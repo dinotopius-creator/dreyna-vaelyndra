@@ -17,8 +17,16 @@ const OUTPUT = path.resolve(__dirname, "..", "src", "data", "zepeto-stats.json")
 
 function parseCount(raw) {
   if (raw == null) return null;
-  const s = String(raw).trim().replace(/\s+/g, "").replace(",", ".");
-  const m = s.match(/^([\d.]+)\s*([KkMm]?)$/);
+  let s = String(raw).trim().replace(/\s+/g, "");
+  // Si ça ressemble à un séparateur de milliers anglais ("1,234", "1,234,567"),
+  // on retire toutes les virgules. Sinon, on la traite comme une virgule décimale
+  // ("5,9K" -> "5.9K").
+  if (/^\d{1,3}(?:,\d{3})+$/.test(s)) {
+    s = s.replace(/,/g, "");
+  } else {
+    s = s.replace(/,/g, ".");
+  }
+  const m = s.match(/^([\d.]+)([KkMm]?)$/);
   if (!m) return null;
   const n = parseFloat(m[1]);
   if (!Number.isFinite(n)) return null;
@@ -63,9 +71,9 @@ async function main() {
   const following = extractStat(html, "Following");
   const posts = extractStat(html, "Post");
 
-  if (followers == null) {
+  if (followers == null || posts == null) {
     throw new Error(
-      "Impossible de parser le nombre d'abonnés (structure de page changée ?).",
+      "Impossible de parser les stats ZEPETO (structure de page changée ?).",
     );
   }
 
@@ -94,9 +102,7 @@ async function main() {
     previous.following === data.following &&
     previous.posts === data.posts
   ) {
-    // rien à changer, on met juste à jour fetchedAt pour montrer la dernière tentative
-    console.log("= Aucun changement, fichier laissé tel quel.");
-    return;
+    console.log("= Aucun changement de stats, on met à jour uniquement fetchedAt.");
   }
 
   await fs.mkdir(path.dirname(OUTPUT), { recursive: true });
