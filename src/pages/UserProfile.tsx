@@ -25,6 +25,9 @@ export function UserProfile() {
   );
   useEffect(() => {
     if (!userId) return;
+    // Reset immédiat : sinon l'ancien avatar serveur reste affiché pendant
+    // la latence de fetch quand on passe de /u/alice à /u/bob.
+    setServerProfile(null);
     let cancelled = false;
     apiGetProfile(userId)
       .then((p) => {
