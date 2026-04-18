@@ -11,23 +11,35 @@ import {
 import type Peer from "peerjs";
 import type { MediaConnection } from "peerjs";
 import { useStore } from "./StoreContext";
+import { useAuth } from "./AuthContext";
 
 /**
- * Contexte dédié au "vrai" live de Dreyna.
+ * Contexte dédié aux lives (queen + cour). Multi-utilisateur.
  *
  * Deux modes disponibles :
- *  - "twitch" : la reine streame depuis OBS vers Twitch. Le site embed le
+ *  - "twitch" : le broadcaster streame depuis OBS vers Twitch. Le site embed le
  *    lecteur Twitch officiel. La clé de stream OBS est stockée en local chez
- *    la reine uniquement (jamais envoyée nulle part).
+ *    le broadcaster uniquement (jamais envoyée nulle part).
  *  - "screen" : partage d'écran direct depuis le navigateur via WebRTC
- *    (peerjs + broker public gratuit). Pas d'OBS nécessaire, la reine clique
- *    "Partager mon écran" et les viewers reçoivent le flux en direct.
+ *    (peerjs + broker public gratuit). Pas d'OBS nécessaire, le broadcaster
+ *    clique "Partager mon écran" et les viewers reçoivent le flux en direct.
+ *
+ * Chaque broadcaster possède son propre peer-ID déterministe
+ * `vaelyndra-live-<userId>`, ce qui permet à plusieurs membres de la cour
+ * d'être en direct en même temps sans collision.
  */
 
 export const LIVE_TITLE_MAX = 20;
 export const LIVE_DESCRIPTION_MAX = 100;
 
-export const LIVE_ROOM_PEER_ID = "dreyna-vaelyndra-royal-court-live";
+/**
+ * Peer-ID déterministe d'un broadcaster donné. Utilisé côté host comme
+ * côté viewer pour ouvrir la MediaConnection WebRTC.
+ */
+export function getLivePeerId(userId: string): string {
+  // Format conservé compatible avec l'historique dreyna-vaelyndra-royal-court-live
+  return `vaelyndra-live-v2-${userId}`;
+}
 
 export type LiveMode = "twitch" | "screen";
 
@@ -41,7 +53,31 @@ export interface LiveConfig {
   startedAt: string | null;
 }
 
+/**
+ * Entrée du registre public des lives en cours. Stocké dans localStorage
+ * sous `vaelyndra_live_registry_v1` et propagé cross-tab pour que le fil
+ * communautaire voie apparaître un live lancé depuis un autre onglet ou
+ * un autre membre.
+ */
+export interface LiveRegistryEntry {
+  userId: string;
+  username: string;
+  avatar: string;
+  title: string;
+  description: string;
+  mode: LiveMode;
+  twitchChannel: string;
+  startedAt: string;
+  /**
+   * Horodatage ISO mis à jour toutes les 30s par l'onglet qui diffuse.
+   * Permet d'évincer les entrées orphelines (crash / fermeture brutale)
+   * sans dépendre d'un TTL long (12h) et sans race cross-tab.
+   */
+  lastHeartbeat?: string;
+}
+
 const CONFIG_STORAGE_KEY = "vaelyndra_live_config_v1";
+const REGISTRY_STORAGE_KEY = "vaelyndra_live_registry_v1";
 
 const DEFAULT_CONFIG: LiveConfig = {
   status: "idle",
@@ -73,37 +109,102 @@ function readConfig(): LiveConfig {
   }
 }
 
+/**
+ * Heartbeat : l'onglet qui diffuse met à jour `lastHeartbeat` toutes les
+ * 30 secondes. Toute entrée sans heartbeat récent (> 90s) est considérée
+ * comme orpheline (crash, kill -9, coupure réseau) et éludée.
+ * Les anciennes entrées sans champ heartbeat tombent sur un fallback TTL
+ * de 2 minutes depuis `startedAt`.
+ */
+const REGISTRY_STALE_MS = 1000 * 90;
+const REGISTRY_FALLBACK_TTL_MS = 1000 * 60 * 2;
+
+function readRegistry(): Record<string, LiveRegistryEntry> {
+  try {
+    const raw = localStorage.getItem(REGISTRY_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, LiveRegistryEntry>;
+    const now = Date.now();
+    const cleaned: Record<string, LiveRegistryEntry> = {};
+    for (const [k, v] of Object.entries(parsed)) {
+      if (!v || typeof v !== "object") continue;
+      const started = new Date(v.startedAt).getTime();
+      if (!Number.isFinite(started)) continue;
+      if (v.lastHeartbeat) {
+        const hb = new Date(v.lastHeartbeat).getTime();
+        if (!Number.isFinite(hb)) continue;
+        if (now - hb > REGISTRY_STALE_MS) continue;
+      } else {
+        // entrée legacy (pas de heartbeat) : on applique un TTL court
+        if (now - started > REGISTRY_FALLBACK_TTL_MS) continue;
+      }
+      cleaned[k] = v;
+    }
+    return cleaned;
+  } catch {
+    return {};
+  }
+}
+
+function writeRegistry(registry: Record<string, LiveRegistryEntry>) {
+  try {
+    localStorage.setItem(REGISTRY_STORAGE_KEY, JSON.stringify(registry));
+  } catch {
+    // quota exceeded, on ignore
+  }
+}
+
 interface LiveCtx {
+  /** Config du live du user connecté (son propre broadcast). */
   config: LiveConfig;
   updateConfig: (patch: Partial<LiveConfig>) => void;
-  /** Côté reine : démarrer le partage d'écran via WebRTC. */
+  /** Registre public des lives en cours (tous users). */
+  liveRegistry: Record<string, LiveRegistryEntry>;
+  /**
+   * Annoncer un live Twitch (mode déclaratif, pas de WebRTC).
+   * `channelOverride` permet au caller de passer le handle déjà normalisé
+   * sans attendre que `updateConfig({ twitchChannel })` soit re-rendu
+   * (sinon `configRef.current` lit encore la valeur pré-normalisation).
+   */
+  announceTwitchLive: (channelOverride?: string) => void;
+  /** Côté host : démarrer le partage d'écran via WebRTC. */
   startScreenShare: () => Promise<void>;
-  /** Côté reine : arrêter le live. */
+  /** Côté host : arrêter mon live. */
   stopLive: () => void;
   /**
-   * Côté viewer : tente de rejoindre un live en cours. Retourne une fonction
-   * de cleanup à appeler au démontage. Idempotent.
+   * Côté viewer : tente de rejoindre un live en cours pour un broadcaster
+   * donné. Retourne une fonction de cleanup à appeler au démontage.
+   * Idempotent.
    */
-  joinAsViewer: () => () => void;
+  joinAsViewer: (broadcasterId: string) => () => void;
   /** Côté viewer : si un flux d'écran est en cours, on le reçoit ici. */
   remoteStream: MediaStream | null;
-  /** Côté reine : le flux local en cours (pour s'auto-regarder). */
+  /** Côté host : le flux local en cours (pour s'auto-regarder). */
   localStream: MediaStream | null;
   /** Côté viewer : true pendant qu'on tente de joindre le live. */
   isConnecting: boolean;
   /** Dernière erreur éventuelle (à afficher en toast). */
   lastError: string | null;
+  /** Métadonnées du live actuellement regardé (titre/description/etc). */
+  viewingMeta: { title: string; description: string; mode: LiveMode } | null;
 }
 
 const Ctx = createContext<LiveCtx | null>(null);
 
 export function LiveProvider({ children }: { children: ReactNode }) {
   const { isLiveOn, setLiveOn } = useStore();
+  const { user } = useAuth();
   const [config, setConfig] = useState<LiveConfig>(() => readConfig());
+  const [liveRegistry, setLiveRegistry] = useState<
+    Record<string, LiveRegistryEntry>
+  >(() => readRegistry());
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
+  const [viewingMeta, setViewingMeta] = useState<
+    { title: string; description: string; mode: LiveMode } | null
+  >(null);
 
   const hostPeerRef = useRef<Peer | null>(null);
   const viewerPeerRef = useRef<Peer | null>(null);
@@ -116,6 +217,9 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   // error) lisent toujours la valeur à jour sans avoir à se réabonner.
   const configRef = useRef<LiveConfig>(config);
   configRef.current = config;
+  // Ref miroir sur l'utilisateur courant pour les callbacks asynchrones.
+  const userRef = useRef(user);
+  userRef.current = user;
 
   useEffect(() => {
     try {
@@ -125,58 +229,36 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     }
   }, [config]);
 
-  // Synchronisation cross-tab : si la reine ouvre le site dans deux onglets
-  // (ex: un pour la Salle du Trône, un autre pour le rendu public),
-  // l'onglet "viewer" récupère automatiquement les changements de titre /
-  // description écrits par l'onglet "host".
+  // Synchronisation cross-tab : titre / description écrits par l'onglet
+  // "host" se propagent aux autres onglets (pour préview / admin).
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
-      if (event.key !== CONFIG_STORAGE_KEY || !event.newValue) return;
-      try {
-        const next = JSON.parse(event.newValue) as Partial<LiveConfig>;
-        // Pour le mode WebRTC (screen), on NE recopie JAMAIS le
-        // "status=live" de l'autre onglet : seul un tab avec un
-        // hostPeer/viewerPeer réellement ouvert a le droit d'allumer le
-        // live ici (cf. joinAsViewer + startScreenShare).
-        // Pour le mode Twitch en revanche, le "live" est purement
-        // déclaratif (aucune ressource WebRTC à maintenir côté client),
-        // donc on propage le status pour que tous les onglets affichent
-        // bien le lecteur Twitch embed.
-        const nextMode =
-          next.mode === "twitch" || next.mode === "screen"
-            ? next.mode
-            : undefined;
-        const shouldSyncStatus =
-          nextMode === "twitch" && next.status === "live";
-        const shouldClearStatus =
-          nextMode === "twitch" && next.status === "idle";
-        setConfig((c) => ({
-          ...c,
-          title: typeof next.title === "string" ? next.title : c.title,
-          description:
-            typeof next.description === "string"
-              ? next.description
-              : c.description,
-          mode: nextMode ?? c.mode,
-          twitchChannel:
-            typeof next.twitchChannel === "string"
-              ? next.twitchChannel
-              : c.twitchChannel,
-          status: shouldSyncStatus
-            ? "live"
-            : shouldClearStatus
-              ? "idle"
-              : c.status,
-          startedAt: shouldSyncStatus
-            ? typeof next.startedAt === "string"
-              ? next.startedAt
-              : c.startedAt
-            : shouldClearStatus
-              ? null
-              : c.startedAt,
-        }));
-      } catch {
-        // payload invalide — on ignore
+      if (event.key === CONFIG_STORAGE_KEY && event.newValue) {
+        try {
+          const next = JSON.parse(event.newValue) as Partial<LiveConfig>;
+          const nextMode =
+            next.mode === "twitch" || next.mode === "screen"
+              ? next.mode
+              : undefined;
+          setConfig((c) => ({
+            ...c,
+            title: typeof next.title === "string" ? next.title : c.title,
+            description:
+              typeof next.description === "string"
+                ? next.description
+                : c.description,
+            mode: nextMode ?? c.mode,
+            twitchChannel:
+              typeof next.twitchChannel === "string"
+                ? next.twitchChannel
+                : c.twitchChannel,
+          }));
+        } catch {
+          // payload invalide — on ignore
+        }
+      }
+      if (event.key === REGISTRY_STORAGE_KEY) {
+        setLiveRegistry(readRegistry());
       }
     };
     window.addEventListener("storage", onStorage);
@@ -184,19 +266,36 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Synchronise l'ancien drapeau `isLiveOn` (Navbar/Home/Admin) avec le
-  // nouveau statut `config.status`. Permet à l'ensemble du site de réagir
-  // quand la reine lance/termine un vrai live depuis la Salle du Trône.
+  // nouveau statut : on allume le drapeau "live actif" dès qu'un membre
+  // (quel qu'il soit) est en direct, pour que les badges globaux du site
+  // s'allument.
   useEffect(() => {
-    const shouldBeOn = config.status === "live";
+    const shouldBeOn = Object.keys(liveRegistry).length > 0;
     if (shouldBeOn !== isLiveOn) setLiveOn(shouldBeOn);
-  }, [config.status, isLiveOn, setLiveOn]);
+  }, [liveRegistry, isLiveOn, setLiveOn]);
 
   const updateConfig = useCallback((patch: Partial<LiveConfig>) => {
     setConfig((c) => ({ ...c, ...patch }));
   }, []);
 
-  /** Ferme proprement toutes les ressources WebRTC (reine ou viewer). */
-  const cleanup = useCallback(() => {
+  /** Écrit le registre public des lives (état + persistance + cross-tab). */
+  const updateRegistry = useCallback(
+    (
+      updater: (
+        r: Record<string, LiveRegistryEntry>,
+      ) => Record<string, LiveRegistryEntry>,
+    ) => {
+      setLiveRegistry((prev) => {
+        const next = updater(prev);
+        writeRegistry(next);
+        return next;
+      });
+    },
+    [],
+  );
+
+  /** Ferme UNIQUEMENT les ressources côté host (peer hôte + stream local). */
+  const stopHosting = useCallback(() => {
     hostConnectionsRef.current.forEach((call) => {
       try {
         call.close();
@@ -214,6 +313,17 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       }
       hostPeerRef.current = null;
     }
+
+    const activeStream = localStreamRef.current;
+    if (activeStream) {
+      activeStream.getTracks().forEach((t) => t.stop());
+    }
+    localStreamRef.current = null;
+    setLocalStream(null);
+  }, []);
+
+  /** Ferme UNIQUEMENT les ressources côté viewer (peer + remoteStream). */
+  const stopViewing = useCallback(() => {
     if (viewerPeerRef.current) {
       try {
         viewerPeerRef.current.destroy();
@@ -222,23 +332,78 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       }
       viewerPeerRef.current = null;
     }
-
-    const activeStream = localStreamRef.current;
-    if (activeStream) {
-      activeStream.getTracks().forEach((t) => t.stop());
-    }
-    localStreamRef.current = null;
-    setLocalStream(null);
     setRemoteStream(null);
     setIsConnecting(false);
+    setViewingMeta(null);
   }, []);
 
+  /** Ferme tout (utilisé au démontage du provider). */
+  const cleanup = useCallback(() => {
+    stopHosting();
+    stopViewing();
+  }, [stopHosting, stopViewing]);
+
   const stopLive = useCallback(() => {
-    cleanup();
+    const me = userRef.current;
+    // IMPORTANT : ne ferme QUE le côté host, pour ne pas casser le stream
+    // qu'on est en train de regarder sur un autre user (viewerPeerRef).
+    stopHosting();
     setConfig((c) => ({ ...c, status: "idle", startedAt: null }));
-  }, [cleanup]);
+    if (me) {
+      updateRegistry((r) => {
+        if (!(me.id in r)) return r;
+        const next = { ...r };
+        delete next[me.id];
+        return next;
+      });
+    }
+  }, [stopHosting, updateRegistry]);
+
+  const announceTwitchLive = useCallback(
+    (channelOverride?: string) => {
+      const me = userRef.current;
+      if (!me) {
+        setLastError("Connecte-toi pour lancer un live.");
+        return;
+      }
+      const c = configRef.current;
+      const channel = (channelOverride ?? c.twitchChannel).trim();
+      if (!channel) {
+        setLastError("Renseigne ton nom de chaîne Twitch.");
+        return;
+      }
+      const startedAt = new Date().toISOString();
+      setConfig((cc) => ({
+        ...cc,
+        mode: "twitch",
+        status: "live",
+        twitchChannel: channel,
+        startedAt,
+      }));
+      updateRegistry((r) => ({
+        ...r,
+        [me.id]: {
+          userId: me.id,
+          username: me.username,
+          avatar: me.avatar,
+          title: c.title.trim() || `${me.username} en direct`,
+          description: c.description.trim(),
+          mode: "twitch",
+          twitchChannel: channel,
+          startedAt,
+          lastHeartbeat: startedAt,
+        },
+      }));
+    },
+    [updateRegistry],
+  );
 
   const startScreenShare = useCallback(async () => {
+    const me = userRef.current;
+    if (!me) {
+      setLastError("Connecte-toi pour lancer un live.");
+      return;
+    }
     // Garde-fou anti-double-clic : si un peer hôte existe déjà (en cours
     // de connexion au broker OU déjà ouvert), on refuse une seconde
     // invocation. Sans ça, un double-clic pendant la phase asynchrone
@@ -264,11 +429,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Quand la reine arrête le partage depuis le prompt navigateur, on stoppe.
-    // On vérifie que ce stream est bien encore le stream actif : sinon c'est
-    // un ancien partage que le guard anti race-condition a explicitement
-    // coupé (track.stop() fire 'ended' en tâche asynchrone), il ne faut
-    // surtout pas appeler stopLive() sur le live qui vient de démarrer.
+    // Quand on arrête le partage depuis le prompt navigateur, on stoppe.
     stream.getVideoTracks().forEach((track) => {
       track.addEventListener("ended", () => {
         if (localStreamRef.current === stream) stopLive();
@@ -280,56 +441,62 @@ export function LiveProvider({ children }: { children: ReactNode }) {
 
     try {
       const { default: PeerCtor } = await import("peerjs");
-      // Garde-fou anti race-condition : si la reine a stoppé le partage ou
+      // Garde-fou anti race-condition : si le host a stoppé le partage ou
       // quitté la page pendant l'import dynamique, `stopLive()` a déjà tourné
-      // et `localStreamRef.current` ne pointe plus sur notre stream. On
-      // annule proprement au lieu de créer un peer orphelin et de remettre
-      // status=live par-dessus le idle fraîchement posé.
+      // et `localStreamRef.current` ne pointe plus sur notre stream.
       if (localStreamRef.current !== stream) {
         stream.getTracks().forEach((t) => t.stop());
         return;
       }
-      const peer = new PeerCtor(LIVE_ROOM_PEER_ID, { debug: 1 });
+      const peerId = getLivePeerId(me.id);
+      const peer = new PeerCtor(peerId, { debug: 1 });
       hostPeerRef.current = peer;
-      // Tant que le peer n'a pas signalé "open", on est encore en phase de
-      // négociation. Toute erreur durant cette phase (unavailable-id, network,
-      // server-error, socket-error…) est fatale : on rembobine proprement et
-      // on retombe en status=idle pour ne pas laisser le site en faux "live".
       let peerOpened = false;
 
       peer.on("open", () => {
         peerOpened = true;
+        const startedAt = new Date().toISOString();
         setConfig((c) => ({
           ...c,
           status: "live",
           mode: "screen",
-          startedAt: new Date().toISOString(),
+          startedAt,
+        }));
+        // Enregistre dans le registre public pour que le fil
+        // communautaire et les autres onglets voient le live.
+        updateRegistry((r) => ({
+          ...r,
+          [me.id]: {
+            userId: me.id,
+            username: me.username,
+            avatar: me.avatar,
+            title: configRef.current.title.trim() || `${me.username} en direct`,
+            description: configRef.current.description.trim(),
+            mode: "screen",
+            twitchChannel: "",
+            startedAt,
+            lastHeartbeat: startedAt,
+          },
         }));
       });
 
       peer.on("error", (err: Error & { type?: string }) => {
         if (!peerOpened) {
-          // Message dédié pour le cas "un autre live est déjà ouvert".
           const friendly =
             err.type === "unavailable-id"
-              ? "Un live Vaelyndra est déjà actif ailleurs. Ferme l'autre onglet."
+              ? "Un live Vaelyndra est déjà actif à ton nom ailleurs. Ferme l'autre onglet."
               : `Impossible de démarrer le relais live : ${err.message || err.type || "erreur inconnue"}`;
           setLastError(friendly);
           stopLive();
           return;
         }
-        // Erreur après ouverture du peer : on log mais on ne tue pas le live,
-        // peerjs se reconnecte souvent tout seul sur ces cas (ex: flux viewer
-        // qui claque). Les vraies déconnexions fatales passent par
-        // peer.on("disconnected") ci-dessous.
         console.warn("PeerJS host error after open", err);
       });
 
       peer.on("disconnected", () => {
-        // Perte de connexion au broker peerjs après coup : on coupe le live.
         if (peerOpened) {
           setLastError(
-            "La connexion au serveur de relais a été perdue. Relance un live quand tu es prête.",
+            "La connexion au serveur de relais a été perdue. Relance un live quand tu es prêt.",
           );
           stopLive();
         }
@@ -345,9 +512,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       });
 
       peer.on("connection", (dataConn) => {
-        // Le viewer ouvre une DataConnection juste pour réclamer les métas
-        // (titre, description) afin d'afficher le cadre live côté public
-        // même quand il est sur un autre navigateur que la reine.
+        // Le viewer ouvre une DataConnection juste pour réclamer les métas.
         dataConn.on("open", () => {
           try {
             dataConn.send({
@@ -372,20 +537,18 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       setLocalStream(null);
       return;
     }
-  }, [stopLive]);
+  }, [stopLive, updateRegistry]);
 
   /**
-   * Côté viewer : tente activement de rejoindre un live en cours. Appelé
-   * par la page `/live` au montage ET périodiquement (polling léger) pour
-   * découvrir un live lancé depuis un autre navigateur, puisque le broker
-   * peerjs public ne nous notifie pas quand un peer apparaît.
-   *
-   * Idempotent : si un viewerPeer existe déjà ou si on est l'hôte, on
-   * ne refait rien. Retourne une fonction de nettoyage.
+   * Côté viewer : tente activement de rejoindre le live d'un broadcaster
+   * donné. Idempotent : si un viewerPeer existe déjà ou si on est le host
+   * du broadcasterId ciblé, on ne refait rien.
    */
-  const joinAsViewer = useCallback(() => {
-    // Déjà hôte : on regarde notre propre flux, pas besoin de se rejoindre.
-    if (hostPeerRef.current) return () => {};
+  const joinAsViewer = useCallback((broadcasterId: string) => {
+    if (!broadcasterId) return () => {};
+    // Déjà hôte de ce broadcast : on regarde notre propre flux.
+    if (hostPeerRef.current && userRef.current?.id === broadcasterId)
+      return () => {};
     // Déjà en train de se connecter / connecté.
     if (viewerPeerRef.current) return () => {};
 
@@ -397,8 +560,6 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       try {
         const { default: PeerCtor } = await import("peerjs");
         if (cancelled) return;
-        // PeerJS accepte un id undefined pour qu'il en génère un, mais le
-        // typage de la signature expose `string`. On contourne proprement.
         const viewerPeer = new (PeerCtor as unknown as {
           new (id?: string, options?: { debug?: number }): Peer;
         })(undefined, { debug: 1 });
@@ -406,8 +567,8 @@ export function LiveProvider({ children }: { children: ReactNode }) {
 
         viewerPeer.on("open", () => {
           if (cancelled) return;
-          // 1) Media call pour recevoir le flux d'écran.
-          const call = viewerPeer.call(LIVE_ROOM_PEER_ID, new MediaStream());
+          const targetPeerId = getLivePeerId(broadcasterId);
+          const call = viewerPeer.call(targetPeerId, new MediaStream());
           if (!call) {
             setIsConnecting(false);
             return;
@@ -416,16 +577,10 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             if (cancelled) return;
             setRemoteStream(stream);
             setIsConnecting(false);
-            // On a bien rejoint un live : reflète-le dans la config
-            // locale pour allumer les badges "EN DIRECT" partout sur le
-            // site, même si on est sur un autre navigateur que la reine.
-            setConfig((c) => ({ ...c, status: "live", mode: "screen" }));
           });
           call.on("close", () => {
             if (cancelled) return;
             setRemoteStream(null);
-            // Le live vient de fermer côté reine : retour à idle.
-            setConfig((c) => ({ ...c, status: "idle", startedAt: null }));
           });
           call.on("error", () => {
             if (cancelled) return;
@@ -433,8 +588,8 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             setIsConnecting(false);
           });
 
-          // 2) DataConnection pour récupérer titre/description du live.
-          const data = viewerPeer.connect(LIVE_ROOM_PEER_ID);
+          // DataConnection pour récupérer titre/description du live.
+          const data = viewerPeer.connect(targetPeerId);
           data.on("data", (payload) => {
             if (cancelled) return;
             if (
@@ -447,23 +602,23 @@ export function LiveProvider({ children }: { children: ReactNode }) {
                 description?: string;
                 mode?: LiveMode;
               };
-              setConfig((c) => ({
-                ...c,
-                title: typeof meta.title === "string" ? meta.title : c.title,
+              setViewingMeta({
+                title: typeof meta.title === "string" ? meta.title : "",
                 description:
                   typeof meta.description === "string"
                     ? meta.description
-                    : c.description,
-                mode: meta.mode === "twitch" || meta.mode === "screen" ? meta.mode : c.mode,
-              }));
+                    : "",
+                mode:
+                  meta.mode === "twitch" || meta.mode === "screen"
+                    ? meta.mode
+                    : "screen",
+              });
             }
           });
         });
 
         viewerPeer.on("error", (err: Error & { type?: string }) => {
           if (err.type === "peer-unavailable") {
-            // Pas de live actuellement : on reste silencieux et on libère
-            // le peer pour autoriser une prochaine tentative.
             setIsConnecting(false);
             if (viewerPeerRef.current === viewerPeer) {
               try {
@@ -502,6 +657,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       }
       setRemoteStream(null);
       setIsConnecting(false);
+      setViewingMeta(null);
     };
   }, []);
 
@@ -512,10 +668,70 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Nettoyage de l'entrée registry à la fermeture / au reload de l'onglet.
+  // CRUCIAL : on ne retire QUE si CE tab est celui qui diffuse (status=live
+  // ET hostPeerRef actif). Sans ces deux gardes, fermer n'importe quel
+  // onglet non-broadcaster tuerait le live d'un autre onglet du même user
+  // via le listener `storage`.
+  useEffect(() => {
+    const removeMyEntry = () => {
+      const me = userRef.current;
+      if (!me) return;
+      // Tab non-diffuseur : on ne touche à rien (évite les races cross-tab).
+      if (configRef.current.status !== "live") return;
+      if (!hostPeerRef.current && configRef.current.mode !== "twitch") return;
+      try {
+        const raw = localStorage.getItem(REGISTRY_STORAGE_KEY);
+        if (!raw) return;
+        const parsed = JSON.parse(raw) as Record<string, LiveRegistryEntry>;
+        if (!(me.id in parsed)) return;
+        delete parsed[me.id];
+        localStorage.setItem(REGISTRY_STORAGE_KEY, JSON.stringify(parsed));
+      } catch {
+        // ignore
+      }
+    };
+    window.addEventListener("beforeunload", removeMyEntry);
+    window.addEventListener("pagehide", removeMyEntry);
+    return () => {
+      window.removeEventListener("beforeunload", removeMyEntry);
+      window.removeEventListener("pagehide", removeMyEntry);
+    };
+  }, []);
+
+  // Heartbeat : l'onglet qui diffuse rafraîchit `lastHeartbeat` toutes les
+  // 30s. Combiné au filtrage dans `readRegistry` (seuil 90s), ça élimine
+  // les entrées orphelines d'une fermeture brutale/crash en ~1-2 minutes,
+  // sans risque de race cross-tab (seul le tab diffuseur écrit).
+  useEffect(() => {
+    if (config.status !== "live") return;
+    const me = userRef.current;
+    if (!me) return;
+    const tick = () => {
+      try {
+        // On passe par readRegistry() pour filtrer au passage les entrées
+        // orphelines des autres broadcasters (crash, heartbeat > 90s). Sans
+        // ce filtrage, un tick recopierait les fantômes à chaque passage.
+        const filtered = readRegistry();
+        const mine = filtered[me.id];
+        if (!mine) return;
+        filtered[me.id] = { ...mine, lastHeartbeat: new Date().toISOString() };
+        writeRegistry(filtered);
+        setLiveRegistry(filtered);
+      } catch {
+        // ignore
+      }
+    };
+    const id = setInterval(tick, 30_000);
+    return () => clearInterval(id);
+  }, [config.status]);
+
   const value = useMemo<LiveCtx>(
     () => ({
       config,
       updateConfig,
+      liveRegistry,
+      announceTwitchLive,
       startScreenShare,
       stopLive,
       joinAsViewer,
@@ -523,10 +739,13 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       localStream,
       isConnecting,
       lastError,
+      viewingMeta,
     }),
     [
       config,
       updateConfig,
+      liveRegistry,
+      announceTwitchLive,
       startScreenShare,
       stopLive,
       joinAsViewer,
@@ -534,6 +753,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       localStream,
       isConnecting,
       lastError,
+      viewingMeta,
     ],
   );
 
