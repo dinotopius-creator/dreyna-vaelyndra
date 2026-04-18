@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
-import { Crown, Sparkles, AtSign, RadioTower, Film } from "lucide-react";
+import { Crown, Sparkles, PlayCircle, Gem } from "lucide-react";
+import { DREYNA_PROFILE } from "../data/mock";
 
 export function Footer() {
   return (
@@ -39,11 +40,33 @@ export function Footer() {
         </div>
         <div>
           <p className="font-regal text-[11px] text-gold-300">Étoiles filantes</p>
-          <div className="mt-3 flex gap-3 text-ivory/75">
-            <a href="#" aria-label="Instagram" className="rounded-full border border-royal-500/30 p-2 hover:text-gold-200"><AtSign className="h-4 w-4" /></a>
-            <a href="#" aria-label="Twitch" className="rounded-full border border-royal-500/30 p-2 hover:text-gold-200"><RadioTower className="h-4 w-4" /></a>
-            <a href="#" aria-label="YouTube" className="rounded-full border border-royal-500/30 p-2 hover:text-gold-200"><Film className="h-4 w-4" /></a>
+          <div className="mt-3 flex flex-wrap gap-3 text-ivory/75">
+            <a
+              href={DREYNA_PROFILE.socials.zepeto}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="ZEPETO de Dreyna"
+              className="inline-flex items-center gap-2 rounded-full border border-royal-500/30 px-3 py-1.5 text-xs hover:border-gold-400/60 hover:text-gold-200"
+            >
+              <Gem className="h-3.5 w-3.5" />
+              ZEPETO
+            </a>
+            <a
+              href={DREYNA_PROFILE.socials.youtube}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="YouTube de Dreyna"
+              className="inline-flex items-center gap-2 rounded-full border border-royal-500/30 px-3 py-1.5 text-xs hover:border-gold-400/60 hover:text-gold-200"
+            >
+              <PlayCircle className="h-3.5 w-3.5" />
+              YouTube
+            </a>
           </div>
+          <p className="mt-4 text-[11px] text-ivory/55">
+            ZEPETO : <span className="text-gold-200">{DREYNA_PROFILE.socials.zepetoHandle}</span>
+            <br />
+            YouTube : <span className="text-gold-200">{DREYNA_PROFILE.socials.youtubeHandle}</span>
+          </p>
           <p className="mt-4 inline-flex items-center gap-1.5 text-xs text-ivory/50">
             <Sparkles className="h-3 w-3 text-gold-300" />
             "Par la Lumière d'Elennor"

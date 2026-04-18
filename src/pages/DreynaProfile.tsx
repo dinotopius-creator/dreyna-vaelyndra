@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Crown, Sparkles } from "lucide-react";
+import { Crown, Gem, PlayCircle, Sparkles } from "lucide-react";
 import { BADGES, DREYNA_PROFILE } from "../data/mock";
 import { SectionHeading } from "../components/SectionHeading";
 import { RuneDivider } from "../components/RuneDivider";
@@ -45,6 +45,26 @@ export function DreynaProfile() {
                 </li>
               ))}
             </ul>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <a
+                href={DREYNA_PROFILE.socials.zepeto}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-royal"
+              >
+                <Gem className="h-4 w-4" />
+                ZEPETO · {DREYNA_PROFILE.socials.zepetoHandle}
+              </a>
+              <a
+                href={DREYNA_PROFILE.socials.youtube}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-ghost"
+              >
+                <PlayCircle className="h-4 w-4" />
+                YouTube · {DREYNA_PROFILE.socials.youtubeHandle}
+              </a>
+            </div>
             <div className="mt-8 grid grid-cols-2 gap-3 md:grid-cols-4">
               {[
                 ["Abonnés", formatNumber(DREYNA_PROFILE.stats.followers)],

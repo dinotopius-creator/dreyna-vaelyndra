@@ -6,17 +6,23 @@ import type {
   LiveSession,
   Product,
 } from "../types";
+import dreynaZepetoPhoto from "../assets/dreyna-zepeto.png";
 
 export const DREYNA_PROFILE = {
   id: "user-dreyna",
   username: "Dreyna",
   email: "dreyna@vaelyndra.realm",
-  avatar:
-    "https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?w=600&auto=format&fit=crop&q=80",
+  avatar: dreynaZepetoPhoto,
   role: "queen" as const,
   joinedAt: "2021-03-21T00:00:00Z",
   bio:
     "Reine des elfes du royaume de Vaelyndra. Gardienne de la Lumière d'Elennor, tisseuse de récits, créatrice ZEPETO.",
+  socials: {
+    zepeto: "https://web.zepeto.me/share/user/profile/dreynakame",
+    youtube: "https://www.youtube.com/@Dreynakame",
+    zepetoHandle: "@dreynakame",
+    youtubeHandle: "@Dreynakame",
+  },
   titles: [
     "Reine des Elfes de Vaelyndra",
     "Gardienne de la Lumière d'Elennor",

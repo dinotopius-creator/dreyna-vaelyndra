@@ -59,3 +59,43 @@ export function renderMarkdown(md: string) {
         .replace(/\*(.+?)\*/g, "<em>$1</em>"),
     );
 }
+
+export type VideoEmbed =
+  | { kind: "youtube"; embedUrl: string; originalUrl: string }
+  | { kind: "tiktok"; embedUrl: string; originalUrl: string }
+  | { kind: "file"; src: string; originalUrl: string }
+  | { kind: "unknown"; originalUrl: string };
+
+export function parseVideoUrl(raw: string): VideoEmbed | null {
+  const url = raw.trim();
+  if (!url) return null;
+
+  // YouTube: https://www.youtube.com/watch?v=XXX / https://youtu.be/XXX / /shorts/XXX
+  const ytMatch = url.match(
+    /(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{6,})/,
+  );
+  if (ytMatch) {
+    return {
+      kind: "youtube",
+      embedUrl: `https://www.youtube.com/embed/${ytMatch[1]}`,
+      originalUrl: url,
+    };
+  }
+
+  // TikTok: https://www.tiktok.com/@user/video/1234567890
+  const tkMatch = url.match(/tiktok\.com\/(?:@[\w.-]+\/video|embed\/v2)\/(\d+)/);
+  if (tkMatch) {
+    return {
+      kind: "tiktok",
+      embedUrl: `https://www.tiktok.com/embed/v2/${tkMatch[1]}`,
+      originalUrl: url,
+    };
+  }
+
+  // Direct video files (MP4, WebM, MOV, OGG)
+  if (/\.(mp4|webm|mov|m4v|ogg|ogv)(\?.*)?$/i.test(url)) {
+    return { kind: "file", src: url, originalUrl: url };
+  }
+
+  return { kind: "unknown", originalUrl: url };
+}

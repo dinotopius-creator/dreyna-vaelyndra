@@ -1,12 +1,17 @@
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Image, Send, Sparkles, Trash2 } from "lucide-react";
+import { ExternalLink, Film, Image, Send, Sparkles, Trash2 } from "lucide-react";
 import { useStore } from "../contexts/StoreContext";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
 import { SectionHeading } from "../components/SectionHeading";
 import { TOP_FANS } from "../data/mock";
-import { formatNumber, formatRelative, generateId } from "../lib/helpers";
+import {
+  formatNumber,
+  formatRelative,
+  generateId,
+  parseVideoUrl,
+} from "../lib/helpers";
 
 const QUICK_EMOJIS = ["✨", "👑", "🌿", "⚔️", "🌙", "🔮"];
 
@@ -16,6 +21,7 @@ export function Community() {
   const { notify } = useToast();
   const [draft, setDraft] = useState("");
   const [imageUrl, setImageUrl] = useState("");
+  const [videoUrl, setVideoUrl] = useState("");
 
   const sorted = useMemo(
     () =>
@@ -33,6 +39,17 @@ export function Community() {
       return;
     }
     if (!draft.trim()) return;
+    const cleanedVideo = videoUrl.trim();
+    if (cleanedVideo) {
+      const parsed = parseVideoUrl(cleanedVideo);
+      if (parsed && parsed.kind === "unknown") {
+        notify(
+          "URL vidéo non reconnue. Utilisez YouTube, TikTok ou un .mp4/.webm.",
+          "error",
+        );
+        return;
+      }
+    }
     dispatch({
       type: "addPost",
       post: {
@@ -42,6 +59,7 @@ export function Community() {
         authorAvatar: user.avatar,
         content: draft.trim(),
         imageUrl: imageUrl.trim() || undefined,
+        videoUrl: cleanedVideo || undefined,
         createdAt: new Date().toISOString(),
         reactions: {},
         comments: [],
@@ -49,6 +67,7 @@ export function Community() {
     });
     setDraft("");
     setImageUrl("");
+    setVideoUrl("");
     notify("Votre parole brille dans la cour 🌟");
   }
 
@@ -105,6 +124,15 @@ export function Community() {
                       className="glass-input pl-9"
                     />
                   </div>
+                  <div className="relative flex-1 min-w-[200px]">
+                    <Film className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ivory/40" />
+                    <input
+                      value={videoUrl}
+                      onChange={(e) => setVideoUrl(e.target.value)}
+                      placeholder="URL vidéo YouTube / TikTok / MP4 (optionnel)"
+                      className="glass-input pl-9"
+                    />
+                  </div>
                   <button type="submit" className="btn-gold">
                     <Send className="h-4 w-4" /> Publier
                   </button>
@@ -158,6 +186,7 @@ export function Community() {
                     className="mt-4 max-h-[400px] w-full rounded-xl object-cover"
                   />
                 )}
+                {p.videoUrl && <PostVideo url={p.videoUrl} />}
                 <div className="mt-4 flex flex-wrap items-center gap-2">
                   {QUICK_EMOJIS.map((e) => {
                     const count = p.reactions[e]?.length ?? 0;
@@ -235,5 +264,51 @@ export function Community() {
         </aside>
       </div>
     </div>
+  );
+}
+
+function PostVideo({ url }: { url: string }) {
+  const parsed = parseVideoUrl(url);
+  if (!parsed) return null;
+
+  if (parsed.kind === "youtube" || parsed.kind === "tiktok") {
+    return (
+      <div className="mt-4 overflow-hidden rounded-xl border border-royal-500/30 bg-night-800">
+        <div className="relative w-full" style={{ paddingTop: "56.25%" }}>
+          <iframe
+            src={parsed.embedUrl}
+            title={`Vidéo ${parsed.kind}`}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowFullScreen
+            className="absolute inset-0 h-full w-full"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (parsed.kind === "file") {
+    return (
+      <video
+        controls
+        preload="metadata"
+        className="mt-4 max-h-[500px] w-full rounded-xl border border-royal-500/30 bg-night-800"
+      >
+        <source src={parsed.src} />
+        Votre navigateur ne supporte pas la lecture vidéo.
+      </video>
+    );
+  }
+
+  return (
+    <a
+      href={parsed.originalUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="mt-4 inline-flex items-center gap-1.5 text-xs text-gold-200 underline hover:text-gold-100"
+    >
+      <ExternalLink className="h-3.5 w-3.5" />
+      Ouvrir la vidéo
+    </a>
   );
 }
