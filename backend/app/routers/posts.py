@@ -1,6 +1,7 @@
 """Endpoints REST pour les posts de la cour."""
 from __future__ import annotations
 
+import os
 import uuid
 from collections import defaultdict
 from typing import Dict, List
@@ -8,9 +9,29 @@ from typing import Dict, List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 
-from ..db import get_session
-from ..models import Comment, Post, Reaction
-from ..schemas import CommentCreate, CommentOut, PostCreate, PostOut, ReactionToggle
+# Ensemble des identifiants autorisés à modérer n'importe quel contenu du fil
+# (reine et potentiels co-modérateurs). Configurable via la variable
+# d'environnement VAELYNDRA_QUEEN_IDS (ids séparés par une virgule).
+_QUEEN_IDS = {
+    uid.strip()
+    for uid in os.environ.get("VAELYNDRA_QUEEN_IDS", "user-dreyna").split(",")
+    if uid.strip()
+}
+
+
+from ..db import get_session  # noqa: E402
+from ..models import Comment, Post, Reaction  # noqa: E402
+from ..schemas import (  # noqa: E402
+    CommentCreate,
+    CommentOut,
+    PostCreate,
+    PostOut,
+    ReactionToggle,
+)
+
+
+def _is_queen(user_id: str) -> bool:
+    return user_id in _QUEEN_IDS
 
 router = APIRouter(prefix="/posts", tags=["posts"])
 
@@ -118,9 +139,8 @@ def delete_post(
     post = session.get(Post, post_id)
     if not post:
         raise HTTPException(status_code=404, detail="Post introuvable.")
-    # Seul l'auteur peut supprimer (la modération côté reine passera par un
-    # header admin séparé lorsque l'auth sera branchée).
-    if post.author_id != user_id:
+    # L'auteur du post ou la reine (modération) peut supprimer.
+    if post.author_id != user_id and not _is_queen(user_id):
         raise HTTPException(status_code=403, detail="Interdit.")
 
     session.exec(
@@ -224,7 +244,14 @@ def delete_comment(
     comment = session.get(Comment, comment_id)
     if not comment or comment.post_id != post_id:
         raise HTTPException(status_code=404, detail="Commentaire introuvable.")
-    if comment.author_id != user_id:
+    # Peuvent supprimer : l'auteur du commentaire, l'auteur du post parent et la reine.
+    post = session.get(Post, post_id)
+    post_author_id = post.author_id if post else None
+    if (
+        comment.author_id != user_id
+        and post_author_id != user_id
+        and not _is_queen(user_id)
+    ):
         raise HTTPException(status_code=403, detail="Interdit.")
     session.delete(comment)
     session.commit()
