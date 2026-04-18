@@ -48,7 +48,7 @@ export function MentionsLegales() {
       <blockquote>
         Le présent régime d'anonymat ne s'applique qu'aussi longtemps que le
         Site reste exempt d'activité commerciale. Dès la mise en vente de
-        gemmes, de biens physiques ou de toute prestation rémunérée, une
+        Sylvins, de biens physiques ou de toute prestation rémunérée, une
         version professionnelle des présentes mentions (raison sociale,
         adresse du siège, SIRET, représentant légal) sera publiée conformément
         à l'article 6-III-1° LCEN.

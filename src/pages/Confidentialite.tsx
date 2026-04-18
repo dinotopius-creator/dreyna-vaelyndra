@@ -44,7 +44,7 @@ export function Confidentialite() {
           exécution du contrat.
         </li>
         <li>
-          <strong>Achats (gemmes et biens physiques)</strong> — identité de
+          <strong>Achats (Sylvins et biens physiques)</strong> — identité de
           facturation, adresse de livraison (pour les produits physiques),
           historique des commandes. <em>Finalité : exécution de la commande,
           facturation, obligations comptables.</em> Base légale : exécution du

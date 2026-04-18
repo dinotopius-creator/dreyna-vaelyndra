@@ -10,7 +10,14 @@ import clsx from "clsx";
 import type { Product } from "../types";
 
 type CategoryFilter = "Tous" | Product["category"];
-const CATEGORIES: CategoryFilter[] = ["Tous", "Merch", "Digital", "VIP", "Exclusif"];
+const CATEGORIES: CategoryFilter[] = [
+  "Tous",
+  "Sylvins",
+  "Merch",
+  "Digital",
+  "VIP",
+  "Exclusif",
+];
 
 export function Shop() {
   const { products, dispatch, cartCount, cartTotal } = useStore();
