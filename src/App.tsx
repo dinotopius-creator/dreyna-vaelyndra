@@ -16,8 +16,14 @@ import { Register } from "./pages/Register";
 import { Me } from "./pages/Me";
 import { Admin } from "./pages/Admin";
 import { NotFound } from "./pages/NotFound";
+import { MentionsLegales } from "./pages/MentionsLegales";
+import { Confidentialite } from "./pages/Confidentialite";
+import { CGU } from "./pages/CGU";
+import { CGV } from "./pages/CGV";
+import { Cookies } from "./pages/Cookies";
 import { Guarded } from "./components/Guarded";
 import { EasterEggs } from "./components/EasterEggs";
+import { CookieBanner } from "./components/CookieBanner";
 
 function AnimatedRoutes() {
   const location = useLocation();
@@ -43,6 +49,11 @@ function AnimatedRoutes() {
           <Route path="/inscription" element={<Register />} />
           <Route path="/moi" element={<Guarded><Me /></Guarded>} />
           <Route path="/admin" element={<Guarded queenOnly><Admin /></Guarded>} />
+          <Route path="/mentions-legales" element={<MentionsLegales />} />
+          <Route path="/confidentialite" element={<Confidentialite />} />
+          <Route path="/cgu" element={<CGU />} />
+          <Route path="/cgv" element={<CGV />} />
+          <Route path="/cookies" element={<Cookies />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </motion.div>
@@ -60,6 +71,7 @@ function App() {
         <AnimatedRoutes />
       </main>
       <Footer />
+      <CookieBanner />
     </div>
   );
 }

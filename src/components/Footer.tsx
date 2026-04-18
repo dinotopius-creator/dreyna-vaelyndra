@@ -73,8 +73,22 @@ export function Footer() {
           </p>
         </div>
       </div>
-      <div className="border-t border-royal-600/20 py-5 text-center text-xs text-ivory/40">
-        © {new Date().getFullYear()} Royaume de Vaelyndra — Tous droits réservés.
+      <div className="space-y-2 border-t border-royal-600/20 px-6 py-5 text-center text-xs text-ivory/40">
+        <p>
+          © {new Date().getFullYear()} Royaume de Vaelyndra — Tous droits
+          réservés. Contact :{" "}
+          <a
+            href="mailto:support@vaelyndra.com"
+            className="text-gold-300/80 hover:text-gold-200"
+          >
+            support@vaelyndra.com
+          </a>
+        </p>
+        <p className="text-ivory/35">
+          Site de fan indépendant, non affilié à ZEPETO ni à Naver Z Corp.
+          ZEPETO et les marques associées appartiennent à leurs détenteurs
+          respectifs.
+        </p>
       </div>
     </footer>
   );
