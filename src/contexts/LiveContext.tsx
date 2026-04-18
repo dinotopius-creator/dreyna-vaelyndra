@@ -80,6 +80,11 @@ interface LiveCtx {
   startScreenShare: () => Promise<void>;
   /** Côté reine : arrêter le live. */
   stopLive: () => void;
+  /**
+   * Côté viewer : tente de rejoindre un live en cours. Retourne une fonction
+   * de cleanup à appeler au démontage. Idempotent.
+   */
+  joinAsViewer: () => () => void;
   /** Côté viewer : si un flux d'écran est en cours, on le reçoit ici. */
   remoteStream: MediaStream | null;
   /** Côté reine : le flux local en cours (pour s'auto-regarder). */
@@ -107,6 +112,10 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   // les tracks même quand il est appelé depuis un callback qui a capturé
   // l'ancienne valeur de state (ex. listener "ended" ou erreur peer).
   const localStreamRef = useRef<MediaStream | null>(null);
+  // Ref miroir sur la config pour que les callbacks peerjs (call, connection,
+  // error) lisent toujours la valeur à jour sans avoir à se réabonner.
+  const configRef = useRef<LiveConfig>(config);
+  configRef.current = config;
 
   useEffect(() => {
     try {
@@ -115,6 +124,39 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       // quota exceeded, on ignore
     }
   }, [config]);
+
+  // Synchronisation cross-tab : si la reine ouvre le site dans deux onglets
+  // (ex: un pour la Salle du Trône, un autre pour le rendu public),
+  // l'onglet "viewer" récupère automatiquement les changements de titre /
+  // description écrits par l'onglet "host".
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== CONFIG_STORAGE_KEY || !event.newValue) return;
+      try {
+        const next = JSON.parse(event.newValue) as Partial<LiveConfig>;
+        // On ne recopie JAMAIS le "status=live" de l'autre onglet : seul
+        // l'onglet qui a effectivement un hostPeer/viewerPeer ouvert a le
+        // droit d'allumer le live ici (cf. joinAsViewer + startScreenShare).
+        setConfig((c) => ({
+          ...c,
+          title: typeof next.title === "string" ? next.title : c.title,
+          description:
+            typeof next.description === "string"
+              ? next.description
+              : c.description,
+          mode: next.mode === "twitch" || next.mode === "screen" ? next.mode : c.mode,
+          twitchChannel:
+            typeof next.twitchChannel === "string"
+              ? next.twitchChannel
+              : c.twitchChannel,
+        }));
+      } catch {
+        // payload invalide — on ignore
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
 
   // Synchronise l'ancien drapeau `isLiveOn` (Navbar/Home/Admin) avec le
   // nouveau statut `config.status`. Permet à l'ensemble du site de réagir
@@ -210,16 +252,48 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         return;
       }
       const peer = new PeerCtor(LIVE_ROOM_PEER_ID, { debug: 1 });
+      hostPeerRef.current = peer;
+      // Tant que le peer n'a pas signalé "open", on est encore en phase de
+      // négociation. Toute erreur durant cette phase (unavailable-id, network,
+      // server-error, socket-error…) est fatale : on rembobine proprement et
+      // on retombe en status=idle pour ne pas laisser le site en faux "live".
+      let peerOpened = false;
+
+      peer.on("open", () => {
+        peerOpened = true;
+        setConfig((c) => ({
+          ...c,
+          status: "live",
+          mode: "screen",
+          startedAt: new Date().toISOString(),
+        }));
+      });
 
       peer.on("error", (err: Error & { type?: string }) => {
-        // unavailable-id : un live est déjà ouvert ailleurs.
-        if (err.type === "unavailable-id") {
+        if (!peerOpened) {
+          // Message dédié pour le cas "un autre live est déjà ouvert".
+          const friendly =
+            err.type === "unavailable-id"
+              ? "Un live Vaelyndra est déjà actif ailleurs. Ferme l'autre onglet."
+              : `Impossible de démarrer le relais live : ${err.message || err.type || "erreur inconnue"}`;
+          setLastError(friendly);
+          stopLive();
+          return;
+        }
+        // Erreur après ouverture du peer : on log mais on ne tue pas le live,
+        // peerjs se reconnecte souvent tout seul sur ces cas (ex: flux viewer
+        // qui claque). Les vraies déconnexions fatales passent par
+        // peer.on("disconnected") ci-dessous.
+        console.warn("PeerJS host error after open", err);
+      });
+
+      peer.on("disconnected", () => {
+        // Perte de connexion au broker peerjs après coup : on coupe le live.
+        if (peerOpened) {
           setLastError(
-            "Un live Vaelyndra est déjà actif ailleurs. Ferme l'autre onglet.",
+            "La connexion au serveur de relais a été perdue. Relance un live quand tu es prête.",
           );
           stopLive();
-        } else {
-          console.warn("PeerJS host error", err);
         }
       });
 
@@ -232,7 +306,23 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         });
       });
 
-      hostPeerRef.current = peer;
+      peer.on("connection", (dataConn) => {
+        // Le viewer ouvre une DataConnection juste pour réclamer les métas
+        // (titre, description) afin d'afficher le cadre live côté public
+        // même quand il est sur un autre navigateur que la reine.
+        dataConn.on("open", () => {
+          try {
+            dataConn.send({
+              type: "live-meta",
+              title: configRef.current.title,
+              description: configRef.current.description,
+              mode: "screen",
+            });
+          } catch {
+            // ignore
+          }
+        });
+      });
     } catch (err) {
       setLastError(
         `Impossible de démarrer le relais WebRTC : ${
@@ -244,26 +334,22 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       setLocalStream(null);
       return;
     }
-
-    setConfig((c) => ({
-      ...c,
-      status: "live",
-      mode: "screen",
-      startedAt: new Date().toISOString(),
-    }));
   }, [stopLive]);
 
   /**
-   * Côté viewer : on tente de joindre le flux d'écran quand la config dit
-   * status=live + mode=screen. Si la reine n'a pas démarré, peerjs renvoie
-   * `peer-unavailable` et on reste en "pas de flux".
+   * Côté viewer : tente activement de rejoindre un live en cours. Appelé
+   * par la page `/live` au montage ET périodiquement (polling léger) pour
+   * découvrir un live lancé depuis un autre navigateur, puisque le broker
+   * peerjs public ne nous notifie pas quand un peer apparaît.
+   *
+   * Idempotent : si un viewerPeer existe déjà ou si on est l'hôte, on
+   * ne refait rien. Retourne une fonction de nettoyage.
    */
-  useEffect(() => {
-    if (config.mode !== "screen" || config.status !== "live") {
-      return;
-    }
-    // Si on est l'hôte (on a un hostPeer), on ne doit pas jouer les viewers.
-    if (hostPeerRef.current) return;
+  const joinAsViewer = useCallback(() => {
+    // Déjà hôte : on regarde notre propre flux, pas besoin de se rejoindre.
+    if (hostPeerRef.current) return () => {};
+    // Déjà en train de se connecter / connecté.
+    if (viewerPeerRef.current) return () => {};
 
     let cancelled = false;
     setIsConnecting(true);
@@ -278,13 +364,12 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         const viewerPeer = new (PeerCtor as unknown as {
           new (id?: string, options?: { debug?: number }): Peer;
         })(undefined, { debug: 1 });
+        viewerPeerRef.current = viewerPeer;
 
         viewerPeer.on("open", () => {
           if (cancelled) return;
-          const call = viewerPeer.call(
-            LIVE_ROOM_PEER_ID,
-            new MediaStream(),
-          );
+          // 1) Media call pour recevoir le flux d'écran.
+          const call = viewerPeer.call(LIVE_ROOM_PEER_ID, new MediaStream());
           if (!call) {
             setIsConnecting(false);
             return;
@@ -293,29 +378,68 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             if (cancelled) return;
             setRemoteStream(stream);
             setIsConnecting(false);
+            // On a bien rejoint un live : reflète-le dans la config
+            // locale pour allumer les badges "EN DIRECT" partout sur le
+            // site, même si on est sur un autre navigateur que la reine.
+            setConfig((c) => ({ ...c, status: "live", mode: "screen" }));
           });
           call.on("close", () => {
             if (cancelled) return;
             setRemoteStream(null);
+            // Le live vient de fermer côté reine : retour à idle.
+            setConfig((c) => ({ ...c, status: "idle", startedAt: null }));
           });
           call.on("error", () => {
             if (cancelled) return;
             setRemoteStream(null);
             setIsConnecting(false);
           });
+
+          // 2) DataConnection pour récupérer titre/description du live.
+          const data = viewerPeer.connect(LIVE_ROOM_PEER_ID);
+          data.on("data", (payload) => {
+            if (cancelled) return;
+            if (
+              typeof payload === "object" &&
+              payload !== null &&
+              (payload as { type?: string }).type === "live-meta"
+            ) {
+              const meta = payload as {
+                title?: string;
+                description?: string;
+                mode?: LiveMode;
+              };
+              setConfig((c) => ({
+                ...c,
+                title: typeof meta.title === "string" ? meta.title : c.title,
+                description:
+                  typeof meta.description === "string"
+                    ? meta.description
+                    : c.description,
+                mode: meta.mode === "twitch" || meta.mode === "screen" ? meta.mode : c.mode,
+              }));
+            }
+          });
         });
 
         viewerPeer.on("error", (err: Error & { type?: string }) => {
           if (err.type === "peer-unavailable") {
-            // Pas de live actuellement : silencieux.
+            // Pas de live actuellement : on reste silencieux et on libère
+            // le peer pour autoriser une prochaine tentative.
             setIsConnecting(false);
+            if (viewerPeerRef.current === viewerPeer) {
+              try {
+                viewerPeer.destroy();
+              } catch {
+                // ignore
+              }
+              viewerPeerRef.current = null;
+            }
             return;
           }
           console.warn("PeerJS viewer error", err);
           setIsConnecting(false);
         });
-
-        viewerPeerRef.current = viewerPeer;
       } catch (err) {
         if (!cancelled) {
           setIsConnecting(false);
@@ -341,7 +465,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       setRemoteStream(null);
       setIsConnecting(false);
     };
-  }, [config.mode, config.status]);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -356,6 +480,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       updateConfig,
       startScreenShare,
       stopLive,
+      joinAsViewer,
       remoteStream,
       localStream,
       isConnecting,
@@ -366,6 +491,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       updateConfig,
       startScreenShare,
       stopLive,
+      joinAsViewer,
       remoteStream,
       localStream,
       isConnecting,

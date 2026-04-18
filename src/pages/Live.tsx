@@ -374,8 +374,29 @@ export function Live() {
   const { lives } = useStore();
   const { user } = useAuth();
   const { notify } = useToast();
-  const { config, remoteStream, localStream, isConnecting } = useLive();
+  const { config, remoteStream, localStream, isConnecting, joinAsViewer } =
+    useLive();
   const isHost = user?.role === "queen" && !!localStream;
+
+  // Découverte active d'un live en cours : on tente de rejoindre la Salle
+  // du Trône dès qu'on arrive sur `/live` (sauf si on est l'hôte). On
+  // retente toutes les 20s tant qu'on n'a pas de flux, pour détecter un
+  // live lancé depuis un autre navigateur après notre arrivée sur la page.
+  useEffect(() => {
+    if (isHost) return;
+    if (config.mode === "twitch") return;
+    let cleanup: (() => void) | null = joinAsViewer();
+    const retry = window.setInterval(() => {
+      if (!remoteStream) {
+        cleanup?.();
+        cleanup = joinAsViewer();
+      }
+    }, 20000);
+    return () => {
+      window.clearInterval(retry);
+      cleanup?.();
+    };
+  }, [isHost, config.mode, joinAsViewer, remoteStream]);
   // localStream est aussi consommé dans <LiveVideoStage /> via prop.
   const hasRemote = config.mode === "screen" && !!remoteStream;
   const twitchChannel = extractTwitchChannel(config.twitchChannel);
