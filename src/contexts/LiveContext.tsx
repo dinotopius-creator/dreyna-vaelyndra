@@ -68,6 +68,12 @@ export interface LiveRegistryEntry {
   mode: LiveMode;
   twitchChannel: string;
   startedAt: string;
+  /**
+   * Horodatage ISO mis à jour toutes les 30s par l'onglet qui diffuse.
+   * Permet d'évincer les entrées orphelines (crash / fermeture brutale)
+   * sans dépendre d'un TTL long (12h) et sans race cross-tab.
+   */
+  lastHeartbeat?: string;
 }
 
 const CONFIG_STORAGE_KEY = "vaelyndra_live_config_v1";
@@ -103,22 +109,35 @@ function readConfig(): LiveConfig {
   }
 }
 
+/**
+ * Heartbeat : l'onglet qui diffuse met à jour `lastHeartbeat` toutes les
+ * 30 secondes. Toute entrée sans heartbeat récent (> 90s) est considérée
+ * comme orpheline (crash, kill -9, coupure réseau) et éludée.
+ * Les anciennes entrées sans champ heartbeat tombent sur un fallback TTL
+ * de 2 minutes depuis `startedAt`.
+ */
+const REGISTRY_STALE_MS = 1000 * 90;
+const REGISTRY_FALLBACK_TTL_MS = 1000 * 60 * 2;
+
 function readRegistry(): Record<string, LiveRegistryEntry> {
   try {
     const raw = localStorage.getItem(REGISTRY_STORAGE_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw) as Record<string, LiveRegistryEntry>;
-    // Les entrées plus vieilles que 12h sont probablement orphelines (tab
-    // fermé sans cleanup). On les écarte pour que le fil communautaire ne
-    // garde pas un faux "en direct" éternel.
     const now = Date.now();
-    const MAX_AGE_MS = 1000 * 60 * 60 * 12;
     const cleaned: Record<string, LiveRegistryEntry> = {};
     for (const [k, v] of Object.entries(parsed)) {
       if (!v || typeof v !== "object") continue;
       const started = new Date(v.startedAt).getTime();
       if (!Number.isFinite(started)) continue;
-      if (now - started > MAX_AGE_MS) continue;
+      if (v.lastHeartbeat) {
+        const hb = new Date(v.lastHeartbeat).getTime();
+        if (!Number.isFinite(hb)) continue;
+        if (now - hb > REGISTRY_STALE_MS) continue;
+      } else {
+        // entrée legacy (pas de heartbeat) : on applique un TTL court
+        if (now - started > REGISTRY_FALLBACK_TTL_MS) continue;
+      }
       cleaned[k] = v;
     }
     return cleaned;
@@ -352,6 +371,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         mode: "twitch",
         twitchChannel: c.twitchChannel.trim(),
         startedAt,
+        lastHeartbeat: startedAt,
       },
     }));
   }, [updateRegistry]);
@@ -433,6 +453,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             mode: "screen",
             twitchChannel: "",
             startedAt,
+            lastHeartbeat: startedAt,
           },
         }));
       });
@@ -626,14 +647,17 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Nettoyage de l'entrée registry à la fermeture / au reload de l'onglet.
-  // React unmount n'est pas fiable pour "tab close" → on s'appuie sur
-  // beforeunload + pagehide. On lit `userRef` pour retirer UNIQUEMENT
-  // l'entrée courante, pas celles des autres utilisateurs partageant le
-  // localStorage.
+  // CRUCIAL : on ne retire QUE si CE tab est celui qui diffuse (status=live
+  // ET hostPeerRef actif). Sans ces deux gardes, fermer n'importe quel
+  // onglet non-broadcaster tuerait le live d'un autre onglet du même user
+  // via le listener `storage`.
   useEffect(() => {
     const removeMyEntry = () => {
       const me = userRef.current;
       if (!me) return;
+      // Tab non-diffuseur : on ne touche à rien (évite les races cross-tab).
+      if (configRef.current.status !== "live") return;
+      if (!hostPeerRef.current && configRef.current.mode !== "twitch") return;
       try {
         const raw = localStorage.getItem(REGISTRY_STORAGE_KEY);
         if (!raw) return;
@@ -653,24 +677,31 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // Au boot (ou login tardif), supprime notre propre entrée registry si on
-  // n'est pas réellement en live — sinon une fermeture brutale précédente
-  // laisse un fantôme jusqu'à 12h (cf. readRegistry).
+  // Heartbeat : l'onglet qui diffuse rafraîchit `lastHeartbeat` toutes les
+  // 30s. Combiné au filtrage dans `readRegistry` (seuil 90s), ça élimine
+  // les entrées orphelines d'une fermeture brutale/crash en ~1-2 minutes,
+  // sans risque de race cross-tab (seul le tab diffuseur écrit).
   useEffect(() => {
-    if (!user) return;
-    if (config.status === "live") return;
-    setLiveRegistry((r) => {
-      if (!(user.id in r)) return r;
-      const next = { ...r };
-      delete next[user.id];
+    if (config.status !== "live") return;
+    const me = userRef.current;
+    if (!me) return;
+    const tick = () => {
       try {
-        localStorage.setItem(REGISTRY_STORAGE_KEY, JSON.stringify(next));
+        const raw = localStorage.getItem(REGISTRY_STORAGE_KEY);
+        if (!raw) return;
+        const parsed = JSON.parse(raw) as Record<string, LiveRegistryEntry>;
+        const mine = parsed[me.id];
+        if (!mine) return;
+        parsed[me.id] = { ...mine, lastHeartbeat: new Date().toISOString() };
+        localStorage.setItem(REGISTRY_STORAGE_KEY, JSON.stringify(parsed));
+        setLiveRegistry(parsed);
       } catch {
         // ignore
       }
-      return next;
-    });
-  }, [user, config.status]);
+    };
+    const id = setInterval(tick, 30_000);
+    return () => clearInterval(id);
+  }, [config.status]);
 
   const value = useMemo<LiveCtx>(
     () => ({
