@@ -239,6 +239,13 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   }, [cleanup]);
 
   const startScreenShare = useCallback(async () => {
+    // Garde-fou anti-double-clic : si un peer hôte existe déjà (en cours
+    // de connexion au broker OU déjà ouvert), on refuse une seconde
+    // invocation. Sans ça, un double-clic pendant la phase asynchrone
+    // (prompt getDisplayMedia + import peerjs) orphelinerait le premier
+    // peer/stream et laisserait l'indicateur de partage d'écran du
+    // navigateur actif sans moyen de le couper depuis l'app.
+    if (hostPeerRef.current || localStreamRef.current) return;
     setLastError(null);
     if (typeof navigator === "undefined" || !navigator.mediaDevices) {
       setLastError("Ton navigateur ne supporte pas le partage d'écran.");
