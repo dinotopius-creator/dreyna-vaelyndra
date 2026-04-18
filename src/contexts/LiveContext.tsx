@@ -200,6 +200,15 @@ export function LiveProvider({ children }: { children: ReactNode }) {
 
     try {
       const { default: PeerCtor } = await import("peerjs");
+      // Garde-fou anti race-condition : si la reine a stoppé le partage ou
+      // quitté la page pendant l'import dynamique, `stopLive()` a déjà tourné
+      // et `localStreamRef.current` ne pointe plus sur notre stream. On
+      // annule proprement au lieu de créer un peer orphelin et de remettre
+      // status=live par-dessus le idle fraîchement posé.
+      if (localStreamRef.current !== stream) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
       const peer = new PeerCtor(LIVE_ROOM_PEER_ID, { debug: 1 });
 
       peer.on("error", (err: Error & { type?: string }) => {
