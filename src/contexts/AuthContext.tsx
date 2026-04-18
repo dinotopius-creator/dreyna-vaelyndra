@@ -94,7 +94,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
-    localStorage.setItem(USERS_KEY, JSON.stringify(users));
+    try {
+      localStorage.setItem(USERS_KEY, JSON.stringify(users));
+    } catch (err) {
+      console.warn("Impossible de sauvegarder les utilisateurs :", err);
+    }
   }, [users]);
 
   useEffect(() => {
@@ -178,6 +182,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!userId) return { ok: false, error: "Non connecté." };
       if (patch.username !== undefined && patch.username.trim().length < 2)
         return { ok: false, error: "Votre nom elfique est trop court." };
+      if (patch.avatar !== undefined && patch.avatar.length > 200_000)
+        return {
+          ok: false,
+          error: "Image trop grande : compresse-la ou utilise une URL.",
+        };
       setUsers((arr) =>
         arr.map((u) => {
           if (u.id !== userId) return u;

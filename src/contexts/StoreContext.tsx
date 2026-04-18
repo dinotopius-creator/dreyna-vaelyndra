@@ -242,7 +242,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (err) {
+      console.warn("Impossible de sauvegarder le royaume :", err);
+    }
   }, [state]);
 
   useEffect(() => {

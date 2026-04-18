@@ -14,7 +14,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useStore } from "../contexts/StoreContext";
 import { useToast } from "../contexts/ToastContext";
 import { SectionHeading } from "../components/SectionHeading";
-import { formatDate, formatPrice } from "../lib/helpers";
+import { formatDate, formatPrice, resizeImageToDataUrl } from "../lib/helpers";
 
 export function Me() {
   const { user, updateProfile } = useAuth();
@@ -49,22 +49,23 @@ export function Me() {
     notify("Votre profil a été scellé aux archives ✨");
   }
 
-  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const input = e.target;
+    const file = input.files?.[0];
+    input.value = "";
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-      notify("Image trop lourde (max 2 Mo).", "error");
+    if (file.size > 5 * 1024 * 1024) {
+      notify("Image trop lourde (max 5 Mo).", "error");
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") {
-        setAvatar(reader.result);
-        setEditingAvatar(true);
-        notify("Image chargée — n'oubliez pas d'enregistrer 💾", "info");
-      }
-    };
-    reader.readAsDataURL(file);
+    try {
+      const thumb = await resizeImageToDataUrl(file, 256, 0.82);
+      setAvatar(thumb);
+      setEditingAvatar(true);
+      notify("Image chargée — n'oubliez pas d'enregistrer 💾", "info");
+    } catch {
+      notify("Image illisible, essaye un autre format.", "error");
+    }
   }
 
   return (

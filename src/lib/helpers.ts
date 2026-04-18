@@ -1,3 +1,45 @@
+export function resizeImageToDataUrl(
+  file: Blob,
+  maxSize = 256,
+  quality = 0.82,
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("read failed"));
+    reader.onload = () => {
+      const src = reader.result;
+      if (typeof src !== "string") {
+        reject(new Error("not a data url"));
+        return;
+      }
+      const img = new Image();
+      img.onerror = () => reject(new Error("decode failed"));
+      img.onload = () => {
+        const longest = Math.max(img.width, img.height);
+        const scale = longest > maxSize ? maxSize / longest : 1;
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          reject(new Error("no canvas ctx"));
+          return;
+        }
+        ctx.drawImage(img, 0, 0, w, h);
+        try {
+          resolve(canvas.toDataURL("image/jpeg", quality));
+        } catch (e) {
+          reject(e instanceof Error ? e : new Error("encode failed"));
+        }
+      };
+      img.src = src;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 export function slugify(text: string) {
   return text
     .normalize("NFD")
