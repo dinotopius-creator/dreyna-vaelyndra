@@ -58,7 +58,16 @@ function readConfig(): LiveConfig {
     const raw = localStorage.getItem(CONFIG_STORAGE_KEY);
     if (!raw) return DEFAULT_CONFIG;
     const parsed = JSON.parse(raw) as Partial<LiveConfig>;
-    return { ...DEFAULT_CONFIG, ...parsed };
+    // Un live WebRTC/Twitch ne survit pas à un rechargement de page
+    // (le peer et le MediaStream sont détruits). On force donc toujours
+    // `status = idle` au boot pour éviter qu'un crash ou une fermeture
+    // d'onglet laisse un faux "En direct" sur tout le site.
+    return {
+      ...DEFAULT_CONFIG,
+      ...parsed,
+      status: "idle",
+      startedAt: null,
+    };
   } catch {
     return DEFAULT_CONFIG;
   }
