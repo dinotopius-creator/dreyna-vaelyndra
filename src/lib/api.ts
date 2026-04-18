@@ -180,15 +180,16 @@ export async function apiUpdateAvatar(
   userId: string,
   patch: { avatarUrl?: string | null; avatarImageUrl?: string },
 ): Promise<UserProfileDto> {
+  // Patch partiel : on n'envoie que les champs réellement fournis, sinon le
+  // serveur considèrerait `avatar_url: null` comme un ordre d'effacement et
+  // effacerait le .glb de l'utilisateur à la prochaine maj de vignette.
+  const body: Record<string, string | null> = {};
+  if (patch.avatarUrl !== undefined) body.avatar_url = patch.avatarUrl;
+  if (patch.avatarImageUrl !== undefined)
+    body.avatar_image_url = patch.avatarImageUrl;
   return (await request<UserProfileDto>(
     `/users/${encodeURIComponent(userId)}/avatar`,
-    {
-      method: "PATCH",
-      body: JSON.stringify({
-        avatar_url: patch.avatarUrl ?? null,
-        avatar_image_url: patch.avatarImageUrl,
-      }),
-    },
+    { method: "PATCH", body: JSON.stringify(body) },
   )) as UserProfileDto;
 }
 
