@@ -415,16 +415,15 @@ function LiveRoster({
   entries: LiveRegistryEntry[];
   activeId: string;
 }) {
-  if (entries.length === 0) return null;
+  const filtered = entries.filter((e) => e.userId !== activeId);
+  if (filtered.length === 0) return null;
   return (
     <div className="card-royal mt-6 p-5">
       <p className="mb-3 font-regal text-[11px] uppercase tracking-[0.22em] text-ivory/60">
         Autres lives en cours
       </p>
       <ul className="flex flex-wrap gap-2">
-        {entries
-          .filter((e) => e.userId !== activeId)
-          .map((e) => (
+        {filtered.map((e) => (
             <li key={e.userId}>
               <Link
                 to={`/live/${e.userId}`}

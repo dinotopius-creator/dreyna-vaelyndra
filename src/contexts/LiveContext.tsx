@@ -625,6 +625,53 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Nettoyage de l'entrée registry à la fermeture / au reload de l'onglet.
+  // React unmount n'est pas fiable pour "tab close" → on s'appuie sur
+  // beforeunload + pagehide. On lit `userRef` pour retirer UNIQUEMENT
+  // l'entrée courante, pas celles des autres utilisateurs partageant le
+  // localStorage.
+  useEffect(() => {
+    const removeMyEntry = () => {
+      const me = userRef.current;
+      if (!me) return;
+      try {
+        const raw = localStorage.getItem(REGISTRY_STORAGE_KEY);
+        if (!raw) return;
+        const parsed = JSON.parse(raw) as Record<string, LiveRegistryEntry>;
+        if (!(me.id in parsed)) return;
+        delete parsed[me.id];
+        localStorage.setItem(REGISTRY_STORAGE_KEY, JSON.stringify(parsed));
+      } catch {
+        // ignore
+      }
+    };
+    window.addEventListener("beforeunload", removeMyEntry);
+    window.addEventListener("pagehide", removeMyEntry);
+    return () => {
+      window.removeEventListener("beforeunload", removeMyEntry);
+      window.removeEventListener("pagehide", removeMyEntry);
+    };
+  }, []);
+
+  // Au boot (ou login tardif), supprime notre propre entrée registry si on
+  // n'est pas réellement en live — sinon une fermeture brutale précédente
+  // laisse un fantôme jusqu'à 12h (cf. readRegistry).
+  useEffect(() => {
+    if (!user) return;
+    if (config.status === "live") return;
+    setLiveRegistry((r) => {
+      if (!(user.id in r)) return r;
+      const next = { ...r };
+      delete next[user.id];
+      try {
+        localStorage.setItem(REGISTRY_STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  }, [user, config.status]);
+
   const value = useMemo<LiveCtx>(
     () => ({
       config,
