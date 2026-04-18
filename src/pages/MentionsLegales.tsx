@@ -102,10 +102,8 @@ export function MentionsLegales() {
         Les captures d'écran de l'avatar de Dreyna proviennent de l'application{" "}
         <strong>ZEPETO</strong>, éditée par Naver Z Corp. Le Site est un site
         de fan entièrement indépendant et n'est{" "}
-        <strong>
-          pas affilié à, ni sponsorisé par, Naver Z Corp ou ZEPETO
-        </strong>
-        . Toutes les marques citées restent la propriété de leurs détenteurs
+        <strong>pas affilié à, ni sponsorisé par, Naver Z Corp ou ZEPETO</strong>.
+        Toutes les marques citées restent la propriété de leurs détenteurs
         respectifs.
       </p>
 
