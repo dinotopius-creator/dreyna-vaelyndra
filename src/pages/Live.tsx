@@ -175,7 +175,9 @@ function BroadcasterControls() {
         return;
       }
       updateConfig({ twitchChannel: handle });
-      announceTwitchLive();
+      // On passe explicitement `handle` : updateConfig est batché donc
+      // configRef.current lit encore la valeur brute pré-normalisation.
+      announceTwitchLive(handle);
     }
   }
 

@@ -160,8 +160,13 @@ interface LiveCtx {
   updateConfig: (patch: Partial<LiveConfig>) => void;
   /** Registre public des lives en cours (tous users). */
   liveRegistry: Record<string, LiveRegistryEntry>;
-  /** Annoncer un live Twitch (mode déclaratif, pas de WebRTC). */
-  announceTwitchLive: () => void;
+  /**
+   * Annoncer un live Twitch (mode déclaratif, pas de WebRTC).
+   * `channelOverride` permet au caller de passer le handle déjà normalisé
+   * sans attendre que `updateConfig({ twitchChannel })` soit re-rendu
+   * (sinon `configRef.current` lit encore la valeur pré-normalisation).
+   */
+  announceTwitchLive: (channelOverride?: string) => void;
   /** Côté host : démarrer le partage d'écran via WebRTC. */
   startScreenShare: () => Promise<void>;
   /** Côté host : arrêter mon live. */
@@ -289,8 +294,8 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  /** Ferme proprement toutes les ressources WebRTC (host ou viewer). */
-  const cleanup = useCallback(() => {
+  /** Ferme UNIQUEMENT les ressources côté host (peer hôte + stream local). */
+  const stopHosting = useCallback(() => {
     hostConnectionsRef.current.forEach((call) => {
       try {
         call.close();
@@ -308,6 +313,17 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       }
       hostPeerRef.current = null;
     }
+
+    const activeStream = localStreamRef.current;
+    if (activeStream) {
+      activeStream.getTracks().forEach((t) => t.stop());
+    }
+    localStreamRef.current = null;
+    setLocalStream(null);
+  }, []);
+
+  /** Ferme UNIQUEMENT les ressources côté viewer (peer + remoteStream). */
+  const stopViewing = useCallback(() => {
     if (viewerPeerRef.current) {
       try {
         viewerPeerRef.current.destroy();
@@ -316,21 +332,22 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       }
       viewerPeerRef.current = null;
     }
-
-    const activeStream = localStreamRef.current;
-    if (activeStream) {
-      activeStream.getTracks().forEach((t) => t.stop());
-    }
-    localStreamRef.current = null;
-    setLocalStream(null);
     setRemoteStream(null);
     setIsConnecting(false);
     setViewingMeta(null);
   }, []);
 
+  /** Ferme tout (utilisé au démontage du provider). */
+  const cleanup = useCallback(() => {
+    stopHosting();
+    stopViewing();
+  }, [stopHosting, stopViewing]);
+
   const stopLive = useCallback(() => {
     const me = userRef.current;
-    cleanup();
+    // IMPORTANT : ne ferme QUE le côté host, pour ne pas casser le stream
+    // qu'on est en train de regarder sur un autre user (viewerPeerRef).
+    stopHosting();
     setConfig((c) => ({ ...c, status: "idle", startedAt: null }));
     if (me) {
       updateRegistry((r) => {
@@ -340,41 +357,46 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         return next;
       });
     }
-  }, [cleanup, updateRegistry]);
+  }, [stopHosting, updateRegistry]);
 
-  const announceTwitchLive = useCallback(() => {
-    const me = userRef.current;
-    if (!me) {
-      setLastError("Connecte-toi pour lancer un live.");
-      return;
-    }
-    const c = configRef.current;
-    if (!c.twitchChannel.trim()) {
-      setLastError("Renseigne ton nom de chaîne Twitch.");
-      return;
-    }
-    const startedAt = new Date().toISOString();
-    setConfig((cc) => ({
-      ...cc,
-      mode: "twitch",
-      status: "live",
-      startedAt,
-    }));
-    updateRegistry((r) => ({
-      ...r,
-      [me.id]: {
-        userId: me.id,
-        username: me.username,
-        avatar: me.avatar,
-        title: c.title.trim() || `${me.username} en direct`,
-        description: c.description.trim(),
+  const announceTwitchLive = useCallback(
+    (channelOverride?: string) => {
+      const me = userRef.current;
+      if (!me) {
+        setLastError("Connecte-toi pour lancer un live.");
+        return;
+      }
+      const c = configRef.current;
+      const channel = (channelOverride ?? c.twitchChannel).trim();
+      if (!channel) {
+        setLastError("Renseigne ton nom de chaîne Twitch.");
+        return;
+      }
+      const startedAt = new Date().toISOString();
+      setConfig((cc) => ({
+        ...cc,
         mode: "twitch",
-        twitchChannel: c.twitchChannel.trim(),
+        status: "live",
+        twitchChannel: channel,
         startedAt,
-        lastHeartbeat: startedAt,
-      },
-    }));
-  }, [updateRegistry]);
+      }));
+      updateRegistry((r) => ({
+        ...r,
+        [me.id]: {
+          userId: me.id,
+          username: me.username,
+          avatar: me.avatar,
+          title: c.title.trim() || `${me.username} en direct`,
+          description: c.description.trim(),
+          mode: "twitch",
+          twitchChannel: channel,
+          startedAt,
+          lastHeartbeat: startedAt,
+        },
+      }));
+    },
+    [updateRegistry],
+  );
 
   const startScreenShare = useCallback(async () => {
     const me = userRef.current;
