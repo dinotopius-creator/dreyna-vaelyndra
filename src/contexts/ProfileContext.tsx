@@ -55,6 +55,10 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     if (!user) {
+      // Reset du marker in-flight : sinon un fetch encore en cours lancé
+      // par le polling avant la déconnexion pourrait ressusciter le profil
+      // juste après ce setProfile(null).
+      inflightIdRef.current = null;
       setProfile(null);
       return;
     }
