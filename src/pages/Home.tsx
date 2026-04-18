@@ -97,7 +97,7 @@ function Hero({ isLiveOn }: { isLiveOn: boolean }) {
             <img
               src={DREYNA_PROFILE.avatar}
               alt="Dreyna, reine des elfes"
-              className="h-full w-full object-cover"
+              className="h-full w-full origin-top scale-[1.06] object-cover object-top"
             />
             <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-night-900 via-night-900/80 to-transparent p-6 pt-24">
               <p className="font-regal text-[10px] tracking-[0.35em] text-gold-300">
