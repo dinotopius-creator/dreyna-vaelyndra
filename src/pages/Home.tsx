@@ -105,7 +105,7 @@ function Hero({ isLiveOn }: { isLiveOn: boolean }) {
               </p>
               <h3 className="font-display text-3xl text-gold-200">Dreyna</h3>
               <p className="mt-1 text-xs text-ivory/70">
-                Gardienne de la Lumière · Créatrice ZEPETO
+                Gardienne de la Lumière · Créatrice HOT ZEPETO 🔥
               </p>
             </div>
             <motion.div

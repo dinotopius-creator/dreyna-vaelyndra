@@ -16,7 +16,7 @@ export const DREYNA_PROFILE = {
   role: "queen" as const,
   joinedAt: "2021-03-21T00:00:00Z",
   bio:
-    "Reine des elfes du royaume de Vaelyndra. Gardienne de la Lumière d'Elennor, tisseuse de récits, créatrice ZEPETO.",
+    "Reine des elfes du royaume de Vaelyndra. Gardienne de la Lumière d'Elennor, créatrice ZEPETO du programme HOT 🔥, Top 2 de l'événement Magic Academy.",
   socials: {
     zepeto: "https://web.zepeto.me/share/user/profile/dreynakame",
     youtube: "https://www.youtube.com/@Dreynakame",
@@ -68,11 +68,20 @@ export const BADGES: Badge[] = [
     rarity: "rare",
   },
   {
-    id: "zepeto",
-    name: "Créatrice ZEPETO Verified",
-    description: "Créatrice officielle, reconnue du royaume numérique.",
-    icon: "💠",
-    rarity: "rare",
+    id: "zepeto-hot",
+    name: "Programme HOT · ZEPETO",
+    description:
+      "Créatrice sélectionnée dans le programme HOT de ZEPETO — flammes de la cour.",
+    icon: "🔥",
+    rarity: "mythique",
+  },
+  {
+    id: "magic-academy-top2",
+    name: "Top 2 · Magic Academy",
+    description:
+      "Finaliste d'élite de l'événement Magic Academy, classée 2ᵉ du royaume.",
+    icon: "🏆",
+    rarity: "royale",
   },
   {
     id: "community",
