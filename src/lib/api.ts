@@ -18,6 +18,15 @@ interface AuthorPayload {
   author_avatar: string;
 }
 
+export class ApiError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+    this.name = "ApiError";
+  }
+}
+
 async function request<T>(
   path: string,
   init: RequestInit = {},
@@ -31,7 +40,8 @@ async function request<T>(
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(
+    throw new ApiError(
+      res.status,
       `API ${init.method ?? "GET"} ${path} → ${res.status} ${text}`,
     );
   }

@@ -23,6 +23,7 @@ import {
   apiGetProfile,
   apiUpdateAvatar,
   apiUpsertProfile,
+  ApiError,
   type UserProfileDto,
 } from "../lib/api";
 import { useAuth } from "./AuthContext";
@@ -60,14 +61,23 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     inflightIdRef.current = user.id;
     setLoading(true);
     try {
-      // upsert (idempotent) puis get pour récupérer la dernière version.
-      const upserted = await apiUpsertProfile({
-        id: user.id,
-        username: user.username,
-        avatarImageUrl: user.avatar,
-      });
+      // On tente d'abord le GET : le profil serveur est la source de vérité
+      // et contient déjà l'avatar RPM si l'utilisateur l'a sauvegardé. On
+      // n'upsert (avec l'avatar local par défaut) que si le profil n'existe
+      // pas encore en base, pour ne jamais écraser un rendu RPM existant.
+      let fresh: UserProfileDto;
+      try {
+        fresh = await apiGetProfile(user.id);
+      } catch (err) {
+        if (!(err instanceof ApiError) || err.status !== 404) throw err;
+        fresh = await apiUpsertProfile({
+          id: user.id,
+          username: user.username,
+          avatarImageUrl: user.avatar,
+        });
+      }
       if (inflightIdRef.current !== user.id) return;
-      setProfile(upserted);
+      setProfile(fresh);
     } catch (err) {
       console.warn("Profil serveur indisponible :", err);
       if (inflightIdRef.current === user.id) setProfile(null);
