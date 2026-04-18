@@ -134,9 +134,22 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       if (event.key !== CONFIG_STORAGE_KEY || !event.newValue) return;
       try {
         const next = JSON.parse(event.newValue) as Partial<LiveConfig>;
-        // On ne recopie JAMAIS le "status=live" de l'autre onglet : seul
-        // l'onglet qui a effectivement un hostPeer/viewerPeer ouvert a le
-        // droit d'allumer le live ici (cf. joinAsViewer + startScreenShare).
+        // Pour le mode WebRTC (screen), on NE recopie JAMAIS le
+        // "status=live" de l'autre onglet : seul un tab avec un
+        // hostPeer/viewerPeer réellement ouvert a le droit d'allumer le
+        // live ici (cf. joinAsViewer + startScreenShare).
+        // Pour le mode Twitch en revanche, le "live" est purement
+        // déclaratif (aucune ressource WebRTC à maintenir côté client),
+        // donc on propage le status pour que tous les onglets affichent
+        // bien le lecteur Twitch embed.
+        const nextMode =
+          next.mode === "twitch" || next.mode === "screen"
+            ? next.mode
+            : undefined;
+        const shouldSyncStatus =
+          nextMode === "twitch" && next.status === "live";
+        const shouldClearStatus =
+          nextMode === "twitch" && next.status === "idle";
         setConfig((c) => ({
           ...c,
           title: typeof next.title === "string" ? next.title : c.title,
@@ -144,11 +157,23 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             typeof next.description === "string"
               ? next.description
               : c.description,
-          mode: next.mode === "twitch" || next.mode === "screen" ? next.mode : c.mode,
+          mode: nextMode ?? c.mode,
           twitchChannel:
             typeof next.twitchChannel === "string"
               ? next.twitchChannel
               : c.twitchChannel,
+          status: shouldSyncStatus
+            ? "live"
+            : shouldClearStatus
+              ? "idle"
+              : c.status,
+          startedAt: shouldSyncStatus
+            ? typeof next.startedAt === "string"
+              ? next.startedAt
+              : c.startedAt
+            : shouldClearStatus
+              ? null
+              : c.startedAt,
         }));
       } catch {
         // payload invalide — on ignore
