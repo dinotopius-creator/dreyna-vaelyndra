@@ -1,6 +1,15 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Crown, Heart, Save, ShoppingBag } from "lucide-react";
+import {
+  Camera,
+  Crown,
+  Heart,
+  Link as LinkIcon,
+  Save,
+  ShoppingBag,
+  Upload,
+  X,
+} from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useStore } from "../contexts/StoreContext";
 import { useToast } from "../contexts/ToastContext";
@@ -8,10 +17,14 @@ import { SectionHeading } from "../components/SectionHeading";
 import { formatDate, formatPrice } from "../lib/helpers";
 
 export function Me() {
-  const { user, updateBio } = useAuth();
+  const { user, updateProfile } = useAuth();
   const { articles, orders, products } = useStore();
   const { notify } = useToast();
   const [bio, setBio] = useState(user?.bio ?? "");
+  const [username, setUsername] = useState(user?.username ?? "");
+  const [avatar, setAvatar] = useState(user?.avatar ?? "");
+  const [editingAvatar, setEditingAvatar] = useState(false);
+  const fileRef = useRef<HTMLInputElement | null>(null);
 
   if (!user) return null;
 
@@ -25,10 +38,33 @@ export function Me() {
     .slice(0, 6);
   const myOrders = orders.filter((o) => o.userId === user.id);
 
-  function saveBio(e: React.FormEvent) {
+  function saveProfile(e: React.FormEvent) {
     e.preventDefault();
-    updateBio(bio);
-    notify("Votre biographie est inscrite aux archives ✨");
+    const res = updateProfile({ username, avatar, bio });
+    if (!res.ok) {
+      notify(res.error ?? "Impossible d'enregistrer.", "error");
+      return;
+    }
+    setEditingAvatar(false);
+    notify("Votre profil a été scellé aux archives ✨");
+  }
+
+  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      notify("Image trop lourde (max 2 Mo).", "error");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        setAvatar(reader.result);
+        setEditingAvatar(true);
+        notify("Image chargée — n'oubliez pas d'enregistrer 💾", "info");
+      }
+    };
+    reader.readAsDataURL(file);
   }
 
   return (
@@ -39,11 +75,22 @@ export function Me() {
         className="card-royal relative overflow-hidden p-8 md:p-10"
       >
         <div className="flex flex-wrap items-center gap-6">
-          <img
-            src={user.avatar}
-            alt={user.username}
-            className="h-24 w-24 rounded-full object-cover ring-4 ring-gold-400/50"
-          />
+          <div className="relative">
+            <img
+              src={avatar || user.avatar}
+              alt={user.username}
+              className="h-24 w-24 rounded-full object-cover ring-4 ring-gold-400/50"
+            />
+            <button
+              type="button"
+              onClick={() => setEditingAvatar((v) => !v)}
+              className="absolute -bottom-1 -right-1 inline-flex h-9 w-9 items-center justify-center rounded-full bg-gold-shine text-night-900 shadow-lg ring-2 ring-night-900 transition hover:scale-105"
+              title="Changer ma photo"
+              aria-label="Changer ma photo de profil"
+            >
+              <Camera className="h-4 w-4" />
+            </button>
+          </div>
           <div className="flex-1">
             <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
               {user.role === "queen"
@@ -65,20 +112,104 @@ export function Me() {
             </span>
           )}
         </div>
-        <form onSubmit={saveBio} className="mt-6 space-y-3">
-          <label className="font-regal text-[10px] tracking-[0.22em] text-ivory/60">
-            Biographie
-          </label>
-          <textarea
-            rows={3}
-            value={bio}
-            onChange={(e) => setBio(e.target.value)}
-            className="glass-input resize-none"
-            placeholder="Parlez de votre place dans Vaelyndra..."
-          />
-          <div className="flex justify-end">
-            <button type="submit" className="btn-ghost">
-              <Save className="h-4 w-4" /> Enregistrer
+
+        {editingAvatar && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            className="mt-6 rounded-xl border border-gold-400/30 bg-night-900/40 p-4"
+          >
+            <div className="flex items-center justify-between">
+              <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
+                ✦ Nouvelle photo de profil
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingAvatar(false);
+                  setAvatar(user.avatar);
+                }}
+                className="text-ivory/50 hover:text-rose-300"
+                title="Annuler"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <input
+                type="file"
+                accept="image/*"
+                ref={fileRef}
+                onChange={handleFile}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="btn-royal"
+              >
+                <Upload className="h-4 w-4" /> Importer depuis mon PC
+              </button>
+              <div className="relative flex-1 min-w-[240px]">
+                <LinkIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ivory/40" />
+                <input
+                  value={avatar}
+                  onChange={(e) => setAvatar(e.target.value)}
+                  placeholder="ou coller une URL d'image (https://...)"
+                  className="glass-input pl-9"
+                />
+              </div>
+            </div>
+            <p className="mt-2 text-[11px] text-ivory/50">
+              Astuce : tu peux sauvegarder ta photo ZEPETO sur ton PC, puis cliquer "Importer". Max 2 Mo.
+            </p>
+          </motion.div>
+        )}
+
+        <form onSubmit={saveProfile} className="mt-6 grid gap-4 md:grid-cols-2">
+          <div>
+            <label className="font-regal text-[10px] tracking-[0.22em] text-ivory/60">
+              Nom elfique
+            </label>
+            <input
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="glass-input mt-2"
+              placeholder="Votre pseudo"
+              maxLength={32}
+            />
+          </div>
+          <div>
+            <label className="font-regal text-[10px] tracking-[0.22em] text-ivory/60">
+              Rôle
+            </label>
+            <input
+              disabled
+              value={
+                user.role === "queen"
+                  ? "Reine de Vaelyndra"
+                  : user.role === "knight"
+                    ? "Chevalier·e lunaire"
+                    : "Elfe de la cour"
+              }
+              className="glass-input mt-2 cursor-not-allowed opacity-70"
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className="font-regal text-[10px] tracking-[0.22em] text-ivory/60">
+              Biographie
+            </label>
+            <textarea
+              rows={3}
+              value={bio}
+              onChange={(e) => setBio(e.target.value)}
+              className="glass-input mt-2 resize-none"
+              placeholder="Parlez de votre place dans Vaelyndra..."
+            />
+          </div>
+          <div className="md:col-span-2 flex justify-end">
+            <button type="submit" className="btn-gold">
+              <Save className="h-4 w-4" /> Enregistrer mon profil
             </button>
           </div>
         </form>
@@ -132,37 +263,26 @@ export function Me() {
             {myOrders.map((o) => (
               <li key={o.id} className="card-royal p-4">
                 <div className="flex items-center justify-between">
-                  <p className="text-sm text-ivory/75">
-                    Commande{" "}
-                    <span className="text-gold-300">#{o.id.slice(-6)}</span> ·{" "}
-                    {formatDate(o.createdAt)}
+                  <p className="font-display text-sm text-gold-200">
+                    Ordre #{o.id.slice(-6)}
                   </p>
-                  <span className="rounded-full border border-gold-400/50 bg-gold-500/10 px-2 py-0.5 text-xs font-semibold text-gold-200">
-                    {o.status === "paid" ? "Scellée" : o.status}
-                  </span>
+                  <p className="font-display text-lg text-gold-200">
+                    {formatPrice(o.total)}
+                  </p>
                 </div>
-                <ul className="mt-3 space-y-1 text-sm">
+                <p className="mt-1 font-regal text-[10px] tracking-[0.22em] text-ivory/55">
+                  {formatDate(o.createdAt)} · {o.status}
+                </p>
+                <ul className="mt-3 space-y-1 text-sm text-ivory/75">
                   {o.items.map((it) => {
                     const p = products.find((x) => x.id === it.productId);
                     return (
-                      <li
-                        key={it.productId}
-                        className="flex justify-between text-ivory/75"
-                      >
-                        <span>
-                          {p?.name ?? "Article"} × {it.quantity}
-                        </span>
-                        <span>{formatPrice(it.priceAtPurchase * it.quantity)}</span>
+                      <li key={it.productId}>
+                        ✦ {p?.name ?? "Item"} × {it.quantity}
                       </li>
                     );
                   })}
                 </ul>
-                <div className="mt-3 flex justify-between border-t border-royal-500/30 pt-3 text-sm">
-                  <span className="text-ivory/60">Total</span>
-                  <span className="font-display text-gold-200">
-                    {formatPrice(o.total)}
-                  </span>
-                </div>
               </li>
             ))}
           </ul>

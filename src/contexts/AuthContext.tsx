@@ -26,6 +26,11 @@ interface AuthCtx {
   ) => { ok: boolean; error?: string };
   logout: () => void;
   updateBio: (bio: string) => void;
+  updateProfile: (patch: {
+    username?: string;
+    avatar?: string;
+    bio?: string;
+  }) => { ok: boolean; error?: string };
 }
 
 const Ctx = createContext<AuthCtx | null>(null);
@@ -168,6 +173,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [userId],
   );
 
+  const updateProfile = useCallback(
+    (patch: { username?: string; avatar?: string; bio?: string }) => {
+      if (!userId) return { ok: false, error: "Non connecté." };
+      if (patch.username !== undefined && patch.username.trim().length < 2)
+        return { ok: false, error: "Votre nom elfique est trop court." };
+      setUsers((arr) =>
+        arr.map((u) => {
+          if (u.id !== userId) return u;
+          return {
+            ...u,
+            username:
+              patch.username !== undefined ? patch.username.trim() : u.username,
+            avatar:
+              patch.avatar !== undefined && patch.avatar.trim().length > 0
+                ? patch.avatar.trim()
+                : u.avatar,
+            bio: patch.bio !== undefined ? patch.bio : u.bio,
+          };
+        }),
+      );
+      return { ok: true };
+    },
+    [userId],
+  );
+
   const value = useMemo<AuthCtx>(
     () => ({
       user,
@@ -185,8 +215,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       register,
       logout,
       updateBio,
+      updateProfile,
     }),
-    [user, users, login, register, logout, updateBio],
+    [user, users, login, register, logout, updateBio, updateProfile],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
