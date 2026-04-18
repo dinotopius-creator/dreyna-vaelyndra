@@ -382,12 +382,20 @@ export function Live() {
   // du Trône dès qu'on arrive sur `/live` (sauf si on est l'hôte). On
   // retente toutes les 20s tant qu'on n'a pas de flux, pour détecter un
   // live lancé depuis un autre navigateur après notre arrivée sur la page.
+  //
+  // IMPORTANT: on NE met PAS `remoteStream` dans les deps — sinon la
+  // réception d'un flux change `remoteStream`, déclenche le cleanup du
+  // précédent effect (qui détruit le peer et remet `remoteStream=null`),
+  // ce qui déclenche un nouveau re-render… boucle infinie. On passe par
+  // un ref pour relire la valeur courante dans le setInterval.
+  const remoteStreamRef = useRef<MediaStream | null>(null);
+  remoteStreamRef.current = remoteStream;
   useEffect(() => {
     if (isHost) return;
     if (config.mode === "twitch") return;
     let cleanup: (() => void) | null = joinAsViewer();
     const retry = window.setInterval(() => {
-      if (!remoteStream) {
+      if (!remoteStreamRef.current) {
         cleanup?.();
         cleanup = joinAsViewer();
       }
@@ -396,7 +404,7 @@ export function Live() {
       window.clearInterval(retry);
       cleanup?.();
     };
-  }, [isHost, config.mode, joinAsViewer, remoteStream]);
+  }, [isHost, config.mode, joinAsViewer]);
   // localStream est aussi consommé dans <LiveVideoStage /> via prop.
   const hasRemote = config.mode === "screen" && !!remoteStream;
   const twitchChannel = extractTwitchChannel(config.twitchChannel);
