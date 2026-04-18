@@ -72,6 +72,7 @@ export interface CommunityPost {
   authorAvatar: string;
   content: string;
   imageUrl?: string;
+  videoUrl?: string;
   createdAt: string;
   reactions: Record<string, string[]>; // emoji -> userIds
   comments: Comment[];
