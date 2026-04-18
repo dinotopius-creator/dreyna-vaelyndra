@@ -28,6 +28,7 @@ import {
   INITIAL_PRODUCTS,
 } from "../data/mock";
 import { generateId } from "../lib/helpers";
+import { apiListPosts } from "../lib/api";
 import { useAuth } from "./AuthContext";
 
 interface StoreState {
@@ -69,6 +70,8 @@ type Action =
   | { type: "updateCartQty"; productId: string; quantity: number }
   | { type: "clearCart" }
   | { type: "checkout"; order: Order }
+  | { type: "setPosts"; posts: CommunityPost[] }
+  | { type: "replacePost"; post: CommunityPost }
   | { type: "addPost"; post: CommunityPost }
   | { type: "deletePost"; id: string }
   | { type: "reactPost"; postId: string; emoji: string; userId: string }
@@ -187,6 +190,15 @@ function reducer(state: StoreState, action: Action): StoreState {
       return { ...state, cart: [] };
     case "checkout":
       return { ...state, cart: [], orders: [action.order, ...state.orders] };
+    case "setPosts":
+      return { ...state, posts: action.posts };
+    case "replacePost":
+      return {
+        ...state,
+        posts: state.posts.some((p) => p.id === action.post.id)
+          ? state.posts.map((p) => (p.id === action.post.id ? action.post : p))
+          : [action.post, ...state.posts],
+      };
     case "addPost":
       return { ...state, posts: [action.post, ...state.posts] };
     case "deletePost":
@@ -397,6 +409,27 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     localStorage.setItem("vaelyndra_live_on", isLiveOn ? "1" : "0");
   }, [isLiveOn]);
+
+  // Récupère le fil depuis le backend au démarrage puis toutes les 30 s afin
+  // que chaque membre voie les posts des autres sans refresh manuel. En cas
+  // d'erreur (backend down), on garde silencieusement le cache localStorage.
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const posts = await apiListPosts();
+        if (!cancelled) dispatch({ type: "setPosts", posts });
+      } catch (err) {
+        if (!cancelled) console.warn("Impossible de rafraîchir le fil :", err);
+      }
+    };
+    refresh();
+    const id = setInterval(refresh, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, []);
 
   const cartTotal = useMemo(() => {
     return state.cart.reduce((acc, c) => {
