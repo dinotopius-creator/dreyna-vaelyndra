@@ -113,3 +113,103 @@ export async function apiDeleteComment(
     { method: "DELETE" },
   );
 }
+
+// --- Profils utilisateur (avatar, inventaire, bourses) --------------------
+
+/**
+ * Profil serveur renvoyé par les endpoints /users.
+ *
+ * - `avatarUrl` : URL .glb (Ready Player Me) pour le rendu 3D
+ * - `avatarImageUrl` : rendu 2D (.png) utilisé dans la navbar, les posts, le chat
+ * - `inventory` / `equipped` : items possédés / équipés (ids opaque string)
+ * - `lueurs` (monnaie gratuite) / `sylvins` (premium) / `sylvinsEarnings` (part streamer)
+ */
+export interface UserProfileDto {
+  id: string;
+  username: string;
+  avatarImageUrl: string;
+  avatarUrl: string | null;
+  inventory: string[];
+  equipped: Record<string, string>;
+  lueurs: number;
+  sylvins: number;
+  sylvinsEarnings: number;
+  lastDailyAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DailyClaimDto {
+  granted: number;
+  already_claimed: boolean;
+  profile: UserProfileDto;
+}
+
+export async function apiUpsertProfile(input: {
+  id: string;
+  username: string;
+  avatarImageUrl: string;
+}): Promise<UserProfileDto> {
+  return (await request<UserProfileDto>("/users", {
+    method: "POST",
+    body: JSON.stringify({
+      id: input.id,
+      username: input.username,
+      avatar_image_url: input.avatarImageUrl,
+    }),
+  })) as UserProfileDto;
+}
+
+export async function apiGetProfile(userId: string): Promise<UserProfileDto> {
+  return (await request<UserProfileDto>(
+    `/users/${encodeURIComponent(userId)}`,
+  )) as UserProfileDto;
+}
+
+export async function apiUpdateAvatar(
+  userId: string,
+  patch: { avatarUrl?: string | null; avatarImageUrl?: string },
+): Promise<UserProfileDto> {
+  return (await request<UserProfileDto>(
+    `/users/${encodeURIComponent(userId)}/avatar`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        avatar_url: patch.avatarUrl ?? null,
+        avatar_image_url: patch.avatarImageUrl,
+      }),
+    },
+  )) as UserProfileDto;
+}
+
+export async function apiUpdateInventory(
+  userId: string,
+  patch: { inventory?: string[]; equipped?: Record<string, string> },
+): Promise<UserProfileDto> {
+  return (await request<UserProfileDto>(
+    `/users/${encodeURIComponent(userId)}/inventory`,
+    { method: "PATCH", body: JSON.stringify(patch) },
+  )) as UserProfileDto;
+}
+
+export async function apiApplyWalletDelta(
+  userId: string,
+  delta: {
+    lueurs?: number;
+    sylvins?: number;
+    sylvins_earnings?: number;
+    reason?: string;
+  },
+): Promise<UserProfileDto> {
+  return (await request<UserProfileDto>(
+    `/users/${encodeURIComponent(userId)}/wallet`,
+    { method: "POST", body: JSON.stringify(delta) },
+  )) as UserProfileDto;
+}
+
+export async function apiDailyClaim(userId: string): Promise<DailyClaimDto> {
+  return (await request<DailyClaimDto>(
+    `/users/${encodeURIComponent(userId)}/daily-claim`,
+    { method: "POST" },
+  )) as DailyClaimDto;
+}

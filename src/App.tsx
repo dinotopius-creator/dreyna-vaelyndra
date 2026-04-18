@@ -22,6 +22,7 @@ import { CGU } from "./pages/CGU";
 import { CGV } from "./pages/CGV";
 import { Cookies } from "./pages/Cookies";
 import { UserProfile } from "./pages/UserProfile";
+import { Avatar } from "./pages/Avatar";
 import { Guarded } from "./components/Guarded";
 import { EasterEggs } from "./components/EasterEggs";
 import { CookieBanner } from "./components/CookieBanner";
@@ -51,6 +52,7 @@ function AnimatedRoutes() {
           <Route path="/connexion" element={<Login />} />
           <Route path="/inscription" element={<Register />} />
           <Route path="/moi" element={<Guarded><Me /></Guarded>} />
+          <Route path="/avatar" element={<Guarded><Avatar /></Guarded>} />
           <Route path="/admin" element={<Guarded queenOnly><Admin /></Guarded>} />
           <Route path="/mentions-legales" element={<MentionsLegales />} />
           <Route path="/confidentialite" element={<Confidentialite />} />

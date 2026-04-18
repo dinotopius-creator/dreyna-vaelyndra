@@ -1,12 +1,14 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams, Navigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Crown, Banknote, Coins, ArrowLeft } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useStore } from "../contexts/StoreContext";
 import { SectionHeading } from "../components/SectionHeading";
+import { AvatarViewer } from "../components/AvatarViewer";
 import { formatDate, formatRelative } from "../lib/helpers";
 import { formatSylvins } from "../lib/sylvins";
+import { apiGetProfile, type UserProfileDto } from "../lib/api";
 
 export function UserProfile() {
   const { userId = "" } = useParams();
@@ -17,6 +19,26 @@ export function UserProfile() {
     () => users.find((u) => u.id === userId),
     [users, userId],
   );
+
+  const [serverProfile, setServerProfile] = useState<UserProfileDto | null>(
+    null,
+  );
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    apiGetProfile(userId)
+      .then((p) => {
+        if (!cancelled) setServerProfile(p);
+      })
+      .catch(() => {
+        // Pas encore de profil serveur (ex. user jamais connecté) — on laisse
+        // le fallback 2D s'afficher.
+        if (!cancelled) setServerProfile(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
 
   if (profile && profile.role === "queen") {
     // La reine a sa propre page dédiée — on redirige pour éviter un doublon.
@@ -56,11 +78,23 @@ export function UserProfile() {
         className="card-royal relative overflow-hidden p-8 md:p-10"
       >
         <div className="flex flex-wrap items-center gap-6">
-          <img
-            src={profile.avatar}
-            alt={profile.username}
-            className="h-24 w-24 rounded-full object-cover ring-4 ring-gold-400/50"
-          />
+          {serverProfile?.avatarUrl ? (
+            <div className="w-32 sm:w-40">
+              <AvatarViewer
+                src={serverProfile.avatarUrl}
+                fallbackImage={serverProfile.avatarImageUrl || profile.avatar}
+                alt={profile.username}
+                size="portrait"
+                framing="face"
+              />
+            </div>
+          ) : (
+            <img
+              src={profile.avatar}
+              alt={profile.username}
+              className="h-24 w-24 rounded-full object-cover ring-4 ring-gold-400/50"
+            />
+          )}
           <div className="flex-1">
             <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
               {profile.role === "knight"

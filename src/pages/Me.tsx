@@ -11,13 +11,16 @@ import {
   ShoppingBag,
   Sparkles,
   Upload,
+  UserCog,
   X,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useStore } from "../contexts/StoreContext";
 import { useToast } from "../contexts/ToastContext";
+import { useProfile } from "../contexts/ProfileContext";
 import { SectionHeading } from "../components/SectionHeading";
+import { AvatarViewer } from "../components/AvatarViewer";
 import { formatDate, formatPrice, resizeImageToDataUrl } from "../lib/helpers";
 import {
   MIN_PAYOUT_EUR,
@@ -30,6 +33,7 @@ import {
 export function Me() {
   const { user, updateProfile } = useAuth();
   const { articles, orders, products, myWallet } = useStore();
+  const { profile: serverProfile } = useProfile();
   const { notify } = useToast();
   const [bio, setBio] = useState(user?.bio ?? "");
   const [username, setUsername] = useState(user?.username ?? "");
@@ -226,6 +230,52 @@ export function Me() {
           </div>
         </form>
       </motion.header>
+
+      <section className="mt-12">
+        <SectionHeading
+          align="left"
+          eyebrow="Avatar de Vaelyndra"
+          title={<>Votre double <span className="text-mystic">elfique</span></>}
+          subtitle="Composé dans l'atelier Ready Player Me, visible partout sur le site : header, fil communautaire, chat, lives."
+        />
+        <div className="mt-6 grid gap-6 md:grid-cols-[260px_1fr]">
+          <div className="card-royal p-4">
+            <AvatarViewer
+              src={serverProfile?.avatarUrl ?? null}
+              fallbackImage={serverProfile?.avatarImageUrl ?? user.avatar}
+              alt={`Avatar 3D de ${user.username}`}
+              size="portrait"
+              framing="face"
+            />
+          </div>
+          <div className="card-royal flex flex-col justify-between gap-5 p-6">
+            <div>
+              <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
+                ✦ Personnalisez votre avatar
+              </p>
+              <p className="mt-2 text-sm text-ivory/75">
+                Cheveux, yeux, teint, tenues, accessoires… plus de 500 pièces
+                dans le catalogue. Votre avatar est sauvegardé sur le serveur
+                et vous retrouve sur tous vos appareils.
+              </p>
+              <ul className="mt-4 space-y-1.5 text-xs text-ivory/65">
+                <li>• Rotation 360°, zoom molette et drag libre</li>
+                <li>• Aperçu instantané, enregistrement en un clic</li>
+                <li>• Prêt pour la boutique d'items et les lives</li>
+              </ul>
+            </div>
+            <Link
+              to="/avatar"
+              className="inline-flex items-center gap-2 self-start rounded-full bg-gold-shine px-5 py-3 font-regal text-[11px] tracking-[0.22em] text-night-900 transition hover:brightness-110"
+            >
+              <UserCog className="h-4 w-4" />
+              {serverProfile?.avatarUrl
+                ? "Modifier mon avatar"
+                : "Composer mon avatar"}
+            </Link>
+          </div>
+        </div>
+      </section>
 
       <section className="mt-12">
         <SectionHeading
