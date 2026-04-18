@@ -44,7 +44,12 @@ export interface Product {
   price: number;
   currency: "€";
   image: string;
-  category: "Merch" | "Digital" | "VIP" | "Exclusif";
+  category: "Merch" | "Digital" | "VIP" | "Exclusif" | "Sylvins";
+  /**
+   * Amount of Sylvins (virtual currency) granted when this product is purchased.
+   * Only set on products of category "Sylvins".
+   */
+  sylvins?: number;
   rating: number;
   stock: number;
   featured?: boolean;

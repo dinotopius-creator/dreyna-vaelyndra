@@ -419,6 +419,7 @@ function ProductsAdmin() {
             })
           }
         >
+          <option>Sylvins</option>
           <option>Merch</option>
           <option>Digital</option>
           <option>VIP</option>
