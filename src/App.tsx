@@ -1,0 +1,67 @@
+import { Route, Routes, useLocation } from "react-router-dom";
+import { AnimatePresence, motion } from "framer-motion";
+import { Navbar } from "./components/Navbar";
+import { Footer } from "./components/Footer";
+import { MagicBackground } from "./components/MagicBackground";
+import { Home } from "./pages/Home";
+import { BlogList } from "./pages/BlogList";
+import { BlogArticle } from "./pages/BlogArticle";
+import { Shop } from "./pages/Shop";
+import { Cart } from "./pages/Cart";
+import { Live } from "./pages/Live";
+import { Community } from "./pages/Community";
+import { DreynaProfile } from "./pages/DreynaProfile";
+import { Login } from "./pages/Login";
+import { Register } from "./pages/Register";
+import { Me } from "./pages/Me";
+import { Admin } from "./pages/Admin";
+import { NotFound } from "./pages/NotFound";
+import { Guarded } from "./components/Guarded";
+import { EasterEggs } from "./components/EasterEggs";
+
+function AnimatedRoutes() {
+  const location = useLocation();
+  return (
+    <AnimatePresence mode="wait">
+      <motion.div
+        key={location.pathname}
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -8 }}
+        transition={{ duration: 0.35 }}
+      >
+        <Routes location={location}>
+          <Route path="/" element={<Home />} />
+          <Route path="/blog" element={<BlogList />} />
+          <Route path="/blog/:slug" element={<BlogArticle />} />
+          <Route path="/boutique" element={<Shop />} />
+          <Route path="/panier" element={<Cart />} />
+          <Route path="/live" element={<Live />} />
+          <Route path="/communaute" element={<Community />} />
+          <Route path="/dreyna" element={<DreynaProfile />} />
+          <Route path="/connexion" element={<Login />} />
+          <Route path="/inscription" element={<Register />} />
+          <Route path="/moi" element={<Guarded><Me /></Guarded>} />
+          <Route path="/admin" element={<Guarded queenOnly><Admin /></Guarded>} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+
+function App() {
+  return (
+    <div className="relative flex min-h-screen flex-col">
+      <MagicBackground />
+      <EasterEggs />
+      <Navbar />
+      <main className="flex-1">
+        <AnimatedRoutes />
+      </main>
+      <Footer />
+    </div>
+  );
+}
+
+export default App;
