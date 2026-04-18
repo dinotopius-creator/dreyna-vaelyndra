@@ -110,13 +110,13 @@ export function CGU() {
         Les Sylvins sont une monnaie <strong>strictement virtuelle</strong>,
         utilisable uniquement à l'intérieur du Royaume pour offrir des
         cadeaux animés pendant les lives, débloquer des badges ou des salons
-        VIP. Elles :
+        VIP. Ils :
       </p>
       <ul>
-        <li>n'ont pas cours légal et ne peuvent pas être reconverties en euros,</li>
-        <li>ne peuvent pas être transférées à un autre membre,</li>
+        <li>n'ont pas cours légal et ne peuvent pas être reconvertis en euros,</li>
+        <li>ne peuvent pas être transférés à un autre membre,</li>
         <li>peuvent expirer 24 mois après leur dernier achat en cas de compte inactif,</li>
-        <li>sont perdues en cas de fermeture volontaire du compte par le membre.</li>
+        <li>sont perdus en cas de fermeture volontaire du compte par le membre.</li>
       </ul>
       <p>
         Les modalités d'achat et de remboursement des Sylvins sont détaillées
@@ -129,7 +129,7 @@ export function CGU() {
         modérer, masquer ou supprimer tout contenu contrevenant aux présentes
         CGU, suspendre ou résilier un compte, couper un live, retirer la
         possibilité de diffuser, ou bannir définitivement un membre. Les
-        Sylvins non consommées sont perdues en cas de bannissement pour faute
+        Sylvins non consommés sont perdus en cas de bannissement pour faute
         grave (fraude, harcèlement, contenu illicite).
       </p>
       <p>
