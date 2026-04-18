@@ -29,11 +29,11 @@ export const DREYNA_PROFILE = {
     "Porteuse de la Couronne d'Aube",
   ],
   stats: {
-    followers: 482_193,
-    likes: 3_214_807,
-    articles: 42,
-    lives: 128,
-    communityMembers: 57_932,
+    followers: 5_900,
+    likes: 24_800,
+    articles: 16,
+    lives: 24,
+    communityMembers: 1_240,
   },
   gallery: [
     "https://images.unsplash.com/photo-1578632749014-ca77efd052eb?w=1200&auto=format&fit=crop&q=80",
