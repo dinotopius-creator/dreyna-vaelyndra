@@ -1,3 +1,4 @@
+import type React from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -11,10 +12,10 @@ import {
   Heart,
 } from "lucide-react";
 import { useStore } from "../contexts/StoreContext";
-import { DREYNA_PROFILE, TOP_FANS } from "../data/mock";
+import { DREYNA_PROFILE, TOP_FANS, ZEPETO_LIVE_STATS } from "../data/mock";
 import { SectionHeading } from "../components/SectionHeading";
 import { RuneDivider } from "../components/RuneDivider";
-import { formatNumber } from "../lib/helpers";
+import { formatNumber, formatRelative } from "../lib/helpers";
 
 export function Home() {
   const { articles, products, isLiveOn } = useStore();
@@ -122,12 +123,20 @@ function Hero({ isLiveOn }: { isLiveOn: boolean }) {
   );
 }
 
+type StatItem = {
+  value: string | number;
+  label: string;
+  icon: React.ReactNode;
+  live?: boolean;
+};
+
 function StatsBar() {
-  const items = [
+  const items: StatItem[] = [
     {
       value: formatNumber(DREYNA_PROFILE.stats.followers),
       label: "Abonnés à la cour",
       icon: <Users className="h-4 w-4" />,
+      live: true,
     },
     {
       value: formatNumber(DREYNA_PROFILE.stats.likes),
@@ -138,6 +147,7 @@ function StatsBar() {
       value: DREYNA_PROFILE.stats.articles,
       label: "Chroniques",
       icon: <BookOpen className="h-4 w-4" />,
+      live: true,
     },
     {
       value: DREYNA_PROFILE.stats.lives,
@@ -154,7 +164,21 @@ function StatsBar() {
               {it.icon}
             </span>
             <div>
-              <p className="font-display text-xl text-gold-200">{it.value}</p>
+              <div className="flex items-center gap-2">
+                <p className="font-display text-xl text-gold-200">{it.value}</p>
+                {it.live && (
+                  <span
+                    title={`Synchronisé avec ZEPETO — dernière mise à jour ${formatRelative(ZEPETO_LIVE_STATS.fetchedAt)}`}
+                    className="inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-[1px] text-[9px] font-semibold uppercase tracking-[0.18em] text-emerald-300"
+                  >
+                    <span className="relative flex h-1.5 w-1.5">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                    </span>
+                    live
+                  </span>
+                )}
+              </div>
               <p className="font-regal text-[10px] tracking-[0.22em] text-ivory/60">
                 {it.label}
               </p>
@@ -162,6 +186,10 @@ function StatsBar() {
           </div>
         ))}
       </div>
+      <p className="mt-3 text-center font-regal text-[10px] tracking-[0.25em] text-ivory/40">
+        Stats ZEPETO · @{ZEPETO_LIVE_STATS.handle} · synchronisé{" "}
+        {formatRelative(ZEPETO_LIVE_STATS.fetchedAt)}
+      </p>
     </section>
   );
 }
