@@ -258,8 +258,14 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     }
 
     // Quand la reine arrête le partage depuis le prompt navigateur, on stoppe.
+    // On vérifie que ce stream est bien encore le stream actif : sinon c'est
+    // un ancien partage que le guard anti race-condition a explicitement
+    // coupé (track.stop() fire 'ended' en tâche asynchrone), il ne faut
+    // surtout pas appeler stopLive() sur le live qui vient de démarrer.
     stream.getVideoTracks().forEach((track) => {
-      track.addEventListener("ended", () => stopLive());
+      track.addEventListener("ended", () => {
+        if (localStreamRef.current === stream) stopLive();
+      });
     });
 
     localStreamRef.current = stream;
