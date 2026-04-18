@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .db import init_db
-from .routers import posts
+from .routers import posts, users
 
 app = FastAPI(title="Vaelyndra API", version="0.1.0")
 
@@ -38,3 +38,4 @@ def healthz() -> dict[str, str]:
 
 
 app.include_router(posts.router)
+app.include_router(users.router)

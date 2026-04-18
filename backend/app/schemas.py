@@ -52,3 +52,64 @@ class PostOut(BaseModel):
     createdAt: str
     reactions: Dict[str, List[str]] = {}
     comments: List[CommentOut] = []
+
+
+# --- Profils utilisateur ---------------------------------------------------
+
+
+class UserProfileUpsert(BaseModel):
+    """Payload d'upsert minimal envoyé par le front lors de la 1re connexion.
+
+    Permet au serveur de créer le profil s'il n'existe pas encore. `id` est
+    l'identifiant stable du user côté front (ex. `user-lyria`).
+    """
+
+    id: str = Field(..., min_length=1, max_length=128)
+    username: str = Field(..., min_length=1, max_length=64)
+    avatar_image_url: str = Field(..., min_length=1, max_length=1024)
+
+
+class AvatarUpdate(BaseModel):
+    avatar_url: Optional[str] = Field(default=None, max_length=1024)
+    avatar_image_url: Optional[str] = Field(default=None, max_length=1024)
+
+
+class InventoryUpdate(BaseModel):
+    """Remplace l'inventaire complet (list d'ids) et/ou l'équipement."""
+
+    inventory: Optional[List[str]] = None
+    equipped: Optional[Dict[str, str]] = None
+
+
+class WalletDelta(BaseModel):
+    """Crédit / débit atomique sur l'une des bourses.
+
+    Les valeurs peuvent être négatives (débit). Le serveur refuse les soldes
+    négatifs finaux (HTTP 400).
+    """
+
+    lueurs: int = 0
+    sylvins: int = 0
+    sylvins_earnings: int = 0
+    reason: Optional[str] = Field(default=None, max_length=128)
+
+
+class UserProfileOut(BaseModel):
+    id: str
+    username: str
+    avatarImageUrl: str
+    avatarUrl: Optional[str] = None
+    inventory: List[str] = []
+    equipped: Dict[str, str] = {}
+    lueurs: int = 0
+    sylvins: int = 0
+    sylvinsEarnings: int = 0
+    lastDailyAt: Optional[str] = None
+    createdAt: str
+    updatedAt: str
+
+
+class DailyClaimOut(BaseModel):
+    granted: int
+    already_claimed: bool = False
+    profile: UserProfileOut
