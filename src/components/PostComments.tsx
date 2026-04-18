@@ -4,7 +4,8 @@ import { Send, Trash2 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useStore } from "../contexts/StoreContext";
 import { useToast } from "../contexts/ToastContext";
-import { formatRelative, generateId } from "../lib/helpers";
+import { formatRelative } from "../lib/helpers";
+import { apiAddComment, apiDeleteComment } from "../lib/api";
 import { DREYNA_PROFILE } from "../data/mock";
 import type { Comment } from "../types";
 
@@ -25,31 +26,39 @@ export function PostComments({ postId, comments, postAuthorId }: Props) {
     return authorId === DREYNA_PROFILE.id ? "/dreyna" : `/u/${authorId}`;
   }
 
-  function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!user) {
       notify("Connectez-vous pour commenter.", "info");
       return;
     }
     if (!draft.trim()) return;
-    dispatch({
-      type: "addPostComment",
-      postId,
-      comment: {
-        id: generateId("cmt"),
-        authorId: user.id,
-        authorName: user.username,
-        authorAvatar: user.avatar,
+    try {
+      const comment = await apiAddComment(postId, {
+        author: {
+          author_id: user.id,
+          author_name: user.username,
+          author_avatar: user.avatar,
+        },
         content: draft.trim(),
-        createdAt: new Date().toISOString(),
-        likes: [],
-      },
-    });
-    setDraft("");
+      });
+      dispatch({ type: "addPostComment", postId, comment });
+      setDraft("");
+    } catch (err) {
+      console.warn(err);
+      notify("Commentaire perdu en route.", "error");
+    }
   }
 
-  function remove(commentId: string) {
-    dispatch({ type: "deletePostComment", postId, commentId });
+  async function remove(commentId: string) {
+    if (!user) return;
+    try {
+      await apiDeleteComment(postId, commentId, user.id);
+      dispatch({ type: "deletePostComment", postId, commentId });
+    } catch (err) {
+      console.warn(err);
+      notify("Suppression refusée par le royaume.", "error");
+    }
   }
 
   return (

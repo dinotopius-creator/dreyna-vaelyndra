@@ -18,12 +18,12 @@ import { useToast } from "../contexts/ToastContext";
 import { SectionHeading } from "../components/SectionHeading";
 import { PostComments } from "../components/PostComments";
 import { DREYNA_PROFILE, TOP_FANS } from "../data/mock";
+import { formatNumber, formatRelative, parseVideoUrl } from "../lib/helpers";
 import {
-  formatNumber,
-  formatRelative,
-  generateId,
-  parseVideoUrl,
-} from "../lib/helpers";
+  apiCreatePost,
+  apiDeletePost,
+  apiToggleReaction,
+} from "../lib/api";
 
 const QUICK_EMOJIS = ["✨", "👑", "🌿", "⚔️", "🌙", "🔮"];
 
@@ -56,7 +56,7 @@ export function Community() {
     [posts],
   );
 
-  function publish(e: React.FormEvent) {
+  async function publish(e: React.FormEvent) {
     e.preventDefault();
     if (!user) {
       notify("Connectez-vous pour publier dans la cour.", "info");
@@ -74,33 +74,56 @@ export function Community() {
         return;
       }
     }
-    dispatch({
-      type: "addPost",
-      post: {
-        id: generateId("post"),
-        authorId: user.id,
-        authorName: user.username,
-        authorAvatar: user.avatar,
+    try {
+      const post = await apiCreatePost({
+        author: {
+          author_id: user.id,
+          author_name: user.username,
+          author_avatar: user.avatar,
+        },
         content: draft.trim(),
         imageUrl: imageUrl.trim() || undefined,
         videoUrl: cleanedVideo || undefined,
-        createdAt: new Date().toISOString(),
-        reactions: {},
-        comments: [],
-      },
-    });
-    setDraft("");
-    setImageUrl("");
-    setVideoUrl("");
-    notify("Votre parole brille dans la cour 🌟");
+      });
+      dispatch({ type: "addPost", post });
+      setDraft("");
+      setImageUrl("");
+      setVideoUrl("");
+      notify("Votre parole brille dans la cour 🌟");
+    } catch (err) {
+      console.warn(err);
+      notify("Le parchemin n'a pas pu être envoyé. Réessayez.", "error");
+    }
   }
 
-  function react(postId: string, emoji: string) {
+  async function react(postId: string, emoji: string) {
     if (!user) {
       notify("Connectez-vous pour réagir.", "info");
       return;
     }
+    // Optimiste : on maj le reducer immédiatement, puis on confirme via l'API.
+    // Si l'API échoue, on resynchronise avec l'état renvoyé par le backend.
     dispatch({ type: "reactPost", postId, emoji, userId: user.id });
+    try {
+      const fresh = await apiToggleReaction(postId, user.id, emoji);
+      dispatch({ type: "replacePost", post: fresh });
+    } catch (err) {
+      console.warn(err);
+      // Rollback : on retoggle localement pour annuler l'optimiste.
+      dispatch({ type: "reactPost", postId, emoji, userId: user.id });
+      notify("Réaction perdue en route. Réessayez.", "error");
+    }
+  }
+
+  async function removePost(postId: string) {
+    if (!user) return;
+    try {
+      await apiDeletePost(postId, user.id);
+      dispatch({ type: "deletePost", id: postId });
+    } catch (err) {
+      console.warn(err);
+      notify("Suppression refusée par le royaume.", "error");
+    }
   }
 
   function profileHref(authorId: string) {
@@ -265,7 +288,7 @@ export function Community() {
                   </div>
                   {(user?.id === p.authorId || isQueen) && (
                     <button
-                      onClick={() => dispatch({ type: "deletePost", id: p.id })}
+                      onClick={() => removePost(p.id)}
                       className="text-ivory/40 hover:text-rose-300"
                       title="Supprimer"
                     >

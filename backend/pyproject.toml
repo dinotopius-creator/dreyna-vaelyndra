@@ -1,0 +1,19 @@
+[project]
+name = "vaelyndra-backend"
+version = "0.1.0"
+description = "Backend de la cour de Vaelyndra (posts, commentaires, réactions)."
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi[standard]>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "sqlmodel>=0.0.22",
+    "pydantic>=2.6",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
