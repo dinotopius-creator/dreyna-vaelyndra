@@ -7,6 +7,16 @@ import type {
   Product,
 } from "../types";
 import dreynaZepetoPhoto from "../assets/dreyna-zepeto.png";
+import zepetoStats from "./zepeto-stats.json";
+
+export const ZEPETO_LIVE_STATS = zepetoStats as {
+  source: string;
+  handle: string;
+  followers: number;
+  following: number | null;
+  posts: number;
+  fetchedAt: string;
+};
 
 export const DREYNA_PROFILE = {
   id: "user-dreyna",
@@ -29,9 +39,9 @@ export const DREYNA_PROFILE = {
     "Porteuse de la Couronne d'Aube",
   ],
   stats: {
-    followers: 5_900,
+    followers: ZEPETO_LIVE_STATS.followers,
     likes: 24_800,
-    articles: 16,
+    articles: ZEPETO_LIVE_STATS.posts,
     lives: 24,
     communityMembers: 1_240,
   },

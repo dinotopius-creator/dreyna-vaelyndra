@@ -1,9 +1,9 @@
 import { motion } from "framer-motion";
 import { Crown, Gem, PlayCircle, Sparkles } from "lucide-react";
-import { BADGES, DREYNA_PROFILE } from "../data/mock";
+import { BADGES, DREYNA_PROFILE, ZEPETO_LIVE_STATS } from "../data/mock";
 import { SectionHeading } from "../components/SectionHeading";
 import { RuneDivider } from "../components/RuneDivider";
-import { formatNumber } from "../lib/helpers";
+import { formatNumber, formatRelative } from "../lib/helpers";
 
 export function DreynaProfile() {
   return (
@@ -66,23 +66,36 @@ export function DreynaProfile() {
               </a>
             </div>
             <div className="mt-8 grid grid-cols-2 gap-3 md:grid-cols-4">
-              {[
-                ["Abonnés", formatNumber(DREYNA_PROFILE.stats.followers)],
-                ["Cœurs", formatNumber(DREYNA_PROFILE.stats.likes)],
-                ["Articles", DREYNA_PROFILE.stats.articles],
-                ["Lives", DREYNA_PROFILE.stats.lives],
-              ].map(([label, value]) => (
-                <div
-                  key={label as string}
-                  className="card-royal p-4 text-center"
-                >
-                  <p className="font-display text-2xl text-gold-200">{value}</p>
+              {(
+                [
+                  ["Abonnés", formatNumber(DREYNA_PROFILE.stats.followers), true],
+                  ["Cœurs", formatNumber(DREYNA_PROFILE.stats.likes), false],
+                  ["Articles", DREYNA_PROFILE.stats.articles, true],
+                  ["Lives", DREYNA_PROFILE.stats.lives, false],
+                ] as [string, string | number, boolean][]
+              ).map(([label, value, live]) => (
+                <div key={label} className="card-royal p-4 text-center">
+                  <div className="flex items-center justify-center gap-1.5">
+                    <p className="font-display text-2xl text-gold-200">
+                      {value}
+                    </p>
+                    {live && (
+                      <span className="relative flex h-1.5 w-1.5">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                      </span>
+                    )}
+                  </div>
                   <p className="font-regal text-[10px] tracking-[0.22em] text-ivory/55">
                     {label}
                   </p>
                 </div>
               ))}
             </div>
+            <p className="mt-3 font-regal text-[10px] tracking-[0.22em] text-ivory/45">
+              Stats ZEPETO · @{ZEPETO_LIVE_STATS.handle} · synchronisé{" "}
+              {formatRelative(ZEPETO_LIVE_STATS.fetchedAt)}
+            </p>
           </div>
         </div>
       </section>

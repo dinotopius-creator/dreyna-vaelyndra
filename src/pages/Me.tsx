@@ -162,7 +162,7 @@ export function Me() {
               </div>
             </div>
             <p className="mt-2 text-[11px] text-ivory/50">
-              Astuce : tu peux sauvegarder ta photo ZEPETO sur ton PC, puis cliquer "Importer". Max 2 Mo.
+              Astuce : tu peux sauvegarder ta photo ZEPETO sur ton PC, puis cliquer "Importer". Max 5 Mo.
             </p>
           </motion.div>
         )}
