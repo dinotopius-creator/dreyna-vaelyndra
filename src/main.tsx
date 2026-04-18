@@ -7,17 +7,20 @@ import { AuthProvider } from "./contexts/AuthContext";
 import { StoreProvider } from "./contexts/StoreContext";
 import { ToastProvider } from "./contexts/ToastContext";
 import { LiveProvider } from "./contexts/LiveContext";
+import { ProfileProvider } from "./contexts/ProfileContext";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter>
       <ToastProvider>
         <AuthProvider>
-          <StoreProvider>
-            <LiveProvider>
-              <App />
-            </LiveProvider>
-          </StoreProvider>
+          <ProfileProvider>
+            <StoreProvider>
+              <LiveProvider>
+                <App />
+              </LiveProvider>
+            </StoreProvider>
+          </ProfileProvider>
         </AuthProvider>
       </ToastProvider>
     </BrowserRouter>

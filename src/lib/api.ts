@@ -18,6 +18,15 @@ interface AuthorPayload {
   author_avatar: string;
 }
 
+export class ApiError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+    this.name = "ApiError";
+  }
+}
+
 async function request<T>(
   path: string,
   init: RequestInit = {},
@@ -31,7 +40,8 @@ async function request<T>(
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(
+    throw new ApiError(
+      res.status,
       `API ${init.method ?? "GET"} ${path} → ${res.status} ${text}`,
     );
   }
@@ -112,4 +122,105 @@ export async function apiDeleteComment(
     )}?user_id=${encodeURIComponent(userId)}`,
     { method: "DELETE" },
   );
+}
+
+// --- Profils utilisateur (avatar, inventaire, bourses) --------------------
+
+/**
+ * Profil serveur renvoyé par les endpoints /users.
+ *
+ * - `avatarUrl` : URL .glb (Ready Player Me) pour le rendu 3D
+ * - `avatarImageUrl` : rendu 2D (.png) utilisé dans la navbar, les posts, le chat
+ * - `inventory` / `equipped` : items possédés / équipés (ids opaque string)
+ * - `lueurs` (monnaie gratuite) / `sylvins` (premium) / `sylvinsEarnings` (part streamer)
+ */
+export interface UserProfileDto {
+  id: string;
+  username: string;
+  avatarImageUrl: string;
+  avatarUrl: string | null;
+  inventory: string[];
+  equipped: Record<string, string>;
+  lueurs: number;
+  sylvins: number;
+  sylvinsEarnings: number;
+  lastDailyAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DailyClaimDto {
+  granted: number;
+  already_claimed: boolean;
+  profile: UserProfileDto;
+}
+
+export async function apiUpsertProfile(input: {
+  id: string;
+  username: string;
+  avatarImageUrl: string;
+}): Promise<UserProfileDto> {
+  return (await request<UserProfileDto>("/users", {
+    method: "POST",
+    body: JSON.stringify({
+      id: input.id,
+      username: input.username,
+      avatar_image_url: input.avatarImageUrl,
+    }),
+  })) as UserProfileDto;
+}
+
+export async function apiGetProfile(userId: string): Promise<UserProfileDto> {
+  return (await request<UserProfileDto>(
+    `/users/${encodeURIComponent(userId)}`,
+  )) as UserProfileDto;
+}
+
+export async function apiUpdateAvatar(
+  userId: string,
+  patch: { avatarUrl?: string | null; avatarImageUrl?: string },
+): Promise<UserProfileDto> {
+  // Patch partiel : on n'envoie que les champs réellement fournis, sinon le
+  // serveur considèrerait `avatar_url: null` comme un ordre d'effacement et
+  // effacerait le .glb de l'utilisateur à la prochaine maj de vignette.
+  const body: Record<string, string | null> = {};
+  if (patch.avatarUrl !== undefined) body.avatar_url = patch.avatarUrl;
+  if (patch.avatarImageUrl !== undefined)
+    body.avatar_image_url = patch.avatarImageUrl;
+  return (await request<UserProfileDto>(
+    `/users/${encodeURIComponent(userId)}/avatar`,
+    { method: "PATCH", body: JSON.stringify(body) },
+  )) as UserProfileDto;
+}
+
+export async function apiUpdateInventory(
+  userId: string,
+  patch: { inventory?: string[]; equipped?: Record<string, string> },
+): Promise<UserProfileDto> {
+  return (await request<UserProfileDto>(
+    `/users/${encodeURIComponent(userId)}/inventory`,
+    { method: "PATCH", body: JSON.stringify(patch) },
+  )) as UserProfileDto;
+}
+
+export async function apiApplyWalletDelta(
+  userId: string,
+  delta: {
+    lueurs?: number;
+    sylvins?: number;
+    sylvins_earnings?: number;
+    reason?: string;
+  },
+): Promise<UserProfileDto> {
+  return (await request<UserProfileDto>(
+    `/users/${encodeURIComponent(userId)}/wallet`,
+    { method: "POST", body: JSON.stringify(delta) },
+  )) as UserProfileDto;
+}
+
+export async function apiDailyClaim(userId: string): Promise<DailyClaimDto> {
+  return (await request<DailyClaimDto>(
+    `/users/${encodeURIComponent(userId)}/daily-claim`,
+    { method: "POST" },
+  )) as DailyClaimDto;
 }
