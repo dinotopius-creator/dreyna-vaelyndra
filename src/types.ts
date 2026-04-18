@@ -111,3 +111,47 @@ export interface Badge {
   icon: string;
   rarity: "commun" | "rare" | "mythique" | "royale";
 }
+
+export type GiftRarity =
+  | "commun"
+  | "rare"
+  | "epique"
+  | "legendaire"
+  | "mythique";
+
+export interface Gift {
+  id: string;
+  name: string;
+  /** Coût en Sylvins (retiré du wallet du viewer et crédité au streamer). */
+  price: number;
+  /** Chemin vers l'icône SVG (public/gifts/xxx.svg). */
+  icon: string;
+  rarity: GiftRarity;
+  description: string;
+}
+
+/**
+ * Portefeuille Sylvins d'un membre.
+ * - `balance` : Sylvins achetés que le membre peut dépenser en cadeaux.
+ * - `earnings` : Sylvins reçus en cadeaux (solde streamer, convertible en €).
+ * - `history` : trace des cadeaux envoyés/reçus pour l'affichage.
+ */
+export interface Wallet {
+  userId: string;
+  balance: number;
+  earnings: number;
+  history: GiftEvent[];
+}
+
+export interface GiftEvent {
+  id: string;
+  giftId: string;
+  /** Celui qui a offert. */
+  fromId: string;
+  fromName: string;
+  fromAvatar: string;
+  /** Celui qui reçoit (streamer). */
+  toId: string;
+  toName: string;
+  createdAt: string;
+}

@@ -1,11 +1,21 @@
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { ExternalLink, Film, Image, Send, Sparkles, Trash2 } from "lucide-react";
+import {
+  ExternalLink,
+  Film,
+  Image,
+  MessageCircle,
+  Send,
+  Sparkles,
+  Trash2,
+} from "lucide-react";
+import { Link } from "react-router-dom";
 import { useStore } from "../contexts/StoreContext";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
 import { SectionHeading } from "../components/SectionHeading";
-import { TOP_FANS } from "../data/mock";
+import { PostComments } from "../components/PostComments";
+import { DREYNA_PROFILE, TOP_FANS } from "../data/mock";
 import {
   formatNumber,
   formatRelative,
@@ -22,6 +32,9 @@ export function Community() {
   const [draft, setDraft] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
+  const [openComments, setOpenComments] = useState<Record<string, boolean>>(
+    {},
+  );
 
   const sorted = useMemo(
     () =>
@@ -77,6 +90,10 @@ export function Community() {
       return;
     }
     dispatch({ type: "reactPost", postId, emoji, userId: user.id });
+  }
+
+  function profileHref(authorId: string) {
+    return authorId === DREYNA_PROFILE.id ? "/dreyna" : `/u/${authorId}`;
   }
 
   return (
@@ -151,16 +168,25 @@ export function Community() {
                 className="card-royal p-5"
               >
                 <header className="flex items-start gap-3">
-                  <img
-                    src={p.authorAvatar}
-                    alt={p.authorName}
-                    className="h-10 w-10 rounded-full object-cover ring-2 ring-royal-500/40"
-                  />
+                  <Link
+                    to={profileHref(p.authorId)}
+                    className="shrink-0"
+                    title={`Voir le profil de ${p.authorName}`}
+                  >
+                    <img
+                      src={p.authorAvatar}
+                      alt={p.authorName}
+                      className="h-10 w-10 rounded-full object-cover ring-2 ring-royal-500/40 transition hover:ring-gold-400/70"
+                    />
+                  </Link>
                   <div className="flex-1">
                     <p className="flex items-center gap-2 text-sm">
-                      <span className="font-display text-gold-200">
+                      <Link
+                        to={profileHref(p.authorId)}
+                        className="font-display text-gold-200 transition hover:text-gold-300"
+                      >
                         {p.authorName}
-                      </span>
+                      </Link>
                       <span className="text-xs text-ivory/40">
                         {formatRelative(p.createdAt)}
                       </span>
@@ -210,7 +236,28 @@ export function Community() {
                       </button>
                     );
                   })}
+                  <button
+                    onClick={() =>
+                      setOpenComments((s) => ({ ...s, [p.id]: !s[p.id] }))
+                    }
+                    className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-royal-500/30 px-3 py-1 text-sm text-ivory/70 transition hover:border-gold-400/40 hover:text-gold-200"
+                  >
+                    <MessageCircle className="h-3.5 w-3.5" />
+                    Commenter
+                    {p.comments.length > 0 && (
+                      <span className="text-xs text-gold-300">
+                        {p.comments.length}
+                      </span>
+                    )}
+                  </button>
                 </div>
+                {openComments[p.id] && (
+                  <PostComments
+                    postId={p.id}
+                    comments={p.comments}
+                    postAuthorId={p.authorId}
+                  />
+                )}
               </motion.li>
             ))}
             {sorted.length === 0 && (
