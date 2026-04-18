@@ -27,6 +27,15 @@ export function Cart() {
     }
     setProcessing(true);
     setTimeout(() => {
+      // Total des Sylvins à créditer au wallet du membre pour les packs de
+      // monnaie virtuelle présents dans le panier.
+      let sylvinsGained = 0;
+      for (const c of cart) {
+        const prod = products.find((p) => p.id === c.productId);
+        if (prod?.category === "Sylvins" && prod.sylvins) {
+          sylvinsGained += prod.sylvins * c.quantity;
+        }
+      }
       dispatch({
         type: "checkout",
         order: {
@@ -43,7 +52,18 @@ export function Cart() {
           status: "paid",
         },
       });
-      notify("✨ Paiement simulé — votre commande est scellée !");
+      if (sylvinsGained > 0) {
+        dispatch({
+          type: "creditSylvins",
+          userId: user.id,
+          amount: sylvinsGained,
+        });
+      }
+      notify(
+        sylvinsGained > 0
+          ? `✨ Commande scellée — ${sylvinsGained.toLocaleString("fr-FR")} Sylvins crédités !`
+          : "✨ Paiement simulé — votre commande est scellée !",
+      );
       setProcessing(false);
     }, 1200);
   }

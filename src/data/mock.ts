@@ -3,6 +3,7 @@ import type {
   Badge,
   ChatMessage,
   CommunityPost,
+  Gift,
   LiveSession,
   Product,
 } from "../types";
@@ -494,4 +495,92 @@ export const EASTER_EGG_HINTS = [
   "On dit que trois clics sur la couronne ouvrent une porte secrète...",
   "La console connaît peut-être un serment oublié.",
   "↑ ↑ ↓ ↓ ← → ← → B A. Certaines magies sont universelles.",
+];
+
+/**
+ * Catalogue de cadeaux Sylvins envoyables en live. Les prix sont en Sylvins ;
+ * le streamer reçoit l'intégralité du montant, la conversion en € se fait
+ * au retrait (voir `src/lib/sylvins.ts`).
+ */
+export const GIFT_CATALOGUE: Gift[] = [
+  {
+    id: "gift-brindille",
+    name: "Brindille",
+    price: 5,
+    icon: "/gifts/brindille.svg",
+    rarity: "commun",
+    description: "Un éclat de forêt pour dire merci.",
+  },
+  {
+    id: "gift-chandelle",
+    name: "Chandelle",
+    price: 10,
+    icon: "/gifts/chandelle.svg",
+    rarity: "commun",
+    description: "Une flamme discrète pour le streamer.",
+  },
+  {
+    id: "gift-fleur",
+    name: "Fleur d'Eledwyn",
+    price: 25,
+    icon: "/gifts/fleur.svg",
+    rarity: "rare",
+    description: "Une fleur d'argent, symbole de fidélité.",
+  },
+  {
+    id: "gift-epee",
+    name: "Épée courte",
+    price: 50,
+    icon: "/gifts/epee.svg",
+    rarity: "rare",
+    description: "Lame d'argent, pour saluer la garde.",
+  },
+  {
+    id: "gift-eclat",
+    name: "Éclat cristallin",
+    price: 100,
+    icon: "/gifts/eclat.svg",
+    rarity: "epique",
+    description: "Un cristal d'émeraude pour honorer.",
+  },
+  {
+    id: "gift-couronne",
+    name: "Couronne mineure",
+    price: 250,
+    icon: "/gifts/couronne.svg",
+    rarity: "epique",
+    description: "Titre honorifique éphémère pour le streamer.",
+  },
+  {
+    id: "gift-licorne",
+    name: "Licorne d'argent",
+    price: 500,
+    icon: "/gifts/licorne.svg",
+    rarity: "legendaire",
+    description: "Galop mystique à travers le stream.",
+  },
+  {
+    id: "gift-dragon",
+    name: "Dragon émeraude",
+    price: 1000,
+    icon: "/gifts/dragon.svg",
+    rarity: "legendaire",
+    description: "Le dragon ancestral descend sur ta cour.",
+  },
+  {
+    id: "gift-chateau",
+    name: "Château de Vaelyndra",
+    price: 5000,
+    icon: "/gifts/chateau.svg",
+    rarity: "mythique",
+    description: "Offre un fief au streamer pour une nuit.",
+  },
+  {
+    id: "gift-etoile",
+    name: "Étoile d'Elennor",
+    price: 10000,
+    icon: "/gifts/etoile.svg",
+    rarity: "mythique",
+    description: "La relique ultime — la cour s'incline.",
+  },
 ];

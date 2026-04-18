@@ -1,24 +1,35 @@
 import { useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
+  Banknote,
   Camera,
+  Coins,
   Crown,
   Heart,
   Link as LinkIcon,
   Save,
   ShoppingBag,
+  Sparkles,
   Upload,
   X,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useStore } from "../contexts/StoreContext";
 import { useToast } from "../contexts/ToastContext";
 import { SectionHeading } from "../components/SectionHeading";
 import { formatDate, formatPrice, resizeImageToDataUrl } from "../lib/helpers";
+import {
+  MIN_PAYOUT_EUR,
+  PLATFORM_CUT,
+  formatEur,
+  formatSylvins,
+  sylvinsToNetEur,
+} from "../lib/sylvins";
 
 export function Me() {
   const { user, updateProfile } = useAuth();
-  const { articles, orders, products } = useStore();
+  const { articles, orders, products, myWallet } = useStore();
   const { notify } = useToast();
   const [bio, setBio] = useState(user?.bio ?? "");
   const [username, setUsername] = useState(user?.username ?? "");
@@ -215,6 +226,74 @@ export function Me() {
           </div>
         </form>
       </motion.header>
+
+      <section className="mt-12">
+        <SectionHeading
+          align="left"
+          eyebrow="Trésorerie"
+          title={<>Votre bourse de <span className="text-mystic">Sylvins</span></>}
+          subtitle="Achetez des Sylvins pour soutenir les streamers, recevez-en en retour de vos lives. Les recettes de streamer sont converties en € au retrait."
+        />
+        <div className="mt-6 grid gap-4 lg:grid-cols-[1fr,1fr]">
+          <div className="card-royal p-5">
+            <div className="flex items-center gap-2">
+              <Coins className="h-5 w-5 text-gold-300" />
+              <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
+                Solde à dépenser
+              </p>
+            </div>
+            <p className="mt-3 font-display text-3xl text-gold-200">
+              {formatSylvins(myWallet.balance)} Sylvins
+            </p>
+            <p className="mt-1 text-xs text-ivory/60">
+              Utilisables dans les lives pour offrir des cadeaux animés.
+            </p>
+            <Link to="/boutique" className="btn-gold mt-4 inline-flex">
+              <Sparkles className="h-4 w-4" /> Recharger
+            </Link>
+          </div>
+          <div className="card-royal p-5">
+            <div className="flex items-center gap-2">
+              <Banknote className="h-5 w-5 text-gold-300" />
+              <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
+                Recettes streamer
+              </p>
+            </div>
+            <p className="mt-3 font-display text-3xl text-gold-200">
+              {formatSylvins(myWallet.earnings)} Sylvins
+            </p>
+            <p className="mt-1 text-xs text-ivory/60">
+              Net estimé :{" "}
+              <span className="text-gold-200">
+                {formatEur(sylvinsToNetEur(myWallet.earnings))}
+              </span>{" "}
+              (après {Math.round(PLATFORM_CUT * 100)}% de frais plateforme)
+            </p>
+            <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-night-900/60">
+              <div
+                className="h-full bg-gold-shine"
+                style={{
+                  width: `${Math.min(
+                    100,
+                    (sylvinsToNetEur(myWallet.earnings) / MIN_PAYOUT_EUR) * 100,
+                  )}%`,
+                }}
+              />
+            </div>
+            <p className="mt-2 text-[11px] text-ivory/50">
+              Seuil de retrait : {formatEur(MIN_PAYOUT_EUR)}
+            </p>
+            <button
+              type="button"
+              className="btn-royal mt-4 inline-flex disabled:cursor-not-allowed disabled:opacity-50"
+              disabled
+              title="Branchement Stripe Connect en cours — disponible après mise en ligne du VPS."
+            >
+              <Banknote className="h-4 w-4" /> Retirer en € (bientôt)
+            </button>
+          </div>
+        </div>
+      </section>
 
       <section className="mt-12">
         <SectionHeading

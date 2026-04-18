@@ -25,12 +25,14 @@ import {
   useLive,
 } from "../contexts/LiveContext";
 import { SectionHeading } from "../components/SectionHeading";
+import { GiftPanel } from "../components/GiftPanel";
+import { GiftFlight } from "../components/GiftFlight";
 import {
   AUTO_CHAT_LINES,
   DREYNA_PROFILE,
   SEED_CHAT,
 } from "../data/mock";
-import type { ChatMessage } from "../types";
+import type { ChatMessage, Gift } from "../types";
 import { generateId } from "../lib/helpers";
 
 const BOT_AUTHORS = [
@@ -418,6 +420,9 @@ export function Live() {
   const [input, setInput] = useState("");
   const [viewers, setViewers] = useState(1284);
   const [hearts, setHearts] = useState<{ id: string; x: number }[]>([]);
+  const [giftFlights, setGiftFlights] = useState<
+    { id: string; gift: Gift; x: number }[]
+  >([]);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   // Simulate viewers pulse
@@ -490,6 +495,15 @@ export function Live() {
     const id = generateId("h");
     setHearts((h) => [...h, { id, x: Math.random() * 100 }]);
     setTimeout(() => setHearts((h) => h.filter((x) => x.id !== id)), 2500);
+  }
+
+  function onGiftSent(gift: Gift) {
+    const id = generateId("gflight");
+    setGiftFlights((f) => [...f, { id, gift, x: 10 + Math.random() * 80 }]);
+    setTimeout(
+      () => setGiftFlights((f) => f.filter((x) => x.id !== id)),
+      2800,
+    );
   }
 
   const heroTitle = config.title?.trim() || "Nuit Étoilée · Ouverture de la cour";
@@ -585,6 +599,7 @@ export function Live() {
                   </motion.span>
                 ))}
               </AnimatePresence>
+              <GiftFlight items={giftFlights} />
 
               <div className="pointer-events-none absolute right-4 top-4 flex items-center gap-2 rounded-full bg-night-900/70 px-3 py-1.5 text-xs text-ivory/80 backdrop-blur">
                 <Users className="h-3.5 w-3.5 text-gold-300" /> {viewers} elfes
@@ -613,6 +628,14 @@ export function Live() {
           </div>
 
           <QueenControls />
+
+          <div className="mt-8">
+            <GiftPanel
+              hostId={DREYNA_PROFILE.id}
+              hostName={DREYNA_PROFILE.username}
+              onGiftSent={onGiftSent}
+            />
+          </div>
 
           <section className="mt-12">
             <SectionHeading

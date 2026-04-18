@@ -12,17 +12,22 @@ import type {
   Article,
   CartItem,
   CommunityPost,
+  Gift,
+  GiftEvent,
   LiveSession,
   Order,
   Product,
   Comment,
+  Wallet,
 } from "../types";
 import {
+  GIFT_CATALOGUE,
   INITIAL_ARTICLES,
   INITIAL_COMMUNITY_POSTS,
   INITIAL_LIVES,
   INITIAL_PRODUCTS,
 } from "../data/mock";
+import { generateId } from "../lib/helpers";
 import { useAuth } from "./AuthContext";
 
 interface StoreState {
@@ -37,6 +42,10 @@ interface StoreState {
    * deleted. We track them so the merge logic doesn't resurrect them on reload.
    */
   deletedMockProductIds: string[];
+  /**
+   * Per-user Sylvins wallets (balance, streamer earnings, gift history).
+   */
+  wallets: Record<string, Wallet>;
 }
 
 const MOCK_PRODUCT_IDS = new Set(INITIAL_PRODUCTS.map((p) => p.id));
@@ -64,8 +73,19 @@ type Action =
   | { type: "deletePost"; id: string }
   | { type: "reactPost"; postId: string; emoji: string; userId: string }
   | { type: "addPostComment"; postId: string; comment: Comment }
+  | { type: "deletePostComment"; postId: string; commentId: string }
   | { type: "addLive"; live: LiveSession }
-  | { type: "deleteLive"; id: string };
+  | { type: "deleteLive"; id: string }
+  | {
+      type: "sendGift";
+      gift: Gift;
+      fromId: string;
+      fromName: string;
+      fromAvatar: string;
+      toId: string;
+      toName: string;
+    }
+  | { type: "creditSylvins"; userId: string; amount: number };
 
 const STORAGE_KEY = "vaelyndra_store_v1";
 
@@ -198,10 +218,72 @@ function reducer(state: StoreState, action: Action): StoreState {
             : p,
         ),
       };
+    case "deletePostComment":
+      return {
+        ...state,
+        posts: state.posts.map((p) =>
+          p.id === action.postId
+            ? {
+                ...p,
+                comments: p.comments.filter((c) => c.id !== action.commentId),
+              }
+            : p,
+        ),
+      };
     case "addLive":
       return { ...state, lives: [action.live, ...state.lives] };
     case "deleteLive":
       return { ...state, lives: state.lives.filter((l) => l.id !== action.id) };
+    case "sendGift": {
+      // Garde-fou : s'offrir un cadeau à soi-même n'a aucun sens économique
+      // (et casserait l'arithmétique : les deux clés `[fromId]` / `[toId]`
+      // écraseraient l'une l'autre dans l'objet `wallets`). On rejette.
+      if (action.fromId === action.toId) return state;
+      const sender = getWallet(state.wallets, action.fromId);
+      if (sender.balance < action.gift.price) return state;
+      const receiver = getWallet(state.wallets, action.toId);
+      const event: GiftEvent = {
+        id: generateId("giftevt"),
+        giftId: action.gift.id,
+        fromId: action.fromId,
+        fromName: action.fromName,
+        fromAvatar: action.fromAvatar,
+        toId: action.toId,
+        toName: action.toName,
+        createdAt: new Date().toISOString(),
+      };
+      return {
+        ...state,
+        wallets: {
+          ...state.wallets,
+          [action.fromId]: {
+            ...sender,
+            balance: sender.balance - action.gift.price,
+            giftsSentCount: (sender.giftsSentCount ?? 0) + 1,
+            history: [event, ...sender.history].slice(0, 50),
+          },
+          [action.toId]: {
+            ...receiver,
+            earnings: receiver.earnings + action.gift.price,
+            giftsReceivedCount: (receiver.giftsReceivedCount ?? 0) + 1,
+            history: [event, ...receiver.history].slice(0, 50),
+          },
+        },
+      };
+    }
+    case "creditSylvins": {
+      const wallet = getWallet(state.wallets, action.userId);
+      return {
+        ...state,
+        wallets: {
+          ...state.wallets,
+          [action.userId]: {
+            ...wallet,
+            balance: wallet.balance + action.amount,
+          },
+        },
+      };
+    }
     default:
       return state;
   }
@@ -215,7 +297,32 @@ const INITIAL: StoreState = {
   cart: [],
   orders: [],
   deletedMockProductIds: [],
+  wallets: {},
 };
+
+function getWallet(
+  wallets: Record<string, Wallet>,
+  userId: string,
+): Wallet {
+  const existing = wallets[userId];
+  if (existing) {
+    // Rétro-compat : les portefeuilles persistés avant l'ajout des compteurs
+    // peuvent manquer de ces champs ; on les normalise à la volée.
+    return {
+      ...existing,
+      giftsSentCount: existing.giftsSentCount ?? 0,
+      giftsReceivedCount: existing.giftsReceivedCount ?? 0,
+    };
+  }
+  return {
+    userId,
+    balance: 0,
+    earnings: 0,
+    history: [],
+    giftsSentCount: 0,
+    giftsReceivedCount: 0,
+  };
+}
 
 interface StoreCtx extends StoreState {
   dispatch: React.Dispatch<Action>;
@@ -224,6 +331,12 @@ interface StoreCtx extends StoreState {
   isLiveOn: boolean;
   toggleLive: () => void;
   setLiveOn: (value: boolean) => void;
+  /** Portefeuille de l'utilisateur connecté (ou wallet vide si invité). */
+  myWallet: Wallet;
+  /** Lit le portefeuille d'un utilisateur arbitraire (streamer, etc.). */
+  walletOf: (userId: string) => Wallet;
+  /** Catalogue de cadeaux disponibles en live. */
+  gifts: Gift[];
 }
 
 const Ctx = createContext<StoreCtx | null>(null);
@@ -258,6 +371,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         cart: parsed.cart ?? [],
         orders: parsed.orders ?? [],
         deletedMockProductIds,
+        wallets: parsed.wallets ?? {},
       };
     } catch {
       return init;
@@ -299,6 +413,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const toggleLive = useCallback(() => setLiveOn((v) => !v), []);
   const setLiveOnValue = useCallback((value: boolean) => setLiveOn(value), []);
 
+  const walletOf = useCallback(
+    (userId: string) => getWallet(state.wallets, userId),
+    [state.wallets],
+  );
+  const myWallet = useMemo(
+    () => walletOf(user?.id ?? "__anon__"),
+    [walletOf, user?.id],
+  );
+
   // Keep a hint in localStorage of the current user (used by reducers indirectly via components)
   useEffect(() => {
     if (user) localStorage.setItem("vaelyndra_current_user", user.id);
@@ -313,8 +436,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       isLiveOn,
       toggleLive,
       setLiveOn: setLiveOnValue,
+      myWallet,
+      walletOf,
+      gifts: GIFT_CATALOGUE,
     }),
-    [state, cartTotal, cartCount, isLiveOn, toggleLive, setLiveOnValue],
+    [
+      state,
+      cartTotal,
+      cartCount,
+      isLiveOn,
+      toggleLive,
+      setLiveOnValue,
+      myWallet,
+      walletOf,
+    ],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

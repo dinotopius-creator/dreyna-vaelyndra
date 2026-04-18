@@ -21,6 +21,7 @@ import { Confidentialite } from "./pages/Confidentialite";
 import { CGU } from "./pages/CGU";
 import { CGV } from "./pages/CGV";
 import { Cookies } from "./pages/Cookies";
+import { UserProfile } from "./pages/UserProfile";
 import { Guarded } from "./components/Guarded";
 import { EasterEggs } from "./components/EasterEggs";
 import { CookieBanner } from "./components/CookieBanner";
@@ -45,6 +46,7 @@ function AnimatedRoutes() {
           <Route path="/live" element={<Live />} />
           <Route path="/communaute" element={<Community />} />
           <Route path="/dreyna" element={<DreynaProfile />} />
+          <Route path="/u/:userId" element={<UserProfile />} />
           <Route path="/connexion" element={<Login />} />
           <Route path="/inscription" element={<Register />} />
           <Route path="/moi" element={<Guarded><Me /></Guarded>} />
