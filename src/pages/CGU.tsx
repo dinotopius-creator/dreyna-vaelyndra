@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { LegalLayout } from "../components/LegalLayout";
 
 export function CGU() {
@@ -5,11 +6,7 @@ export function CGU() {
     <LegalLayout
       eyebrow="Code de la cour"
       title="Conditions Générales d'Utilisation"
-      lastUpdated={new Date().toLocaleDateString("fr-FR", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      })}
+      lastUpdated="18 avril 2026"
     >
       <p>
         Les présentes Conditions Générales d'Utilisation (« CGU ») régissent
@@ -123,7 +120,7 @@ export function CGU() {
       </ul>
       <p>
         Les modalités d'achat et de remboursement des Gemmes sont détaillées
-        dans les <a href="/cgv">Conditions Générales de Vente</a>.
+        dans les <Link to="/cgv">Conditions Générales de Vente</Link>.
       </p>
 
       <h2>6. Modération, sanctions et bannissement</h2>

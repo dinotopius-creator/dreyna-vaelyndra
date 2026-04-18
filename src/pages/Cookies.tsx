@@ -5,11 +5,7 @@ export function Cookies() {
     <LegalLayout
       eyebrow="Grimoire des traces"
       title="Politique de cookies"
-      lastUpdated={new Date().toLocaleDateString("fr-FR", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      })}
+      lastUpdated="18 avril 2026"
     >
       <p>
         Le Royaume utilise des technologies de stockage local

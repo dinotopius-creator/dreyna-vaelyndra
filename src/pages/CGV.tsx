@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { LegalLayout } from "../components/LegalLayout";
 
 export function CGV() {
@@ -5,11 +6,7 @@ export function CGV() {
     <LegalLayout
       eyebrow="Édit de commerce"
       title="Conditions Générales de Vente"
-      lastUpdated={new Date().toLocaleDateString("fr-FR", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      })}
+      lastUpdated="18 avril 2026"
     >
       <p>
         Les présentes Conditions Générales de Vente (« CGV ») régissent les
@@ -194,7 +191,7 @@ export function CGV() {
       <p>
         Les données personnelles collectées dans le cadre d'une commande
         (facturation, livraison, historique) sont traitées conformément à
-        notre <a href="/confidentialite">politique de confidentialité</a>.
+        notre <Link to="/confidentialite">politique de confidentialité</Link>.
       </p>
 
       <h2>13. Droit applicable</h2>

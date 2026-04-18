@@ -5,11 +5,7 @@ export function MentionsLegales() {
     <LegalLayout
       eyebrow="Parchemin officiel"
       title="Mentions légales"
-      lastUpdated={new Date().toLocaleDateString("fr-FR", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      })}
+      lastUpdated="18 avril 2026"
     >
       <p>
         Conformément aux dispositions de l'article 6 de la loi n° 2004-575 du 21

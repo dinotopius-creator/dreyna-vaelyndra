@@ -5,11 +5,7 @@ export function Confidentialite() {
     <LegalLayout
       eyebrow="Serment de la cour"
       title="Politique de confidentialité"
-      lastUpdated={new Date().toLocaleDateString("fr-FR", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      })}
+      lastUpdated="18 avril 2026"
     >
       <p>
         La présente politique décrit la manière dont le Royaume de Vaelyndra
