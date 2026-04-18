@@ -221,9 +221,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return init;
       const parsed = JSON.parse(raw) as Partial<StoreState>;
+      // Merge any new mock products (e.g. newly added Sylvins packs) into the
+      // stored catalogue so existing users automatically get them without
+      // losing their own admin-created products.
+      const storedProducts = parsed.products ?? init.products;
+      const mergedProducts = [
+        ...storedProducts,
+        ...init.products.filter(
+          (mock) => !storedProducts.some((p) => p.id === mock.id),
+        ),
+      ];
       return {
         articles: parsed.articles ?? init.articles,
-        products: parsed.products ?? init.products,
+        products: mergedProducts,
         posts: parsed.posts ?? init.posts,
         lives: parsed.lives ?? init.lives,
         cart: parsed.cart ?? [],
