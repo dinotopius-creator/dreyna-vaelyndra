@@ -209,6 +209,7 @@ interface StoreCtx extends StoreState {
   cartCount: number;
   isLiveOn: boolean;
   toggleLive: () => void;
+  setLiveOn: (value: boolean) => void;
 }
 
 const Ctx = createContext<StoreCtx | null>(null);
@@ -266,6 +267,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
 
   const toggleLive = useCallback(() => setLiveOn((v) => !v), []);
+  const setLiveOnValue = useCallback((value: boolean) => setLiveOn(value), []);
 
   // Keep a hint in localStorage of the current user (used by reducers indirectly via components)
   useEffect(() => {
@@ -273,8 +275,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   const value = useMemo<StoreCtx>(
-    () => ({ ...state, dispatch, cartTotal, cartCount, isLiveOn, toggleLive }),
-    [state, cartTotal, cartCount, isLiveOn, toggleLive],
+    () => ({
+      ...state,
+      dispatch,
+      cartTotal,
+      cartCount,
+      isLiveOn,
+      toggleLive,
+      setLiveOn: setLiveOnValue,
+    }),
+    [state, cartTotal, cartCount, isLiveOn, toggleLive, setLiveOnValue],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
