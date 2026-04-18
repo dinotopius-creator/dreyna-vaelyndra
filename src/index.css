@@ -155,6 +155,34 @@
     @apply inline-flex items-center gap-1.5 rounded-full border border-gold-400/40 bg-gold-500/10 px-3 py-1 text-xs uppercase tracking-[0.22em] text-gold-300;
   }
 
+  .prose-legal h2 {
+    @apply mt-10 mb-3 font-display text-2xl text-gold-200;
+  }
+  .prose-legal h3 {
+    @apply mt-6 mb-2 font-display text-lg text-gold-300;
+  }
+  .prose-legal p {
+    @apply text-ivory/80;
+  }
+  .prose-legal ul {
+    @apply list-disc space-y-1.5 pl-6 text-ivory/80;
+  }
+  .prose-legal ol {
+    @apply list-decimal space-y-1.5 pl-6 text-ivory/80;
+  }
+  .prose-legal a {
+    @apply text-gold-300 underline underline-offset-4 hover:text-gold-200;
+  }
+  .prose-legal strong {
+    @apply text-ivory;
+  }
+  .prose-legal code {
+    @apply rounded bg-night-800 px-1.5 py-0.5 text-gold-200;
+  }
+  .prose-legal blockquote {
+    @apply border-l-2 border-gold-400/40 pl-4 italic text-ivory/70;
+  }
+
   .glow-ring {
     position: relative;
   }
