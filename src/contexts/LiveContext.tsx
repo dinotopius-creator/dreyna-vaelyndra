@@ -687,14 +687,15 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     if (!me) return;
     const tick = () => {
       try {
-        const raw = localStorage.getItem(REGISTRY_STORAGE_KEY);
-        if (!raw) return;
-        const parsed = JSON.parse(raw) as Record<string, LiveRegistryEntry>;
-        const mine = parsed[me.id];
+        // On passe par readRegistry() pour filtrer au passage les entrées
+        // orphelines des autres broadcasters (crash, heartbeat > 90s). Sans
+        // ce filtrage, un tick recopierait les fantômes à chaque passage.
+        const filtered = readRegistry();
+        const mine = filtered[me.id];
         if (!mine) return;
-        parsed[me.id] = { ...mine, lastHeartbeat: new Date().toISOString() };
-        localStorage.setItem(REGISTRY_STORAGE_KEY, JSON.stringify(parsed));
-        setLiveRegistry(parsed);
+        filtered[me.id] = { ...mine, lastHeartbeat: new Date().toISOString() };
+        writeRegistry(filtered);
+        setLiveRegistry(filtered);
       } catch {
         // ignore
       }
