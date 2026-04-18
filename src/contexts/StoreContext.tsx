@@ -32,7 +32,14 @@ interface StoreState {
   lives: LiveSession[];
   cart: CartItem[];
   orders: Order[];
+  /**
+   * IDs of mock products (from INITIAL_PRODUCTS) that the admin has explicitly
+   * deleted. We track them so the merge logic doesn't resurrect them on reload.
+   */
+  deletedMockProductIds: string[];
 }
+
+const MOCK_PRODUCT_IDS = new Set(INITIAL_PRODUCTS.map((p) => p.id));
 
 type Action =
   | { type: "load"; state: StoreState }
@@ -112,11 +119,17 @@ function reducer(state: StoreState, action: Action): StoreState {
           p.id === action.product.id ? action.product : p,
         ),
       };
-    case "deleteProduct":
+    case "deleteProduct": {
+      const isMock = MOCK_PRODUCT_IDS.has(action.id);
       return {
         ...state,
         products: state.products.filter((p) => p.id !== action.id),
+        deletedMockProductIds:
+          isMock && !state.deletedMockProductIds.includes(action.id)
+            ? [...state.deletedMockProductIds, action.id]
+            : state.deletedMockProductIds,
       };
+    }
     case "addToCart": {
       const quantity = action.quantity ?? 1;
       const existing = state.cart.find((c) => c.productId === action.productId);
@@ -201,6 +214,7 @@ const INITIAL: StoreState = {
   lives: INITIAL_LIVES,
   cart: [],
   orders: [],
+  deletedMockProductIds: [],
 };
 
 interface StoreCtx extends StoreState {
@@ -221,13 +235,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return init;
       const parsed = JSON.parse(raw) as Partial<StoreState>;
+      // Merge any new mock products (e.g. newly added Sylvins packs) into the
+      // stored catalogue so existing users automatically get them without
+      // losing their own admin-created products. Mock products that the admin
+      // explicitly deleted are tracked in `deletedMockProductIds` so they are
+      // NOT resurrected on reload.
+      const storedProducts = parsed.products ?? init.products;
+      const deletedMockProductIds = parsed.deletedMockProductIds ?? [];
+      const mergedProducts = [
+        ...storedProducts,
+        ...init.products.filter(
+          (mock) =>
+            !storedProducts.some((p) => p.id === mock.id) &&
+            !deletedMockProductIds.includes(mock.id),
+        ),
+      ];
       return {
         articles: parsed.articles ?? init.articles,
-        products: parsed.products ?? init.products,
+        products: mergedProducts,
         posts: parsed.posts ?? init.posts,
         lives: parsed.lives ?? init.lives,
         cart: parsed.cart ?? [],
         orders: parsed.orders ?? [],
+        deletedMockProductIds,
       };
     } catch {
       return init;
