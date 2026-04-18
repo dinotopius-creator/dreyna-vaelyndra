@@ -60,7 +60,7 @@ function ensureModelViewer(): Promise<void> {
     modelViewerPromise = Promise.resolve();
     return modelViewerPromise;
   }
-  modelViewerPromise = new Promise<void>((resolve, reject) => {
+  const wrapped: Promise<void> = new Promise<void>((resolve, reject) => {
     const existing = document.querySelector<HTMLScriptElement>(
       `script[src="${MODEL_VIEWER_SRC}"]`,
     );
@@ -77,11 +77,22 @@ function ensureModelViewer(): Promise<void> {
     script.type = "module";
     script.src = MODEL_VIEWER_SRC;
     script.onload = handleLoad;
-    script.onerror = () =>
+    script.onerror = () => {
+      // En cas d'échec réseau transitoire : on retire le script et on laisse
+      // la prochaine demande retenter (sinon le rejet resterait caché et tous
+      // les AvatarViewer suivants tomberaient sur le fallback 2D jusqu'au F5).
+      script.remove();
       reject(new Error("Impossible de charger model-viewer"));
+    };
     document.head.appendChild(script);
+  }).catch((err) => {
+    // Réinitialise le cache si c'était encore notre tentative en cours,
+    // pour permettre un retry naturel au prochain rendu.
+    if (modelViewerPromise === wrapped) modelViewerPromise = null;
+    throw err;
   });
-  return modelViewerPromise;
+  modelViewerPromise = wrapped;
+  return wrapped;
 }
 
 interface Props {
