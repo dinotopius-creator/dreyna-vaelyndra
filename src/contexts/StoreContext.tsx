@@ -235,6 +235,10 @@ function reducer(state: StoreState, action: Action): StoreState {
     case "deleteLive":
       return { ...state, lives: state.lives.filter((l) => l.id !== action.id) };
     case "sendGift": {
+      // Garde-fou : s'offrir un cadeau à soi-même n'a aucun sens économique
+      // (et casserait l'arithmétique : les deux clés `[fromId]` / `[toId]`
+      // écraseraient l'une l'autre dans l'objet `wallets`). On rejette.
+      if (action.fromId === action.toId) return state;
       const sender = getWallet(state.wallets, action.fromId);
       if (sender.balance < action.gift.price) return state;
       const receiver = getWallet(state.wallets, action.toId);
@@ -255,11 +259,13 @@ function reducer(state: StoreState, action: Action): StoreState {
           [action.fromId]: {
             ...sender,
             balance: sender.balance - action.gift.price,
+            giftsSentCount: (sender.giftsSentCount ?? 0) + 1,
             history: [event, ...sender.history].slice(0, 50),
           },
           [action.toId]: {
             ...receiver,
             earnings: receiver.earnings + action.gift.price,
+            giftsReceivedCount: (receiver.giftsReceivedCount ?? 0) + 1,
             history: [event, ...receiver.history].slice(0, 50),
           },
         },
@@ -298,14 +304,24 @@ function getWallet(
   wallets: Record<string, Wallet>,
   userId: string,
 ): Wallet {
-  return (
-    wallets[userId] ?? {
-      userId,
-      balance: 0,
-      earnings: 0,
-      history: [],
-    }
-  );
+  const existing = wallets[userId];
+  if (existing) {
+    // Rétro-compat : les portefeuilles persistés avant l'ajout des compteurs
+    // peuvent manquer de ces champs ; on les normalise à la volée.
+    return {
+      ...existing,
+      giftsSentCount: existing.giftsSentCount ?? 0,
+      giftsReceivedCount: existing.giftsReceivedCount ?? 0,
+    };
+  }
+  return {
+    userId,
+    balance: 0,
+    earnings: 0,
+    history: [],
+    giftsSentCount: 0,
+    giftsReceivedCount: 0,
+  };
 }
 
 interface StoreCtx extends StoreState {

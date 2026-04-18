@@ -94,10 +94,7 @@ export function UserProfile() {
             </p>
           </div>
           <p className="mt-3 font-display text-2xl text-gold-200">
-            {formatSylvins(
-              wallet.history.filter((e) => e.fromId === profile.id).length,
-            )}{" "}
-            envoyés
+            {formatSylvins(wallet.giftsSentCount)} envoyés
           </p>
         </div>
         <div className="card-royal p-5">

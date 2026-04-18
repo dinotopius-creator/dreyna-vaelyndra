@@ -134,13 +134,18 @@ export interface Gift {
  * Portefeuille Sylvins d'un membre.
  * - `balance` : Sylvins achetés que le membre peut dépenser en cadeaux.
  * - `earnings` : Sylvins reçus en cadeaux (solde streamer, convertible en €).
- * - `history` : trace des cadeaux envoyés/reçus pour l'affichage.
+ * - `history` : trace des cadeaux envoyés/reçus (tronquée aux 50 plus récents
+ *   pour ne pas exploser le localStorage).
+ * - `giftsSentCount` / `giftsReceivedCount` : compteurs cumulatifs complets
+ *   (non tronqués) utilisés pour l'affichage des stats durables.
  */
 export interface Wallet {
   userId: string;
   balance: number;
   earnings: number;
   history: GiftEvent[];
+  giftsSentCount: number;
+  giftsReceivedCount: number;
 }
 
 export interface GiftEvent {
