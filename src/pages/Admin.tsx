@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   BookPlus,
@@ -34,15 +35,7 @@ type TabId = (typeof TABS)[number]["id"];
 
 export function Admin() {
   const { user } = useAuth();
-  const {
-    articles,
-    products,
-    lives,
-    posts,
-    orders,
-    isLiveOn,
-    toggleLive,
-  } = useStore();
+  const { articles, products, lives, posts, orders, isLiveOn } = useStore();
   const [tab, setTab] = useState<TabId>("dashboard");
 
   if (!user) return null;
@@ -62,8 +55,8 @@ export function Admin() {
             de la couronne.
           </p>
         </div>
-        <button
-          onClick={toggleLive}
+        <Link
+          to="/live"
           className={clsx(
             "btn-royal",
             isLiveOn
@@ -72,8 +65,8 @@ export function Admin() {
           )}
         >
           <RadioTower className="h-4 w-4" />
-          {isLiveOn ? "Terminer le live" : "Lancer le live"}
-        </button>
+          {isLiveOn ? "Ouvrir le live en cours" : "Ouvrir la Salle du Trône"}
+        </Link>
       </header>
 
       <nav className="mt-8 flex flex-wrap gap-2">

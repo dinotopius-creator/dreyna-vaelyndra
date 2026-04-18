@@ -10,6 +10,7 @@ import {
 } from "react";
 import type Peer from "peerjs";
 import type { MediaConnection } from "peerjs";
+import { useStore } from "./StoreContext";
 
 /**
  * Contexte dédié au "vrai" live de Dreyna.
@@ -83,6 +84,7 @@ interface LiveCtx {
 const Ctx = createContext<LiveCtx | null>(null);
 
 export function LiveProvider({ children }: { children: ReactNode }) {
+  const { isLiveOn, setLiveOn } = useStore();
   const [config, setConfig] = useState<LiveConfig>(() => readConfig());
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
@@ -92,6 +94,10 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   const hostPeerRef = useRef<Peer | null>(null);
   const viewerPeerRef = useRef<Peer | null>(null);
   const hostConnectionsRef = useRef<Set<MediaConnection>>(new Set());
+  // Ref miroir sur le flux local pour que `cleanup` puisse toujours couper
+  // les tracks même quand il est appelé depuis un callback qui a capturé
+  // l'ancienne valeur de state (ex. listener "ended" ou erreur peer).
+  const localStreamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
     try {
@@ -100,6 +106,14 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       // quota exceeded, on ignore
     }
   }, [config]);
+
+  // Synchronise l'ancien drapeau `isLiveOn` (Navbar/Home/Admin) avec le
+  // nouveau statut `config.status`. Permet à l'ensemble du site de réagir
+  // quand la reine lance/termine un vrai live depuis la Salle du Trône.
+  useEffect(() => {
+    const shouldBeOn = config.status === "live";
+    if (shouldBeOn !== isLiveOn) setLiveOn(shouldBeOn);
+  }, [config.status, isLiveOn, setLiveOn]);
 
   const updateConfig = useCallback((patch: Partial<LiveConfig>) => {
     setConfig((c) => ({ ...c, ...patch }));
@@ -133,13 +147,15 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       viewerPeerRef.current = null;
     }
 
-    if (localStream) {
-      localStream.getTracks().forEach((t) => t.stop());
+    const activeStream = localStreamRef.current;
+    if (activeStream) {
+      activeStream.getTracks().forEach((t) => t.stop());
     }
+    localStreamRef.current = null;
     setLocalStream(null);
     setRemoteStream(null);
     setIsConnecting(false);
-  }, [localStream]);
+  }, []);
 
   const stopLive = useCallback(() => {
     cleanup();
@@ -170,6 +186,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       track.addEventListener("ended", () => stopLive());
     });
 
+    localStreamRef.current = stream;
     setLocalStream(stream);
 
     try {
@@ -205,6 +222,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         }`,
       );
       stream.getTracks().forEach((t) => t.stop());
+      localStreamRef.current = null;
       setLocalStream(null);
       return;
     }
