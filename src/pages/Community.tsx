@@ -5,6 +5,7 @@ import {
   Film,
   Image,
   MessageCircle,
+  Radio,
   Send,
   Sparkles,
   Trash2,
@@ -12,6 +13,7 @@ import {
 import { Link } from "react-router-dom";
 import { useStore } from "../contexts/StoreContext";
 import { useAuth } from "../contexts/AuthContext";
+import { useLive } from "../contexts/LiveContext";
 import { useToast } from "../contexts/ToastContext";
 import { SectionHeading } from "../components/SectionHeading";
 import { PostComments } from "../components/PostComments";
@@ -28,7 +30,16 @@ const QUICK_EMOJIS = ["✨", "👑", "🌿", "⚔️", "🌙", "🔮"];
 export function Community() {
   const { posts, dispatch } = useStore();
   const { user, isQueen } = useAuth();
+  const { liveRegistry } = useLive();
   const { notify } = useToast();
+  const activeLives = useMemo(
+    () =>
+      Object.values(liveRegistry).sort(
+        (a, b) =>
+          new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime(),
+      ),
+    [liveRegistry],
+  );
   const [draft, setDraft] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
@@ -103,6 +114,63 @@ export function Community() {
         title={<>Le <span className="text-mystic">fil</span> de Vaelyndra</>}
         subtitle="Partagez vos serments, créations et pensées. La reine passe ici chaque jour."
       />
+
+      {activeLives.length > 0 && (
+        <section className="mt-10 card-royal p-5">
+          <header className="mb-3 flex items-center gap-2">
+            <Radio className="h-4 w-4 animate-pulse text-rose-300" />
+            <h3 className="font-display text-lg text-gold-200">
+              Lives en cours
+            </h3>
+            <span className="ml-auto text-[11px] uppercase tracking-[0.22em] text-ivory/50">
+              {activeLives.length} membre
+              {activeLives.length > 1 ? "s" : ""} en direct
+            </span>
+          </header>
+          <ul className="grid gap-3 md:grid-cols-2">
+            {activeLives.map((l) => (
+              <li key={l.userId}>
+                <Link
+                  to={`/live/${l.userId}`}
+                  className="group flex items-start gap-3 rounded-xl border border-royal-500/30 bg-night-900/40 p-4 transition hover:border-gold-400/50"
+                >
+                  <div className="relative">
+                    <img
+                      src={l.avatar}
+                      alt={l.username}
+                      className="h-12 w-12 rounded-full object-cover ring-2 ring-rose-400/60"
+                    />
+                    <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full border border-night-900 bg-rose-500 px-1.5 py-[1px] text-[8px] font-semibold uppercase tracking-[0.14em] text-ivory">
+                      Live
+                    </span>
+                  </div>
+                  <div className="flex-1">
+                    <p className="flex items-center gap-2 text-sm">
+                      <span className="font-display text-gold-200">
+                        {l.username}
+                      </span>
+                      <span className="text-xs text-ivory/50">
+                        {formatRelative(l.startedAt)}
+                      </span>
+                    </p>
+                    <p className="mt-1 line-clamp-1 font-display text-sm text-ivory/90">
+                      {l.title || `${l.username} est en direct`}
+                    </p>
+                    {l.description && (
+                      <p className="mt-0.5 line-clamp-1 text-xs text-ivory/60">
+                        {l.description}
+                      </p>
+                    )}
+                    <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-gold-300/80 group-hover:text-gold-200">
+                      Rejoindre le live →
+                    </p>
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <div className="mt-10 grid gap-8 lg:grid-cols-[1fr,320px]">
         <div>

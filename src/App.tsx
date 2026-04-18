@@ -44,6 +44,7 @@ function AnimatedRoutes() {
           <Route path="/boutique" element={<Shop />} />
           <Route path="/panier" element={<Cart />} />
           <Route path="/live" element={<Live />} />
+          <Route path="/live/:broadcasterId" element={<Live />} />
           <Route path="/communaute" element={<Community />} />
           <Route path="/dreyna" element={<DreynaProfile />} />
           <Route path="/u/:userId" element={<UserProfile />} />

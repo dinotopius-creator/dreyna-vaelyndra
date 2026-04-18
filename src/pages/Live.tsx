@@ -15,7 +15,9 @@ import {
   Copy,
   Eye,
   EyeOff,
+  Video,
 } from "lucide-react";
+import { Link, useParams } from "react-router-dom";
 import { useStore } from "../contexts/StoreContext";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
@@ -24,6 +26,7 @@ import {
   LIVE_TITLE_MAX,
   useLive,
 } from "../contexts/LiveContext";
+import type { LiveRegistryEntry } from "../contexts/LiveContext";
 import { SectionHeading } from "../components/SectionHeading";
 import { GiftPanel } from "../components/GiftPanel";
 import { GiftFlight } from "../components/GiftFlight";
@@ -32,7 +35,7 @@ import {
   DREYNA_PROFILE,
   SEED_CHAT,
 } from "../data/mock";
-import type { ChatMessage, Gift } from "../types";
+import type { ChatMessage, Gift, User } from "../types";
 import { generateId } from "../lib/helpers";
 
 const BOT_AUTHORS = [
@@ -44,10 +47,16 @@ const BOT_AUTHORS = [
   { id: "user-thalia", name: "Thalia", avatar: "https://i.pravatar.cc/150?u=thalia" },
 ];
 
+/** Pseudo-utilisateur "Sort d'appel" pour les annonces système du chat. */
+const SYSTEM_AUTHOR = {
+  id: "system-herald",
+  name: "Héraut de la cour",
+  avatar: "/crown.svg",
+};
+
 function extractTwitchChannel(raw: string) {
   const v = raw.trim();
   if (!v) return "";
-  // Accepte "https://www.twitch.tv/xxx" ou simplement "xxx"
   const m = v.match(/twitch\.tv\/([A-Za-z0-9_]{3,})/i);
   if (m) return m[1];
   return v.replace(/^@/, "").replace(/[^A-Za-z0-9_]/g, "");
@@ -83,7 +92,7 @@ function LiveVideoStage({
       ref={videoRef}
       autoPlay
       playsInline
-      // La reine se voit sans son (sinon larsen). Les viewers entendent.
+      // Le host se voit sans son (sinon larsen). Les viewers entendent.
       muted={isHost}
       controls={!isHost}
       className="absolute inset-0 h-full w-full bg-night-900 object-contain"
@@ -93,7 +102,6 @@ function LiveVideoStage({
 
 function TwitchEmbed({ channel }: { channel: string }) {
   if (!channel) return null;
-  // Twitch exige le paramètre `parent` avec le hostname. On le récupère côté client.
   const parent =
     typeof window !== "undefined" ? window.location.hostname : "localhost";
   const src = `https://player.twitch.tv/?channel=${encodeURIComponent(
@@ -110,26 +118,39 @@ function TwitchEmbed({ channel }: { channel: string }) {
   );
 }
 
-function QueenControls() {
-  const { user } = useAuth();
+/**
+ * Panneau de contrôle du broadcaster : visible à tout membre connecté, lui
+ * permet de démarrer son propre live (partage d'écran pour tous, OBS/Twitch
+ * réservé à la reine pour garder le garde-fou ZEPETO).
+ */
+function BroadcasterControls() {
+  const { user, isQueen } = useAuth();
   const { notify } = useToast();
   const {
     config,
     updateConfig,
     startScreenShare,
     stopLive,
+    announceTwitchLive,
     lastError,
   } = useLive();
   const [showKey, setShowKey] = useState(false);
 
-  const isQueen = user?.role === "queen";
   const isLive = config.status === "live";
 
   useEffect(() => {
     if (lastError) notify(lastError, "info");
   }, [lastError, notify]);
 
-  if (!isQueen) return null;
+  // Les non-queen n'ont que le mode "screen". On force.
+  useEffect(() => {
+    if (!user) return;
+    if (!isQueen && config.mode !== "screen") {
+      updateConfig({ mode: "screen" });
+    }
+  }, [user, isQueen, config.mode, updateConfig]);
+
+  if (!user) return null;
 
   async function copyKey() {
     try {
@@ -142,7 +163,7 @@ function QueenControls() {
 
   async function goLive() {
     if (!config.title.trim()) {
-      notify("Donne un titre à ton live, reine.", "info");
+      notify("Donne un titre à ton live.", "info");
       return;
     }
     if (config.mode === "screen") {
@@ -153,20 +174,21 @@ function QueenControls() {
         notify("Renseigne ton nom de chaîne Twitch.", "info");
         return;
       }
-      updateConfig({
-        status: "live",
-        twitchChannel: handle,
-        startedAt: new Date().toISOString(),
-      });
+      updateConfig({ twitchChannel: handle });
+      announceTwitchLive();
     }
   }
 
   return (
     <section className="card-royal mt-8 p-5 md:p-6">
       <div className="flex items-center gap-2">
-        <Crown className="h-4 w-4 text-gold-300" />
+        {isQueen ? (
+          <Crown className="h-4 w-4 text-gold-300" />
+        ) : (
+          <Video className="h-4 w-4 text-gold-300" />
+        )}
         <h3 className="font-display text-lg text-gold-200">
-          Salle du Trône — Diffuser
+          {isQueen ? "Salle du Trône — Diffuser" : "Lancer mon live"}
         </h3>
         {isLive && (
           <span className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-rose-400/50 bg-rose-500/20 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-rose-200">
@@ -195,7 +217,9 @@ function QueenControls() {
             maxLength={LIVE_TITLE_MAX}
             value={config.title}
             onChange={(e) => updateConfig({ title: e.target.value })}
-            placeholder="Nuit Étoilée de Vaelyndra"
+            placeholder={
+              isQueen ? "Nuit Étoilée de Vaelyndra" : "Mon live du soir"
+            }
             className="input-royal"
             disabled={isLive}
           />
@@ -219,64 +243,66 @@ function QueenControls() {
             maxLength={LIVE_DESCRIPTION_MAX}
             value={config.description}
             onChange={(e) => updateConfig({ description: e.target.value })}
-            placeholder="Rituel d'ouverture de la cour, salon sucré…"
+            placeholder="Rituel d'ouverture, salon sucré, discussion…"
             className="input-royal"
             disabled={isLive}
           />
         </label>
       </div>
 
-      <fieldset className="mt-5">
-        <legend className="mb-2 font-regal text-[11px] uppercase tracking-[0.22em] text-ivory/60">
-          Mode de diffusion
-        </legend>
-        <div className="grid gap-3 md:grid-cols-2">
-          <button
-            type="button"
-            onClick={() => !isLive && updateConfig({ mode: "screen" })}
-            disabled={isLive}
-            className={`card-royal flex items-start gap-3 p-4 text-left transition ${
-              config.mode === "screen"
-                ? "ring-1 ring-gold-400/60"
-                : "opacity-80 hover:opacity-100"
-            } disabled:cursor-not-allowed`}
-          >
-            <Monitor className="mt-0.5 h-5 w-5 text-gold-300" />
-            <div>
-              <p className="font-display text-base text-gold-200">
-                Partage d'écran direct
-              </p>
-              <p className="mt-1 text-xs text-ivory/60">
-                Zéro install. Ton navigateur partage un écran/onglet/appli et
-                les viewers le voient en live via WebRTC.
-              </p>
-            </div>
-          </button>
-          <button
-            type="button"
-            onClick={() => !isLive && updateConfig({ mode: "twitch" })}
-            disabled={isLive}
-            className={`card-royal flex items-start gap-3 p-4 text-left transition ${
-              config.mode === "twitch"
-                ? "ring-1 ring-gold-400/60"
-                : "opacity-80 hover:opacity-100"
-            } disabled:cursor-not-allowed`}
-          >
-            <Gamepad2 className="mt-0.5 h-5 w-5 text-gold-300" />
-            <div>
-              <p className="font-display text-base text-gold-200">
-                OBS + Twitch
-              </p>
-              <p className="mt-1 text-xs text-ivory/60">
-                Tu streames depuis OBS vers Twitch. Le site embed le lecteur
-                officiel. Qualité pro.
-              </p>
-            </div>
-          </button>
-        </div>
-      </fieldset>
+      {isQueen && (
+        <fieldset className="mt-5">
+          <legend className="mb-2 font-regal text-[11px] uppercase tracking-[0.22em] text-ivory/60">
+            Mode de diffusion
+          </legend>
+          <div className="grid gap-3 md:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => !isLive && updateConfig({ mode: "screen" })}
+              disabled={isLive}
+              className={`card-royal flex items-start gap-3 p-4 text-left transition ${
+                config.mode === "screen"
+                  ? "ring-1 ring-gold-400/60"
+                  : "opacity-80 hover:opacity-100"
+              } disabled:cursor-not-allowed`}
+            >
+              <Monitor className="mt-0.5 h-5 w-5 text-gold-300" />
+              <div>
+                <p className="font-display text-base text-gold-200">
+                  Partage d'écran direct
+                </p>
+                <p className="mt-1 text-xs text-ivory/60">
+                  Zéro install. Ton navigateur partage un écran/onglet/appli
+                  et les viewers le voient en live via WebRTC.
+                </p>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => !isLive && updateConfig({ mode: "twitch" })}
+              disabled={isLive}
+              className={`card-royal flex items-start gap-3 p-4 text-left transition ${
+                config.mode === "twitch"
+                  ? "ring-1 ring-gold-400/60"
+                  : "opacity-80 hover:opacity-100"
+              } disabled:cursor-not-allowed`}
+            >
+              <Gamepad2 className="mt-0.5 h-5 w-5 text-gold-300" />
+              <div>
+                <p className="font-display text-base text-gold-200">
+                  OBS + Twitch
+                </p>
+                <p className="mt-1 text-xs text-ivory/60">
+                  Tu streames depuis OBS vers Twitch. Le site embed le lecteur
+                  officiel. Qualité pro.
+                </p>
+              </div>
+            </button>
+          </div>
+        </fieldset>
+      )}
 
-      {config.mode === "twitch" && (
+      {isQueen && config.mode === "twitch" && (
         <div className="mt-5 grid gap-4 md:grid-cols-2">
           <label className="block">
             <span className="mb-1 block font-regal text-[11px] uppercase tracking-[0.22em] text-ivory/60">
@@ -354,7 +380,7 @@ function QueenControls() {
           </button>
         ) : (
           <button onClick={stopLive} className="btn-ghost">
-            <StopCircle className="h-4 w-4" /> Terminer le live
+            <StopCircle className="h-4 w-4" /> Terminer mon live
           </button>
         )}
         {isLive && config.mode === "screen" && (
@@ -367,54 +393,135 @@ function QueenControls() {
             Lance aussi le stream depuis OBS pour que la diffusion démarre.
           </p>
         )}
+        {isLive && (
+          <Link
+            to={`/live/${user?.id}`}
+            className="btn-ghost"
+            title="Voir mon live côté viewer"
+          >
+            Voir ma page publique
+          </Link>
+        )}
       </div>
     </section>
   );
 }
 
-export function Live() {
-  const { lives } = useStore();
-  const { user } = useAuth();
-  const { notify } = useToast();
-  const { config, remoteStream, localStream, isConnecting, joinAsViewer } =
-    useLive();
-  const isHost = user?.role === "queen" && !!localStream;
+/** Affiche la liste des lives en cours (autre que celui qu'on regarde). */
+function LiveRoster({
+  entries,
+  activeId,
+}: {
+  entries: LiveRegistryEntry[];
+  activeId: string;
+}) {
+  if (entries.length === 0) return null;
+  return (
+    <div className="card-royal mt-6 p-5">
+      <p className="mb-3 font-regal text-[11px] uppercase tracking-[0.22em] text-ivory/60">
+        Autres lives en cours
+      </p>
+      <ul className="flex flex-wrap gap-2">
+        {entries
+          .filter((e) => e.userId !== activeId)
+          .map((e) => (
+            <li key={e.userId}>
+              <Link
+                to={`/live/${e.userId}`}
+                className="inline-flex items-center gap-2 rounded-full border border-royal-500/30 bg-night-900/40 px-3 py-1.5 text-xs text-ivory/80 transition hover:border-gold-400/50"
+              >
+                <img
+                  src={e.avatar}
+                  alt=""
+                  className="h-5 w-5 rounded-full object-cover"
+                />
+                <span className="font-display text-gold-200">
+                  {e.username}
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/20 px-2 py-0.5 text-[9px] uppercase tracking-[0.2em] text-rose-200">
+                  <span className="h-1 w-1 animate-pulse rounded-full bg-rose-400" />
+                  Live
+                </span>
+              </Link>
+            </li>
+          ))}
+      </ul>
+    </div>
+  );
+}
 
-  // Découverte active d'un live en cours : on tente de rejoindre la Salle
-  // du Trône dès qu'on arrive sur `/live` (sauf si on est l'hôte). On
-  // retente toutes les 20s tant qu'on n'a pas de flux, pour détecter un
-  // live lancé depuis un autre navigateur après notre arrivée sur la page.
-  //
-  // IMPORTANT: on NE met PAS `remoteStream` dans les deps — sinon la
-  // réception d'un flux change `remoteStream`, déclenche le cleanup du
-  // précédent effect (qui détruit le peer et remet `remoteStream=null`),
-  // ce qui déclenche un nouveau re-render… boucle infinie. On passe par
-  // un ref pour relire la valeur courante dans le setInterval.
+export function Live() {
+  const { broadcasterId: paramBroadcasterId } = useParams<{
+    broadcasterId?: string;
+  }>();
+  const { lives } = useStore();
+  const { user, users } = useAuth();
+  const { notify } = useToast();
+  const {
+    config,
+    remoteStream,
+    localStream,
+    isConnecting,
+    joinAsViewer,
+    liveRegistry,
+    viewingMeta,
+  } = useLive();
+
+  // Quel broadcaster regarde-t-on ? Priorité URL > Dreyna par défaut.
+  const broadcasterId = paramBroadcasterId ?? DREYNA_PROFILE.id;
+  const amBroadcaster = !!user && user.id === broadcasterId;
+  // Résout le profil du broadcaster (pour nom/avatar/pseudo dans le HUD + GiftPanel).
+  const broadcasterProfile = useMemo<User | null>(() => {
+    if (broadcasterId === DREYNA_PROFILE.id) {
+      return {
+        id: DREYNA_PROFILE.id,
+        username: DREYNA_PROFILE.username,
+        email: "dreyna@vaelyndra.realm",
+        avatar: DREYNA_PROFILE.avatar,
+        role: "queen",
+        joinedAt: new Date().toISOString(),
+      };
+    }
+    return users.find((u) => u.id === broadcasterId) ?? null;
+  }, [broadcasterId, users]);
+
+  const registryEntry = liveRegistry[broadcasterId] ?? null;
+  const isHost = amBroadcaster && !!localStream;
+
+  // Rejoindre le flux du broadcaster cible (sauf si on est host).
   const remoteStreamRef = useRef<MediaStream | null>(null);
   remoteStreamRef.current = remoteStream;
   useEffect(() => {
-    if (isHost) return;
-    if (config.mode === "twitch") return;
-    let cleanup: (() => void) | null = joinAsViewer();
+    if (amBroadcaster) return;
+    // Si c'est un live Twitch (pas WebRTC), pas de joinAsViewer à tenter.
+    if (registryEntry?.mode === "twitch") return;
+    let cleanup: (() => void) | null = joinAsViewer(broadcasterId);
     const retry = window.setInterval(() => {
       if (!remoteStreamRef.current) {
         cleanup?.();
-        cleanup = joinAsViewer();
+        cleanup = joinAsViewer(broadcasterId);
       }
     }, 20000);
     return () => {
       window.clearInterval(retry);
       cleanup?.();
     };
-  }, [isHost, config.mode, joinAsViewer]);
-  // localStream est aussi consommé dans <LiveVideoStage /> via prop.
-  const hasRemote = config.mode === "screen" && !!remoteStream;
-  const twitchChannel = extractTwitchChannel(config.twitchChannel);
+  }, [amBroadcaster, broadcasterId, joinAsViewer, registryEntry?.mode]);
+
+  const hasRemote = !!remoteStream;
+  const twitchChannel = extractTwitchChannel(
+    registryEntry?.twitchChannel ?? (amBroadcaster ? config.twitchChannel : ""),
+  );
+  const activeMode: "screen" | "twitch" =
+    registryEntry?.mode ??
+    viewingMeta?.mode ??
+    (amBroadcaster ? config.mode : "screen");
+  const isActiveLive = !!registryEntry || (amBroadcaster && config.status === "live");
   const showViewer =
-    config.status === "live" &&
+    isActiveLive &&
     (isHost ||
       hasRemote ||
-      (config.mode === "twitch" && !!twitchChannel));
+      (activeMode === "twitch" && !!twitchChannel));
 
   const [messages, setMessages] = useState<ChatMessage[]>(SEED_CHAT);
   const [input, setInput] = useState("");
@@ -424,6 +531,11 @@ export function Live() {
     { id: string; gift: Gift; x: number }[]
   >([]);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  // Reset du chat quand on change de broadcaster pour éviter la confusion.
+  useEffect(() => {
+    setMessages(SEED_CHAT);
+  }, [broadcasterId]);
 
   // Simulate viewers pulse
   useEffect(() => {
@@ -439,7 +551,7 @@ export function Live() {
 
   // Auto chat lines
   useEffect(() => {
-    if (config.status !== "live") return;
+    if (!isActiveLive) return;
     const t = setInterval(() => {
       const line =
         AUTO_CHAT_LINES[Math.floor(Math.random() * AUTO_CHAT_LINES.length)];
@@ -459,7 +571,7 @@ export function Live() {
       );
     }, 4200);
     return () => clearInterval(t);
-  }, [config.status]);
+  }, [isActiveLive]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -491,10 +603,46 @@ export function Live() {
     setInput("");
   }
 
+  function pushSystemAnnouncement(content: string) {
+    setMessages((m) =>
+      [
+        ...m,
+        {
+          id: generateId("msg"),
+          authorId: SYSTEM_AUTHOR.id,
+          authorName: SYSTEM_AUTHOR.name,
+          authorAvatar: SYSTEM_AUTHOR.avatar,
+          content,
+          createdAt: new Date().toISOString(),
+          highlight: true,
+        },
+      ].slice(-60),
+    );
+  }
+
   function shootHeart() {
     const id = generateId("h");
     setHearts((h) => [...h, { id, x: Math.random() * 100 }]);
     setTimeout(() => setHearts((h) => h.filter((x) => x.id !== id)), 2500);
+    if (user) {
+      pushSystemAnnouncement(
+        `❤️ ${user.username} envoie un cœur à ${broadcasterProfile?.username ?? "la cour"}`,
+      );
+    }
+  }
+
+  function castSortDAppel() {
+    if (!user) {
+      notify("Connectez-vous pour lancer un sort d'appel.", "info");
+      return;
+    }
+    notify(
+      `🔥 ${broadcasterProfile?.username ?? "La cour"} vient de recevoir votre sortilège`,
+      "info",
+    );
+    pushSystemAnnouncement(
+      `🔥 ${user.username} lance un sort d'appel sur ${broadcasterProfile?.username ?? "la cour"}`,
+    );
   }
 
   function onGiftSent(gift: Gift) {
@@ -504,19 +652,43 @@ export function Live() {
       () => setGiftFlights((f) => f.filter((x) => x.id !== id)),
       2800,
     );
+    if (user) {
+      pushSystemAnnouncement(
+        `🎁 ${user.username} a offert ${gift.name} à ${broadcasterProfile?.username ?? "la cour"}`,
+      );
+    }
   }
 
-  const heroTitle = config.title?.trim() || "Nuit Étoilée · Ouverture de la cour";
+  const heroTitle =
+    registryEntry?.title?.trim() ||
+    viewingMeta?.title?.trim() ||
+    (amBroadcaster ? config.title?.trim() : "") ||
+    (broadcasterProfile
+      ? `${broadcasterProfile.username} en direct`
+      : "Nuit Étoilée · Ouverture de la cour");
   const heroDescription =
-    config.description?.trim() ||
-    "Avec la reine Dreyna · depuis l'archipel de Vaelyndra";
+    registryEntry?.description?.trim() ||
+    viewingMeta?.description?.trim() ||
+    (amBroadcaster ? config.description?.trim() : "") ||
+    (broadcasterProfile
+      ? `Avec ${broadcasterProfile.username} · depuis l'archipel de Vaelyndra`
+      : "Avec la reine Dreyna · depuis l'archipel de Vaelyndra");
+
+  const registryList = useMemo(
+    () => Object.values(liveRegistry),
+    [liveRegistry],
+  );
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-12">
       <SectionHeading
         eyebrow="La Salle des Lives"
         title={<>La cour <span className="text-mystic">en direct</span></>}
-        subtitle="Quand le rideau s'ouvre, Vaelyndra s'anime. Chat en temps réel et rituels partagés."
+        subtitle={
+          broadcasterProfile
+            ? `Vous regardez ${broadcasterProfile.username}. Chaque membre peut lancer son propre live.`
+            : "Quand le rideau s'ouvre, Vaelyndra s'anime. Chat en temps réel et rituels partagés."
+        }
       />
 
       <div className="mt-10 grid gap-6 lg:grid-cols-[2fr,1fr]">
@@ -525,14 +697,14 @@ export function Live() {
             <div className="relative aspect-video w-full overflow-hidden bg-night-900">
               {showViewer ? (
                 <>
-                  {config.mode === "screen" && (
+                  {activeMode === "screen" && (
                     <LiveVideoStage
                       isHost={isHost}
                       localStream={localStream}
                       remoteStream={remoteStream}
                     />
                   )}
-                  {config.mode === "twitch" && (
+                  {activeMode === "twitch" && (
                     <TwitchEmbed channel={twitchChannel} />
                   )}
                   <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-night-900/95 via-night-900/40 to-transparent p-6">
@@ -547,13 +719,28 @@ export function Live() {
                       <p className="mt-1 text-sm text-ivory/70">
                         {heroDescription}
                       </p>
+                      {broadcasterProfile && (
+                        <div className="mt-3 flex items-center gap-2 text-xs text-ivory/80">
+                          <img
+                            src={broadcasterProfile.avatar}
+                            alt=""
+                            className="h-6 w-6 rounded-full border border-gold-400/40 object-cover"
+                          />
+                          <span>
+                            avec{" "}
+                            <span className="font-display text-gold-200">
+                              {broadcasterProfile.username}
+                            </span>
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </>
-              ) : config.status === "live" && config.mode === "screen" ? (
+              ) : isActiveLive && activeMode === "screen" ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-center">
                   <img
-                    src={DREYNA_PROFILE.avatar}
+                    src={broadcasterProfile?.avatar ?? DREYNA_PROFILE.avatar}
                     alt=""
                     className="absolute inset-0 h-full w-full scale-105 object-cover opacity-40 blur-sm"
                   />
@@ -561,13 +748,13 @@ export function Live() {
                     <Radio className="h-10 w-10 animate-pulse text-rose-300" />
                     <p className="font-display text-2xl text-gold-200">
                       {isConnecting
-                        ? "Connexion au flux royal…"
+                        ? "Connexion au flux…"
                         : "Le live est annoncé"}
                     </p>
                     <p className="max-w-md text-sm text-ivory/65">
                       {isConnecting
                         ? "La cour se connecte aux portails de Vaelyndra."
-                        : "La reine prépare son sortilège. Rafraîchis la page dans quelques secondes."}
+                        : `${broadcasterProfile?.username ?? "Le broadcaster"} prépare son sortilège. Rafraîchis dans quelques secondes.`}
                     </p>
                   </div>
                 </div>
@@ -578,8 +765,9 @@ export function Live() {
                     Le rideau est tiré
                   </p>
                   <p className="max-w-md text-sm text-ivory/65">
-                    Dreyna n'est pas en direct pour le moment. Préparez votre
-                    bougie pour le prochain rituel.
+                    {broadcasterProfile?.username ?? "Ce membre"} n'est pas en
+                    direct pour le moment. Préparez votre bougie pour le
+                    prochain rituel.
                   </p>
                 </div>
               )}
@@ -610,32 +798,33 @@ export function Live() {
                 <button onClick={shootHeart} className="btn-ghost">
                   <Heart className="h-3.5 w-3.5" /> Envoyer un cœur
                 </button>
-                <button
-                  onClick={() =>
-                    notify("🔥 Dreyna vient de recevoir votre sortilège", "info")
-                  }
-                  className="btn-ghost"
-                >
+                <button onClick={castSortDAppel} className="btn-ghost">
                   <Flame className="h-3.5 w-3.5" /> Sort d'appel
                 </button>
               </div>
               <p className="text-xs text-ivory/50">
-                {config.status === "live"
+                {isActiveLive
                   ? "Live actif — le chat est activé automatiquement."
-                  : "La reine peut activer le direct depuis la Salle du Trône."}
+                  : broadcasterProfile && amBroadcaster
+                    ? "Lance ton propre live depuis le panneau ci-dessous."
+                    : "Le rideau est tiré. Reviens quand la scène s'allume."}
               </p>
             </div>
           </div>
 
-          <QueenControls />
+          <LiveRoster entries={registryList} activeId={broadcasterId} />
 
-          <div className="mt-8">
-            <GiftPanel
-              hostId={DREYNA_PROFILE.id}
-              hostName={DREYNA_PROFILE.username}
-              onGiftSent={onGiftSent}
-            />
-          </div>
+          <BroadcasterControls />
+
+          {broadcasterProfile && (
+            <div className="mt-8">
+              <GiftPanel
+                hostId={broadcasterProfile.id}
+                hostName={broadcasterProfile.username}
+                onGiftSent={onGiftSent}
+              />
+            </div>
+          )}
 
           <section className="mt-12">
             <SectionHeading
@@ -700,33 +889,46 @@ export function Live() {
             ref={scrollRef}
             className="flex-1 space-y-3 overflow-y-auto px-4 py-4"
           >
-            {messages.map((m) => (
-              <motion.div
-                key={m.id}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={`flex gap-3 ${
-                  m.highlight ? "rounded-xl bg-gold-500/10 p-2" : ""
-                }`}
-              >
-                <img
-                  src={m.authorAvatar}
-                  alt={m.authorName}
-                  className="h-7 w-7 rounded-full border border-gold-400/30 object-cover"
-                />
-                <div>
-                  <div className="flex items-center gap-2 text-[11px] text-ivory/60">
-                    <span className="text-gold-200">{m.authorName}</span>
-                    {m.highlight && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-gold-500/20 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.2em] text-gold-200">
-                        <Crown className="h-2.5 w-2.5" /> reine
-                      </span>
-                    )}
+            {messages.map((m) => {
+              const isSystem = m.authorId === SYSTEM_AUTHOR.id;
+              return (
+                <motion.div
+                  key={m.id}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={`flex gap-3 ${
+                    isSystem
+                      ? "rounded-xl border border-gold-400/30 bg-gold-500/5 p-2"
+                      : m.highlight
+                        ? "rounded-xl bg-gold-500/10 p-2"
+                        : ""
+                  }`}
+                >
+                  <img
+                    src={m.authorAvatar}
+                    alt={m.authorName}
+                    className="h-7 w-7 rounded-full border border-gold-400/30 object-cover"
+                  />
+                  <div>
+                    <div className="flex items-center gap-2 text-[11px] text-ivory/60">
+                      <span className="text-gold-200">{m.authorName}</span>
+                      {isSystem ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-gold-500/20 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.2em] text-gold-200">
+                          annonce
+                        </span>
+                      ) : (
+                        m.highlight && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-gold-500/20 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.2em] text-gold-200">
+                            <Crown className="h-2.5 w-2.5" /> reine
+                          </span>
+                        )
+                      )}
+                    </div>
+                    <p className="text-sm text-ivory/85">{m.content}</p>
                   </div>
-                  <p className="text-sm text-ivory/85">{m.content}</p>
-                </div>
-              </motion.div>
-            ))}
+                </motion.div>
+              );
+            })}
           </div>
           <form
             onSubmit={send}
