@@ -20,6 +20,7 @@ import {
 } from "react";
 import clsx from "clsx";
 import { isFlatImageUrl } from "../lib/dicebear";
+import { CATALOG_BY_ID } from "../lib/avatarShop";
 
 /**
  * `<model-viewer>` est un web component chargé dynamiquement via CDN : on
@@ -94,7 +95,7 @@ function ensureModelViewer(): Promise<void> {
 }
 
 interface Props {
-  /** URL du fichier .glb (Ready Player Me). */
+  /** URL DiceBear SVG ou GLB 3D légacy. */
   src: string | null | undefined;
   /** Vignette PNG affichée en fallback et comme poster avant chargement. */
   fallbackImage?: string | null;
@@ -106,6 +107,24 @@ interface Props {
   autoRotate?: boolean;
   /** Cadre la caméra sur le visage (profil) ou sur le corps (live). */
   framing?: "face" | "body";
+  /**
+   * Id d'une parure équipée (slot `frame`). Quand fourni, on superpose
+   * l'emoji correspondant au coin supérieur droit de l'avatar.
+   */
+  equippedFrameId?: string | null;
+}
+
+function FrameOverlay({ itemId }: { itemId: string }) {
+  const item = CATALOG_BY_ID[itemId];
+  if (!item?.frameGlyph) return null;
+  return (
+    <span
+      aria-hidden
+      className="pointer-events-none absolute right-2 top-2 select-none text-3xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.6)]"
+    >
+      {item.frameGlyph}
+    </span>
+  );
 }
 
 export function AvatarViewer({
@@ -116,6 +135,7 @@ export function AvatarViewer({
   className,
   autoRotate = true,
   framing = "face",
+  equippedFrameId,
 }: Props) {
   const [ready, setReady] = useState(
     typeof window !== "undefined" && !!customElements.get("model-viewer"),
@@ -167,6 +187,7 @@ export function AvatarViewer({
           className="h-full w-full object-cover"
           draggable={false}
         />
+        {equippedFrameId && <FrameOverlay itemId={equippedFrameId} />}
       </div>
     );
   }
@@ -197,6 +218,7 @@ export function AvatarViewer({
             Chargement du rendu 3D…
           </div>
         )}
+        {equippedFrameId && <FrameOverlay itemId={equippedFrameId} />}
       </div>
     );
   }
@@ -228,6 +250,7 @@ export function AvatarViewer({
           backgroundColor: "transparent",
         }}
       />
+      {equippedFrameId && <FrameOverlay itemId={equippedFrameId} />}
     </div>
   );
 }

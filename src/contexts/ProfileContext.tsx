@@ -20,10 +20,14 @@ import {
   type ReactNode,
 } from "react";
 import {
+  apiApplyWalletDelta,
+  apiDailyClaim,
   apiGetProfile,
   apiUpdateAvatar,
+  apiUpdateInventory,
   apiUpsertProfile,
   ApiError,
+  type DailyClaimDto,
   type UserProfileDto,
 } from "../lib/api";
 import { useAuth } from "./AuthContext";
@@ -40,6 +44,22 @@ interface ProfileCtx {
     avatarUrl: string | null;
     avatarImageUrl?: string;
   }) => Promise<UserProfileDto | null>;
+  /**
+   * Achète un item cosmétique : débite la bourse, ajoute l'item à
+   * l'inventaire. Refuse si le solde est insuffisant.
+   */
+  buyItem: (input: {
+    itemId: string;
+    currency: "lueurs" | "sylvins";
+    price: number;
+  }) => Promise<UserProfileDto | null>;
+  /** Équipe ou retire un item dans un slot (ex. `frame`). */
+  setEquipped: (
+    slot: string,
+    itemId: string | null,
+  ) => Promise<UserProfileDto | null>;
+  /** Réclame la récompense quotidienne (serveur gère cooldown). */
+  claimDaily: () => Promise<DailyClaimDto | null>;
   /** Permet aux autres contextes (Store) de pousser un état serveur frais. */
   setProfile: (next: UserProfileDto | null) => void;
 }
@@ -118,6 +138,52 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     [user],
   );
 
+  const buyItem = useCallback(
+    async (input: {
+      itemId: string;
+      currency: "lueurs" | "sylvins";
+      price: number;
+    }): Promise<UserProfileDto | null> => {
+      if (!user) return null;
+      // 1) Débit de la bourse (le backend rejette 400 si solde insuffisant).
+      const debited = await apiApplyWalletDelta(user.id, {
+        [input.currency]: -input.price,
+        reason: `buy:${input.itemId}`,
+      } as { lueurs?: number; sylvins?: number; reason?: string });
+      // 2) Ajout à l'inventaire (le serveur déduplique).
+      const currentInventory = debited.inventory ?? [];
+      const updated = await apiUpdateInventory(user.id, {
+        inventory: [...currentInventory, input.itemId],
+      });
+      setProfile(updated);
+      return updated;
+    },
+    [user],
+  );
+
+  const setEquipped = useCallback(
+    async (
+      slot: string,
+      itemId: string | null,
+    ): Promise<UserProfileDto | null> => {
+      if (!user || !profile) return null;
+      const next = { ...(profile.equipped ?? {}) };
+      if (itemId) next[slot] = itemId;
+      else delete next[slot];
+      const updated = await apiUpdateInventory(user.id, { equipped: next });
+      setProfile(updated);
+      return updated;
+    },
+    [user, profile],
+  );
+
+  const claimDaily = useCallback(async (): Promise<DailyClaimDto | null> => {
+    if (!user) return null;
+    const res = await apiDailyClaim(user.id);
+    setProfile(res.profile);
+    return res;
+  }, [user]);
+
   useEffect(() => {
     // Rafraîchit en fond toutes les 60 s pour capter les crédits Lueurs/Sylvins
     // servis par d'autres devices (achats Stripe, daily claim…).
@@ -135,8 +201,17 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   const value = useMemo<ProfileCtx>(
-    () => ({ profile, loading, refresh, saveAvatar, setProfile }),
-    [profile, loading, refresh, saveAvatar],
+    () => ({
+      profile,
+      loading,
+      refresh,
+      saveAvatar,
+      buyItem,
+      setEquipped,
+      claimDaily,
+      setProfile,
+    }),
+    [profile, loading, refresh, saveAvatar, buyItem, setEquipped, claimDaily],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

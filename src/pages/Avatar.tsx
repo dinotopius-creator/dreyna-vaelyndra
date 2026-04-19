@@ -25,7 +25,11 @@ import { useProfile } from "../contexts/ProfileContext";
 import { useToast } from "../contexts/ToastContext";
 import { AvatarViewer } from "../components/AvatarViewer";
 import { AvatarEditor } from "../components/AvatarEditor";
+import { AvatarShop } from "../components/AvatarShop";
+import { DailyRewardCard } from "../components/DailyRewardCard";
+import { InventoryPanel } from "../components/InventoryPanel";
 import { SectionHeading } from "../components/SectionHeading";
+import { EQUIP_SLOT } from "../lib/avatarShop";
 
 export function Avatar() {
   const { user } = useAuth();
@@ -126,6 +130,7 @@ export function Avatar() {
             alt={`Avatar de ${user.username}`}
             size="portrait"
             framing="face"
+            equippedFrameId={profile?.equipped?.[EQUIP_SLOT.Frame] ?? null}
           />
 
           <div>
@@ -187,6 +192,7 @@ export function Avatar() {
             <AvatarEditor
               initialAvatarUrl={profile?.avatarUrl ?? null}
               defaultSeed={user.username}
+              ownedItemIds={profile?.inventory ?? []}
               onExport={(exp) => {
                 setDraft(exp);
                 notify(
@@ -226,13 +232,22 @@ export function Avatar() {
                 </li>
               </ol>
               <p className="mt-3 text-xs text-ivory/50">
-                Illustrations générées via DiceBear (SVG libre, MIT). Vos
-                vrais items de boutique viendront s'équiper par-dessus
-                prochainement.
+                Illustrations générées via DiceBear (SVG libre, MIT). Ajoutez
+                styles, fonds et parures à votre collection via la boutique
+                avatar ci-dessous.
               </p>
             </div>
           )}
         </div>
+      </div>
+
+      <div className="mt-12 grid gap-6 lg:grid-cols-[1fr_minmax(0,320px)]">
+        <InventoryPanel />
+        <DailyRewardCard />
+      </div>
+
+      <div className="mt-10">
+        <AvatarShop />
       </div>
     </div>
   );
