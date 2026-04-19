@@ -4,7 +4,6 @@ import {
   Users,
   Play,
   Archive,
-  Flame,
   Heart,
   Crown,
   Monitor,
@@ -31,6 +30,13 @@ import { GiftFlight } from "../components/GiftFlight";
 import { LiveAvatarOverlay } from "../components/LiveAvatarOverlay";
 import { LiveChatOverlay } from "../components/LiveChatOverlay";
 import { LiveHeartsOverlay } from "../components/LiveHeartsOverlay";
+import { LiveLeaderboardOverlay } from "../components/LiveLeaderboardOverlay";
+import type { TributeEntry } from "../components/LiveLeaderboardOverlay";
+import {
+  SortDAppelCaster,
+  SORT_LEVELS,
+  type SortLevel,
+} from "../components/SortDAppelCaster";
 import {
   AUTO_CHAT_LINES,
   DREYNA_PROFILE,
@@ -535,12 +541,20 @@ export function Live() {
   const [giftFlights, setGiftFlights] = useState<
     { id: string; gift: Gift; x: number }[]
   >([]);
+  // Agrégat des Sylvins offerts au broadcaster courant pendant la séance
+  // en cours, clé par senderId. Remis à zéro au changement de broadcaster.
+  // Pré-seedé avec quelques donations fictives pour ne pas afficher un
+  // Top vide en démo.
+  const [tributes, setTributes] = useState<Record<string, TributeEntry>>(
+    () => seedTributes(),
+  );
 
-  // Reset du chat + des cœurs quand on change de broadcaster pour
-  // éviter la confusion (le chat flottant est spécifique au live).
+  // Reset du chat + des cœurs + du leaderboard quand on change de
+  // broadcaster pour éviter la confusion (tout est spécifique au live).
   useEffect(() => {
     setMessages(SEED_CHAT);
     setHeartEvents([]);
+    setTributes(seedTributes());
   }, [broadcasterId]);
 
   // Simulate viewers pulse
@@ -639,18 +653,28 @@ export function Live() {
     }
   }
 
-  function castSortDAppel() {
+  /**
+   * Lance un sort d'appel. Retourne `false` si on n'a pas pu le lancer
+   * (ex. pas connecté) — dans ce cas le `SortDAppelCaster` n'armera pas
+   * le cooldown.
+   */
+  function castSortDAppel(level: SortLevel): boolean {
     if (!user) {
       notify("Connectez-vous pour lancer un sort d'appel.", "info");
-      return;
+      return false;
     }
+    const tier = SORT_LEVELS.find((s) => s.level === level);
+    if (!tier) return false;
+    const romanSuffix = level === 1 ? "I" : level === 2 ? "II" : "III";
+    const glyph = level === 3 ? "🌟" : level === 2 ? "✨" : "🔥";
     notify(
-      `🔥 ${broadcasterProfile?.username ?? "La cour"} vient de recevoir votre sortilège`,
+      `${glyph} Sort ${romanSuffix} lancé sur ${broadcasterProfile?.username ?? "la cour"}`,
       "info",
     );
     pushSystemAnnouncement(
-      `🔥 ${user.username} lance un sort d'appel sur ${broadcasterProfile?.username ?? "la cour"}`,
+      `${glyph} ${user.username} invoque le Sort ${romanSuffix} sur ${broadcasterProfile?.username ?? "la cour"}`,
     );
+    return true;
   }
 
   function onGiftSent(gift: Gift) {
@@ -664,6 +688,21 @@ export function Live() {
       pushSystemAnnouncement(
         `🎁 ${user.username} a offert ${gift.name} à ${broadcasterProfile?.username ?? "la cour"}`,
       );
+      // On agrège la donation dans le leaderboard live. On additionne le
+      // prix du cadeau à la contribution cumulée de l'utilisateur pour
+      // ce broadcaster depuis le début de la séance.
+      setTributes((prev) => {
+        const current = prev[user.id];
+        return {
+          ...prev,
+          [user.id]: {
+            userId: user.id,
+            name: user.username,
+            avatar: user.avatar,
+            total: (current?.total ?? 0) + gift.price,
+          },
+        };
+      });
     }
   }
 
@@ -803,6 +842,16 @@ export function Live() {
               <LiveHeartsOverlay key={broadcasterId} events={heartEvents} />
               <GiftFlight items={giftFlights} />
 
+              {/* Classement live Top 3 Sylvins. Purgé au changement de
+                  broadcaster via le `key`. Masqué si le live n'est pas
+                  actif (pas de compétition à afficher sur un rideau tiré). */}
+              {isActiveLive && (
+                <LiveLeaderboardOverlay
+                  key={`lb-${broadcasterId}`}
+                  entries={Object.values(tributes)}
+                />
+              )}
+
               {/* Chat flottant TikTok/Twitch : visible uniquement si un
                   live est effectivement en cours sur ce broadcaster. */}
               {isActiveLive && (
@@ -825,7 +874,7 @@ export function Live() {
               </div>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3 p-4">
-              <div className="flex gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   onClick={shootHeart}
                   className="btn-ghost"
@@ -833,13 +882,11 @@ export function Live() {
                 >
                   <Heart className="h-3.5 w-3.5" /> Cœur
                 </button>
-                <button onClick={castSortDAppel} className="btn-ghost">
-                  <Flame className="h-3.5 w-3.5" /> Sort d'appel
-                </button>
+                <SortDAppelCaster onCast={castSortDAppel} disabled={!user} />
               </div>
               <p className="text-xs text-ivory/50">
                 {isActiveLive
-                  ? "Chat flottant sur le flux — tes messages apparaîtront en surimpression."
+                  ? "Chat flottant sur le flux. Les Sorts I/II/III ont chacun leur cooldown (10 / 25 / 60 s)."
                   : broadcasterProfile && amBroadcaster
                     ? "Lance ton propre live depuis le panneau ci-dessous."
                     : "Le rideau est tiré. Reviens quand la scène s'allume."}
@@ -909,4 +956,33 @@ export function Live() {
       </div>
     </div>
   );
+}
+
+/**
+ * Donations fictives qui pré-remplissent le Top 3 avant que la première
+ * vraie donation n'arrive. Évite un classement vide pendant la démo et
+ * donne une vraie "compétition" à dépasser.
+ */
+function seedTributes(): Record<string, TributeEntry> {
+  const seeds: TributeEntry[] = [
+    {
+      userId: "seed-lyria",
+      name: "Lyria",
+      avatar: "https://i.pravatar.cc/150?u=lyria",
+      total: 1200,
+    },
+    {
+      userId: "seed-caelum",
+      name: "Caelum",
+      avatar: "https://i.pravatar.cc/150?u=caelum",
+      total: 780,
+    },
+    {
+      userId: "seed-mira",
+      name: "Mira",
+      avatar: "https://i.pravatar.cc/150?u=mira",
+      total: 420,
+    },
+  ];
+  return Object.fromEntries(seeds.map((s) => [s.userId, s]));
 }
