@@ -89,6 +89,7 @@ export function UserProfile() {
                 alt={profile.username}
                 size="portrait"
                 framing="face"
+                equippedFrameId={serverProfile.equipped?.frame ?? null}
               />
             </div>
           ) : (

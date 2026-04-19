@@ -246,6 +246,7 @@ export function Me() {
               alt={`Avatar 3D de ${user.username}`}
               size="portrait"
               framing="face"
+              equippedFrameId={serverProfile?.equipped?.frame ?? null}
             />
           </div>
           <div className="card-royal flex flex-col justify-between gap-5 p-6">

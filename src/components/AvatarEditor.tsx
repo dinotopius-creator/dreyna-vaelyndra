@@ -16,7 +16,7 @@
  */
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Dice5, Shuffle, Wand2 } from "lucide-react";
+import { Dice5, Lock, Shuffle, Wand2 } from "lucide-react";
 import clsx from "clsx";
 import {
   BACKGROUND_SWATCHES,
@@ -26,7 +26,9 @@ import {
   parseDicebearUrl,
   randomSeed,
   type DicebearConfig,
+  type DicebearStyle,
 } from "../lib/dicebear";
+import { SHOP_CATALOG } from "../lib/avatarShop";
 
 interface Props {
   /** Avatar déjà sauvegardé — sert à pré-remplir le style/seed à l'ouverture. */
@@ -37,6 +39,21 @@ interface Props {
   onExport: (input: { avatarUrl: string; avatarImageUrl: string }) => void;
   onClose?: () => void;
   className?: string;
+  /** Ids des items possédés par l'utilisateur — débloque styles / fonds. */
+  ownedItemIds?: readonly string[];
+}
+
+interface ExtendedStyle extends DicebearStyle {
+  locked: boolean;
+  lockedHint?: string;
+}
+
+interface ExtendedSwatch {
+  id: string;
+  label: string;
+  hex: string;
+  locked: boolean;
+  lockedHint?: string;
 }
 
 export function AvatarEditor({
@@ -45,6 +62,7 @@ export function AvatarEditor({
   onExport,
   onClose,
   className,
+  ownedItemIds = [],
 }: Props) {
   const [config, setConfig] = useState<DicebearConfig>(() => {
     // Reprend la config existante pour que l'utilisateur retrouve son avatar
@@ -55,6 +73,52 @@ export function AvatarEditor({
   });
 
   const previewUrl = useMemo(() => buildDicebearUrl(config), [config]);
+
+  // Fusionne les styles gratuits + styles débloqués via la boutique. Les
+  // styles non possédés restent visibles mais verrouillés (bouton Lock)
+  // pour inciter à l'achat.
+  const availableStyles: ExtendedStyle[] = useMemo(() => {
+    const owned = new Set(ownedItemIds);
+    const freeStyleIds = new Set(STYLES.map((s) => s.id));
+    const unlocked: ExtendedStyle[] = STYLES.map((s) => ({
+      ...s,
+      locked: false,
+    }));
+    for (const item of SHOP_CATALOG) {
+      if (item.category !== "style" || !item.styleId) continue;
+      if (freeStyleIds.has(item.styleId)) continue;
+      unlocked.push({
+        id: item.styleId,
+        label: item.name,
+        tagline: item.description,
+        previewSeed: defaultSeed,
+        locked: !owned.has(item.id),
+        lockedHint: `${item.price} ${item.currency === "lueurs" ? "Lueurs" : "Sylvins"} à la boutique avatar`,
+      });
+    }
+    return unlocked;
+  }, [ownedItemIds, defaultSeed]);
+
+  const availableSwatches: ExtendedSwatch[] = useMemo(() => {
+    const owned = new Set(ownedItemIds);
+    const freeHexes = new Set(BACKGROUND_SWATCHES.map((s) => s.hex));
+    const unlocked: ExtendedSwatch[] = BACKGROUND_SWATCHES.map((s) => ({
+      ...s,
+      locked: false,
+    }));
+    for (const item of SHOP_CATALOG) {
+      if (item.category !== "background" || !item.backgroundHex) continue;
+      if (freeHexes.has(item.backgroundHex)) continue;
+      unlocked.push({
+        id: item.id,
+        label: item.name,
+        hex: item.backgroundHex,
+        locked: !owned.has(item.id),
+        lockedHint: `${item.price} ${item.currency === "lueurs" ? "Lueurs" : "Sylvins"}`,
+      });
+    }
+    return unlocked;
+  }, [ownedItemIds]);
 
   function applyExport() {
     const url = buildDicebearUrl(config);
@@ -128,12 +192,15 @@ export function AvatarEditor({
               ✦ Style d'illustration
             </p>
             <div className="grid gap-2 sm:grid-cols-2">
-              {STYLES.map((s) => {
+              {availableStyles.map((s) => {
                 const active = s.id === config.style;
+                const disabled = s.locked;
                 return (
                   <button
                     key={s.id}
                     type="button"
+                    disabled={disabled}
+                    title={disabled ? s.lockedHint : s.tagline}
                     onClick={() =>
                       setConfig((c) => ({ ...c, style: s.id }))
                     }
@@ -141,23 +208,37 @@ export function AvatarEditor({
                       "flex items-center gap-3 rounded-xl border px-3 py-2 text-left transition",
                       active
                         ? "border-gold-400/70 bg-gold-500/15 text-gold-100"
-                        : "border-royal-500/30 bg-night-900/60 text-ivory/75 hover:border-gold-400/40",
+                        : disabled
+                          ? "border-royal-500/20 bg-night-950/60 text-ivory/35"
+                          : "border-royal-500/30 bg-night-900/60 text-ivory/75 hover:border-gold-400/40",
                     )}
                   >
-                    <img
-                      src={buildDicebearUrl({
-                        style: s.id,
-                        seed: s.previewSeed,
-                        backgroundColor: config.backgroundColor,
-                      })}
-                      alt=""
-                      className="h-10 w-10 rounded-md border border-gold-400/20 object-cover"
-                      draggable={false}
-                    />
+                    <div className="relative">
+                      <img
+                        src={buildDicebearUrl({
+                          style: s.id,
+                          seed: s.previewSeed,
+                          backgroundColor: config.backgroundColor,
+                        })}
+                        alt=""
+                        className={clsx(
+                          "h-10 w-10 rounded-md border border-gold-400/20 object-cover",
+                          disabled && "opacity-40 grayscale",
+                        )}
+                        draggable={false}
+                      />
+                      {disabled && (
+                        <span className="absolute -right-1 -top-1 rounded-full bg-night-900 p-0.5 text-ivory/70">
+                          <Lock className="h-3 w-3" />
+                        </span>
+                      )}
+                    </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-xs font-semibold">{s.label}</p>
+                      <p className="truncate text-xs font-semibold">
+                        {s.label}
+                      </p>
                       <p className="truncate text-[11px] text-ivory/55">
-                        {s.tagline}
+                        {disabled ? s.lockedHint : s.tagline}
                       </p>
                     </div>
                   </button>
@@ -201,25 +282,36 @@ export function AvatarEditor({
               ✦ Couleur de fond
             </p>
             <div className="flex flex-wrap gap-2">
-              {BACKGROUND_SWATCHES.map((sw) => {
+              {availableSwatches.map((sw) => {
                 const active = sw.hex === config.backgroundColor;
+                const disabled = sw.locked;
                 return (
                   <button
                     key={sw.id}
                     type="button"
+                    disabled={disabled}
                     onClick={() =>
                       setConfig((c) => ({ ...c, backgroundColor: sw.hex }))
                     }
-                    title={sw.label}
+                    title={
+                      disabled ? `${sw.label} — ${sw.lockedHint}` : sw.label
+                    }
                     className={clsx(
                       "relative h-9 w-9 rounded-full border transition",
                       active
                         ? "border-gold-200 ring-2 ring-gold-400/60"
-                        : "border-royal-500/40 hover:border-gold-300/60",
+                        : disabled
+                          ? "border-royal-500/20 opacity-50"
+                          : "border-royal-500/40 hover:border-gold-300/60",
                     )}
                     style={{ backgroundColor: `#${sw.hex}` }}
                   >
                     <span className="sr-only">{sw.label}</span>
+                    {disabled && (
+                      <span className="absolute inset-0 flex items-center justify-center text-ivory/80">
+                        <Lock className="h-3 w-3" />
+                      </span>
+                    )}
                   </button>
                 );
               })}
