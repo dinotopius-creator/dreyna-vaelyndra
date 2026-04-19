@@ -145,18 +145,43 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       price: number;
     }): Promise<UserProfileDto | null> => {
       if (!user) return null;
+      // L'achat est en deux appels (débit de bourse puis ajout inventaire) :
+      // faute d'endpoint atomique côté backend, on applique le pattern "saga"
+      // avec une transaction compensatoire si l'étape 2 échoue, pour éviter
+      // de laisser l'utilisateur débité sans item.
       // 1) Débit de la bourse (le backend rejette 400 si solde insuffisant).
       const debited = await apiApplyWalletDelta(user.id, {
         [input.currency]: -input.price,
         reason: `buy:${input.itemId}`,
       } as { lueurs?: number; sylvins?: number; reason?: string });
-      // 2) Ajout à l'inventaire (le serveur déduplique).
-      const currentInventory = debited.inventory ?? [];
-      const updated = await apiUpdateInventory(user.id, {
-        inventory: [...currentInventory, input.itemId],
-      });
-      setProfile(updated);
-      return updated;
+      // Synchronise l'état local dès le débit réussi : si le reste échoue on
+      // a au moins le bon solde affiché, et le toast d'erreur ne sera pas
+      // suivi d'une illusion de "solde inchangé" qui pousserait à réessayer.
+      setProfile(debited);
+      // 2) Ajout à l'inventaire (le serveur déduplique). Si ça plante, on
+      // recrédite immédiatement la bourse.
+      try {
+        const currentInventory = debited.inventory ?? [];
+        const updated = await apiUpdateInventory(user.id, {
+          inventory: [...currentInventory, input.itemId],
+        });
+        setProfile(updated);
+        return updated;
+      } catch (err) {
+        try {
+          const refunded = await apiApplyWalletDelta(user.id, {
+            [input.currency]: input.price,
+            reason: `refund:${input.itemId}`,
+          } as { lueurs?: number; sylvins?: number; reason?: string });
+          setProfile(refunded);
+        } catch (refundErr) {
+          console.error(
+            "Achat partiellement échoué — remboursement KO :",
+            refundErr,
+          );
+        }
+        throw err;
+      }
     },
     [user],
   );
