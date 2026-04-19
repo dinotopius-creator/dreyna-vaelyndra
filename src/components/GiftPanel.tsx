@@ -4,7 +4,9 @@ import { Gift as GiftIcon, Plus, ShieldAlert, Coins } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useStore } from "../contexts/StoreContext";
 import { useAuth } from "../contexts/AuthContext";
+import { useProfile } from "../contexts/ProfileContext";
 import { useToast } from "../contexts/ToastContext";
+import { apiGiftSylvins, ApiError } from "../lib/api";
 import { formatSylvins } from "../lib/sylvins";
 import type { Gift, GiftRarity } from "../types";
 
@@ -54,6 +56,7 @@ const RARITY_STYLES: Record<
 export function GiftPanel({ hostId, hostName, onGiftSent }: Props) {
   const { gifts, myWallet, dispatch } = useStore();
   const { user } = useAuth();
+  const { profile: serverProfile, refresh: refreshProfile } = useProfile();
   const { notify } = useToast();
   const [selected, setSelected] = useState<Gift | null>(null);
 
@@ -64,7 +67,17 @@ export function GiftPanel({ hostId, hostName, onGiftSent }: Props) {
 
   const canSend = !!user && user.id !== hostId;
 
-  function send(gift: Gift) {
+  // Pour la validation "solde suffisant", on prend le max entre les deux
+  // sources (client StoreContext et serveur ProfileContext). Tant que les
+  // wallets n'ont pas été fusionnés, privilégier le serveur comme source
+  // de vérité quand il est chargé évite de bloquer un envoi valide côté
+  // backend (et inversement, bloque les envois invalides si le client est
+  // désynchronisé à la hausse).
+  const effectiveBalance = serverProfile
+    ? serverProfile.sylvinsPaid + serverProfile.sylvinsPromo
+    : myWallet.balance;
+
+  async function send(gift: Gift) {
     if (!user) {
       notify("Connectez-vous pour offrir un cadeau.", "info");
       return;
@@ -73,13 +86,14 @@ export function GiftPanel({ hostId, hostName, onGiftSent }: Props) {
       notify("Vous ne pouvez pas vous offrir vos propres cadeaux.", "info");
       return;
     }
-    if (myWallet.balance < gift.price) {
+    if (effectiveBalance < gift.price) {
       notify(
         "Solde insuffisant — rechargez vos Sylvins dans la boutique.",
         "info",
       );
       return;
     }
+    // 1) Optimistic local dispatch (anime le débit + historique client).
     dispatch({
       type: "sendGift",
       gift,
@@ -92,6 +106,25 @@ export function GiftPanel({ hostId, hostName, onGiftSent }: Props) {
     setSelected(null);
     onGiftSent?.(gift);
     notify(`${gift.name} envoyé à ${hostName} ✨`, "success");
+    // 2) Miroir serveur : consomme PROMO d'abord côté backend et crédite
+    //    earnings_paid/earnings_promo du receiver. C'est ce qui alimente
+    //    la Trésorerie retirable (split paid/promo).
+    try {
+      await apiGiftSylvins({
+        senderId: user.id,
+        receiverId: hostId,
+        amount: gift.price,
+        reason: gift.id,
+      });
+      void refreshProfile();
+    } catch (err) {
+      // 404 = le receiver n'a pas encore de profil serveur (pas grave ici,
+      // on n'annule pas le geste côté client) ; les autres erreurs on les
+      // log pour les voir en console sans casser l'UX.
+      if (!(err instanceof ApiError) || err.status !== 404) {
+        console.warn("Sync gift → backend impossible :", err);
+      }
+    }
   }
 
   return (
@@ -109,7 +142,7 @@ export function GiftPanel({ hostId, hostName, onGiftSent }: Props) {
               className="h-4 w-4"
             />
             <span className="font-display text-sm text-gold-200">
-              {formatSylvins(myWallet.balance)} Sylvins
+              {formatSylvins(effectiveBalance)} Sylvins
             </span>
           </div>
           <Link
@@ -138,7 +171,7 @@ export function GiftPanel({ hostId, hostName, onGiftSent }: Props) {
       <ul className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
         {sorted.map((g) => {
           const style = RARITY_STYLES[g.rarity];
-          const insufficient = !!user && myWallet.balance < g.price;
+          const insufficient = !!user && effectiveBalance < g.price;
           return (
             <li key={g.id}>
               <button
@@ -215,15 +248,15 @@ export function GiftPanel({ hostId, hostName, onGiftSent }: Props) {
                   type="button"
                   className="btn-gold"
                   onClick={() => send(selected)}
-                  disabled={myWallet.balance < selected.price}
+                  disabled={effectiveBalance < selected.price}
                 >
                   Offrir à {hostName}
                 </button>
               </div>
-              {myWallet.balance < selected.price && (
+              {effectiveBalance < selected.price && (
                 <p className="mt-3 text-xs text-rose-300">
                   Il vous manque{" "}
-                  {formatSylvins(selected.price - myWallet.balance)} Sylvins —{" "}
+                  {formatSylvins(selected.price - effectiveBalance)} Sylvins —{" "}
                   <Link to="/boutique" className="underline">
                     recharger
                   </Link>

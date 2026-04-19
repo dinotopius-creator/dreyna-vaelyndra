@@ -132,7 +132,18 @@ export async function apiDeleteComment(
  * - `avatarUrl` : URL de l'avatar principal (SVG DiceBear, ou .glb légacy)
  * - `avatarImageUrl` : vignette 2D utilisée dans la navbar, les posts, le chat
  * - `inventory` / `equipped` : items possédés / équipés (ids opaque string)
- * - `lueurs` (monnaie gratuite) / `sylvins` (premium) / `sylvinsEarnings` (part streamer)
+ * - `lueurs` : monnaie gratuite (daily claim, events)
+ *
+ * Sylvins (monnaie premium) — split anti-fraude :
+ * - `sylvinsPaid` : solde acheté en € via Stripe (seul pot retirable)
+ * - `sylvinsPromo` : solde gratuit (admin top-up, events, cadeaux reçus
+ *   depuis un pot promo). Dépensable mais non retirable.
+ * - `sylvins` : somme `sylvinsPaid + sylvinsPromo` (solde total à afficher
+ *   dans l'UI pour la dépense ; la distinction paid/promo ne concerne que
+ *   le cashout).
+ * Idem pour les recettes streamer : `earningsPaid` seul alimente le
+ * retrait Stripe Connect ; `earningsPromo` reste utilisable uniquement
+ * pour dépenser dans la plateforme.
  */
 export interface UserProfileDto {
   id: string;
@@ -144,6 +155,10 @@ export interface UserProfileDto {
   lueurs: number;
   sylvins: number;
   sylvinsEarnings: number;
+  sylvinsPaid: number;
+  sylvinsPromo: number;
+  earningsPaid: number;
+  earningsPromo: number;
   lastDailyAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -207,8 +222,22 @@ export async function apiApplyWalletDelta(
   userId: string,
   delta: {
     lueurs?: number;
+    /**
+     * Delta "total" (ancien champ). En débit, consomme le pot PROMO du
+     * serveur en priorité puis déborde sur PAID. En crédit, tombe
+     * intégralement dans PROMO (sécurité : créditer le pot retirable
+     * passe obligatoirement par `sylvins_paid` explicite).
+     */
     sylvins?: number;
     sylvins_earnings?: number;
+    /** Crédit/débit explicite du pot PAID Sylvins (retirable). */
+    sylvins_paid?: number;
+    /** Crédit/débit explicite du pot PROMO Sylvins (non retirable). */
+    sylvins_promo?: number;
+    /** Crédit/débit explicite des earnings PAID streamer. */
+    earnings_paid?: number;
+    /** Crédit/débit explicite des earnings PROMO streamer. */
+    earnings_promo?: number;
     reason?: string;
   },
 ): Promise<UserProfileDto> {
@@ -216,6 +245,38 @@ export async function apiApplyWalletDelta(
     `/users/${encodeURIComponent(userId)}/wallet`,
     { method: "POST", body: JSON.stringify(delta) },
   )) as UserProfileDto;
+}
+
+export interface GiftTransferDto {
+  sender: UserProfileDto;
+  receiver: UserProfileDto;
+  consumed_promo: number;
+  consumed_paid: number;
+}
+
+/**
+ * Transfert atomique de Sylvins (cadeau live). Le serveur consomme le pot
+ * PROMO du sender en priorité et crédite le receiver sur les pots miroirs
+ * (promo→promo, paid→paid) : impossible de blanchir un solde promo en
+ * cashable via un complice.
+ */
+export async function apiGiftSylvins(input: {
+  senderId: string;
+  receiverId: string;
+  amount: number;
+  reason?: string;
+}): Promise<GiftTransferDto> {
+  return (await request<GiftTransferDto>(
+    `/users/${encodeURIComponent(input.senderId)}/gift-sylvins`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        receiver_id: input.receiverId,
+        amount: input.amount,
+        reason: input.reason,
+      }),
+    },
+  )) as GiftTransferDto;
 }
 
 export async function apiDailyClaim(userId: string): Promise<DailyClaimDto> {

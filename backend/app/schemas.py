@@ -86,11 +86,43 @@ class WalletDelta(BaseModel):
 
     Les valeurs peuvent être négatives (débit). Le serveur refuse les soldes
     négatifs finaux (HTTP 400).
+
+    Sylvins split (anti-fraude, cf. `UserProfile`) :
+
+    - `sylvins_paid` / `earnings_paid` : pots **réellement payés en €**
+      (webhook Stripe). Seuls ces pots alimentent les retraits streamer.
+    - `sylvins_promo` / `earnings_promo` : pots gratuits (daily, events,
+      admin top-up). Non retirables.
+    - Les champs legacy `sylvins` / `sylvins_earnings` sont routés
+      automatiquement vers les pots PROMO côté serveur (rétro-compat) :
+      un `sylvins: +100` admin top-up → `+100` en promo.
+    - Pour un **débit** legacy (`sylvins: -N`), le serveur consomme d'abord
+      le pot PROMO (si suffisant), puis déborde sur PAID. Ça garantit que
+      les achats d'items ne grignotent pas le pot retirable avant d'avoir
+      épuisé le promo.
     """
 
     lueurs: int = 0
     sylvins: int = 0
     sylvins_earnings: int = 0
+    sylvins_paid: int = 0
+    sylvins_promo: int = 0
+    earnings_paid: int = 0
+    earnings_promo: int = 0
+    reason: Optional[str] = Field(default=None, max_length=128)
+
+
+class GiftTransfer(BaseModel):
+    """Transfert atomique de Sylvins du pot sender vers les earnings receiver.
+
+    Respecte le split paid/promo : consomme d'abord le pot PROMO du sender
+    (si suffisant) puis PAID. Crédite les earnings du receiver dans le pot
+    miroir (PROMO → earnings_promo, PAID → earnings_paid). Ça empêche de
+    "blanchir" un solde promo en cashable via un gift entre complices.
+    """
+
+    receiver_id: str = Field(..., min_length=1, max_length=128)
+    amount: int = Field(..., gt=0)
     reason: Optional[str] = Field(default=None, max_length=128)
 
 
@@ -102,8 +134,16 @@ class UserProfileOut(BaseModel):
     inventory: List[str] = []
     equipped: Dict[str, str] = {}
     lueurs: int = 0
+    # Champs legacy (= pots PROMO) conservés pour les anciens clients qui
+    # lisent encore `sylvins` / `sylvinsEarnings`. Un client à jour lit les
+    # 4 sous-pots explicites.
     sylvins: int = 0
     sylvinsEarnings: int = 0
+    # Nouveaux champs du split paid/promo.
+    sylvinsPaid: int = 0
+    sylvinsPromo: int = 0
+    earningsPaid: int = 0
+    earningsPromo: int = 0
     lastDailyAt: Optional[str] = None
     createdAt: str
     updatedAt: str
@@ -113,3 +153,10 @@ class DailyClaimOut(BaseModel):
     granted: int
     already_claimed: bool = False
     profile: UserProfileOut
+
+
+class GiftTransferOut(BaseModel):
+    sender: UserProfileOut
+    receiver: UserProfileOut
+    consumed_promo: int
+    consumed_paid: int

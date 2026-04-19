@@ -55,8 +55,32 @@ class UserProfile(SQLModel, table=True):
       vignettes (header, posts, chat).
     - `inventory` est une liste d'ids d'items possédés, encodée en JSON. Les
       items équipés sont dans `equipped` (dict slot → itemId).
-    - `lueurs` est la monnaie gratuite (daily claim, récompenses), `sylvins`
-      la monnaie premium (packs achetés).
+    - `lueurs` est la monnaie gratuite (daily claim, récompenses). Les
+      Sylvins (monnaie premium) sont **séparés en deux pots** pour empêcher
+      l'auto-fraude (fondateur qui se crédite gratuitement des Sylvins et
+      les retire en vrai argent) :
+
+      - `sylvins_paid` = solde acheté avec du vrai € via Stripe. Seul pot
+        convertible en € à la sortie (cashout streamer).
+      - `sylvins_promo` (anciennement `sylvins`) = solde "promo" gagné
+        gratuitement (daily claim, events, top-up admin, cadeaux reçus
+        depuis un autre pot promo). Non convertible en € ; utilisable
+        uniquement pour dépenser dans la plateforme (cadeaux, items).
+
+      Côté recettes streamer, même split :
+
+      - `earnings_paid` = part reçue depuis des cadeaux payés par un vrai
+        achat €. Seul pot autorisé à alimenter les retraits Stripe Connect.
+      - `earnings_promo` (anciennement `sylvins_earnings`) = part reçue
+        depuis des cadeaux issus d'un solde promo. Non retirable — le
+        streamer ne peut que le réinjecter dans la plateforme (offrir à
+        son tour, acheter des items…).
+
+      Rétro-compat : les colonnes `sylvins` et `sylvins_earnings` gardent
+      leur nom physique en SQLite mais sont lues/écrites comme les pots
+      PROMO. Les nouvelles colonnes `sylvins_paid` / `earnings_paid`
+      démarrent à 0 pour tous les profils existants (aucun vrai paiement
+      encore). Quand Stripe sera branché, le webhook créditera `sylvins_paid`.
     - `last_daily_at` : ISO timestamp du dernier claim quotidien.
     """
 
@@ -69,8 +93,13 @@ class UserProfile(SQLModel, table=True):
     inventory_json: str = Field(default="[]")
     equipped_json: str = Field(default="{}")
     lueurs: int = Field(default=0)
+    # ⚠️ La colonne `sylvins` stocke désormais uniquement le pot PROMO (cf.
+    # docstring). Pour le solde "payé" vraiment retirable, voir
+    # `sylvins_paid`.
     sylvins: int = Field(default=0)
     sylvins_earnings: int = Field(default=0)
+    sylvins_paid: int = Field(default=0)
+    earnings_paid: int = Field(default=0)
     last_daily_at: Optional[str] = None
     created_at: str = Field(default_factory=_now_iso)
     updated_at: str = Field(default_factory=_now_iso)
