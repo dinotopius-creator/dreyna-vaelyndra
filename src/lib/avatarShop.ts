@@ -23,8 +23,22 @@
  * par slot. Un seul item peut être équipé par slot.
  */
 
-export type ShopCategory = "style" | "background" | "frame";
+export type ShopCategory = "style" | "background" | "frame" | "scene";
 export type ShopCurrency = "lueurs" | "sylvins";
+
+/**
+ * Identifiants de scènes animées reconnus. Chaque scène correspond à un
+ * rendu CSS dédié dans `AvatarViewer` (dégradés animés, lucioles…).
+ * Ajouter un id ici nécessite aussi d'ajouter le rendu visuel côté
+ * `AvatarViewer` (sinon la scène apparaîtra vide à l'équipement).
+ */
+export type SceneId =
+  | "cosmos"
+  | "forest-glow"
+  | "sunrise"
+  | "ocean"
+  | "aurora"
+  | "flames";
 
 export interface ShopItem {
   id: string;
@@ -44,11 +58,17 @@ export interface ShopItem {
    * l'avatar. On stocke aussi un id court utilisable comme classe CSS.
    */
   frameGlyph?: string;
+  /**
+   * Pour les scènes animées : id reconnu par `AvatarViewer` pour
+   * sélectionner un rendu de fond dédié (dégradé animé, particules…).
+   */
+  sceneId?: SceneId;
 }
 
 /** Slots d'équipement reconnus côté profil. */
 export const EQUIP_SLOT = {
   Frame: "frame",
+  Scene: "scene",
 } as const;
 
 /**
@@ -107,6 +127,86 @@ export const SHOP_CATALOG: ShopItem[] = [
     price: 30,
     styleId: "thumbs",
   },
+  {
+    id: "style-micah",
+    category: "style",
+    name: "Micah",
+    description: "Portraits flat design, très épurés.",
+    icon: "🎨",
+    currency: "lueurs",
+    price: 140,
+    styleId: "micah",
+  },
+  {
+    id: "style-miniavs",
+    category: "style",
+    name: "Miniavs",
+    description: "Micro-avatars stylés façon badge.",
+    icon: "🔖",
+    currency: "lueurs",
+    price: 140,
+    styleId: "miniavs",
+  },
+  {
+    id: "style-croodles",
+    category: "style",
+    name: "Croodles",
+    description: "Doodles joueurs dessinés à la main.",
+    icon: "✏️",
+    currency: "lueurs",
+    price: 160,
+    styleId: "croodles",
+  },
+  {
+    id: "style-fun-emoji",
+    category: "style",
+    name: "Fun emoji",
+    description: "Grandes bouilles expressives pour le live.",
+    icon: "😄",
+    currency: "lueurs",
+    price: 160,
+    styleId: "fun-emoji",
+  },
+  {
+    id: "style-big-ears",
+    category: "style",
+    name: "Grandes oreilles",
+    description: "Trait elfique cartoon avec de jolies oreilles.",
+    icon: "🧝",
+    currency: "sylvins",
+    price: 40,
+    styleId: "big-ears",
+  },
+  {
+    id: "style-avataaars-neutral",
+    category: "style",
+    name: "Modernes neutres",
+    description: "Avataaars sans genre marqué, plus flexible.",
+    icon: "🫥",
+    currency: "sylvins",
+    price: 40,
+    styleId: "avataaars-neutral",
+  },
+  {
+    id: "style-lorelei-neutral",
+    category: "style",
+    name: "Lorelei neutre",
+    description: "Même illustration que Lorelei, cheveux courts.",
+    icon: "🎭",
+    currency: "sylvins",
+    price: 40,
+    styleId: "lorelei-neutral",
+  },
+  {
+    id: "style-adventurer-neutral",
+    category: "style",
+    name: "Aventurier neutre",
+    description: "Variante plus sobre du style Aventurier.",
+    icon: "🗺️",
+    currency: "sylvins",
+    price: 40,
+    styleId: "adventurer-neutral",
+  },
   // --- Fonds premium (Lueurs / Sylvins) ------------------------------
   {
     id: "bg-royal-gold",
@@ -147,6 +247,147 @@ export const SHOP_CATALOG: ShopItem[] = [
     currency: "sylvins",
     price: 20,
     backgroundHex: "b91c1c",
+  },
+  {
+    id: "bg-aurora",
+    category: "background",
+    name: "Aurore",
+    description: "Turquoise glacé, éclats d'aurore boréale.",
+    icon: "🧊",
+    currency: "lueurs",
+    price: 80,
+    backgroundHex: "0ea5e9",
+  },
+  {
+    id: "bg-midnight",
+    category: "background",
+    name: "Minuit",
+    description: "Bleu d'encre profond, nuit sans lune.",
+    icon: "🌙",
+    currency: "lueurs",
+    price: 80,
+    backgroundHex: "1e1b4b",
+  },
+  {
+    id: "bg-moss",
+    category: "background",
+    name: "Mousse elfique",
+    description: "Vert mousse doux, sous-bois de Vaelyndra.",
+    icon: "🍃",
+    currency: "lueurs",
+    price: 60,
+    backgroundHex: "4d7c0f",
+  },
+  {
+    id: "bg-peach",
+    category: "background",
+    name: "Pêche d'été",
+    description: "Rose pêché, parfait pour les portraits vifs.",
+    icon: "🍑",
+    currency: "lueurs",
+    price: 60,
+    backgroundHex: "fb7185",
+  },
+  {
+    id: "bg-obsidian",
+    category: "background",
+    name: "Obsidienne",
+    description: "Noir pur, fait ressortir les cadres dorés.",
+    icon: "🖤",
+    currency: "sylvins",
+    price: 25,
+    backgroundHex: "0f172a",
+  },
+  {
+    id: "bg-ivory",
+    category: "background",
+    name: "Ivoire royal",
+    description: "Fond blanc chaud, portraits officiels.",
+    icon: "🤍",
+    currency: "sylvins",
+    price: 25,
+    backgroundHex: "fef3c7",
+  },
+  {
+    id: "bg-saphir",
+    category: "background",
+    name: "Saphir",
+    description: "Bleu profond du saphir brut.",
+    icon: "💙",
+    currency: "sylvins",
+    price: 30,
+    backgroundHex: "1d4ed8",
+  },
+  {
+    id: "bg-amethyst",
+    category: "background",
+    name: "Améthyste royale",
+    description: "Violet cristallin, plus intense que la nébuleuse.",
+    icon: "💜",
+    currency: "sylvins",
+    price: 30,
+    backgroundHex: "7e22ce",
+  },
+  // --- Scènes animées (fond CSS illustré, pas un hex statique) -------
+  {
+    id: "scene-cosmos",
+    category: "scene",
+    name: "Nébuleuse cosmique",
+    description: "Dégradé radial violet→rose qui pulse doucement.",
+    icon: "🌌",
+    currency: "sylvins",
+    price: 60,
+    sceneId: "cosmos",
+  },
+  {
+    id: "scene-forest-glow",
+    category: "scene",
+    name: "Clairière enchantée",
+    description: "Halo vert-émeraude avec lucioles animées.",
+    icon: "🌿",
+    currency: "sylvins",
+    price: 60,
+    sceneId: "forest-glow",
+  },
+  {
+    id: "scene-sunrise",
+    category: "scene",
+    name: "Aube d'or",
+    description: "Lever de soleil doré-orangé, très chaleureux.",
+    icon: "🌅",
+    currency: "sylvins",
+    price: 80,
+    sceneId: "sunrise",
+  },
+  {
+    id: "scene-ocean",
+    category: "scene",
+    name: "Courants marins",
+    description: "Bleu turquoise animé par des ondes lumineuses.",
+    icon: "🌊",
+    currency: "sylvins",
+    price: 80,
+    sceneId: "ocean",
+  },
+  {
+    id: "scene-aurora",
+    category: "scene",
+    name: "Voile d'aurore",
+    description: "Aurores boréales dansantes vert-violet.",
+    icon: "✨",
+    currency: "sylvins",
+    price: 120,
+    sceneId: "aurora",
+  },
+  {
+    id: "scene-flames",
+    category: "scene",
+    name: "Flammes de la cour",
+    description: "Flammes bleues stylisées au second plan.",
+    icon: "🔥",
+    currency: "sylvins",
+    price: 120,
+    sceneId: "flames",
   },
   // --- Parures (overlays) -------------------------------------------
   {
@@ -208,6 +449,66 @@ export const SHOP_CATALOG: ShopItem[] = [
     currency: "lueurs",
     price: 80,
     frameGlyph: "⭐",
+  },
+  {
+    id: "frame-moon",
+    category: "frame",
+    name: "Lune d'argent",
+    description: "Un croissant qui veille discrètement.",
+    icon: "🌙",
+    currency: "lueurs",
+    price: 90,
+    frameGlyph: "🌙",
+  },
+  {
+    id: "frame-leaf",
+    category: "frame",
+    name: "Feuille sacrée",
+    description: "Feuille d'érable elfique, naturelle et douce.",
+    icon: "🍁",
+    currency: "lueurs",
+    price: 70,
+    frameGlyph: "🍁",
+  },
+  {
+    id: "frame-sparkles",
+    category: "frame",
+    name: "Étincelles",
+    description: "Une volée d'étincelles magiques.",
+    icon: "✨",
+    currency: "lueurs",
+    price: 100,
+    frameGlyph: "💫",
+  },
+  {
+    id: "frame-heart",
+    category: "frame",
+    name: "Cœur d'améthyste",
+    description: "Un cœur violet, pour les cœurs d'appel.",
+    icon: "💜",
+    currency: "sylvins",
+    price: 40,
+    frameGlyph: "💜",
+  },
+  {
+    id: "frame-unicorn",
+    category: "frame",
+    name: "Licorne",
+    description: "Compagnon mystique rare.",
+    icon: "🦄",
+    currency: "sylvins",
+    price: 200,
+    frameGlyph: "🦄",
+  },
+  {
+    id: "frame-phoenix",
+    category: "frame",
+    name: "Phénix",
+    description: "L'oiseau de feu — couronne de prestige.",
+    icon: "🦅",
+    currency: "sylvins",
+    price: 400,
+    frameGlyph: "🦅",
   },
 ];
 

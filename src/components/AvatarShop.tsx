@@ -32,6 +32,11 @@ const TABS: { id: ShopCategory; label: string; hint: string }[] = [
     label: "Parures",
     hint: "Accessoires posés au-dessus de votre avatar.",
   },
+  {
+    id: "scene",
+    label: "Scènes",
+    hint: "Halos animés équipables autour de votre médaillon.",
+  },
 ];
 
 export function AvatarShop() {

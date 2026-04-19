@@ -90,6 +90,7 @@ export function UserProfile() {
                 size="portrait"
                 framing="face"
                 equippedFrameId={serverProfile.equipped?.frame ?? null}
+                equippedSceneId={serverProfile.equipped?.scene ?? null}
               />
             </div>
           ) : (
