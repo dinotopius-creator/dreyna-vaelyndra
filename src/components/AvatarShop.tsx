@@ -16,6 +16,13 @@ import { SHOP_CATALOG, type ShopCategory, type ShopItem } from "../lib/avatarSho
 import { useProfile } from "../contexts/ProfileContext";
 import { useToast } from "../contexts/ToastContext";
 
+const CATEGORY_LABEL: Record<ShopCategory, string> = {
+  style: "Style",
+  background: "Fond",
+  frame: "Parure",
+  scene: "Scène",
+};
+
 const TABS: { id: ShopCategory; label: string; hint: string }[] = [
   {
     id: "style",
@@ -156,11 +163,7 @@ export function AvatarShop() {
                   {item.icon}
                 </span>
                 <span className="text-[10px] uppercase tracking-[0.22em] text-ivory/50">
-                  {item.category === "style"
-                    ? "Style"
-                    : item.category === "background"
-                      ? "Fond"
-                      : "Parure"}
+                  {CATEGORY_LABEL[item.category]}
                 </span>
               </div>
               <h4 className="mt-3 font-display text-lg text-ivory">
