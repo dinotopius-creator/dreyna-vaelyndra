@@ -231,6 +231,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         role: u.role,
         joinedAt: u.joinedAt,
         bio: u.bio,
+        creatureId: u.creatureId,
       })),
       isQueen: user?.role === "queen",
       login,
