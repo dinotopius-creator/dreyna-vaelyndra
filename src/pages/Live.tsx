@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import {
   Radio,
-  Send,
   Users,
   Play,
   Archive,
@@ -31,6 +29,8 @@ import { SectionHeading } from "../components/SectionHeading";
 import { GiftPanel } from "../components/GiftPanel";
 import { GiftFlight } from "../components/GiftFlight";
 import { LiveAvatarOverlay } from "../components/LiveAvatarOverlay";
+import { LiveChatOverlay } from "../components/LiveChatOverlay";
+import { LiveHeartsOverlay } from "../components/LiveHeartsOverlay";
 import {
   AUTO_CHAT_LINES,
   DREYNA_PROFILE,
@@ -526,17 +526,21 @@ export function Live() {
       (activeMode === "twitch" && !!twitchChannel));
 
   const [messages, setMessages] = useState<ChatMessage[]>(SEED_CHAT);
-  const [input, setInput] = useState("");
   const [viewers, setViewers] = useState(1284);
-  const [hearts, setHearts] = useState<{ id: string; x: number }[]>([]);
+  // `heartEvents` est append-only : chaque cœur envoyé y dépose un
+  // `BurstEvent`. `LiveHeartsOverlay` dédoublonne en interne.
+  const [heartEvents, setHeartEvents] = useState<
+    { emitterId: string; x: number }[]
+  >([]);
   const [giftFlights, setGiftFlights] = useState<
     { id: string; gift: Gift; x: number }[]
   >([]);
-  const scrollRef = useRef<HTMLDivElement | null>(null);
 
-  // Reset du chat quand on change de broadcaster pour éviter la confusion.
+  // Reset du chat + des cœurs quand on change de broadcaster pour
+  // éviter la confusion (le chat flottant est spécifique au live).
   useEffect(() => {
     setMessages(SEED_CHAT);
+    setHeartEvents([]);
   }, [broadcasterId]);
 
   // Simulate viewers pulse
@@ -575,34 +579,28 @@ export function Live() {
     return () => clearInterval(t);
   }, [isActiveLive]);
 
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages.length]);
-
   const replays = useMemo(() => lives, [lives]);
 
-  function send(e: React.FormEvent) {
-    e.preventDefault();
-    if (!input.trim()) return;
+  function sendMessage(content: string) {
+    if (!content.trim()) return;
     if (!user) {
       notify("Connectez-vous pour écrire dans la cour.", "info");
       return;
     }
-    setMessages((m) => [
-      ...m,
-      {
-        id: generateId("msg"),
-        authorId: user.id,
-        authorName: user.username,
-        authorAvatar: user.avatar,
-        content: input.trim(),
-        createdAt: new Date().toISOString(),
-        highlight: user.role === "queen",
-      },
-    ]);
-    setInput("");
+    setMessages((m) =>
+      [
+        ...m,
+        {
+          id: generateId("msg"),
+          authorId: user.id,
+          authorName: user.username,
+          authorAvatar: user.avatar,
+          content: content.trim(),
+          createdAt: new Date().toISOString(),
+          highlight: user.role === "queen",
+        },
+      ].slice(-80),
+    );
   }
 
   function pushSystemAnnouncement(content: string) {
@@ -622,11 +620,19 @@ export function Live() {
     );
   }
 
+  // Repère la dernière annonce cœur envoyée par l'utilisateur courant,
+  // pour regrouper les clics rapprochés dans le chat (anti-spam texte).
+  const lastHeartAnnounceRef = useRef<number>(0);
   function shootHeart() {
-    const id = generateId("h");
-    setHearts((h) => [...h, { id, x: Math.random() * 100 }]);
-    setTimeout(() => setHearts((h) => h.filter((x) => x.id !== id)), 2500);
-    if (user) {
+    const emitterId = user?.id ?? "anon";
+    // Position horizontale aléatoire mais bornée pour rester centrée.
+    const x = 20 + Math.random() * 60;
+    setHeartEvents((h) => [...h.slice(-64), { emitterId, x }]);
+    if (!user) return;
+    // On n'annonce qu'un cœur par fenêtre de 1,5 s pour ne pas noyer le chat.
+    const now = Date.now();
+    if (now - lastHeartAnnounceRef.current > 1500) {
+      lastHeartAnnounceRef.current = now;
       pushSystemAnnouncement(
         `❤️ ${user.username} envoie un cœur à ${broadcasterProfile?.username ?? "la cour"}`,
       );
@@ -693,7 +699,7 @@ export function Live() {
         }
       />
 
-      <div className="mt-10 grid gap-6 lg:grid-cols-[2fr,1fr]">
+      <div className="mt-10">
         <div>
           <div className="card-royal relative overflow-hidden">
             <div className="relative aspect-video w-full overflow-hidden bg-night-900">
@@ -788,22 +794,26 @@ export function Live() {
                 </div>
               )}
 
-              <AnimatePresence>
-                {hearts.map((h) => (
-                  <motion.span
-                    key={h.id}
-                    initial={{ opacity: 0, y: 0, scale: 0.5 }}
-                    animate={{ opacity: 1, y: -220, scale: 1.2 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 2.2, ease: "easeOut" }}
-                    style={{ left: `${h.x}%` }}
-                    className="pointer-events-none absolute bottom-8 text-gold-300"
-                  >
-                    <Heart className="h-5 w-5 fill-gold-300 text-gold-300" />
-                  </motion.span>
-                ))}
-              </AnimatePresence>
+              {/* Cœurs flottants groupés (remplace l'ancienne pluie à
+                  1 cœur par clic). Voir `LiveHeartsOverlay` pour le combo. */}
+              <LiveHeartsOverlay events={heartEvents} />
               <GiftFlight items={giftFlights} />
+
+              {/* Chat flottant TikTok/Twitch : visible uniquement si un
+                  live est effectivement en cours sur ce broadcaster. */}
+              {isActiveLive && (
+                <LiveChatOverlay
+                  messages={messages}
+                  systemAuthorId={SYSTEM_AUTHOR.id}
+                  onSend={sendMessage}
+                  canSend={!!user}
+                  placeholder={
+                    user
+                      ? "Un mot pour la cour…"
+                      : "Connecte-toi pour parler dans le live"
+                  }
+                />
+              )}
 
               <div className="pointer-events-none absolute right-4 top-4 flex items-center gap-2 rounded-full bg-night-900/70 px-3 py-1.5 text-xs text-ivory/80 backdrop-blur">
                 <Users className="h-3.5 w-3.5 text-gold-300" /> {viewers} elfes
@@ -811,8 +821,12 @@ export function Live() {
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3 p-4">
               <div className="flex gap-2">
-                <button onClick={shootHeart} className="btn-ghost">
-                  <Heart className="h-3.5 w-3.5" /> Envoyer un cœur
+                <button
+                  onClick={shootHeart}
+                  className="btn-ghost"
+                  aria-label="Envoyer un cœur"
+                >
+                  <Heart className="h-3.5 w-3.5" /> Cœur
                 </button>
                 <button onClick={castSortDAppel} className="btn-ghost">
                   <Flame className="h-3.5 w-3.5" /> Sort d'appel
@@ -820,7 +834,7 @@ export function Live() {
               </div>
               <p className="text-xs text-ivory/50">
                 {isActiveLive
-                  ? "Live actif — le chat est activé automatiquement."
+                  ? "Chat flottant sur le flux — tes messages apparaîtront en surimpression."
                   : broadcasterProfile && amBroadcaster
                     ? "Lance ton propre live depuis le panneau ci-dessous."
                     : "Le rideau est tiré. Reviens quand la scène s'allume."}
@@ -887,89 +901,6 @@ export function Live() {
           </section>
         </div>
 
-        <aside className="card-royal relative flex h-[600px] flex-col overflow-hidden">
-          <div className="flex items-center justify-between gap-2 border-b border-ivory/10 px-4 py-3">
-            <div>
-              <p className="font-display text-base text-gold-200">
-                Chat de la cour
-              </p>
-              <p className="text-[10px] uppercase tracking-[0.2em] text-ivory/50">
-                en direct · modération douce
-              </p>
-            </div>
-            <span className="inline-flex items-center gap-1 rounded-full bg-night-900/70 px-2 py-0.5 text-[10px] text-ivory/70">
-              <Users className="h-3 w-3 text-gold-300" /> {viewers}
-            </span>
-          </div>
-          <div
-            ref={scrollRef}
-            className="flex-1 space-y-3 overflow-y-auto px-4 py-4"
-          >
-            {messages.map((m) => {
-              const isSystem = m.authorId === SYSTEM_AUTHOR.id;
-              return (
-                <motion.div
-                  key={m.id}
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={`flex gap-3 ${
-                    isSystem
-                      ? "rounded-xl border border-gold-400/30 bg-gold-500/5 p-2"
-                      : m.highlight
-                        ? "rounded-xl bg-gold-500/10 p-2"
-                        : ""
-                  }`}
-                >
-                  <img
-                    src={m.authorAvatar}
-                    alt={m.authorName}
-                    className="h-7 w-7 rounded-full border border-gold-400/30 object-cover"
-                  />
-                  <div>
-                    <div className="flex items-center gap-2 text-[11px] text-ivory/60">
-                      <span className="text-gold-200">{m.authorName}</span>
-                      {isSystem ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-gold-500/20 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.2em] text-gold-200">
-                          annonce
-                        </span>
-                      ) : (
-                        m.highlight && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-gold-500/20 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.2em] text-gold-200">
-                            <Crown className="h-2.5 w-2.5" /> reine
-                          </span>
-                        )
-                      )}
-                    </div>
-                    <p className="text-sm text-ivory/85">{m.content}</p>
-                  </div>
-                </motion.div>
-              );
-            })}
-          </div>
-          <form
-            onSubmit={send}
-            className="flex items-center gap-2 border-t border-ivory/10 px-3 py-3"
-          >
-            <input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={
-                user
-                  ? "Écris ton message dans la cour…"
-                  : "Connecte-toi pour rejoindre le chat"
-              }
-              className="input-royal flex-1"
-              disabled={!user}
-            />
-            <button
-              type="submit"
-              className="btn-royal"
-              disabled={!user || !input.trim()}
-            >
-              <Send className="h-3.5 w-3.5" /> Envoyer
-            </button>
-          </form>
-        </aside>
       </div>
     </div>
   );
