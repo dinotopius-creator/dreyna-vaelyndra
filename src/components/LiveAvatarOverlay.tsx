@@ -182,7 +182,18 @@ export function LiveAvatarOverlay({
       </div>
 
       {showControls && menuOpen && (
-        <div className="absolute top-full mt-2 w-44 rounded-xl border border-gold-400/40 bg-night-950/95 p-2 text-[11px] text-ivory/80 shadow-xl">
+        <div
+          className={clsx(
+            // Le player vidéo parent utilise `overflow-hidden`, donc quand
+            // l'overlay est ancré en bas (`bl`/`br`), un menu qui s'ouvre
+            // vers le bas serait tronqué. On l'ouvre vers le haut dans ce
+            // cas pour qu'il reste entièrement visible.
+            "absolute w-44 rounded-xl border border-gold-400/40 bg-night-950/95 p-2 text-[11px] text-ivory/80 shadow-xl",
+            prefs.anchor === "bl" || prefs.anchor === "br"
+              ? "bottom-full mb-2"
+              : "top-full mt-2",
+          )}
+        >
           <p className="px-1 pb-1 text-[10px] uppercase tracking-[0.18em] text-gold-300">
             Position
           </p>
