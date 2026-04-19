@@ -181,7 +181,11 @@ def _apply_legacy_sylvins_delta(p: UserProfile, delta: int) -> None:
         p.sylvins += delta
         return
     remaining = -delta
-    take_promo = min(remaining, p.sylvins)
+    # max(0, ...) : si un delta explicite (`sylvins_promo`) a déjà mis le
+    # brouillon du pot promo en négatif, on ne laisse pas un `take_promo`
+    # négatif "soigner" l'overdraft et siçhonner le pot PAID au passage.
+    # Le check final (tous les pots >= 0) reste le garde-fou atomique.
+    take_promo = min(remaining, max(0, p.sylvins))
     p.sylvins -= take_promo
     remaining -= take_promo
     if remaining > 0:
@@ -194,7 +198,9 @@ def _apply_legacy_earnings_delta(p: UserProfile, delta: int) -> None:
         p.sylvins_earnings += delta
         return
     remaining = -delta
-    take_promo = min(remaining, p.sylvins_earnings)
+    # Idem `_apply_legacy_sylvins_delta` : max(0, ...) bloque le transfert
+    # silencieux d'un overdraft promo vers le pot PAID.
+    take_promo = min(remaining, max(0, p.sylvins_earnings))
     p.sylvins_earnings -= take_promo
     remaining -= take_promo
     if remaining > 0:

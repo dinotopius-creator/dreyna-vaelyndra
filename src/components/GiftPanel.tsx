@@ -59,6 +59,7 @@ export function GiftPanel({ hostId, hostName, onGiftSent }: Props) {
   const { profile: serverProfile, refresh: refreshProfile } = useProfile();
   const { notify } = useToast();
   const [selected, setSelected] = useState<Gift | null>(null);
+  const [sending, setSending] = useState(false);
 
   const sorted = useMemo(
     () => [...gifts].sort((a, b) => a.price - b.price),
@@ -67,15 +68,19 @@ export function GiftPanel({ hostId, hostName, onGiftSent }: Props) {
 
   const canSend = !!user && user.id !== hostId;
 
-  // Pour la validation "solde suffisant", on prend le max entre les deux
-  // sources (client StoreContext et serveur ProfileContext). Tant que les
-  // wallets n'ont pas été fusionnés, privilégier le serveur comme source
-  // de vérité quand il est chargé évite de bloquer un envoi valide côté
-  // backend (et inversement, bloque les envois invalides si le client est
-  // désynchronisé à la hausse).
-  const effectiveBalance = serverProfile
+  // Deux sources de vérité temporaires (tant que les wallets ne sont pas
+  // fusionnés) :
+  //   - `myWallet.balance` : décrémenté immédiatement par le dispatch
+  //     optimiste (→ protège contre les clics répétés).
+  //   - `serverProfile.sylvinsPaid + sylvinsPromo` : vérité serveur après
+  //     refresh (→ protège contre un client désynchronisé à la hausse).
+  // On prend le **min** des deux pour que les deux garde-fous s'appliquent
+  // en même temps : un send rapide bloque via le client optimiste, un
+  // client trafiqué bloque via le serveur.
+  const serverBalance = serverProfile
     ? serverProfile.sylvinsPaid + serverProfile.sylvinsPromo
-    : myWallet.balance;
+    : Number.POSITIVE_INFINITY;
+  const effectiveBalance = Math.min(myWallet.balance, serverBalance);
 
   async function send(gift: Gift) {
     if (!user) {
@@ -86,6 +91,7 @@ export function GiftPanel({ hostId, hostName, onGiftSent }: Props) {
       notify("Vous ne pouvez pas vous offrir vos propres cadeaux.", "info");
       return;
     }
+    if (sending) return;
     if (effectiveBalance < gift.price) {
       notify(
         "Solde insuffisant — rechargez vos Sylvins dans la boutique.",
@@ -93,6 +99,7 @@ export function GiftPanel({ hostId, hostName, onGiftSent }: Props) {
       );
       return;
     }
+    setSending(true);
     // 1) Optimistic local dispatch (anime le débit + historique client).
     dispatch({
       type: "sendGift",
@@ -124,6 +131,8 @@ export function GiftPanel({ hostId, hostName, onGiftSent }: Props) {
       if (!(err instanceof ApiError) || err.status !== 404) {
         console.warn("Sync gift → backend impossible :", err);
       }
+    } finally {
+      setSending(false);
     }
   }
 
@@ -248,9 +257,9 @@ export function GiftPanel({ hostId, hostName, onGiftSent }: Props) {
                   type="button"
                   className="btn-gold"
                   onClick={() => send(selected)}
-                  disabled={effectiveBalance < selected.price}
+                  disabled={sending || effectiveBalance < selected.price}
                 >
-                  Offrir à {hostName}
+                  {sending ? "Envoi…" : `Offrir à ${hostName}`}
                 </button>
               </div>
               {effectiveBalance < selected.price && (
