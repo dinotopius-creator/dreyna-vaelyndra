@@ -3,7 +3,7 @@
  * utilisée par Register, mais déclenche l'API `PATCH /users/{id}/creature`
  * au lieu du register local.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { X, Loader2 } from "lucide-react";
 import { CREATURES } from "../data/creatures";
 import { useProfile } from "../contexts/ProfileContext";
@@ -26,6 +26,13 @@ export function CreaturePickerModal({
     currentCreatureId ?? null,
   );
   const [pending, setPending] = useState(false);
+
+  // Ré-aligne la sélection sur la créature réellement équipée chaque fois
+  // que la modal s'ouvre, pour qu'un pick non confirmé ne persiste pas
+  // entre deux ouvertures.
+  useEffect(() => {
+    if (open) setSelected(currentCreatureId ?? null);
+  }, [open, currentCreatureId]);
 
   if (!open) return null;
 

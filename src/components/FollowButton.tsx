@@ -43,6 +43,10 @@ export function FollowButton({
       setIsFollowing(null);
       return;
     }
+    // Reset avant fetch : sinon, si le composant reste monté en naviguant
+    // d'un profil à l'autre, le bouton affiche l'état du profil précédent
+    // tant que la nouvelle réponse n'est pas arrivée.
+    setIsFollowing(null);
     let cancelled = false;
     apiFollowStatus(targetId, user.id)
       .then((res) => {
