@@ -236,7 +236,7 @@ export function Me() {
           align="left"
           eyebrow="Avatar de Vaelyndra"
           title={<>Votre double <span className="text-mystic">elfique</span></>}
-          subtitle="Composé dans l'atelier Ready Player Me, visible partout sur le site : header, fil communautaire, chat, lives."
+          subtitle="Composé dans l'atelier paper-doll, visible partout sur le site : header, fil communautaire, chat, lives."
         />
         <div className="mt-6 grid gap-6 md:grid-cols-[260px_1fr]">
           <div className="card-royal p-4">
@@ -254,12 +254,12 @@ export function Me() {
                 ✦ Personnalisez votre avatar
               </p>
               <p className="mt-2 text-sm text-ivory/75">
-                Cheveux, yeux, teint, tenues, accessoires… plus de 500 pièces
-                dans le catalogue. Votre avatar est sauvegardé sur le serveur
-                et vous retrouve sur tous vos appareils.
+                Six styles d'illustration, des milliers de combinaisons via les
+                dés. Votre avatar est sauvegardé sur le serveur et vous retrouve
+                sur tous vos appareils.
               </p>
               <ul className="mt-4 space-y-1.5 text-xs text-ivory/65">
-                <li>• Rotation 360°, zoom molette et drag libre</li>
+                <li>• Choix du style, du seed et de la couleur de fond</li>
                 <li>• Aperçu instantané, enregistrement en un clic</li>
                 <li>• Prêt pour la boutique d'items et les lives</li>
               </ul>

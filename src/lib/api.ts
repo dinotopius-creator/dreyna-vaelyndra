@@ -129,8 +129,8 @@ export async function apiDeleteComment(
 /**
  * Profil serveur renvoyé par les endpoints /users.
  *
- * - `avatarUrl` : URL .glb (Ready Player Me) pour le rendu 3D
- * - `avatarImageUrl` : rendu 2D (.png) utilisé dans la navbar, les posts, le chat
+ * - `avatarUrl` : URL de l'avatar principal (SVG DiceBear, ou .glb légacy)
+ * - `avatarImageUrl` : vignette 2D utilisée dans la navbar, les posts, le chat
  * - `inventory` / `equipped` : items possédés / équipés (ids opaque string)
  * - `lueurs` (monnaie gratuite) / `sylvins` (premium) / `sylvinsEarnings` (part streamer)
  */
