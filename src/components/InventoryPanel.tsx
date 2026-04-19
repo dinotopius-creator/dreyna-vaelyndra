@@ -12,7 +12,74 @@ import clsx from "clsx";
 import { X, Check } from "lucide-react";
 import { useProfile } from "../contexts/ProfileContext";
 import { useToast } from "../contexts/ToastContext";
-import { CATALOG_BY_ID, EQUIP_SLOT, SHOP_CATALOG } from "../lib/avatarShop";
+import {
+  CATALOG_BY_ID,
+  EQUIP_SLOT,
+  SHOP_CATALOG,
+  type ShopItem,
+} from "../lib/avatarShop";
+
+/**
+ * Grille d'items équipables pour un slot donné. Un seul item peut être
+ * équipé par slot : cliquer à nouveau sur l'actif retire l'équipement.
+ */
+function EquipSlotGrid({
+  title,
+  items,
+  equippedId,
+  busy,
+  onToggle,
+}: {
+  title: string;
+  items: ShopItem[];
+  equippedId: string | null;
+  busy: string | null;
+  onToggle: (itemId: string) => void;
+}) {
+  return (
+    <div>
+      <p className="mb-2 text-[11px] uppercase tracking-[0.22em] text-ivory/50">
+        {title}
+      </p>
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {items.map((item) => {
+          const active = equippedId === item.id;
+          const isBusy = busy === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => onToggle(item.id)}
+              disabled={isBusy}
+              className={clsx(
+                "flex items-center gap-3 rounded-xl border px-3 py-2 text-left transition",
+                active
+                  ? "border-gold-400/70 bg-gold-500/15 text-gold-100"
+                  : "border-royal-500/30 bg-night-950/60 text-ivory/80 hover:border-gold-400/40",
+                isBusy && "opacity-60",
+              )}
+            >
+              <span className="text-2xl" aria-hidden>
+                {item.icon}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-semibold">{item.name}</p>
+                <p className="truncate text-[11px] text-ivory/55">
+                  {active ? "Équipée" : "Cliquer pour équiper"}
+                </p>
+              </div>
+              {active ? (
+                <Check className="h-4 w-4 text-gold-300" />
+              ) : (
+                <X className="h-4 w-4 text-ivory/30" />
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export function InventoryPanel() {
   const { profile, setEquipped } = useProfile();
@@ -27,16 +94,22 @@ export function InventoryPanel() {
   }, [profile?.inventory]);
 
   const equippedFrame = profile?.equipped?.[EQUIP_SLOT.Frame] ?? null;
+  const equippedScene = profile?.equipped?.[EQUIP_SLOT.Scene] ?? null;
 
-  async function toggleFrame(itemId: string) {
+  async function toggleSlot(
+    slot: typeof EQUIP_SLOT.Frame | typeof EQUIP_SLOT.Scene,
+    itemId: string,
+  ) {
     setBusy(itemId);
     try {
-      const next = equippedFrame === itemId ? null : itemId;
-      await setEquipped(EQUIP_SLOT.Frame, next);
+      const current = slot === EQUIP_SLOT.Frame ? equippedFrame : equippedScene;
+      const next = current === itemId ? null : itemId;
+      await setEquipped(slot, next);
+      const label = slot === EQUIP_SLOT.Frame ? "Parure" : "Scène";
       notify(
         next
-          ? `${CATALOG_BY_ID[itemId]?.name ?? "Parure"} équipée ✨`
-          : "Parure retirée.",
+          ? `${CATALOG_BY_ID[itemId]?.name ?? label} équipée ✨`
+          : `${label} retirée.`,
         "info",
       );
     } catch {
@@ -49,7 +122,10 @@ export function InventoryPanel() {
   if (!profile) return null;
 
   const frames = owned.filter((i) => i.category === "frame");
-  const stylesOrBgs = owned.filter((i) => i.category !== "frame");
+  const scenes = owned.filter((i) => i.category === "scene");
+  const stylesOrBgs = owned.filter(
+    (i) => i.category !== "frame" && i.category !== "scene",
+  );
 
   return (
     <section className="card-royal space-y-5 p-6">
@@ -67,49 +143,23 @@ export function InventoryPanel() {
       </div>
 
       {frames.length > 0 && (
-        <div>
-          <p className="mb-2 text-[11px] uppercase tracking-[0.22em] text-ivory/50">
-            Parures
-          </p>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {frames.map((item) => {
-              const active = equippedFrame === item.id;
-              const isBusy = busy === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => toggleFrame(item.id)}
-                  disabled={isBusy}
-                  className={clsx(
-                    "flex items-center gap-3 rounded-xl border px-3 py-2 text-left transition",
-                    active
-                      ? "border-gold-400/70 bg-gold-500/15 text-gold-100"
-                      : "border-royal-500/30 bg-night-950/60 text-ivory/80 hover:border-gold-400/40",
-                    isBusy && "opacity-60",
-                  )}
-                >
-                  <span className="text-2xl" aria-hidden>
-                    {item.icon}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-xs font-semibold">
-                      {item.name}
-                    </p>
-                    <p className="truncate text-[11px] text-ivory/55">
-                      {active ? "Équipée" : "Cliquer pour équiper"}
-                    </p>
-                  </div>
-                  {active ? (
-                    <Check className="h-4 w-4 text-gold-300" />
-                  ) : (
-                    <X className="h-4 w-4 text-ivory/30" />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        <EquipSlotGrid
+          title="Parures"
+          items={frames}
+          equippedId={equippedFrame}
+          busy={busy}
+          onToggle={(id) => toggleSlot(EQUIP_SLOT.Frame, id)}
+        />
+      )}
+
+      {scenes.length > 0 && (
+        <EquipSlotGrid
+          title="Scènes animées"
+          items={scenes}
+          equippedId={equippedScene}
+          busy={busy}
+          onToggle={(id) => toggleSlot(EQUIP_SLOT.Scene, id)}
+        />
       )}
 
       {stylesOrBgs.length > 0 && (

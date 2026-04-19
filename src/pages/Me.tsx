@@ -247,6 +247,7 @@ export function Me() {
               size="portrait"
               framing="face"
               equippedFrameId={serverProfile?.equipped?.frame ?? null}
+              equippedSceneId={serverProfile?.equipped?.scene ?? null}
             />
           </div>
           <div className="card-royal flex flex-col justify-between gap-5 p-6">

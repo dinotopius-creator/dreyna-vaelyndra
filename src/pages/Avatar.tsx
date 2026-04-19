@@ -131,6 +131,7 @@ export function Avatar() {
             size="portrait"
             framing="face"
             equippedFrameId={profile?.equipped?.[EQUIP_SLOT.Frame] ?? null}
+            equippedSceneId={profile?.equipped?.[EQUIP_SLOT.Scene] ?? null}
           />
 
           <div>

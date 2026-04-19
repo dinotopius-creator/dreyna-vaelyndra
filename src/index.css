@@ -196,6 +196,56 @@
     opacity: 0.45;
     z-index: -1;
   }
+
+  /* Scènes animées des avatars (équipables depuis la boutique).
+     Chaque scène a sa propre animation discrète (pulse / drift) pour
+     animer le halo derrière le médaillon sans distraire du visage. */
+  .avatar-scene {
+    animation-duration: 12s;
+    animation-iteration-count: infinite;
+    animation-timing-function: ease-in-out;
+  }
+  .avatar-scene--cosmos {
+    animation-name: scene-pulse;
+  }
+  .avatar-scene--forest {
+    animation-name: scene-glow;
+    animation-duration: 8s;
+  }
+  .avatar-scene--sunrise {
+    animation-name: scene-pulse;
+    animation-duration: 10s;
+  }
+  .avatar-scene--ocean {
+    animation-name: scene-drift;
+    /* Les dégradés CSS remplissent 100% du conteneur par défaut, donc
+       animer `background-position` n'a aucun effet visible sans une
+       `background-size` supérieure à 100%. On double la taille pour
+       laisser de la place au décalage horizontal. */
+    background-size: 200% 200%;
+  }
+  .avatar-scene--aurora {
+    animation-name: scene-drift;
+    animation-duration: 14s;
+    background-size: 200% 200%;
+  }
+  .avatar-scene--flames {
+    animation-name: scene-glow;
+    animation-duration: 6s;
+  }
+
+  @keyframes scene-pulse {
+    0%, 100% { filter: saturate(1) brightness(1); }
+    50% { filter: saturate(1.25) brightness(1.12); }
+  }
+  @keyframes scene-glow {
+    0%, 100% { filter: saturate(1) brightness(0.95); }
+    50% { filter: saturate(1.35) brightness(1.15); }
+  }
+  @keyframes scene-drift {
+    0%, 100% { background-position: 0% 50%; filter: saturate(1); }
+    50% { background-position: 100% 50%; filter: saturate(1.3); }
+  }
 }
 
 @layer utilities {

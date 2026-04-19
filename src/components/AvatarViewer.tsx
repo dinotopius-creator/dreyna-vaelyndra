@@ -20,7 +20,7 @@ import {
 } from "react";
 import clsx from "clsx";
 import { isFlatImageUrl } from "../lib/dicebear";
-import { CATALOG_BY_ID } from "../lib/avatarShop";
+import { CATALOG_BY_ID, type SceneId } from "../lib/avatarShop";
 
 /**
  * `<model-viewer>` est un web component chargé dynamiquement via CDN : on
@@ -112,6 +112,12 @@ interface Props {
    * l'emoji correspondant au coin supérieur droit de l'avatar.
    */
   equippedFrameId?: string | null;
+  /**
+   * Id d'une scène équipée (slot `scene`). Quand fourni, on rend un
+   * dégradé animé en arrière-plan et on réduit l'avatar en médaillon
+   * centré pour que la scène joue le rôle de halo illustré.
+   */
+  equippedSceneId?: string | null;
 }
 
 function FrameOverlay({ itemId }: { itemId: string }) {
@@ -127,6 +133,33 @@ function FrameOverlay({ itemId }: { itemId: string }) {
   );
 }
 
+/**
+ * Dictionnaire central des styles inline associés à chaque scène. On
+ * préfère des dégradés CSS pur (radial + conic) plutôt que des images :
+ * ça rend bien à toutes les tailles, ça tourne sans réseau, et ça reste
+ * léger côté bundle. Les animations sont définies dans `src/index.css`.
+ */
+const SCENE_STYLES: Record<SceneId, string> = {
+  cosmos:
+    "avatar-scene avatar-scene--cosmos bg-[radial-gradient(ellipse_at_20%_20%,#7c3aed_0%,transparent_50%),radial-gradient(ellipse_at_80%_70%,#ec4899_0%,transparent_60%),linear-gradient(135deg,#0f172a,#1e1b4b)]",
+  "forest-glow":
+    "avatar-scene avatar-scene--forest bg-[radial-gradient(ellipse_at_50%_40%,#34d39980_0%,transparent_60%),linear-gradient(180deg,#064e3b,#0f172a)]",
+  sunrise:
+    "avatar-scene avatar-scene--sunrise bg-[radial-gradient(ellipse_at_50%_80%,#fbbf24_0%,#ea580c_40%,#7c2d12_80%)]",
+  ocean:
+    "avatar-scene avatar-scene--ocean bg-[radial-gradient(ellipse_at_30%_60%,#22d3ee_0%,transparent_60%),linear-gradient(160deg,#0e7490,#0f172a)]",
+  aurora:
+    "avatar-scene avatar-scene--aurora bg-[linear-gradient(125deg,#312e81_0%,#166534_35%,#a21caf_60%,#1e1b4b_100%)]",
+  flames:
+    "avatar-scene avatar-scene--flames bg-[radial-gradient(ellipse_at_50%_90%,#60a5fa_0%,#2563eb_40%,#1e1b4b_80%)]",
+};
+
+function SceneBackground({ sceneId }: { sceneId: string }) {
+  const style = SCENE_STYLES[sceneId as SceneId];
+  if (!style) return null;
+  return <div aria-hidden className={clsx("absolute inset-0", style)} />;
+}
+
 export function AvatarViewer({
   src,
   fallbackImage,
@@ -136,7 +169,10 @@ export function AvatarViewer({
   autoRotate = true,
   framing = "face",
   equippedFrameId,
+  equippedSceneId,
 }: Props) {
+  const sceneItem = equippedSceneId ? CATALOG_BY_ID[equippedSceneId] : null;
+  const sceneId = sceneItem?.sceneId ?? null;
   const [ready, setReady] = useState(
     typeof window !== "undefined" && !!customElements.get("model-viewer"),
   );
@@ -181,10 +217,19 @@ export function AvatarViewer({
           className,
         )}
       >
+        {sceneId && <SceneBackground sceneId={sceneId} />}
         <img
           src={src}
           alt={alt}
-          className="h-full w-full object-cover"
+          className={clsx(
+            "object-cover",
+            sceneId
+              ? // En présence d'une scène, l'avatar devient un médaillon
+                // centré et arrondi : la scène joue le rôle de halo illustré
+                // tout autour. Un ring doré souligne le médaillon.
+                "absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[82%] w-[82%] rounded-full ring-2 ring-gold-400/60 shadow-[0_0_18px_rgba(250,204,21,0.35)]"
+              : "relative h-full w-full",
+          )}
           draggable={false}
         />
         {equippedFrameId && <FrameOverlay itemId={equippedFrameId} />}
