@@ -310,38 +310,81 @@ export function Me() {
                 Recettes streamer
               </p>
             </div>
-            <p className="mt-3 font-display text-3xl text-gold-200">
-              {formatSylvins(myWallet.earnings)} Sylvins
-            </p>
-            <p className="mt-1 text-xs text-ivory/60">
-              Net estimé :{" "}
-              <span className="text-gold-200">
-                {formatEur(sylvinsToNetEur(myWallet.earnings))}
-              </span>{" "}
-              (après {Math.round(PLATFORM_CUT * 100)}% de frais plateforme)
-            </p>
-            <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-night-900/60">
-              <div
-                className="h-full bg-gold-shine"
-                style={{
-                  width: `${Math.min(
-                    100,
-                    (sylvinsToNetEur(myWallet.earnings) / MIN_PAYOUT_EUR) * 100,
-                  )}%`,
-                }}
-              />
-            </div>
-            <p className="mt-2 text-[11px] text-ivory/50">
-              Seuil de retrait : {formatEur(MIN_PAYOUT_EUR)}
-            </p>
-            <button
-              type="button"
-              className="btn-royal mt-4 inline-flex disabled:cursor-not-allowed disabled:opacity-50"
-              disabled
-              title="Branchement Stripe Connect en cours — disponible après mise en ligne du VPS."
-            >
-              <Banknote className="h-4 w-4" /> Retirer en € (bientôt)
-            </button>
+            {(() => {
+              // Source de vérité = profil serveur (split paid/promo). Tant
+              // qu'il n'est pas chargé, on affiche le solde client-side en
+              // fallback (anciennement seule source, pré-migration backend).
+              const paid = serverProfile?.earningsPaid ?? 0;
+              const promo =
+                serverProfile?.earningsPromo ?? myWallet.earnings;
+              const retirableNetEur = sylvinsToNetEur(paid);
+              return (
+                <>
+                  <p className="mt-3 font-display text-3xl text-gold-200">
+                    {formatSylvins(paid + promo)} Sylvins
+                  </p>
+                  <div className="mt-3 grid gap-2 text-xs">
+                    <div className="rounded-lg border border-gold-400/30 bg-night-900/40 p-3">
+                      <p className="font-regal text-[10px] uppercase tracking-[0.22em] text-gold-300">
+                        Retirables
+                      </p>
+                      <p className="mt-1 font-display text-lg text-gold-200">
+                        {formatSylvins(paid)} Sylvins
+                      </p>
+                      <p className="mt-1 text-ivory/60">
+                        Net estimé :{" "}
+                        <span className="text-gold-200">
+                          {formatEur(retirableNetEur)}
+                        </span>{" "}
+                        (après {Math.round(PLATFORM_CUT * 100)}% de frais
+                        plateforme)
+                      </p>
+                      <p className="mt-1 text-[11px] text-ivory/50">
+                        Seulement les cadeaux reçus depuis un achat Stripe
+                        alimentent ce pot.
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-royal-500/30 bg-night-900/30 p-3">
+                      <p className="font-regal text-[10px] uppercase tracking-[0.22em] text-ivory/60">
+                        En cadeaux uniquement
+                      </p>
+                      <p className="mt-1 font-display text-lg text-ivory/85">
+                        {formatSylvins(promo)} Sylvins
+                      </p>
+                      <p className="mt-1 text-[11px] text-ivory/50">
+                        Reçus depuis un solde promo (events, admin,
+                        récompenses). Non retirables en € — réinjectez-les
+                        en offrant vos propres cadeaux ou en achetant des
+                        items boutique.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-night-900/60">
+                    <div
+                      className="h-full bg-gold-shine"
+                      style={{
+                        width: `${Math.min(
+                          100,
+                          (retirableNetEur / MIN_PAYOUT_EUR) * 100,
+                        )}%`,
+                      }}
+                    />
+                  </div>
+                  <p className="mt-2 text-[11px] text-ivory/50">
+                    Seuil de retrait : {formatEur(MIN_PAYOUT_EUR)} (calculé
+                    sur le pot "Retirables").
+                  </p>
+                  <button
+                    type="button"
+                    className="btn-royal mt-4 inline-flex disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled
+                    title="Branchement Stripe Connect en cours — disponible après mise en ligne du VPS."
+                  >
+                    <Banknote className="h-4 w-4" /> Retirer en € (bientôt)
+                  </button>
+                </>
+              );
+            })()}
           </div>
         </div>
       </section>

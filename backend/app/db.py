@@ -35,6 +35,38 @@ def init_db() -> None:
     from . import models  # noqa: F401
 
     SQLModel.metadata.create_all(engine)
+    _apply_migrations()
+
+
+def _apply_migrations() -> None:
+    """Ajoute les colonnes manquantes sur les tables existantes.
+
+    SQLModel.metadata.create_all ne crée que les tables absentes ; il
+    n'ajoute pas les colonnes neuves. Pour les schémas évolutifs sans
+    Alembic, on fait un `ALTER TABLE … ADD COLUMN` idempotent : on liste
+    les colonnes actuelles via PRAGMA et on n'ajoute que celles qui
+    manquent. Les valeurs par défaut (0) garantissent que les lignes
+    existantes restent valides.
+    """
+    required: dict[str, list[tuple[str, str]]] = {
+        "userprofile": [
+            ("sylvins_paid", "INTEGER NOT NULL DEFAULT 0"),
+            ("earnings_paid", "INTEGER NOT NULL DEFAULT 0"),
+        ],
+    }
+    with engine.begin() as conn:
+        for table, columns in required.items():
+            existing = {
+                row[1]  # row = (cid, name, type, notnull, dflt, pk)
+                for row in conn.exec_driver_sql(
+                    f"PRAGMA table_info({table})"
+                ).fetchall()
+            }
+            for col_name, col_ddl in columns:
+                if col_name not in existing:
+                    conn.exec_driver_sql(
+                        f"ALTER TABLE {table} ADD COLUMN {col_name} {col_ddl}"
+                    )
 
 
 def get_session() -> Session:
