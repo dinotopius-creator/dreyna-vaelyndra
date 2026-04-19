@@ -298,7 +298,13 @@ def gift_sylvins(
         )
 
     # Ordre de consommation : PROMO d'abord (préserve le pot retirable).
-    take_promo = min(amount, sender.sylvins)
+    # `max(0, …)` : même garde-fou défensif que `_apply_legacy_sylvins_delta`,
+    # au cas où `sender.sylvins` serait négatif suite à une race condition ou
+    # un chemin futur. Sans ce garde-fou, un pot PROMO à -5 siphonnerait 5
+    # Sylvins supplémentaires depuis le pot PAID retirable et créditerait le
+    # receiver en `earnings_paid` au lieu d'`earnings_promo` — exactement le
+    # blanchiment que le split est censé empêcher.
+    take_promo = min(amount, max(0, sender.sylvins))
     take_paid = amount - take_promo
 
     sender.sylvins -= take_promo
