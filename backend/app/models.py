@@ -101,5 +101,27 @@ class UserProfile(SQLModel, table=True):
     sylvins_paid: int = Field(default=0)
     earnings_paid: int = Field(default=0)
     last_daily_at: Optional[str] = None
+    # Créature choisie à l'inscription (Elfe, Dragon, Fée…). Catalogue figé
+    # côté code dans `creatures.py` — on stocke juste l'id ici pour pouvoir
+    # faire évoluer le catalogue (nouvelles descriptions, skins…) sans
+    # réécrire toutes les lignes.
+    creature_id: Optional[str] = Field(default=None, index=True)
+    # Rôle sur la plateforme : "user" (défaut), "animator" (compte officiel
+    # sans droits admin, juste un badge), "admin" (droits complets).
+    # Source de vérité unique pour les badges 🎭 et 👑.
+    role: str = Field(default="user", index=True)
     created_at: str = Field(default_factory=_now_iso)
     updated_at: str = Field(default_factory=_now_iso)
+
+
+class Follow(SQLModel, table=True):
+    """Relation d'abonnement user→user.
+
+    Une ligne = `follower_id` suit `following_id`. La paire
+    (follower, following) est unique (cf. contrainte en base).
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    follower_id: str = Field(index=True)
+    following_id: str = Field(index=True)
+    created_at: str = Field(default_factory=_now_iso)

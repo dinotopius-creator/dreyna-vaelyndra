@@ -52,6 +52,9 @@ def _apply_migrations() -> None:
         "userprofile": [
             ("sylvins_paid", "INTEGER NOT NULL DEFAULT 0"),
             ("earnings_paid", "INTEGER NOT NULL DEFAULT 0"),
+            # PR A — créatures + rôles officiels.
+            ("creature_id", "TEXT"),
+            ("role", "TEXT NOT NULL DEFAULT 'user'"),
         ],
     }
     with engine.begin() as conn:
@@ -67,6 +70,12 @@ def _apply_migrations() -> None:
                     conn.exec_driver_sql(
                         f"ALTER TABLE {table} ADD COLUMN {col_name} {col_ddl}"
                     )
+        # Unicité (follower, following) — empêche les doublons si deux
+        # requêtes parallèles tentent de créer la même relation.
+        conn.exec_driver_sql(
+            "CREATE UNIQUE INDEX IF NOT EXISTS follow_unique_pair "
+            "ON follow (follower_id, following_id)"
+        )
 
 
 def get_session() -> Session:

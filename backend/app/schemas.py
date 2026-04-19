@@ -62,11 +62,45 @@ class UserProfileUpsert(BaseModel):
 
     Permet au serveur de créer le profil s'il n'existe pas encore. `id` est
     l'identifiant stable du user côté front (ex. `user-lyria`).
+
+    `creature_id` est optionnel (rétro-compat pour les anciens users pré-PR A
+    qui n'en ont pas) ; côté inscription, le front l'envoie obligatoirement.
     """
 
     id: str = Field(..., min_length=1, max_length=128)
     username: str = Field(..., min_length=1, max_length=64)
     avatar_image_url: str = Field(..., min_length=1, max_length=1024)
+    creature_id: Optional[str] = Field(default=None, max_length=32)
+
+
+class CreatureChoice(BaseModel):
+    """Choix / changement de créature. Slug du catalogue figé."""
+
+    creature_id: str = Field(..., min_length=1, max_length=32)
+
+
+class FollowAction(BaseModel):
+    """Identité du follower pour les endpoints follow/unfollow."""
+
+    follower_id: str = Field(..., min_length=1, max_length=128)
+
+
+class CreatureOut(BaseModel):
+    id: str
+    name: str
+    icon: str
+    color: str
+    description: str
+
+
+class FollowerOut(BaseModel):
+    """Extrait d'un profil utilisé pour afficher follower/following lists."""
+
+    id: str
+    username: str
+    avatarImageUrl: str
+    creature: Optional[CreatureOut] = None
+    role: str = "user"
 
 
 class AvatarUpdate(BaseModel):
@@ -145,6 +179,12 @@ class UserProfileOut(BaseModel):
     earningsPaid: int = 0
     earningsPromo: int = 0
     lastDailyAt: Optional[str] = None
+    # PR A — créature, rôle, compteurs follow (sources de vérité uniques
+    # pour les badges partout dans le front).
+    creature: Optional[CreatureOut] = None
+    role: str = "user"
+    followersCount: int = 0
+    followingCount: int = 0
     createdAt: str
     updatedAt: str
 

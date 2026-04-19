@@ -8,6 +8,21 @@ export interface User {
   role: "queen" | "knight" | "elf";
   joinedAt: string;
   bio?: string;
+  /** Slug de la créature choisie à l'inscription (cf. `CREATURES`). */
+  creatureId?: string;
+}
+
+/**
+ * Créature choisie à l'inscription. Catalogue figé côté backend
+ * (`/creatures`) et dupliqué côté front dans `src/data/creatures.ts` pour
+ * ne pas bloquer l'UI sur un appel réseau avant l'étape de sélection.
+ */
+export interface Creature {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  description: string;
 }
 
 export interface Comment {
