@@ -39,6 +39,14 @@ interface Particle {
   id: string;
   x: number;
   driftX: number;
+  /**
+   * Cible verticale pré-calculée. Obligatoire : si on mettait
+   * `Math.random()` directement dans `animate.y`, Framer Motion
+   * verrait une cible différente à chaque re-render (toutes les
+   * 400 ms via l'interval de nettoyage) et ferait tressauter les
+   * cœurs en vol vers une nouvelle destination.
+   */
+  driftY: number;
   hue: string;
   size: number;
 }
@@ -134,7 +142,7 @@ export function LiveHeartsOverlay({ events }: Props) {
               initial={{ opacity: 0, y: 0, scale: 0.5 }}
               animate={{
                 opacity: [0, 1, 1, 0],
-                y: -260 - Math.random() * 80,
+                y: p.driftY,
                 x: p.driftX,
                 scale: [0.5, 1.1, 1, 0.9],
                 rotate: p.driftX > 0 ? 12 : -12,
@@ -176,6 +184,7 @@ function makeParticle(xBase: number): Particle {
     id: generateId("heart"),
     x: Math.max(2, Math.min(98, xBase + (Math.random() - 0.5) * 8)),
     driftX: drift,
+    driftY: -260 - Math.random() * 80,
     hue: HEART_HUES[Math.floor(Math.random() * HEART_HUES.length)],
     size: 14 + Math.random() * 10,
   };
