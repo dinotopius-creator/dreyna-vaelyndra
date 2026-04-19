@@ -22,7 +22,10 @@ import {
 import {
   apiApplyWalletDelta,
   apiDailyClaim,
+  apiFollow,
   apiGetProfile,
+  apiSetCreature,
+  apiUnfollow,
   apiUpdateAvatar,
   apiUpdateInventory,
   apiUpsertProfile,
@@ -60,6 +63,12 @@ interface ProfileCtx {
   ) => Promise<UserProfileDto | null>;
   /** Réclame la récompense quotidienne (serveur gère cooldown). */
   claimDaily: () => Promise<DailyClaimDto | null>;
+  /** Enregistre/change la créature (slug du catalogue figé). */
+  setCreature: (creatureId: string) => Promise<UserProfileDto | null>;
+  /** S'abonne à un autre user. */
+  follow: (targetId: string) => Promise<UserProfileDto | null>;
+  /** Se désabonne. */
+  unfollow: (targetId: string) => Promise<UserProfileDto | null>;
   /** Permet aux autres contextes (Store) de pousser un état serveur frais. */
   setProfile: (next: UserProfileDto | null) => void;
 }
@@ -98,6 +107,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
           id: user.id,
           username: user.username,
           avatarImageUrl: user.avatar,
+          creatureId: user.creatureId,
         });
       }
       if (inflightIdRef.current !== user.id) return;
@@ -136,6 +146,52 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       }
     },
     [user],
+  );
+
+  const setCreature = useCallback(
+    async (creatureId: string): Promise<UserProfileDto | null> => {
+      if (!user) return null;
+      try {
+        const updated = await apiSetCreature(user.id, creatureId);
+        setProfile(updated);
+        return updated;
+      } catch (err) {
+        console.warn("Échec choix créature :", err);
+        throw err;
+      }
+    },
+    [user],
+  );
+
+  const follow = useCallback(
+    async (targetId: string): Promise<UserProfileDto | null> => {
+      if (!user) return null;
+      try {
+        const target = await apiFollow(user.id, targetId);
+        // Refresh profil courant pour mettre à jour `followingCount`.
+        void refresh();
+        return target;
+      } catch (err) {
+        console.warn("Échec follow :", err);
+        throw err;
+      }
+    },
+    [user, refresh],
+  );
+
+  const unfollow = useCallback(
+    async (targetId: string): Promise<UserProfileDto | null> => {
+      if (!user) return null;
+      try {
+        const target = await apiUnfollow(user.id, targetId);
+        void refresh();
+        return target;
+      } catch (err) {
+        console.warn("Échec unfollow :", err);
+        throw err;
+      }
+    },
+    [user, refresh],
   );
 
   const buyItem = useCallback(
@@ -234,9 +290,23 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       buyItem,
       setEquipped,
       claimDaily,
+      setCreature,
+      follow,
+      unfollow,
       setProfile,
     }),
-    [profile, loading, refresh, saveAvatar, buyItem, setEquipped, claimDaily],
+    [
+      profile,
+      loading,
+      refresh,
+      saveAvatar,
+      buyItem,
+      setEquipped,
+      claimDaily,
+      setCreature,
+      follow,
+      unfollow,
+    ],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

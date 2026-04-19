@@ -8,11 +8,16 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 
+from ..creatures import CREATURES, get_creature
 from ..db import get_session
-from ..models import UserProfile
+from ..models import Follow, UserProfile
 from ..schemas import (
     AvatarUpdate,
+    CreatureChoice,
+    CreatureOut,
     DailyClaimOut,
+    FollowAction,
+    FollowerOut,
     GiftTransfer,
     GiftTransferOut,
     InventoryUpdate,
@@ -30,6 +35,16 @@ router = APIRouter(prefix="/users", tags=["users"])
 DAILY_REWARD_LUEURS = 50
 DAILY_COOLDOWN = timedelta(hours=20)
 
+# Comptes officiels suivis automatiquement à la création d'un nouveau profil.
+# `Le roi des zems💎` est admin (tous droits) ; les deux autres sont
+# animatrices (badge 🎭 uniquement). Sources de vérité côté seed (cf.
+# `app.main.seed_official_accounts`).
+OFFICIAL_FOLLOW_TARGETS: list[str] = [
+    "user-dreyna",
+    "user-kamestars",
+    "user-roi-des-zems",
+]
+
 
 def _session_dep():
     with get_session() as session:
@@ -40,13 +55,35 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _to_out(p: UserProfile) -> UserProfileOut:
+def _creature_out(creature_id: str | None) -> CreatureOut | None:
+    c = get_creature(creature_id)
+    if c is None:
+        return None
+    return CreatureOut(**c)
+
+
+def _count_follows(session: Session, user_id: str) -> tuple[int, int]:
+    """Compte (followers, following) pour un user en 2 requêtes SQL."""
+    followers = session.exec(
+        select(Follow).where(Follow.following_id == user_id)
+    ).all()
+    following = session.exec(
+        select(Follow).where(Follow.follower_id == user_id)
+    ).all()
+    return len(followers), len(following)
+
+
+def _to_out(p: UserProfile, session: Session | None = None) -> UserProfileOut:
     # Pour un client à jour, on expose les 4 sous-pots explicites. Les
     # champs legacy `sylvins` / `sylvinsEarnings` retournent la somme
     # paid+promo pour les clients qui ne savent pas encore lire le split.
     # (Avant PR 5, la colonne `sylvins` stockait tout ; depuis, elle ne
     # stocke plus que le PROMO. On préserve la sémantique "solde total" côté
     # DTO pour rester rétro-compatible.)
+    followers_count = 0
+    following_count = 0
+    if session is not None:
+        followers_count, following_count = _count_follows(session, p.id)
     return UserProfileOut(
         id=p.id,
         username=p.username,
@@ -62,6 +99,10 @@ def _to_out(p: UserProfile) -> UserProfileOut:
         earningsPaid=p.earnings_paid,
         earningsPromo=p.sylvins_earnings,
         lastDailyAt=p.last_daily_at,
+        creature=_creature_out(p.creature_id),
+        role=p.role or "user",
+        followersCount=followers_count,
+        followingCount=following_count,
         createdAt=p.created_at,
         updatedAt=p.updated_at,
     )
@@ -74,7 +115,7 @@ def _touch(p: UserProfile) -> None:
 @router.get("", response_model=List[UserProfileOut])
 def list_users(session: Session = Depends(_session_dep)) -> List[UserProfileOut]:
     rows = session.exec(select(UserProfile)).all()
-    return [_to_out(p) for p in rows]
+    return [_to_out(p, session) for p in rows]
 
 
 @router.get("/{user_id}", response_model=UserProfileOut)
@@ -84,7 +125,34 @@ def get_user(
     p = session.get(UserProfile, user_id)
     if not p:
         raise HTTPException(status_code=404, detail="Profil introuvable.")
-    return _to_out(p)
+    return _to_out(p, session)
+
+
+def _auto_follow_officials(session: Session, follower_id: str) -> None:
+    """Abonne automatiquement un nouveau user aux 3 comptes officiels.
+
+    Idempotent : l'index unique `follow_unique_pair` ignore silencieusement
+    les doublons si la fonction est rappelée. Sauté pour les comptes
+    officiels eux-mêmes (pas de self-follow, pas de boucle).
+    """
+    for target_id in OFFICIAL_FOLLOW_TARGETS:
+        if target_id == follower_id:
+            continue
+        # Vérifie l'existence du compte officiel avant d'insérer la relation
+        # (inutile de créer un follow fantôme si le seed n'est pas encore
+        # passé en local).
+        if session.get(UserProfile, target_id) is None:
+            continue
+        existing = session.exec(
+            select(Follow)
+            .where(Follow.follower_id == follower_id)
+            .where(Follow.following_id == target_id)
+        ).first()
+        if existing is not None:
+            continue
+        session.add(
+            Follow(follower_id=follower_id, following_id=target_id)
+        )
 
 
 @router.post("", response_model=UserProfileOut)
@@ -93,15 +161,23 @@ def upsert_user(
 ) -> UserProfileOut:
     """Crée le profil si absent, sinon rafraîchit juste le pseudo/avatar image.
 
-    Appelé automatiquement par le front à la connexion pour garantir qu'un
-    profil existe en base pour chaque utilisateur actif.
+    À la **création** :
+    - Enregistre la créature choisie (obligatoire côté front mais
+      rétro-compatible ici : un client pré-PR A peut omettre le champ).
+    - Abonne automatiquement le nouveau user aux 3 comptes officiels
+      (dreyna, Kamestars LV, Le roi des zems💎).
     """
     p = session.get(UserProfile, payload.id)
+    is_new = p is None
     if p is None:
+        creature_id = payload.creature_id
+        if creature_id is not None and get_creature(creature_id) is None:
+            creature_id = None
         p = UserProfile(
             id=payload.id,
             username=payload.username,
             avatar_image_url=payload.avatar_image_url,
+            creature_id=creature_id,
         )
         session.add(p)
     else:
@@ -110,10 +186,43 @@ def upsert_user(
         # pas écraser un rendu RPM déjà généré par l'utilisateur).
         if not p.avatar_image_url:
             p.avatar_image_url = payload.avatar_image_url
+        # Rétro-compat : si l'user n'a pas encore de créature (ancien compte)
+        # et que le front en fournit une, on l'enregistre. Pas d'écrasement
+        # tant qu'il a déjà fait son choix.
+        if not p.creature_id and payload.creature_id:
+            if get_creature(payload.creature_id) is not None:
+                p.creature_id = payload.creature_id
         _touch(p)
+    if is_new:
+        _auto_follow_officials(session, p.id)
     session.commit()
     session.refresh(p)
-    return _to_out(p)
+    return _to_out(p, session)
+
+
+@router.patch("/{user_id}/creature", response_model=UserProfileOut)
+def set_creature(
+    user_id: str,
+    payload: CreatureChoice,
+    session: Session = Depends(_session_dep),
+) -> UserProfileOut:
+    """Choix ou changement de créature.
+
+    Rejette 400 si l'id ne correspond à aucune créature du catalogue figé.
+    """
+    p = session.get(UserProfile, user_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Profil introuvable.")
+    if get_creature(payload.creature_id) is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Créature inconnue.",
+        )
+    p.creature_id = payload.creature_id
+    _touch(p)
+    session.commit()
+    session.refresh(p)
+    return _to_out(p, session)
 
 
 @router.patch("/{user_id}/avatar", response_model=UserProfileOut)
@@ -132,7 +241,7 @@ def update_avatar(
     _touch(p)
     session.commit()
     session.refresh(p)
-    return _to_out(p)
+    return _to_out(p, session)
 
 
 @router.patch("/{user_id}/inventory", response_model=UserProfileOut)
@@ -163,7 +272,7 @@ def update_inventory(
     _touch(p)
     session.commit()
     session.refresh(p)
-    return _to_out(p)
+    return _to_out(p, session)
 
 
 def _apply_legacy_sylvins_delta(p: UserProfile, delta: int) -> None:
@@ -258,7 +367,7 @@ def apply_wallet_delta(
     _touch(p)
     session.commit()
     session.refresh(p)
-    return _to_out(p)
+    return _to_out(p, session)
 
 
 @router.post("/{sender_id}/gift-sylvins", response_model=GiftTransferOut)
@@ -317,8 +426,8 @@ def gift_sylvins(
     session.refresh(sender)
     session.refresh(receiver)
     return GiftTransferOut(
-        sender=_to_out(sender),
-        receiver=_to_out(receiver),
+        sender=_to_out(sender, session),
+        receiver=_to_out(receiver, session),
         consumed_promo=take_promo,
         consumed_paid=take_paid,
     )
@@ -339,7 +448,7 @@ def daily_claim(
             last = None
         if last and now - last < DAILY_COOLDOWN:
             return DailyClaimOut(
-                granted=0, already_claimed=True, profile=_to_out(p)
+                granted=0, already_claimed=True, profile=_to_out(p, session)
             )
     p.lueurs += DAILY_REWARD_LUEURS
     p.last_daily_at = now.isoformat()
@@ -347,5 +456,138 @@ def daily_claim(
     session.commit()
     session.refresh(p)
     return DailyClaimOut(
-        granted=DAILY_REWARD_LUEURS, already_claimed=False, profile=_to_out(p)
+        granted=DAILY_REWARD_LUEURS, already_claimed=False, profile=_to_out(p, session)
     )
+
+
+# --- Follow / Unfollow ----------------------------------------------------
+
+
+def _follower_out(p: UserProfile) -> FollowerOut:
+    return FollowerOut(
+        id=p.id,
+        username=p.username,
+        avatarImageUrl=p.avatar_image_url,
+        creature=_creature_out(p.creature_id),
+        role=p.role or "user",
+    )
+
+
+@router.post("/{target_id}/follow", response_model=UserProfileOut)
+def follow_user(
+    target_id: str,
+    payload: FollowAction,
+    session: Session = Depends(_session_dep),
+) -> UserProfileOut:
+    """Crée la relation follower_id → target_id.
+
+    Idempotent : si la relation existe déjà, renvoie le profil cible tel
+    quel sans ré-insérer. Rejette le self-follow (400) et les ids
+    inexistants (404).
+    """
+    follower_id = payload.follower_id
+    if follower_id == target_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Impossible de s'abonner à soi-même.",
+        )
+    target = session.get(UserProfile, target_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="Cible introuvable.")
+    follower = session.get(UserProfile, follower_id)
+    if not follower:
+        raise HTTPException(status_code=404, detail="Follower introuvable.")
+
+    existing = session.exec(
+        select(Follow)
+        .where(Follow.follower_id == follower_id)
+        .where(Follow.following_id == target_id)
+    ).first()
+    if existing is None:
+        session.add(
+            Follow(follower_id=follower_id, following_id=target_id)
+        )
+        session.commit()
+    return _to_out(target, session)
+
+
+@router.delete("/{target_id}/follow", response_model=UserProfileOut)
+def unfollow_user(
+    target_id: str,
+    follower_id: str,
+    session: Session = Depends(_session_dep),
+) -> UserProfileOut:
+    """Supprime la relation follower_id → target_id si elle existe."""
+    target = session.get(UserProfile, target_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="Cible introuvable.")
+    existing = session.exec(
+        select(Follow)
+        .where(Follow.follower_id == follower_id)
+        .where(Follow.following_id == target_id)
+    ).first()
+    if existing is not None:
+        session.delete(existing)
+        session.commit()
+    return _to_out(target, session)
+
+
+@router.get("/{user_id}/followers", response_model=List[FollowerOut])
+def list_followers(
+    user_id: str, session: Session = Depends(_session_dep)
+) -> List[FollowerOut]:
+    """Liste les users qui suivent `user_id`."""
+    rows = session.exec(
+        select(Follow).where(Follow.following_id == user_id)
+    ).all()
+    follower_ids = [r.follower_id for r in rows]
+    if not follower_ids:
+        return []
+    users = session.exec(
+        select(UserProfile).where(UserProfile.id.in_(follower_ids))
+    ).all()
+    return [_follower_out(u) for u in users]
+
+
+@router.get("/{user_id}/following", response_model=List[FollowerOut])
+def list_following(
+    user_id: str, session: Session = Depends(_session_dep)
+) -> List[FollowerOut]:
+    """Liste les users suivis par `user_id`."""
+    rows = session.exec(
+        select(Follow).where(Follow.follower_id == user_id)
+    ).all()
+    target_ids = [r.following_id for r in rows]
+    if not target_ids:
+        return []
+    users = session.exec(
+        select(UserProfile).where(UserProfile.id.in_(target_ids))
+    ).all()
+    return [_follower_out(u) for u in users]
+
+
+@router.get("/{user_id}/follow-status")
+def follow_status(
+    user_id: str,
+    follower_id: str,
+    session: Session = Depends(_session_dep),
+) -> dict:
+    """`{ following: bool }` — le follower suit-il `user_id` ?"""
+    existing = session.exec(
+        select(Follow)
+        .where(Follow.follower_id == follower_id)
+        .where(Follow.following_id == user_id)
+    ).first()
+    return {"following": existing is not None}
+
+
+# --- Catalogue créatures --------------------------------------------------
+
+
+creatures_router = APIRouter(prefix="/creatures", tags=["creatures"])
+
+
+@creatures_router.get("", response_model=List[CreatureOut])
+def list_creatures() -> List[CreatureOut]:
+    """Catalogue figé des 9 créatures (affiché à l'inscription)."""
+    return [CreatureOut(**c) for c in CREATURES]

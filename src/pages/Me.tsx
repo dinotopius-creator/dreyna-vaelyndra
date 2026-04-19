@@ -21,6 +21,8 @@ import { useToast } from "../contexts/ToastContext";
 import { useProfile } from "../contexts/ProfileContext";
 import { SectionHeading } from "../components/SectionHeading";
 import { AvatarViewer } from "../components/AvatarViewer";
+import { UserBadges } from "../components/UserBadges";
+import { CreaturePickerModal } from "../components/CreaturePickerModal";
 import { formatDate, formatPrice, resizeImageToDataUrl } from "../lib/helpers";
 import {
   MIN_PAYOUT_EUR,
@@ -39,6 +41,7 @@ export function Me() {
   const [username, setUsername] = useState(user?.username ?? "");
   const [avatar, setAvatar] = useState(user?.avatar ?? "");
   const [editingAvatar, setEditingAvatar] = useState(false);
+  const [creaturePickerOpen, setCreaturePickerOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   if (!user) return null;
@@ -118,9 +121,37 @@ export function Me() {
             <h1 className="mt-1 font-display text-3xl text-gold-200 md:text-4xl">
               {user.username}
             </h1>
-            <p className="mt-1 text-sm text-ivory/60">
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <UserBadges
+                creatureId={serverProfile?.creature?.id ?? user.creatureId}
+                role={serverProfile?.role}
+                size="md"
+              />
+              <button
+                type="button"
+                onClick={() => setCreaturePickerOpen(true)}
+                className="text-[11px] font-regal tracking-wide text-ivory/50 underline-offset-4 transition hover:text-gold-200 hover:underline"
+              >
+                Changer
+              </button>
+            </div>
+            <p className="mt-2 text-sm text-ivory/60">
               Entré·e à la cour le {formatDate(user.joinedAt)}
             </p>
+            <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-ivory/70">
+              <span>
+                <strong className="font-display text-gold-200">
+                  {serverProfile?.followersCount ?? 0}
+                </strong>{" "}
+                abonné·e·s
+              </span>
+              <span>
+                <strong className="font-display text-gold-200">
+                  {serverProfile?.followingCount ?? 0}
+                </strong>{" "}
+                abonnements
+              </span>
+            </div>
           </div>
           {user.role === "queen" && (
             <span className="rounded-full border border-gold-400/50 bg-gold-500/15 px-3 py-1 font-regal text-[10px] font-semibold tracking-[0.22em] text-gold-200">
@@ -128,6 +159,13 @@ export function Me() {
             </span>
           )}
         </div>
+        <CreaturePickerModal
+          open={creaturePickerOpen}
+          currentCreatureId={
+            serverProfile?.creature?.id ?? user.creatureId ?? null
+          }
+          onClose={() => setCreaturePickerOpen(false)}
+        />
 
         {editingAvatar && (
           <motion.div

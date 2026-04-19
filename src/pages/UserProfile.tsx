@@ -6,6 +6,8 @@ import { useAuth } from "../contexts/AuthContext";
 import { useStore } from "../contexts/StoreContext";
 import { SectionHeading } from "../components/SectionHeading";
 import { AvatarViewer } from "../components/AvatarViewer";
+import { UserBadges } from "../components/UserBadges";
+import { FollowButton } from "../components/FollowButton";
 import { formatDate, formatRelative } from "../lib/helpers";
 import { formatSylvins } from "../lib/sylvins";
 import { apiGetProfile, type UserProfileDto } from "../lib/api";
@@ -109,15 +111,52 @@ export function UserProfile() {
             <h1 className="mt-1 font-display text-3xl text-gold-200 md:text-4xl">
               {profile.username}
             </h1>
-            <p className="mt-1 text-sm text-ivory/60">
+            <UserBadges
+              creatureId={serverProfile?.creature?.id ?? profile.creatureId}
+              role={serverProfile?.role}
+              size="md"
+              className="mt-2"
+            />
+            <p className="mt-2 text-sm text-ivory/60">
               Entré·e à la cour le {formatDate(profile.joinedAt)}
             </p>
+            <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-ivory/70">
+              <span>
+                <strong className="font-display text-gold-200">
+                  {serverProfile?.followersCount ?? 0}
+                </strong>{" "}
+                abonné·e·s
+              </span>
+              <span>
+                <strong className="font-display text-gold-200">
+                  {serverProfile?.followingCount ?? 0}
+                </strong>{" "}
+                abonnements
+              </span>
+            </div>
           </div>
-          {profile.role === "queen" && (
-            <span className="rounded-full border border-gold-400/50 bg-gold-500/15 px-3 py-1 font-regal text-[10px] font-semibold tracking-[0.22em] text-gold-200">
-              <Crown className="mr-1 inline h-3 w-3" /> Trône
-            </span>
-          )}
+          <div className="flex flex-col items-end gap-2">
+            {profile.role === "queen" && (
+              <span className="rounded-full border border-gold-400/50 bg-gold-500/15 px-3 py-1 font-regal text-[10px] font-semibold tracking-[0.22em] text-gold-200">
+                <Crown className="mr-1 inline h-3 w-3" /> Trône
+              </span>
+            )}
+            <FollowButton
+              targetId={profile.id}
+              targetUsername={profile.username}
+              onChange={(nowFollowing) => {
+                setServerProfile((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        followersCount:
+                          prev.followersCount + (nowFollowing ? 1 : -1),
+                      }
+                    : prev,
+                );
+              }}
+            />
+          </div>
         </div>
         {profile.bio && (
           <p className="mt-6 text-sm text-ivory/80">{profile.bio}</p>

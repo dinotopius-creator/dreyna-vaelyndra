@@ -5,7 +5,7 @@
  * backend Fly.io de prod — ce qui permet au site déployé sur devinapps.com
  * (multi-appareils) de partager un seul fil d'actualité.
  */
-import type { CommunityPost, Comment } from "../types";
+import type { CommunityPost, Comment, Creature } from "../types";
 
 const BASE = (
   import.meta.env.VITE_API_URL ??
@@ -160,8 +160,22 @@ export interface UserProfileDto {
   earningsPaid: number;
   earningsPromo: number;
   lastDailyAt: string | null;
+  /** Créature choisie (null si compte pré-PR A non encore migré). */
+  creature: Creature | null;
+  /** `user` (défaut), `animator` (badge 🎭), `admin` (badge 👑). */
+  role: string;
+  followersCount: number;
+  followingCount: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface FollowerDto {
+  id: string;
+  username: string;
+  avatarImageUrl: string;
+  creature: Creature | null;
+  role: string;
 }
 
 export interface DailyClaimDto {
@@ -174,6 +188,8 @@ export async function apiUpsertProfile(input: {
   id: string;
   username: string;
   avatarImageUrl: string;
+  /** Optionnel : envoyé uniquement au premier upsert (inscription). */
+  creatureId?: string;
 }): Promise<UserProfileDto> {
   return (await request<UserProfileDto>("/users", {
     method: "POST",
@@ -181,8 +197,76 @@ export async function apiUpsertProfile(input: {
       id: input.id,
       username: input.username,
       avatar_image_url: input.avatarImageUrl,
+      creature_id: input.creatureId,
     }),
   })) as UserProfileDto;
+}
+
+export async function apiListCreatures(): Promise<Creature[]> {
+  return (await request<Creature[]>("/creatures")) ?? [];
+}
+
+export async function apiSetCreature(
+  userId: string,
+  creatureId: string,
+): Promise<UserProfileDto> {
+  return (await request<UserProfileDto>(
+    `/users/${encodeURIComponent(userId)}/creature`,
+    { method: "PATCH", body: JSON.stringify({ creature_id: creatureId }) },
+  )) as UserProfileDto;
+}
+
+export async function apiFollow(
+  followerId: string,
+  targetId: string,
+): Promise<UserProfileDto> {
+  return (await request<UserProfileDto>(
+    `/users/${encodeURIComponent(targetId)}/follow`,
+    { method: "POST", body: JSON.stringify({ follower_id: followerId }) },
+  )) as UserProfileDto;
+}
+
+export async function apiUnfollow(
+  followerId: string,
+  targetId: string,
+): Promise<UserProfileDto> {
+  return (await request<UserProfileDto>(
+    `/users/${encodeURIComponent(targetId)}/follow?follower_id=${encodeURIComponent(
+      followerId,
+    )}`,
+    { method: "DELETE" },
+  )) as UserProfileDto;
+}
+
+export async function apiListFollowers(
+  userId: string,
+): Promise<FollowerDto[]> {
+  return (
+    (await request<FollowerDto[]>(
+      `/users/${encodeURIComponent(userId)}/followers`,
+    )) ?? []
+  );
+}
+
+export async function apiListFollowing(
+  userId: string,
+): Promise<FollowerDto[]> {
+  return (
+    (await request<FollowerDto[]>(
+      `/users/${encodeURIComponent(userId)}/following`,
+    )) ?? []
+  );
+}
+
+export async function apiFollowStatus(
+  userId: string,
+  followerId: string,
+): Promise<{ following: boolean }> {
+  return (await request<{ following: boolean }>(
+    `/users/${encodeURIComponent(userId)}/follow-status?follower_id=${encodeURIComponent(
+      followerId,
+    )}`,
+  )) as { following: boolean };
 }
 
 export async function apiGetProfile(userId: string): Promise<UserProfileDto> {

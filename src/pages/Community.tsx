@@ -17,7 +17,9 @@ import { useLive } from "../contexts/LiveContext";
 import { useToast } from "../contexts/ToastContext";
 import { SectionHeading } from "../components/SectionHeading";
 import { PostComments } from "../components/PostComments";
+import { UserBadges } from "../components/UserBadges";
 import { DREYNA_PROFILE, TOP_FANS } from "../data/mock";
+import { getOfficial } from "../data/officials";
 import { formatNumber, formatRelative, parseVideoUrl } from "../lib/helpers";
 import {
   apiCreatePost,
@@ -271,13 +273,22 @@ export function Community() {
                     />
                   </Link>
                   <div className="flex-1">
-                    <p className="flex items-center gap-2 text-sm">
+                    <p className="flex flex-wrap items-center gap-2 text-sm">
                       <Link
                         to={profileHref(p.authorId)}
                         className="font-display text-gold-200 transition hover:text-gold-300"
                       >
                         {p.authorName}
                       </Link>
+                      {(() => {
+                        const off = getOfficial(p.authorId);
+                        return (
+                          <UserBadges
+                            role={off?.role}
+                            creatureId={off?.creatureId}
+                          />
+                        );
+                      })()}
                       <span className="text-xs text-ivory/40">
                         {formatRelative(p.createdAt)}
                       </span>

@@ -23,6 +23,7 @@ interface AuthCtx {
     username: string,
     email: string,
     password: string,
+    creatureId: string,
   ) => { ok: boolean; error?: string };
   logout: () => void;
   updateBio: (bio: string) => void;
@@ -60,6 +61,7 @@ function seedUsers(): StoredUser[] {
   const seed: StoredUser[] = [
     {
       ...DREYNA_PROFILE,
+      creatureId: "elfe",
       passwordHash: hash("vaelyndra"),
     },
     {
@@ -70,6 +72,7 @@ function seedUsers(): StoredUser[] {
       role: "knight",
       joinedAt: "2022-05-14T00:00:00Z",
       bio: "Chevalière lunaire, dévouée à la reine.",
+      creatureId: "gardien",
       passwordHash: hash("lumiere"),
     },
     {
@@ -80,6 +83,7 @@ function seedUsers(): StoredUser[] {
       role: "elf",
       joinedAt: "2023-01-01T00:00:00Z",
       bio: "Archer d'argent.",
+      creatureId: "elfe",
       passwordHash: hash("lumiere"),
     },
   ];
@@ -119,6 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       role: u.role,
       joinedAt: u.joinedAt,
       bio: u.bio,
+      creatureId: u.creatureId,
     };
     return rest;
   }, [userId, users]);
@@ -138,13 +143,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const register = useCallback(
-    (username: string, email: string, password: string) => {
+    (
+      username: string,
+      email: string,
+      password: string,
+      creatureId: string,
+    ) => {
       if (username.length < 2)
         return { ok: false, error: "Votre nom elfique est trop court." };
       if (!/^\S+@\S+\.\S+$/.test(email))
         return { ok: false, error: "Un mail valide est requis." };
       if (password.length < 4)
         return { ok: false, error: "Le sortilège doit faire 4 caractères." };
+      if (!creatureId)
+        return { ok: false, error: "Choisis ta créature pour franchir le portail." };
       if (users.some((u) => u.email.toLowerCase() === email.toLowerCase()))
         return { ok: false, error: "Ce mail est déjà inscrit aux archives." };
       const id = `user-${Math.random().toString(36).slice(2, 9)}`;
@@ -156,6 +168,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         role: "elf",
         joinedAt: new Date().toISOString(),
         bio: "Nouvel enfant de Vaelyndra.",
+        creatureId,
         passwordHash: hash(password),
       };
       setUsers((arr) => [...arr, newUser]);
@@ -218,6 +231,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         role: u.role,
         joinedAt: u.joinedAt,
         bio: u.bio,
+        creatureId: u.creatureId,
       })),
       isQueen: user?.role === "queen",
       login,
