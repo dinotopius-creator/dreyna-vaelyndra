@@ -33,8 +33,8 @@ interface ProfileCtx {
   loading: boolean;
   refresh: () => Promise<void>;
   /**
-   * Persiste un nouvel avatar Ready Player Me (URL .glb) et sa vignette .png
-   * associée. Renvoie le profil mis à jour.
+   * Persiste un nouvel avatar (URL DiceBear SVG, ou .glb légacy) et sa
+   * vignette associée. Renvoie le profil mis à jour.
    */
   saveAvatar: (patch: {
     avatarUrl: string | null;
@@ -66,9 +66,9 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     try {
       // On tente d'abord le GET : le profil serveur est la source de vérité
-      // et contient déjà l'avatar RPM si l'utilisateur l'a sauvegardé. On
-      // n'upsert (avec l'avatar local par défaut) que si le profil n'existe
-      // pas encore en base, pour ne jamais écraser un rendu RPM existant.
+      // et contient déjà l'avatar sauvegardé. On n'upsert (avec l'avatar
+      // local par défaut) que si le profil n'existe pas encore en base, pour
+      // ne jamais écraser un rendu déjà scellé.
       let fresh: UserProfileDto;
       try {
         fresh = await apiGetProfile(user.id);

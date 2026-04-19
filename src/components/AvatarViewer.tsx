@@ -1,17 +1,14 @@
 /**
- * Visionneuse 3D d'avatar (GLB Ready Player Me) basée sur <model-viewer>.
+ * Visionneuse d'avatar — gère deux rendus selon le type d'URL :
  *
- * Le web component est chargé dynamiquement depuis le CDN Google au premier
- * rendu afin de ne pas alourdir le bundle principal. Tant qu'il n'est pas
- * prêt, on affiche le fallback 2D (la vignette PNG habituelle).
+ * 1. URL 2D (SVG DiceBear, PNG, JPG…) → simple `<img>` (cas principal
+ *    depuis le retrait de Ready Player Me).
+ * 2. URL 3D (`.glb`) → `<model-viewer>` chargé dynamiquement depuis le CDN
+ *    Google (rotation 360°, zoom, drag). Conservé pour rétro-compat avec
+ *    les quelques avatars RPM encore en base.
  *
- * Features natives de <model-viewer> :
- * - rotation 360° (auto-rotate + drag)
- * - zoom molette + pinch
- * - drag & drop pour repositionner
- *
- * Ces interactions répondent directement à la demande du brief : « Rotation
- * 360°, Zoom, Rotation libre ».
+ * Tant que le CE 3D n'est pas prêt (ou s'il échoue), on retombe sur le
+ * fallback 2D (vignette existante ou texte « Avatar en attente »).
  */
 import {
   useEffect,
@@ -22,6 +19,7 @@ import {
   type ReactNode,
 } from "react";
 import clsx from "clsx";
+import { isFlatImageUrl } from "../lib/dicebear";
 
 /**
  * `<model-viewer>` est un web component chargé dynamiquement via CDN : on
@@ -151,7 +149,29 @@ export function AvatarViewer({
   // la cible pour zoomer sur le buste sur le profil.
   const cameraOrbit = framing === "face" ? "0deg 80deg 1.7m" : "0deg 90deg 3m";
 
-  // Fallback 2D lorsque pas de GLB, chargement KO, ou pendant le boot du CE.
+  // Cas principal depuis le retrait de RPM : avatars 2D (SVG DiceBear,
+  // PNG, JPG). On rend directement avec un <img> — pas besoin du CE 3D.
+  const flat = isFlatImageUrl(src);
+  if (src && flat) {
+    return (
+      <div
+        className={clsx(
+          "relative overflow-hidden rounded-2xl border border-gold-400/30 bg-night-900/60",
+          sizeClass,
+          className,
+        )}
+      >
+        <img
+          src={src}
+          alt={alt}
+          className="h-full w-full object-cover"
+          draggable={false}
+        />
+      </div>
+    );
+  }
+
+  // Fallback 2D lorsque pas de src, chargement GLB KO, ou pendant le boot du CE.
   if (!src || errored || !ready) {
     return (
       <div

@@ -1,14 +1,20 @@
 /**
- * Page `/avatar` — atelier complet pour personnaliser et sauvegarder son
- * avatar 3D Ready Player Me. Affiche :
+ * Page `/avatar` — atelier d'avatar 2D « paper-doll » (DiceBear).
  *
- * 1. Un visualiseur 3D (<AvatarViewer>) avec rotation 360°, zoom et drag
- * 2. Un bouton "Ouvrir l'atelier" qui révèle l'éditeur RPM en iframe
- * 3. Un bouton "Enregistrer mon avatar" qui persiste `avatar_url` +
- *    `avatar_image_url` en base via l'API backend.
+ * Depuis la fermeture de Ready Player Me en janvier 2026, on génère
+ * l'avatar côté front via l'API publique DiceBear : le style + la graine
+ * produisent un SVG déterministe que l'on persiste directement en base
+ * (aucun fichier lourd à héberger).
  *
- * Le profil est rechargé dans le ProfileContext après sauvegarde pour
- * propager le nouvel avatar à toute l'app (navbar, posts, chat).
+ * Affiche :
+ *   1. un aperçu de l'avatar actuel
+ *   2. un atelier plié/déplié qui laisse l'utilisateur choisir style,
+ *      seed et fond
+ *   3. un bouton « Enregistrer mon avatar » qui persiste l'URL DiceBear
+ *      côté serveur via l'API backend.
+ *
+ * Le profil est rechargé via ProfileContext après sauvegarde pour que le
+ * nouvel avatar se propage à toute l'app (navbar, posts, chat, lives).
  */
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
@@ -26,15 +32,15 @@ export function Avatar() {
   const { profile, refresh, saveAvatar, loading } = useProfile();
   const { notify } = useToast();
   const [editing, setEditing] = useState(false);
-  // Brouillon : avatar exporté par RPM mais pas encore persisté côté serveur.
+  // Brouillon : avatar composé dans l'atelier mais pas encore persisté.
   const [draft, setDraft] = useState<{
-    glbUrl: string;
-    pngUrl: string;
+    avatarUrl: string;
+    avatarImageUrl: string;
   } | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // Re-sync à l'ouverture pour être certain d'afficher la dernière version
-  // (ex. l'utilisateur a modifié son avatar depuis un autre device).
+  // Re-sync à l'ouverture pour afficher la dernière version (ex. l'utilisateur
+  // a modifié son avatar depuis un autre appareil).
   useEffect(() => {
     void refresh();
   }, [refresh]);
@@ -55,9 +61,9 @@ export function Avatar() {
     );
   }
 
-  const currentGlb = draft?.glbUrl ?? profile?.avatarUrl ?? null;
-  const currentPng =
-    draft?.pngUrl ?? profile?.avatarImageUrl ?? user.avatar ?? null;
+  const currentAvatar = draft?.avatarUrl ?? profile?.avatarUrl ?? null;
+  const currentImage =
+    draft?.avatarImageUrl ?? profile?.avatarImageUrl ?? user.avatar ?? null;
   const hasDraft = !!draft;
 
   async function persist() {
@@ -65,8 +71,8 @@ export function Avatar() {
     setSaving(true);
     try {
       await saveAvatar({
-        avatarUrl: draft.glbUrl,
-        avatarImageUrl: draft.pngUrl,
+        avatarUrl: draft.avatarUrl,
+        avatarImageUrl: draft.avatarImageUrl,
       });
       setDraft(null);
       setEditing(false);
@@ -105,7 +111,7 @@ export function Avatar() {
       <SectionHeading
         eyebrow="Atelier d'avatar"
         title="Composez votre double elfique"
-        subtitle="Cheveux, yeux, tenues, accessoires… explorez le catalogue Ready Player Me. Tout est sauvegardé sur votre compte — vous retrouverez votre avatar sur tous vos appareils."
+        subtitle="Choisissez un style d'illustration, lancez les dés pour varier coiffure et tenue, puis scellez. Votre avatar vous suit sur tous vos appareils."
       />
 
       <div className="mt-10 grid gap-8 lg:grid-cols-[minmax(0,360px)_1fr]">
@@ -115,8 +121,8 @@ export function Avatar() {
           className="card-royal space-y-5 p-6"
         >
           <AvatarViewer
-            src={currentGlb}
-            fallbackImage={currentPng}
+            src={currentAvatar}
+            fallbackImage={currentImage}
             alt={`Avatar de ${user.username}`}
             size="portrait"
             framing="face"
@@ -127,9 +133,8 @@ export function Avatar() {
               ✦ Aperçu
             </p>
             <p className="mt-1 text-sm text-ivory/70">
-              Tournez à 360°, zoomez et faites glisser pour examiner votre
-              avatar sous toutes les coutures. C'est la vue qu'afficheront vos
-              posts et vos lives.
+              Voilà la vignette qu'afficheront vos posts, vos commentaires et
+              vos lives. Ouvrez l'atelier pour la refaire entièrement.
             </p>
           </div>
 
@@ -140,7 +145,7 @@ export function Avatar() {
               className="flex w-full items-center justify-center gap-2 rounded-full bg-gold-shine px-5 py-3 font-regal text-[11px] tracking-[0.22em] text-night-900 transition hover:brightness-110"
             >
               <UserCog className="h-4 w-4" />
-              {editing ? "Fermer l'atelier" : "Ouvrir l'atelier RPM"}
+              {editing ? "Fermer l'atelier" : "Ouvrir l'atelier"}
             </button>
             {hasDraft && (
               <div className="flex gap-2">
@@ -181,11 +186,11 @@ export function Avatar() {
           {editing ? (
             <AvatarEditor
               initialAvatarUrl={profile?.avatarUrl ?? null}
+              defaultSeed={user.username}
               onExport={(exp) => {
                 setDraft(exp);
-                setEditing(false);
                 notify(
-                  "Avatar capturé — vérifiez et enregistrez pour sceller ✨",
+                  "Avatar composé — vérifiez et enregistrez pour sceller ✨",
                   "info",
                 );
               }}
@@ -199,15 +204,18 @@ export function Avatar() {
               <ol className="mx-auto max-w-md space-y-3 text-left text-sm text-ivory/70">
                 <li>
                   1. <strong className="text-gold-200">Ouvrez l'atelier</strong>{" "}
-                  — prenez un selfie ou choisissez un corps de départ.
+                  pour choisir un style d'illustration.
                 </li>
                 <li>
-                  2. <strong className="text-gold-200">Personnalisez</strong>{" "}
-                  cheveux, yeux, peau, vêtements, accessoires…
+                  2. <strong className="text-gold-200">Lancez les dés</strong>{" "}
+                  pour varier coiffures, tenues et accessoires.
                 </li>
                 <li>
-                  3. <strong className="text-gold-200">Validez</strong> dans
-                  l'éditeur — votre avatar apparaît ici en brouillon.
+                  3.{" "}
+                  <strong className="text-gold-200">
+                    Appliquez le brouillon
+                  </strong>{" "}
+                  — il apparaît à gauche en aperçu.
                 </li>
                 <li>
                   4.{" "}
@@ -218,8 +226,9 @@ export function Avatar() {
                 </li>
               </ol>
               <p className="mt-3 text-xs text-ivory/50">
-                L'éditeur est fourni par Ready Player Me, service gratuit
-                spécialisé dans les avatars 3D.
+                Illustrations générées via DiceBear (SVG libre, MIT). Vos
+                vrais items de boutique viendront s'équiper par-dessus
+                prochainement.
               </p>
             </div>
           )}
