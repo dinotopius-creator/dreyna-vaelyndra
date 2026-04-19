@@ -30,6 +30,7 @@ import type { LiveRegistryEntry } from "../contexts/LiveContext";
 import { SectionHeading } from "../components/SectionHeading";
 import { GiftPanel } from "../components/GiftPanel";
 import { GiftFlight } from "../components/GiftFlight";
+import { LiveAvatarOverlay } from "../components/LiveAvatarOverlay";
 import {
   AUTO_CHAT_LINES,
   DREYNA_PROFILE,
@@ -708,6 +709,20 @@ export function Live() {
                   {activeMode === "twitch" && (
                     <TwitchEmbed channel={twitchChannel} />
                   )}
+                  {/*
+                    Overlay « avatar en live » : médaillon du broadcaster
+                    (avec sa scène + sa parure équipées) en surimpression,
+                    pour que les viewers voient toujours qui ils regardent
+                    même sur un partage d'écran ou un embed Twitch.
+                  */}
+                  <LiveAvatarOverlay
+                    broadcasterId={broadcasterId}
+                    broadcasterName={
+                      broadcasterProfile?.username ?? "Vaelyndra"
+                    }
+                    fallbackAvatar={broadcasterProfile?.avatar ?? null}
+                    showControls={amBroadcaster}
+                  />
                   <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-night-900/95 via-night-900/40 to-transparent p-6">
                     <div>
                       <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-400/50 bg-rose-500/20 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-rose-200">
