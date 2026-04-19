@@ -795,14 +795,19 @@ export function Live() {
               )}
 
               {/* Cœurs flottants groupés (remplace l'ancienne pluie à
-                  1 cœur par clic). Voir `LiveHeartsOverlay` pour le combo. */}
-              <LiveHeartsOverlay events={heartEvents} />
+                  1 cœur par clic). Voir `LiveHeartsOverlay` pour le combo.
+                  `key={broadcasterId}` force un remount quand on change
+                  de broadcaster : l'état interne (bursts + processedRef)
+                  est entièrement purgé pour éviter le leak visuel et
+                  mémoire du `Set` accumulateur. */}
+              <LiveHeartsOverlay key={broadcasterId} events={heartEvents} />
               <GiftFlight items={giftFlights} />
 
               {/* Chat flottant TikTok/Twitch : visible uniquement si un
                   live est effectivement en cours sur ce broadcaster. */}
               {isActiveLive && (
                 <LiveChatOverlay
+                  key={broadcasterId}
                   messages={messages}
                   systemAuthorId={SYSTEM_AUTHOR.id}
                   onSend={sendMessage}
