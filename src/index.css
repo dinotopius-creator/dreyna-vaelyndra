@@ -218,10 +218,16 @@
   }
   .avatar-scene--ocean {
     animation-name: scene-drift;
+    /* Les dégradés CSS remplissent 100% du conteneur par défaut, donc
+       animer `background-position` n'a aucun effet visible sans une
+       `background-size` supérieure à 100%. On double la taille pour
+       laisser de la place au décalage horizontal. */
+    background-size: 200% 200%;
   }
   .avatar-scene--aurora {
     animation-name: scene-drift;
     animation-duration: 14s;
+    background-size: 200% 200%;
   }
   .avatar-scene--flames {
     animation-name: scene-glow;
