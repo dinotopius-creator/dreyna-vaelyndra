@@ -49,46 +49,74 @@ function hash(input: string) {
   return `h${h}`;
 }
 
+// Compte admin officiel (miroir de `backend/app/main.py:OFFICIAL_ACCOUNTS` +
+// `src/data/officials.ts`). Role "queen" côté frontend pour débloquer la
+// Salle du Trône (isQueen === role === "queen") ; le badge 💎 admin vient
+// du ProfileContext (role serveur "admin") via `OFFICIALS`.
+const ROI_DES_ZEMS: StoredUser = {
+  id: "user-roi-des-zems",
+  username: "Le roi des zems💎",
+  email: "roi@vaelyndra.realm",
+  avatar: "https://api.dicebear.com/7.x/personas/svg?seed=RoiDesZems",
+  role: "queen",
+  joinedAt: "2024-01-01T00:00:00Z",
+  bio: "Gardien du trésor du royaume — admin de Vaelyndra.",
+  creatureId: "dragon",
+  passwordHash: hash("zemsdiamant"),
+};
+
+const DEFAULT_SEED: StoredUser[] = [
+  {
+    ...DREYNA_PROFILE,
+    creatureId: "elfe",
+    passwordHash: hash("vaelyndra"),
+  },
+  ROI_DES_ZEMS,
+  {
+    id: "user-lyria",
+    username: "Lyria",
+    email: "lyria@vaelyndra.realm",
+    avatar: "https://i.pravatar.cc/150?u=lyria",
+    role: "knight",
+    joinedAt: "2022-05-14T00:00:00Z",
+    bio: "Chevalière lunaire, dévouée à la reine.",
+    creatureId: "gardien",
+    passwordHash: hash("lumiere"),
+  },
+  {
+    id: "user-caelum",
+    username: "Caelum",
+    email: "caelum@vaelyndra.realm",
+    avatar: "https://i.pravatar.cc/150?u=caelum",
+    role: "elf",
+    joinedAt: "2023-01-01T00:00:00Z",
+    bio: "Archer d'argent.",
+    creatureId: "elfe",
+    passwordHash: hash("lumiere"),
+  },
+];
+
 function seedUsers(): StoredUser[] {
   const existing = localStorage.getItem(USERS_KEY);
   if (existing) {
     try {
-      return JSON.parse(existing) as StoredUser[];
+      const parsed = JSON.parse(existing) as StoredUser[];
+      // Migration : ajoute le compte admin "Le roi des zems💎" aux
+      // installations existantes qui ont un localStorage pré-PR. On ne
+      // touche pas aux comptes utilisateur existants (y compris Dreyna
+      // s'ils l'ont personnalisée).
+      if (!parsed.some((u) => u.id === ROI_DES_ZEMS.id)) {
+        const merged = [...parsed, ROI_DES_ZEMS];
+        localStorage.setItem(USERS_KEY, JSON.stringify(merged));
+        return merged;
+      }
+      return parsed;
     } catch {
       /* empty */
     }
   }
-  const seed: StoredUser[] = [
-    {
-      ...DREYNA_PROFILE,
-      creatureId: "elfe",
-      passwordHash: hash("vaelyndra"),
-    },
-    {
-      id: "user-lyria",
-      username: "Lyria",
-      email: "lyria@vaelyndra.realm",
-      avatar: "https://i.pravatar.cc/150?u=lyria",
-      role: "knight",
-      joinedAt: "2022-05-14T00:00:00Z",
-      bio: "Chevalière lunaire, dévouée à la reine.",
-      creatureId: "gardien",
-      passwordHash: hash("lumiere"),
-    },
-    {
-      id: "user-caelum",
-      username: "Caelum",
-      email: "caelum@vaelyndra.realm",
-      avatar: "https://i.pravatar.cc/150?u=caelum",
-      role: "elf",
-      joinedAt: "2023-01-01T00:00:00Z",
-      bio: "Archer d'argent.",
-      creatureId: "elfe",
-      passwordHash: hash("lumiere"),
-    },
-  ];
-  localStorage.setItem(USERS_KEY, JSON.stringify(seed));
-  return seed;
+  localStorage.setItem(USERS_KEY, JSON.stringify(DEFAULT_SEED));
+  return DEFAULT_SEED;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
