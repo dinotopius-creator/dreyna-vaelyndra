@@ -24,6 +24,7 @@ import {
   useLive,
 } from "../contexts/LiveContext";
 import type { LiveRegistryEntry } from "../contexts/LiveContext";
+import { LIVE_CATEGORIES, getLiveCategory } from "../data/liveCategories";
 import { SectionHeading } from "../components/SectionHeading";
 import { GiftPanel } from "../components/GiftPanel";
 import { GiftFlight } from "../components/GiftFlight";
@@ -259,6 +260,42 @@ function BroadcasterControls() {
         </label>
       </div>
 
+      <fieldset className="mt-5">
+        <legend className="mb-2 font-regal text-[11px] uppercase tracking-[0.22em] text-ivory/60">
+          Catégorie du live
+        </legend>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          {LIVE_CATEGORIES.map((c) => {
+            const selected = config.category === c.id;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => !isLive && updateConfig({ category: c.id })}
+                disabled={isLive}
+                className={`flex items-start gap-2 rounded-xl border bg-night-900/40 p-3 text-left transition ${
+                  selected
+                    ? "border-gold-400/60 ring-1 ring-gold-400/40"
+                    : "border-royal-500/30 opacity-80 hover:opacity-100 hover:border-gold-400/30"
+                } disabled:cursor-not-allowed`}
+              >
+                <span className="text-xl leading-none" aria-hidden>
+                  {c.icon}
+                </span>
+                <span>
+                  <span className="block font-display text-sm text-gold-200">
+                    {c.label}
+                  </span>
+                  <span className="mt-0.5 block text-[11px] leading-snug text-ivory/55">
+                    {c.description}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </fieldset>
+
       {isQueen && (
         <fieldset className="mt-5">
           <legend className="mb-2 font-regal text-[11px] uppercase tracking-[0.22em] text-ivory/60">
@@ -432,7 +469,9 @@ function LiveRoster({
         Autres lives en cours
       </p>
       <ul className="flex flex-wrap gap-2">
-        {filtered.map((e) => (
+        {filtered.map((e) => {
+          const category = getLiveCategory(e.category);
+          return (
             <li key={e.userId}>
               <Link
                 to={`/live/${e.userId}`}
@@ -446,13 +485,21 @@ function LiveRoster({
                 <span className="font-display text-gold-200">
                   {e.username}
                 </span>
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] uppercase tracking-[0.18em] ${category.chipClass}`}
+                  title={category.label}
+                >
+                  <span aria-hidden>{category.icon}</span>
+                  {category.label}
+                </span>
                 <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/20 px-2 py-0.5 text-[9px] uppercase tracking-[0.2em] text-rose-200">
                   <span className="h-1 w-1 animate-pulse rounded-full bg-rose-400" />
                   Live
                 </span>
               </Link>
             </li>
-          ))}
+          );
+        })}
       </ul>
     </div>
   );
@@ -713,6 +760,13 @@ export function Live() {
     (broadcasterProfile
       ? `${broadcasterProfile.username} en direct`
       : "Nuit Étoilée · Ouverture de la cour");
+  // Catégorie à afficher en badge dans le header du lecteur. On privilégie
+  // l'entrée du registre public (vue unifiée cross-tab) ; si elle n'existe
+  // pas encore (host qui est en train de démarrer), on retombe sur le
+  // state local du host courant.
+  const heroCategory = getLiveCategory(
+    registryEntry?.category ?? (amBroadcaster ? config.category : undefined),
+  );
   const heroDescription =
     registryEntry?.description?.trim() ||
     viewingMeta?.description?.trim() ||
@@ -770,10 +824,18 @@ export function Live() {
                   />
                   <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-night-900/95 via-night-900/40 to-transparent p-6">
                     <div>
-                      <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-400/50 bg-rose-500/20 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-rose-200">
-                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-rose-400" />{" "}
-                        En direct
-                      </span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-400/50 bg-rose-500/20 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-rose-200">
+                          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-rose-400" />{" "}
+                          En direct
+                        </span>
+                        <span
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] ${heroCategory.chipClass}`}
+                        >
+                          <span aria-hidden>{heroCategory.icon}</span>
+                          {heroCategory.label}
+                        </span>
+                      </div>
                       <h3 className="mt-3 font-display text-2xl text-gold-200 md:text-4xl">
                         {heroTitle}
                       </h3>

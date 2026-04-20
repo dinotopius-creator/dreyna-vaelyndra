@@ -12,6 +12,11 @@ import type Peer from "peerjs";
 import type { MediaConnection } from "peerjs";
 import { useStore } from "./StoreContext";
 import { useAuth } from "./AuthContext";
+import {
+  DEFAULT_LIVE_CATEGORY,
+  normalizeLiveCategory,
+  type LiveCategoryId,
+} from "../data/liveCategories";
 
 /**
  * Contexte dédié aux lives (queen + cour). Multi-utilisateur.
@@ -48,6 +53,12 @@ export interface LiveConfig {
   mode: LiveMode;
   title: string;
   description: string;
+  /**
+   * Catégorie sélectionnée au lancement du live (obligatoire côté UI, on
+   * tolère ici un défaut pour que les configs legacy en localStorage
+   * restent lisibles sans migration).
+   */
+  category: LiveCategoryId;
   twitchChannel: string;
   obsKey: string;
   startedAt: string | null;
@@ -66,6 +77,8 @@ export interface LiveRegistryEntry {
   title: string;
   description: string;
   mode: LiveMode;
+  /** Catégorie du live (affichée en badge dans le fil et sur /live). */
+  category: LiveCategoryId;
   twitchChannel: string;
   startedAt: string;
   /**
@@ -84,6 +97,7 @@ const DEFAULT_CONFIG: LiveConfig = {
   mode: "screen",
   title: "",
   description: "",
+  category: DEFAULT_LIVE_CATEGORY,
   twitchChannel: "",
   obsKey: "",
   startedAt: null,
@@ -101,6 +115,10 @@ function readConfig(): LiveConfig {
     return {
       ...DEFAULT_CONFIG,
       ...parsed,
+      // Normalise la catégorie : protège contre un localStorage corrompu
+      // et force un défaut reconnu si l'ancien schéma (pré-PR E) n'avait
+      // pas encore ce champ.
+      category: normalizeLiveCategory(parsed.category),
       status: "idle",
       startedAt: null,
     };
@@ -138,7 +156,11 @@ function readRegistry(): Record<string, LiveRegistryEntry> {
         // entrée legacy (pas de heartbeat) : on applique un TTL court
         if (now - started > REGISTRY_FALLBACK_TTL_MS) continue;
       }
-      cleaned[k] = v;
+      // Normalise la catégorie : une entrée pré-PR E pourra être
+      // re-publiée sans faire planter le rendu, et une catégorie
+      // inconnue (évolution future + downgrade du client) est
+      // remplacée par le défaut.
+      cleaned[k] = { ...v, category: normalizeLiveCategory(v.category) };
     }
     return cleaned;
   } catch {
@@ -248,6 +270,10 @@ export function LiveProvider({ children }: { children: ReactNode }) {
                 ? next.description
                 : c.description,
             mode: nextMode ?? c.mode,
+            category:
+              next.category !== undefined
+                ? normalizeLiveCategory(next.category)
+                : c.category,
             twitchChannel:
               typeof next.twitchChannel === "string"
                 ? next.twitchChannel
@@ -389,6 +415,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
           title: c.title.trim() || `${me.username} en direct`,
           description: c.description.trim(),
           mode: "twitch",
+          category: c.category,
           twitchChannel: channel,
           startedAt,
           lastHeartbeat: startedAt,
@@ -473,6 +500,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             title: configRef.current.title.trim() || `${me.username} en direct`,
             description: configRef.current.description.trim(),
             mode: "screen",
+            category: configRef.current.category,
             twitchChannel: "",
             startedAt,
             lastHeartbeat: startedAt,
