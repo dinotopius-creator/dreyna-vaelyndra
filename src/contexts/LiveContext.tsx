@@ -23,7 +23,6 @@ import {
   apiStopLive,
   type LiveSessionOut,
 } from "../lib/liveApi";
-import { API_BASE } from "../lib/api";
 
 /**
  * Contexte dédié aux lives (queen + cour). Multi-utilisateur.
@@ -941,52 +940,15 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Nettoyage de l'entrée registry à la fermeture / au reload de l'onglet.
-  // CRUCIAL : on ne retire QUE si CE tab est celui qui diffuse (status=live
-  // ET hostPeerRef actif). Sans ces deux gardes, fermer n'importe quel
-  // onglet non-broadcaster tuerait le live d'un autre onglet du même user
-  // via le listener `storage`.
-  useEffect(() => {
-    const removeMyEntry = () => {
-      const me = userRef.current;
-      if (!me) return;
-      // Tab non-diffuseur : on ne touche à rien (évite les races cross-tab).
-      if (configRef.current.status !== "live") return;
-      if (!hostPeerRef.current && configRef.current.mode !== "twitch") return;
-      try {
-        const raw = localStorage.getItem(REGISTRY_STORAGE_KEY);
-        if (!raw) return;
-        const parsed = JSON.parse(raw) as Record<string, LiveRegistryEntry>;
-        if (!(me.id in parsed)) return;
-        delete parsed[me.id];
-        localStorage.setItem(REGISTRY_STORAGE_KEY, JSON.stringify(parsed));
-      } catch {
-        // ignore
-      }
-      // Sur `beforeunload` / `pagehide`, les requêtes `fetch()` classiques
-      // sont coupées par le navigateur. On utilise `fetch` avec
-      // `keepalive: true` pour que le DELETE /live/stop survive à la
-      // fermeture. À défaut (safari iOS), l'entrée serveur expirera
-      // toute seule via le TTL heartbeat 90 s.
-      try {
-        fetch(`${API_BASE}/live/stop`, {
-          method: "DELETE",
-          credentials: "include",
-          keepalive: true,
-        }).catch(() => {
-          // ignore
-        });
-      } catch {
-        // ignore
-      }
-    };
-    window.addEventListener("beforeunload", removeMyEntry);
-    window.addEventListener("pagehide", removeMyEntry);
-    return () => {
-      window.removeEventListener("beforeunload", removeMyEntry);
-      window.removeEventListener("pagehide", removeMyEntry);
-    };
-  }, []);
+  // Volontairement aucun handler `beforeunload` / `pagehide` : un simple
+  // refresh de la page (F5, pull-to-refresh mobile) ne doit PAS tuer le
+  // live du broadcaster, c'était le bug #54 signalé. Le backend purge
+  // automatiquement les entrées orphelines via le TTL heartbeat (90 s
+  // côté serveur), ce qui couvre la fermeture définitive d'onglet sans
+  // pénaliser les refresh volontaires. Le broadcaster peut restaurer
+  // son live en relançant le partage d'écran après refresh — l'entrée
+  // serveur reste vivante entre-temps, donc les viewers voient
+  // "Reconnexion…" au lieu de "Live terminé".
 
   // Heartbeat : l'onglet qui diffuse rafraîchit `lastHeartbeat` toutes les
   // 30s. Combiné au filtrage dans `readRegistry` (seuil 90s), ça élimine
