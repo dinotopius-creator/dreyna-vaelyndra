@@ -409,13 +409,16 @@ export const INITIAL_LIVES: LiveSession[] = [
   },
 ];
 
+// Messages de seed du chat : plus de référence à Dreyna ni à la cour
+// royale — les bots qui commentent les lives doivent rester neutres
+// pour n'importe quel streamer sur la plateforme.
 export const SEED_CHAT: ChatMessage[] = [
   {
     id: "msg-1",
     authorId: "user-lyria",
     authorName: "Lyria",
     authorAvatar: "https://i.pravatar.cc/150?u=lyria",
-    content: "✨ La reine est entrée, longue vie à Vaelyndra !",
+    content: "coucou tout le monde 💫",
     createdAt: new Date(Date.now() - 1000 * 60 * 7).toISOString(),
   },
   {
@@ -423,41 +426,48 @@ export const SEED_CHAT: ChatMessage[] = [
     authorId: "user-caelum",
     authorName: "Caelum",
     authorAvatar: "https://i.pravatar.cc/150?u=caelum",
-    content: "Je sens déjà la brume magique d'ici 🌫️",
+    content: "première fois ici, t'es trop stylé",
     createdAt: new Date(Date.now() - 1000 * 60 * 6).toISOString(),
   },
   {
     id: "msg-3",
-    authorId: "user-dreyna",
-    authorName: "Dreyna",
-    authorAvatar: DREYNA_PROFILE.avatar,
-    content: "Bienvenue, peuple elfe 👑 La cour est ouverte.",
+    authorId: "user-thalia",
+    authorName: "Thalia",
+    authorAvatar: "https://i.pravatar.cc/150?u=thalia",
+    content: "f4f ? 🫶",
     createdAt: new Date(Date.now() - 1000 * 60 * 4).toISOString(),
-    highlight: true,
   },
   {
     id: "msg-4",
     authorId: "user-aeris",
     authorName: "Aëris",
     authorAvatar: "https://i.pravatar.cc/150?u=aeris",
-    content: "🌙 Incroyable de te voir ce soir Dreyna 💜",
+    content: "gg 🔥",
     createdAt: new Date(Date.now() - 1000 * 60 * 3).toISOString(),
   },
 ];
 
+// Phrases d'ambiance réinjectées aléatoirement dans le chat live.
+// Volontairement génériques (type réseau social) : aucune mention
+// d'un streamer en particulier, ni de "reine" / "cour" / "royaume",
+// pour que l'ambiance soit crédible quel que soit le user qui streame.
 export const AUTO_CHAT_LINES = [
-  "✨ Longue vie à la reine",
-  "👑 On t'aime Dreyna",
-  "🌙 La nuit elfique tombe sur Vaelyndra",
-  "💜 Le royaume brille ce soir",
-  "🧝‍♀️ Coucou de Bretagne",
-  "🌿 Serment du sylvaris prêté",
-  "🎶 Quelle ambiance",
-  "💫 J'attends la prochaine collection",
-  "⚔️ Pour Vaelyndra !",
-  "🌠 Dreyna, tu es magique",
-  "🔮 Les runes scintillent",
-  "🕯️ Bougie allumée pour le rituel",
+  "coucou",
+  "hey 👋",
+  "f4f ?",
+  "gg 🔥",
+  "💎💎💎",
+  "wow",
+  "t'es trop stylé",
+  "on follow ?",
+  "première fois ici",
+  "salut tout le monde",
+  "trop bonne ambiance",
+  "stream de malade",
+  "👑",
+  "🫶",
+  "let's gooo",
+  "je reste jusqu'à la fin",
 ];
 
 export const TOP_FANS = [
