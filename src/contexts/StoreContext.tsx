@@ -367,13 +367,34 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // NOT resurrected on reload.
       const storedProducts = parsed.products ?? init.products;
       const deletedMockProductIds = parsed.deletedMockProductIds ?? [];
-      // Migration PR L (pivot mini-réseau) : rattrape les mock products
-      // déjà persistés dans le localStorage des users existants — on réécrit
-      // nom/description/tags depuis la source mock quand l'id match, ce qui
-      // remplace automatiquement "Pack ZEPETO · Elennor" par le nouveau nom
-      // sans effacer les produits admin personnalisés.
+
+      // --- Migration one-shot PR L (pivot mini-réseau) ----------------------
+      //
+      // Les users déjà connectés ont persisté dans leur localStorage :
+      //  - des mock products avec les anciens noms ZEPETO
+      //  - l'article "art-2" avec slug/title ZEPETO et catégorie "IRL / ZEPETO"
+      //  - le live "live-2" avec titre ZEPETO
+      //
+      // On applique **une seule fois** un patch pour les rattraper, gardé
+      // derrière un flag de version (`vaelyndra_migration_v`). Sans ce flag,
+      // la réécriture serait permanente : les futures customisations admin
+      // via `updateProduct`/`updateArticle` seraient silencieusement écrasées
+      // au prochain reload. Après le passage de cette migration, les données
+      // stockées sont la source de vérité et la boucle ne touche plus à rien.
+      const MIGRATION_KEY = "vaelyndra_migration_v";
+      const MIGRATION_TARGET = 1; // PR L
+      const runMigration = (() => {
+        try {
+          const current = Number(localStorage.getItem(MIGRATION_KEY) ?? "0");
+          return current < MIGRATION_TARGET;
+        } catch {
+          return true;
+        }
+      })();
+
       const mergedProducts = [
         ...storedProducts.map((stored) => {
+          if (!runMigration) return stored;
           const mock = init.products.find((m) => m.id === stored.id);
           return mock
             ? {
@@ -390,29 +411,61 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             !deletedMockProductIds.includes(mock.id),
         ),
       ];
-      // Migration PR L : rattrape la catégorie article "IRL / ZEPETO"
-      // (obsolète) → "Lifestyle", + retitre "art-2" si l'ancien slug/title
-      // ZEPETO est encore persisté. On ne touche pas aux articles custom
-      // créés par l'admin.
+
       const storedArticles = parsed.articles ?? init.articles;
-      const migratedArticles = storedArticles.map((art) => {
-        const mock = init.articles.find((m) => m.id === art.id);
-        const patch: Partial<typeof art> = {};
-        if ((art.category as string) === "IRL / ZEPETO") {
-          patch.category = "Lifestyle";
+      const migratedArticles = runMigration
+        ? storedArticles.map((art) => {
+            const mock = init.articles.find((m) => m.id === art.id);
+            const patch: Partial<typeof art> = {};
+            if ((art.category as string) === "IRL / ZEPETO") {
+              patch.category = "Lifestyle";
+            }
+            if (mock && art.id === "art-2") {
+              patch.slug = mock.slug;
+              patch.title = mock.title;
+              patch.category = mock.category;
+            }
+            return Object.keys(patch).length > 0 ? { ...art, ...patch } : art;
+          })
+        : storedArticles;
+
+      // Lives : même logique — on ne rafraîchit le titre depuis le mock QUE
+      // pour les lives seed (ids présents dans init.lives). Les lives créés
+      // par la cour (archives, lives admin) ne sont jamais touchés.
+      const storedLives = parsed.lives ?? init.lives;
+      const migratedLives = runMigration
+        ? storedLives.map((live) => {
+            const mock = init.lives.find((m) => m.id === live.id);
+            if (!mock) return live;
+            // On rafraîchit uniquement les champs potentiellement ZEPETO
+            // (title, description) pour live-2 ; pour les autres lives seed
+            // on laisse tel quel afin de ne pas écraser une édition admin.
+            if (live.id === "live-2") {
+              return {
+                ...live,
+                title: mock.title,
+                description: mock.description,
+              };
+            }
+            return live;
+          })
+        : storedLives;
+
+      if (runMigration) {
+        try {
+          localStorage.setItem(MIGRATION_KEY, String(MIGRATION_TARGET));
+        } catch {
+          // Best-effort : si localStorage est plein / désactivé, on tolère
+          // une ré-exécution — l'idempotence de la migration garantit que
+          // ça ne casse rien (les champs sont juste ré-écrits à l'identique).
         }
-        if (mock && art.id === "art-2") {
-          patch.slug = mock.slug;
-          patch.title = mock.title;
-          patch.category = mock.category;
-        }
-        return Object.keys(patch).length > 0 ? { ...art, ...patch } : art;
-      });
+      }
+
       return {
         articles: migratedArticles,
         products: mergedProducts,
         posts: parsed.posts ?? init.posts,
-        lives: parsed.lives ?? init.lives,
+        lives: migratedLives,
         cart: parsed.cart ?? [],
         orders: parsed.orders ?? [],
         deletedMockProductIds,
