@@ -226,6 +226,29 @@ class LiveSession(SQLModel, table=True):
     last_heartbeat_at: str = Field(default_factory=_now_iso, index=True)
 
 
+class LiveModeration(SQLModel, table=True):
+    """Actions de modération du broadcaster sur son propre live.
+
+    Un broadcaster peut :
+      - MUTE un user pendant X secondes → ce user ne peut plus envoyer de
+        message dans le chat de *ce* live jusqu'à `expires_at`.
+      - KICK un user → ce user est déconnecté de *ce* live et ne peut pas
+        le rejoindre jusqu'à `expires_at`.
+
+    Les deux actions sont scopées au `broadcaster_id` : muter quelqu'un sur
+    un live ne le mute pas sur un autre live. Une ligne par (broadcaster,
+    target, action). Les anciennes lignes expirées sont tolérées (pas
+    nettoyées automatiquement) — la lecture compare toujours `expires_at`.
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    broadcaster_id: str = Field(index=True)
+    target_user_id: str = Field(index=True)
+    action: str = Field(index=True)  # "mute" | "kick"
+    expires_at: str = Field(index=True)
+    created_at: str = Field(default_factory=_now_iso)
+
+
 class GiftLedger(SQLModel, table=True):
     """Journal append-only de chaque cadeau Sylvins envoyé.
 

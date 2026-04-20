@@ -91,3 +91,62 @@ export async function apiLiveHeartbeat(
 export async function apiStopLive(): Promise<void> {
   await request<null>("/live/stop", { method: "DELETE" });
 }
+
+// ---------------------------------------------------------------------------
+// Modération live (mute / kick) — PR Q
+// ---------------------------------------------------------------------------
+
+export type LiveModerationAction = "mute" | "kick";
+
+export interface LiveModerationState {
+  muted_until: string | null;
+  kicked_until: string | null;
+}
+
+/**
+ * Applique une sanction (mute ou kick) à `targetUserId` sur le live du
+ * user connecté. Nécessite d'être authentifié ; le backend vérifie
+ * aussi que l'appelant n'essaie pas de se modérer lui-même.
+ */
+export async function apiModerateLive(input: {
+  targetUserId: string;
+  action: LiveModerationAction;
+  durationSeconds: number;
+}): Promise<LiveModerationState> {
+  return (await request<LiveModerationState>("/live/moderate", {
+    method: "POST",
+    body: JSON.stringify({
+      target_user_id: input.targetUserId,
+      action: input.action,
+      duration_seconds: input.durationSeconds,
+    }),
+  })) as LiveModerationState;
+}
+
+/** Annule manuellement une sanction active. */
+export async function apiUnmoderateLive(input: {
+  targetUserId: string;
+  action: LiveModerationAction;
+}): Promise<void> {
+  const params = new URLSearchParams({
+    target_user_id: input.targetUserId,
+    action: input.action,
+  });
+  await request<null>(`/live/moderate?${params.toString()}`, {
+    method: "DELETE",
+  });
+}
+
+/**
+ * Retourne les éventuelles sanctions actives du user connecté sur le
+ * live de `broadcasterId`. Utilisé par le viewer pour savoir s'il est
+ * muté/expulsé (polling ~30 s).
+ */
+export async function apiMyModerationState(
+  broadcasterId: string,
+): Promise<LiveModerationState> {
+  const params = new URLSearchParams({ broadcaster_id: broadcasterId });
+  return (await request<LiveModerationState>(
+    `/live/moderation/me?${params.toString()}`,
+  )) as LiveModerationState;
+}

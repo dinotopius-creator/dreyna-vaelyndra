@@ -32,6 +32,7 @@ import { SectionHeading } from "../components/SectionHeading";
 import { GiftPanel } from "../components/GiftPanel";
 import { GiftFlight } from "../components/GiftFlight";
 import { LiveAvatarOverlay } from "../components/LiveAvatarOverlay";
+import { LiveChatHistory } from "../components/LiveChatHistory";
 import { LiveChatOverlay } from "../components/LiveChatOverlay";
 import { LiveHeartsOverlay } from "../components/LiveHeartsOverlay";
 import { LiveLeaderboardOverlay } from "../components/LiveLeaderboardOverlay";
@@ -50,6 +51,11 @@ import {
 } from "../data/mock";
 import type { ChatMessage, Gift, User } from "../types";
 import { generateId } from "../lib/helpers";
+import {
+  apiModerateLive,
+  apiMyModerationState,
+  type LiveModerationAction,
+} from "../lib/liveApi";
 
 const BOT_AUTHORS = [
   { id: "user-lyria", name: "Lyria", avatar: "https://i.pravatar.cc/150?u=lyria" },
@@ -66,6 +72,18 @@ const SYSTEM_AUTHOR = {
   name: "Héraut de la cour",
   avatar: "/crown.svg",
 };
+
+/**
+ * Formate une durée en secondes → "2 min", "1 h", "45 s" selon la taille.
+ * Utilisé par les notifications de modération (mute/kick).
+ */
+function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${Math.max(1, Math.round(seconds))} s`;
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.round(minutes / 60);
+  return `${hours} h`;
+}
 
 function extractTwitchChannel(raw: string) {
   const v = raw.trim();
@@ -802,6 +820,11 @@ export function Live() {
 
   const [messages, setMessages] = useState<ChatMessage[]>(SEED_CHAT);
   const [viewers, setViewers] = useState(1284);
+  // Modération (PR Q) : sanctions actives reçues depuis le backend pour le
+  // user courant, sur *ce* live. Polled ~30 s depuis `apiMyModerationState`
+  // pour détecter un mute/kick posé pendant qu'on regarde.
+  const [myMuteUntil, setMyMuteUntil] = useState<string | null>(null);
+  const [myKickUntil, setMyKickUntil] = useState<string | null>(null);
   // `heartEvents` est append-only : chaque cœur envoyé y dépose un
   // `BurstEvent`. `LiveHeartsOverlay` dédoublonne en interne.
   const [heartEvents, setHeartEvents] = useState<
@@ -824,7 +847,38 @@ export function Live() {
     setMessages(SEED_CHAT);
     setHeartEvents([]);
     setTributes(seedTributes());
+    setMyMuteUntil(null);
+    setMyKickUntil(null);
   }, [broadcasterId]);
+
+  // Polling de mes éventuelles sanctions (mute/kick) sur le live courant.
+  // On n'appelle pas l'endpoint si :
+  //  - je suis le broadcaster (il ne peut pas se modérer lui-même),
+  //  - je ne suis pas connecté (endpoint auth-protégé → 401 bruyant).
+  useEffect(() => {
+    if (!user || amBroadcaster) return;
+    let cancelled = false;
+    async function refresh() {
+      try {
+        const state = await apiMyModerationState(broadcasterId);
+        if (cancelled) return;
+        setMyMuteUntil(state.muted_until);
+        setMyKickUntil(state.kicked_until);
+      } catch {
+        // Silencieux — on retentera à la prochaine itération.
+      }
+    }
+    refresh();
+    const t = window.setInterval(refresh, 30000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(t);
+    };
+  }, [user, amBroadcaster, broadcasterId]);
+
+  // Timestamp future → booléen "encore actif".
+  const isMuted = !!myMuteUntil && new Date(myMuteUntil) > new Date();
+  const isKicked = !!myKickUntil && new Date(myKickUntil) > new Date();
 
   // Purge les demandes d'invitation dès que mon live s'arrête (détecté
   // quand je suis broadcaster et que `isActiveLive` redevient false).
@@ -880,6 +934,21 @@ export function Live() {
       notify("Connectez-vous pour écrire dans la cour.", "info");
       return;
     }
+    if (isMuted) {
+      // Mute actif → on bloque l'envoi, côté UI uniquement pour l'instant
+      // (le chat est non persisté : il n'y a rien à envoyer au serveur).
+      const until = myMuteUntil ? new Date(myMuteUntil) : null;
+      const remaining = until
+        ? Math.max(1, Math.round((until.getTime() - Date.now()) / 1000))
+        : null;
+      notify(
+        remaining
+          ? `Tu es en sourdine pour encore ${formatDuration(remaining)}.`
+          : "Tu es en sourdine sur ce live.",
+        "info",
+      );
+      return;
+    }
     setMessages((m) =>
       [
         ...m,
@@ -892,8 +961,55 @@ export function Live() {
           createdAt: new Date().toISOString(),
           highlight: user.role === "queen",
         },
-      ].slice(-80),
+      ].slice(-200),
     );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Handlers de modération (broadcaster uniquement)
+  // ---------------------------------------------------------------------------
+  async function applyModeration(
+    action: LiveModerationAction,
+    targetUserId: string,
+    targetName: string,
+    durationSeconds: number,
+  ) {
+    if (!amBroadcaster) return;
+    try {
+      await apiModerateLive({
+        targetUserId,
+        action,
+        durationSeconds,
+      });
+      const label =
+        action === "mute"
+          ? `${targetName} mis en sourdine pour ${formatDuration(durationSeconds)}.`
+          : `${targetName} expulsé du live pour ${formatDuration(durationSeconds)}.`;
+      notify(label, "success");
+      pushSystemAnnouncement(
+        action === "mute"
+          ? `🔇 ${targetName} a été mis en sourdine (${formatDuration(durationSeconds)}).`
+          : `🚫 ${targetName} a été expulsé du live (${formatDuration(durationSeconds)}).`,
+      );
+    } catch {
+      notify("Action impossible pour le moment.", "error");
+    }
+  }
+
+  function handleMute(
+    targetUserId: string,
+    targetName: string,
+    durationSeconds: number,
+  ) {
+    void applyModeration("mute", targetUserId, targetName, durationSeconds);
+  }
+
+  function handleKick(
+    targetUserId: string,
+    targetName: string,
+    durationSeconds: number,
+  ) {
+    void applyModeration("kick", targetUserId, targetName, durationSeconds);
   }
 
   function pushSystemAnnouncement(content: string) {
@@ -1206,6 +1322,39 @@ export function Live() {
               </p>
             </div>
           </div>
+
+          {/* Historique complet du chat (PR P/Q) : permet de remonter
+              dans le temps pour voir les messages qui ont disparu de
+              l'overlay flottant, et pour le broadcaster, d'accéder au
+              menu de modération (mute / expulser) en cliquant sur un
+              pseudo. Visible sur mobile comme sur PC. */}
+          {isActiveLive && (
+            <LiveChatHistory
+              messages={messages}
+              systemAuthorId={SYSTEM_AUTHOR.id}
+              broadcasterId={broadcasterId}
+              isBroadcaster={amBroadcaster}
+              currentUserId={user?.id ?? null}
+              onMute={handleMute}
+              onKick={handleKick}
+            />
+          )}
+
+          {/* Bandeau "Tu es expulsé / en sourdine" pour le user courant.
+              Informatif : le mute est déjà appliqué dans sendMessage, le
+              kick n'empêche pas de voir le flux (on informe simplement). */}
+          {isActiveLive && isKicked && (
+            <div className="mt-4 rounded-2xl border border-rose-400/40 bg-rose-500/15 p-3 text-sm text-rose-100">
+              🚫 Tu as été expulsé du live. Tu ne peux plus y participer
+              pour l'instant.
+            </div>
+          )}
+          {isActiveLive && isMuted && !isKicked && (
+            <div className="mt-4 rounded-2xl border border-amber-400/40 bg-amber-500/15 p-3 text-sm text-amber-100">
+              🔇 Tu es en sourdine sur ce live — tu ne peux pas envoyer de
+              message dans le chat pour l'instant.
+            </div>
+          )}
 
           {/* Panneau "Demander à monter" (PR H) : bouton côté viewer,
               file d'attente côté broadcaster. Rendu juste sous le lecteur
