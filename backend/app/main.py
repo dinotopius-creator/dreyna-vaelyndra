@@ -13,7 +13,7 @@ from .auth.rate_limit import limiter
 from .auth.routes import router as auth_router
 from .db import get_session, init_db
 from .models import UserProfile
-from .routers import admin, posts, reports, streamers, users
+from .routers import admin, live, posts, reports, streamers, users
 
 app = FastAPI(title="Vaelyndra API", version="0.1.0")
 
@@ -196,3 +196,4 @@ app.include_router(streamers.router)
 app.include_router(auth_router)
 app.include_router(admin.router)
 app.include_router(reports.router)
+app.include_router(live.router)

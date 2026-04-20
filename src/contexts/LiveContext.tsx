@@ -17,6 +17,13 @@ import {
   normalizeLiveCategory,
   type LiveCategoryId,
 } from "../data/liveCategories";
+import {
+  apiListLive,
+  apiLiveHeartbeat,
+  apiStopLive,
+  type LiveSessionOut,
+} from "../lib/liveApi";
+import { API_BASE } from "../lib/api";
 
 /**
  * Contexte dédié aux lives (queen + cour). Multi-utilisateur.
@@ -174,6 +181,26 @@ function readRegistry(): Record<string, LiveRegistryEntry> {
   } catch {
     return {};
   }
+}
+
+/** Convertit une ligne LiveSession du backend en entrée de registre local. */
+function remoteToRegistry(s: LiveSessionOut): LiveRegistryEntry {
+  const mode: LiveMode =
+    s.mode === "twitch" || s.mode === "screen" || s.mode === "camera"
+      ? s.mode
+      : "screen";
+  return {
+    userId: s.broadcaster_id,
+    username: s.broadcaster_name,
+    avatar: s.broadcaster_avatar,
+    title: s.title,
+    description: s.description,
+    mode,
+    category: normalizeLiveCategory(s.category),
+    twitchChannel: s.twitch_channel,
+    startedAt: s.started_at,
+    lastHeartbeat: s.last_heartbeat_at,
+  };
 }
 
 function writeRegistry(registry: Record<string, LiveRegistryEntry>) {
@@ -411,6 +438,12 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         const next = { ...r };
         delete next[me.id];
         return next;
+      });
+      // Notifie le backend pour que les autres users voient disparaître
+      // ce live immédiatement (sans attendre le TTL heartbeat 90 s).
+      apiStopLive().catch(() => {
+        // Si l'appel échoue, le serveur finira par supprimer l'entrée
+        // une fois que le heartbeat expirera côté backend (90 s).
       });
     }
   }, [stopHosting, updateRegistry]);
@@ -930,6 +963,22 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       } catch {
         // ignore
       }
+      // Sur `beforeunload` / `pagehide`, les requêtes `fetch()` classiques
+      // sont coupées par le navigateur. On utilise `fetch` avec
+      // `keepalive: true` pour que le DELETE /live/stop survive à la
+      // fermeture. À défaut (safari iOS), l'entrée serveur expirera
+      // toute seule via le TTL heartbeat 90 s.
+      try {
+        fetch(`${API_BASE}/live/stop`, {
+          method: "DELETE",
+          credentials: "include",
+          keepalive: true,
+        }).catch(() => {
+          // ignore
+        });
+      } catch {
+        // ignore
+      }
     };
     window.addEventListener("beforeunload", removeMyEntry);
     window.addEventListener("pagehide", removeMyEntry);
@@ -943,11 +992,16 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   // 30s. Combiné au filtrage dans `readRegistry` (seuil 90s), ça élimine
   // les entrées orphelines d'une fermeture brutale/crash en ~1-2 minutes,
   // sans risque de race cross-tab (seul le tab diffuseur écrit).
+  //
+  // Depuis le registre serveur (LiveSession), on POSTe aussi /live/heartbeat
+  // pour que les autres users (sur d'autres browsers/devices) voient
+  // apparaître ce live dans leur `/communaute`. Sans ce POST, le live
+  // reste cantonné au localStorage du broadcaster.
   useEffect(() => {
     if (config.status !== "live") return;
     const me = userRef.current;
     if (!me) return;
-    const tick = () => {
+    const tickLocal = () => {
       try {
         // On passe par readRegistry() pour filtrer au passage les entrées
         // orphelines des autres broadcasters (crash, heartbeat > 90s). Sans
@@ -962,9 +1016,82 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         // ignore
       }
     };
-    const id = setInterval(tick, 30_000);
+    const tickServer = () => {
+      const c = configRef.current;
+      apiLiveHeartbeat({
+        title: c.title,
+        description: c.description,
+        category: c.category,
+        mode: c.mode,
+        twitchChannel: c.twitchChannel,
+      }).catch(() => {
+        // Silencieux : un 401/403 (non connecté) ou un 5xx temporaire ne
+        // doit pas interrompre le live local. Les viewers fallback-eront
+        // sur le peerjs direct si le registre serveur n'est pas dispo.
+      });
+    };
+    // Premier POST immédiat pour que les viewers voient le live tout de
+    // suite (sans attendre 30 s), puis tick régulier.
+    tickServer();
+    const id = setInterval(() => {
+      tickLocal();
+      tickServer();
+    }, 30_000);
     return () => clearInterval(id);
   }, [config.status]);
+
+  // Sync registre serveur → registre local. Toutes les 10 s, on récupère
+  // la liste publique des lives actifs depuis le backend et on la
+  // fusionne dans `liveRegistry`. Résultat : Dreyna (ou n'importe quel
+  // autre user) voit apparaître le live d'Alexandre sans avoir à
+  // refresh la page ni à partager un localStorage.
+  //
+  // Stratégie de fusion :
+  //  - entrées du serveur → on les ajoute / remplace (source de vérité)
+  //  - entrée locale du broadcaster en cours → on la conserve telle
+  //    quelle (le tick local est plus fréquent et garde les champs riches
+  //    comme `lastHeartbeat`)
+  useEffect(() => {
+    let cancelled = false;
+    const sync = async () => {
+      try {
+        const remote = await apiListLive();
+        if (cancelled) return;
+        const me = userRef.current;
+        setLiveRegistry((prev) => {
+          const next: Record<string, LiveRegistryEntry> = {};
+          // 1. Toutes les entrées serveur (tous broadcasters).
+          for (const s of remote) {
+            // On ne touche pas à la sienne — l'entrée locale est la
+            // source de vérité pour son propre live (titre modifié en
+            // direct, heartbeat frais).
+            if (me && s.broadcaster_id === me.id) continue;
+            next[s.broadcaster_id] = remoteToRegistry(s);
+          }
+          // 2. Ma propre entrée conservée (si je suis en live sur ce tab).
+          if (me && prev[me.id]) {
+            next[me.id] = prev[me.id];
+          }
+          writeRegistry(next);
+          return next;
+        });
+      } catch {
+        // Backend indispo : on garde ce qu'on a en local, pas de reset.
+      }
+    };
+    sync();
+    const id = setInterval(sync, 10_000);
+    // Re-sync au retour d'onglet (user mobile qui bascule d'app → revient).
+    const onVisible = () => {
+      if (document.visibilityState === "visible") sync();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, []);
 
   const value = useMemo<LiveCtx>(
     () => ({
