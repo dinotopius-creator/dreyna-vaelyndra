@@ -21,7 +21,6 @@ const NAV = [
   { to: "/boutique", label: "Boutique" },
   { to: "/live", label: "Lives" },
   { to: "/communaute", label: "Communauté" },
-  { to: "/dreyna", label: "La Reine" },
 ];
 
 export function Navbar() {

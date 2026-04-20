@@ -1,4 +1,4 @@
-export type Category = "Lore" | "IRL / ZEPETO" | "Annonces" | "Communauté";
+export type Category = "Lore" | "Lifestyle" | "Annonces" | "Communauté";
 
 export interface User {
   id: string;

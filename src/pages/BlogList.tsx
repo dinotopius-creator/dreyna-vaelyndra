@@ -11,7 +11,7 @@ import clsx from "clsx";
 const CATEGORIES: ("Toutes" | Category)[] = [
   "Toutes",
   "Lore",
-  "IRL / ZEPETO",
+  "Lifestyle",
   "Annonces",
   "Communauté",
 ];

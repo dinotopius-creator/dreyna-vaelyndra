@@ -7,8 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview",
-    "sync:zepeto": "node scripts/sync-zepeto-stats.mjs"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@tsparticles/engine": "^3.9.1",

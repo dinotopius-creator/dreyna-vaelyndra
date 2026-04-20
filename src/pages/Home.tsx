@@ -12,10 +12,10 @@ import {
   Heart,
 } from "lucide-react";
 import { useStore } from "../contexts/StoreContext";
-import { DREYNA_PROFILE, TOP_FANS, ZEPETO_LIVE_STATS } from "../data/mock";
+import { DREYNA_PROFILE, TOP_FANS } from "../data/mock";
 import { SectionHeading } from "../components/SectionHeading";
 import { RuneDivider } from "../components/RuneDivider";
-import { formatNumber, formatRelative } from "../lib/helpers";
+import { formatNumber } from "../lib/helpers";
 
 export function Home() {
   const { articles, products, isLiveOn } = useStore();
@@ -45,15 +45,14 @@ function Hero({ isLiveOn }: { isLiveOn: boolean }) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.9, ease: "easeOut" }}
         >
-          <span className="tag-gold"><Crown className="h-3 w-3" /> Reine de Vaelyndra</span>
+          <span className="tag-gold"><Crown className="h-3 w-3" /> Royaume de Vaelyndra</span>
           <h1 className="heading-gold mt-6 text-5xl leading-[1.05] md:text-7xl">
-            Bienvenue dans le royaume<br />de Vaelyndra
+            Bienvenue à<br />Vaelyndra
           </h1>
           <p className="mt-6 max-w-xl text-lg text-ivory/80 md:text-xl">
-            Sous la lumière d'Elennor, <span className="text-mystic font-semibold">Dreyna</span>{" "}
-            vous invite dans l'univers officiel des elfes du royaume.
-            Chroniques, boutique, lives et cour royale — une expérience digitale
-            pensée comme une couronne.
+            Le mini-réseau féerique où <span className="text-mystic font-semibold">chacun peut percer</span>{" "}
+            — streamer, poster, tisser des liens d'âme, gravir les grades de la cour.
+            Ton histoire commence ici.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <Link to="/blog" className="btn-gold">
@@ -106,7 +105,7 @@ function Hero({ isLiveOn }: { isLiveOn: boolean }) {
               </p>
               <h3 className="font-display text-3xl text-gold-200">Dreyna</h3>
               <p className="mt-1 text-xs text-ivory/70">
-                Gardienne de la Lumière · Créatrice HOT ZEPETO 🔥
+                Gardienne de la Lumière · Elfe originelle du royaume
               </p>
             </div>
             <motion.div
@@ -133,21 +132,19 @@ type StatItem = {
 function StatsBar() {
   const items: StatItem[] = [
     {
-      value: formatNumber(DREYNA_PROFILE.stats.followers),
-      label: "Abonnés à la cour",
+      value: formatNumber(DREYNA_PROFILE.stats.communityMembers),
+      label: "Âmes du royaume",
       icon: <Users className="h-4 w-4" />,
-      live: true,
     },
     {
       value: formatNumber(DREYNA_PROFILE.stats.likes),
-      label: "Cœurs reçus",
+      label: "Cœurs échangés",
       icon: <Heart className="h-4 w-4" />,
     },
     {
-      value: DREYNA_PROFILE.stats.articles,
-      label: "Chroniques",
-      icon: <BookOpen className="h-4 w-4" />,
-      live: true,
+      value: 6,
+      label: "Grades streamers",
+      icon: <Sparkles className="h-4 w-4" />,
     },
     {
       value: DREYNA_PROFILE.stats.lives,
@@ -164,21 +161,7 @@ function StatsBar() {
               {it.icon}
             </span>
             <div>
-              <div className="flex items-center gap-2">
-                <p className="font-display text-xl text-gold-200">{it.value}</p>
-                {it.live && (
-                  <span
-                    title={`Synchronisé avec ZEPETO — dernière mise à jour ${formatRelative(ZEPETO_LIVE_STATS.fetchedAt)}`}
-                    className="inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-[1px] text-[9px] font-semibold uppercase tracking-[0.18em] text-emerald-300"
-                  >
-                    <span className="relative flex h-1.5 w-1.5">
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                    </span>
-                    live
-                  </span>
-                )}
-              </div>
+              <p className="font-display text-xl text-gold-200">{it.value}</p>
               <p className="font-regal text-[10px] tracking-[0.22em] text-ivory/60">
                 {it.label}
               </p>
@@ -186,10 +169,6 @@ function StatsBar() {
           </div>
         ))}
       </div>
-      <p className="mt-3 text-center font-regal text-[10px] tracking-[0.25em] text-ivory/40">
-        Stats ZEPETO · @{ZEPETO_LIVE_STATS.handle} · synchronisé{" "}
-        {formatRelative(ZEPETO_LIVE_STATS.fetchedAt)}
-      </p>
     </section>
   );
 }
@@ -206,7 +185,7 @@ function Pillars() {
     {
       title: "La Boutique Royale",
       to: "/boutique",
-      desc: "Merch fantasy, items ZEPETO, accès VIP à la cour privée.",
+      desc: "Merch fantasy, tenues numériques, accès VIP à la cour privée.",
       icon: <ShoppingBag className="h-5 w-5" />,
       tint: "from-gold-400/20 to-gold-700/10",
     },
@@ -348,7 +327,7 @@ function ShopShowcase({ products }: { products: ReturnType<typeof useStore>["pro
       <SectionHeading
         eyebrow="Boutique Royale"
         title={<>Objets sacrés & drops exclusifs</>}
-        subtitle="Items en édition limitée, collections ZEPETO et accès VIP — signés par Dreyna."
+        subtitle="Items en édition limitée, collections numériques et accès VIP — signés par la cour."
       />
       <div className="mt-12 grid gap-6 md:grid-cols-3">
         {products.map((p, i) => (
@@ -467,10 +446,10 @@ function CTA() {
         </p>
         <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
           <Link to="/inscription" className="btn-gold">
-            Prêter serment à la cour
+            Rejoindre la cour
           </Link>
-          <Link to="/dreyna" className="btn-royal">
-            Connaître Dreyna
+          <Link to="/communaute" className="btn-royal">
+            Voir la communauté
           </Link>
         </div>
       </motion.div>

@@ -1,6 +1,6 @@
-# 👑 Dreyna · Royaume de Vaelyndra
+# 👑 Vaelyndra
 
-Plateforme immersive pour **Dreyna**, créatrice ZEPETO et reine des elfes du royaume de **Vaelyndra**.
+**Mini-réseau social féerique** — plateforme communautaire où streamers, créateurs et âmes connectées peuvent percer, poster, streamer et gravir les grades de la cour.
 
 > *"Par la Lumière d'Elennor, que le royaume s'éveille."*
 
@@ -11,8 +11,8 @@ Plateforme immersive pour **Dreyna**, créatrice ZEPETO et reine des elfes du ro
 ## ✨ Fonctionnalités
 
 - 🏰 **Accueil immersif** — hero elfique, particules magiques, aurore dorée
-- 📜 **Blog / Chroniques** — catégories Lore / IRL / Annonces / Communauté, likes, commentaires
-- 🛍️ **Boutique royale** — merch, drops ZEPETO, accès VIP, panier + checkout simulé
+- 📜 **Blog / Chroniques** — catégories Lore / Lifestyle / Annonces / Communauté, likes, commentaires
+- 🛍️ **Boutique royale** — merch, tenues numériques, accès VIP, panier + checkout simulé
 - 📡 **Lives** — direct simulé avec chat, cœurs animés, viewers en temps réel, archives
 - 👥 **Communauté** — feed social, posts, images, réactions emojis, modération
 - 👑 **Profil Dreyna** — bio royale, stats, galerie, badges & distinctions

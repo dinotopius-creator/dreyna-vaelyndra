@@ -63,7 +63,7 @@ OFFICIAL_ACCOUNTS: list[dict[str, str]] = [
         "username": "Dreyna",
         "role": "animator",
         # Dreyna existe déjà ; pas d'avatar par défaut ici, on ne veut pas
-        # écraser sa photo ZEPETO si elle est déjà configurée.
+        # écraser sa photo déjà configurée si elle en a une.
         "avatar_image_url": "",
         "creature_id": "elfe",
         # Credentials seed pour login immédiat (PR "Mon compte").
@@ -132,7 +132,7 @@ def _seed_official_accounts() -> None:
                 if not existing.creature_id:
                     existing.creature_id = account["creature_id"]
                 # Seed d'un avatar uniquement si le compte n'en a pas (on ne
-                # veut pas écraser la photo ZEPETO de Dreyna par ex.).
+                # veut pas écraser la photo de Dreyna par ex.).
                 if not existing.avatar_image_url and account["avatar_image_url"]:
                     existing.avatar_image_url = account["avatar_image_url"]
         session.commit()
