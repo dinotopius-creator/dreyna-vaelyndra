@@ -87,7 +87,7 @@ _HTML_WRAPPER = """\
 
 
 def send_verification_email(to: str, username: str, token: str) -> bool:
-    url = f"{_public_site_url()}/auth/verify-email?token={token}"
+    url = f"{_public_site_url()}/verifier-email?token={token}"
     content = f"""
     <h2 style="color:#e9e4ff;font-size:18px;margin:0 0 16px;">Bienvenue, {username} ✨</h2>
     <p style="color:#c4b6e8;line-height:1.6;">
@@ -118,7 +118,7 @@ def send_verification_email(to: str, username: str, token: str) -> bool:
 
 
 def send_password_reset_email(to: str, username: str, token: str) -> bool:
-    url = f"{_public_site_url()}/auth/reset-password?token={token}"
+    url = f"{_public_site_url()}/reinitialiser-mot-de-passe?token={token}"
     content = f"""
     <h2 style="color:#e9e4ff;font-size:18px;margin:0 0 16px;">Réinitialisation — {username}</h2>
     <p style="color:#c4b6e8;line-height:1.6;">
