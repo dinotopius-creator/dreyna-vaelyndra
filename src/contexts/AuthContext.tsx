@@ -326,6 +326,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 "Email non vérifié. Consulte ta boîte mail pour activer le compte.",
             };
           }
+          // Compte banni (403) : le backend renvoie un detail structuré
+          // { code: "account_banned", message, reason } que `authRequest`
+          // sérialise en JSON string. On l'extrait pour afficher un message
+          // propre plutôt qu'un blob JSON brut à l'utilisateur.
+          if (err.status === 403 && /account_banned/.test(err.message)) {
+            let reason = "";
+            try {
+              const parsed = JSON.parse(err.message) as {
+                reason?: string;
+                message?: string;
+              };
+              reason = parsed.reason || "";
+            } catch {
+              /* message non parsable : on garde un fallback générique */
+            }
+            return {
+              ok: false,
+              error: reason
+                ? `Ce compte est suspendu. Motif : ${reason}`
+                : "Ce compte est suspendu. Contacte le support pour en savoir plus.",
+            };
+          }
           if (err.status === 429) {
             return {
               ok: false,

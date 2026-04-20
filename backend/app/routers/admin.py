@@ -345,6 +345,14 @@ def ban_user(
         raise HTTPException(400, "Tu ne peux pas te bannir toi-même.")
     if user.role == "admin":
         raise HTTPException(400, "Impossible de bannir un autre admin. Retire-lui d'abord le rôle.")
+    # Refuse un second ban sur un compte déjà banni : sinon on écraserait
+    # silencieusement `banned_at / banned_reason / banned_by` avec les valeurs
+    # du second appel, ce qui ferait perdre la trace du ban initial côté
+    # `UserProfile` (le journal d'audit le garde, mais l'UI admin affiche
+    # toujours l'enregistrement live). L'admin doit passer par `unban` puis
+    # `ban` s'il veut réellement modifier la raison.
+    if user.banned_at:
+        raise HTTPException(400, "Cet utilisateur est déjà banni. Débannis-le d'abord pour modifier la raison.")
     now = _now_iso()
     user.banned_at = now
     user.banned_reason = body.reason
