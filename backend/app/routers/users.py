@@ -10,7 +10,8 @@ from sqlmodel import Session, select
 
 from ..creatures import CREATURES, get_creature
 from ..db import get_session
-from ..models import Follow, UserProfile
+from ..models import Follow, GiftLedger, UserProfile
+from .streamers import iso_week_start
 from ..schemas import (
     AvatarUpdate,
     CreatureChoice,
@@ -422,6 +423,20 @@ def gift_sylvins(
     receiver.earnings_paid += take_paid
     _touch(sender)
     _touch(receiver)
+    # Journal append-only pour alimenter le classement hebdo + BFF dans
+    # l'espace communauté. Écrit dans la même transaction que le transfert :
+    # impossible de voir un streamer crédité en `earnings_paid` sans ligne
+    # correspondante au ledger (et inversement).
+    session.add(
+        GiftLedger(
+            sender_id=sender.id,
+            receiver_id=receiver.id,
+            amount=amount,
+            amount_paid=take_paid,
+            amount_promo=take_promo,
+            week_start_iso=iso_week_start().isoformat(),
+        )
+    )
     session.commit()
     session.refresh(sender)
     session.refresh(receiver)

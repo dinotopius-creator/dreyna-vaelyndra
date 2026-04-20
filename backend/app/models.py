@@ -125,3 +125,33 @@ class Follow(SQLModel, table=True):
     follower_id: str = Field(index=True)
     following_id: str = Field(index=True)
     created_at: str = Field(default_factory=_now_iso)
+
+
+class GiftLedger(SQLModel, table=True):
+    """Journal append-only de chaque cadeau Sylvins envoyé.
+
+    Alimente :
+      - Classement hebdo des streamers (agrégé par `receiver_id` sur une
+        plage [week_start, week_start + 7j)).
+      - Module BFF (plus gros donateur par streamer, agrégé par
+        `(receiver_id, sender_id)`).
+
+    `week_start_iso` = date ISO (YYYY-MM-DD) du lundi UTC de la semaine,
+    stockée explicitement pour pouvoir indexer + filtrer sans calcul au
+    runtime. Recalculable depuis `created_at`, mais gelée à l'insertion
+    pour garantir qu'un gift envoyé le dimanche à 23:59:59 UTC reste dans
+    "sa" semaine même si le serveur bascule le lundi 00:00 entre l'écriture
+    et la lecture (corner case CI/horloge).
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    sender_id: str = Field(index=True)
+    receiver_id: str = Field(index=True)
+    amount: int
+    # Classement "retirable" vs "cadeau" : on trace paid et promo
+    # séparément pour pouvoir, plus tard, exposer un classement par type.
+    # Pour l'instant le classement affiché somme les deux.
+    amount_paid: int = Field(default=0)
+    amount_promo: int = Field(default=0)
+    week_start_iso: str = Field(index=True)
+    created_at: str = Field(default_factory=_now_iso, index=True)

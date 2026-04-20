@@ -7,7 +7,6 @@ import {
   MessageCircle,
   Radio,
   Send,
-  Sparkles,
   Trash2,
 } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -18,9 +17,11 @@ import { useToast } from "../contexts/ToastContext";
 import { SectionHeading } from "../components/SectionHeading";
 import { PostComments } from "../components/PostComments";
 import { UserBadges } from "../components/UserBadges";
-import { DREYNA_PROFILE, TOP_FANS } from "../data/mock";
+import { StreamerLeaderboard } from "../components/StreamerLeaderboard";
+import { BFFModule } from "../components/BFFModule";
+import { DREYNA_PROFILE } from "../data/mock";
 import { getOfficial } from "../data/officials";
-import { formatNumber, formatRelative, parseVideoUrl } from "../lib/helpers";
+import { formatRelative, parseVideoUrl } from "../lib/helpers";
 import {
   apiCreatePost,
   apiDeletePost,
@@ -371,34 +372,8 @@ export function Community() {
         </div>
 
         <aside className="space-y-6">
-          <div className="card-royal p-5">
-            <h3 className="font-display text-lg text-gold-200">
-              <Sparkles className="mr-1 inline h-4 w-4 text-gold-300" />
-              Top fans du mois
-            </h3>
-            <ol className="mt-4 space-y-3">
-              {TOP_FANS.map((f, i) => (
-                <li key={f.name} className="flex items-center gap-3">
-                  <span className="font-display text-lg text-gold-300 w-6">
-                    #{i + 1}
-                  </span>
-                  <img
-                    src={f.avatar}
-                    alt={f.name}
-                    className="h-9 w-9 rounded-full object-cover ring-2 ring-gold-400/40"
-                  />
-                  <div className="flex-1">
-                    <p className="font-display text-sm text-gold-200">
-                      {f.name}
-                    </p>
-                    <p className="font-regal text-[10px] tracking-[0.22em] text-ivory/55">
-                      {formatNumber(f.score)} pts
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ol>
-          </div>
+          <StreamerLeaderboard />
+          <BFFModule />
 
           <div className="card-royal p-5">
             <h3 className="font-display text-lg text-gold-200">
