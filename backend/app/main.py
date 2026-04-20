@@ -32,7 +32,7 @@ app.add_middleware(
     # pour éviter qu'un tiers malveillant héberge un site pirate sur vercel.app
     # et lise nos endpoints publics via CORS. Starlette fait un `fullmatch`,
     # donc ce pattern ne matche QUE les URLs de previews de ce projet.
-    allow_origin_regex=r"https://dreyna-vaelyndra[a-z0-9-]*\.vercel\.app",
+    allow_origin_regex=r"https://dreyna-vaelyndra(-[a-z0-9-]+)?\.vercel\.app",
     allow_origins=[o.strip() for o in _cors_origins if o.strip()],
     allow_credentials=False,
     allow_methods=["*"],
