@@ -141,11 +141,25 @@ def heartbeat(
 
 @router.delete("/stop", status_code=status.HTTP_204_NO_CONTENT)
 def stop_live(user: UserProfile = Depends(require_auth)) -> Response:
-    """Supprime le live du user connecté (arrêt volontaire du stream)."""
+    """Supprime le live du user connecté (arrêt volontaire du stream).
+
+    Purge aussi toutes les `LiveJoinRequest` associées : sans ça, au
+    prochain live du même broadcaster, les demandes "accepted" / "pending"
+    de la session précédente ré-apparaîtraient comme des invités fantômes
+    sans connexion WebRTC.
+    """
     with get_session() as session:
         existing = session.get(LiveSession, user.id)
         if existing is not None:
             session.delete(existing)
+        stale_joins = session.exec(
+            select(LiveJoinRequest).where(
+                LiveJoinRequest.broadcaster_id == user.id
+            )
+        ).all()
+        for row in stale_joins:
+            session.delete(row)
+        if existing is not None or stale_joins:
             session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -511,12 +525,26 @@ def list_join_requests(
     """Broadcaster : liste les demandes sur SON live (polled ~5s).
 
     Inclut pending + accepted + refused récents. Le frontend filtre /
-    groupe selon l'affichage. La fraîcheur du live n'est PAS checkée
-    ici pour que le broadcaster voie ses demandes juste après avoir
-    relancé le live (et avant que le heartbeat remonte).
+    groupe selon l'affichage.
+
+    Défense en profondeur : si une `LiveSession` existe pour ce broadcaster,
+    on purge les demandes dont `requested_at` est antérieur à `started_at`
+    (cas d'un crash / heartbeat timeout qui n'a pas déclenché `/live/stop`
+    et aurait laissé des demandes fantômes). La fraîcheur du live n'est
+    PAS checkée ici pour que le broadcaster voie ses demandes juste après
+    avoir relancé le live (et avant que le heartbeat remonte).
     """
     with get_session() as session:
         _purge_stale_refused(session, broadcaster_id=user.id)
+        live = session.get(LiveSession, user.id)
+        if live is not None:
+            stale = session.exec(
+                select(LiveJoinRequest)
+                .where(LiveJoinRequest.broadcaster_id == user.id)
+                .where(LiveJoinRequest.requested_at < live.started_at)
+            ).all()
+            for row in stale:
+                session.delete(row)
         session.commit()
         rows = session.exec(
             select(LiveJoinRequest)

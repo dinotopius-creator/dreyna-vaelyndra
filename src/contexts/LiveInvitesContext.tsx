@@ -180,6 +180,28 @@ export function LiveInvitesProvider({ children }: { children: ReactNode }) {
   // demande, même si le poll revient toutes les 5 s).
   const knownPendingIdsRef = useRef<Set<number>>(new Set());
 
+  // Verrou optimiste pour les décisions broadcaster (accept/refuse/revoke).
+  // Sans ça, quand on accepte un viewer, le PATCH part en fire-and-forget
+  // et si le prochain poll (toutes les 5 s) arrive avant que le backend
+  // ait committé, on récupère encore `status=pending` → on écraserait la
+  // bascule optimiste `accepted` côté UI. À chaque décision locale, on
+  // note dans ce map `{ serverId → { expectedStatus, ts } }`. Dans le
+  // merge, on ignore les mises à jour serveur qui ne correspondent pas
+  // encore à l'attente pendant `OPTIMISTIC_TTL_MS`.
+  const optimisticPatchesRef = useRef<
+    Map<number, { expected: "accepted" | "refused"; ts: number }>
+  >(new Map());
+  const OPTIMISTIC_TTL_MS = 15_000;
+  const markOptimisticPatch = useCallback(
+    (serverId: number, expected: "accepted" | "refused") => {
+      optimisticPatchesRef.current.set(serverId, {
+        expected,
+        ts: Date.now(),
+      });
+    },
+    [],
+  );
+
   // Miroir **synchrone** de `state`. Indispensable pour que deux mutations
   // consécutives (ex. un `revokeInvite` suivi d'un `acceptInvite` dans le
   // même tick) voient chacune le résultat de la précédente. Tous les
@@ -379,13 +401,14 @@ export function LiveInvitesProvider({ children }: { children: ReactNode }) {
         userRef.current &&
         userRef.current.id === broadcasterId
       ) {
+        markOptimisticPatch(serverIdToPatch, "accepted");
         apiDecideJoinRequest(serverIdToPatch, "accepted").catch(() => {
           /* ignore */
         });
       }
       return committed;
     },
-    [commit],
+    [commit, markOptimisticPatch],
   );
 
   const refuseInvite = useCallback<InvitesCtx["refuseInvite"]>(
@@ -413,12 +436,13 @@ export function LiveInvitesProvider({ children }: { children: ReactNode }) {
         userRef.current &&
         userRef.current.id === broadcasterId
       ) {
+        markOptimisticPatch(serverIdToPatch, "refused");
         apiDecideJoinRequest(serverIdToPatch, "refused").catch(() => {
           /* ignore */
         });
       }
     },
-    [commit],
+    [commit, markOptimisticPatch],
   );
 
   const revokeInvite = useCallback<InvitesCtx["revokeInvite"]>(
@@ -447,12 +471,13 @@ export function LiveInvitesProvider({ children }: { children: ReactNode }) {
         userRef.current &&
         userRef.current.id === broadcasterId
       ) {
+        markOptimisticPatch(serverIdToPatch, "refused");
         apiDecideJoinRequest(serverIdToPatch, "refused").catch(() => {
           /* ignore */
         });
       }
     },
-    [commit],
+    [commit, markOptimisticPatch],
   );
 
   const resetBroadcast = useCallback<InvitesCtx["resetBroadcast"]>(
@@ -498,6 +523,14 @@ export function LiveInvitesProvider({ children }: { children: ReactNode }) {
       for (const r of newPending) {
         notify(`✋ ${r.username} demande à monter sur scène`, "info");
       }
+      // On purge au passage les verrous optimistes expirés (> TTL) pour
+      // éviter de faire grossir la Map indéfiniment.
+      const nowTs = Date.now();
+      for (const [id, entry] of optimisticPatchesRef.current) {
+        if (nowTs - entry.ts > OPTIMISTIC_TTL_MS) {
+          optimisticPatchesRef.current.delete(id);
+        }
+      }
       commit((prev) => {
         const currentBroadcaster = prev[broadcasterId] || {};
         const next: Record<string, InviteRequest> = {};
@@ -505,6 +538,28 @@ export function LiveInvitesProvider({ children }: { children: ReactNode }) {
         //    les demandes cross-device).
         for (const r of rows) {
           const existing = currentBroadcaster[r.user_id];
+          // Verrou optimiste : si on a décidé localement (accept/refuse)
+          // juste avant ce poll mais que le backend n'a pas encore committé
+          // le PATCH, on garde la valeur locale plutôt que d'écraser avec
+          // l'ancien statut serveur. Sans ça, on pourrait :
+          //  - voir l'invité accepté revenir en "pending" quelques secondes
+          //  - dépasser MAX_GUESTS en cas de race (accept viewer1 → flicker
+          //    pending → re-accept viewer2 → PATCH1 arrive → 5 accepted)
+          const pending = optimisticPatchesRef.current.get(r.id);
+          if (
+            pending &&
+            r.status !== pending.expected &&
+            nowTs - pending.ts <= OPTIMISTIC_TTL_MS &&
+            existing
+          ) {
+            // On garde l'entrée locale (décision optimiste) telle quelle.
+            next[r.user_id] = existing;
+            continue;
+          }
+          // Le serveur a rattrapé (ou TTL expiré) : on peut clear le verrou.
+          if (pending && r.status === pending.expected) {
+            optimisticPatchesRef.current.delete(r.id);
+          }
           next[r.user_id] = {
             userId: r.user_id,
             username: r.username,
