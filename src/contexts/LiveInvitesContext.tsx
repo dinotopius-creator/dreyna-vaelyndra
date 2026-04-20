@@ -405,9 +405,11 @@ export function LiveInvitesProvider({ children }: { children: ReactNode }) {
 
   const revokeInvite = useCallback<InvitesCtx["revokeInvite"]>(
     (broadcasterId, userId) => {
+      let serverIdToPatch: number | undefined;
       commit((prev) => {
         const reqs = prev[broadcasterId];
         if (!reqs || !reqs[userId]) return prev;
+        serverIdToPatch = reqs[userId].serverId;
         const next = { ...reqs };
         delete next[userId];
         if (Object.keys(next).length === 0) {
@@ -417,6 +419,20 @@ export function LiveInvitesProvider({ children }: { children: ReactNode }) {
         }
         return { ...prev, [broadcasterId]: next };
       });
+      // Sans ce PATCH, la ligne serveur reste `accepted` et le prochain
+      // poll broadcaster (toutes les 5 s) ré-injecte l'invité sur scène
+      // — la révocation serait donc annulée côté UI au tick suivant.
+      // On bascule la ligne serveur en `refused` pour purge naturelle
+      // (même chemin que `refuseInvite`, avec la grace window 3 min).
+      if (
+        serverIdToPatch &&
+        userRef.current &&
+        userRef.current.id === broadcasterId
+      ) {
+        apiDecideJoinRequest(serverIdToPatch, "refused").catch(() => {
+          /* ignore */
+        });
+      }
     },
     [commit],
   );
