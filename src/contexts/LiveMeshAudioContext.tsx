@@ -180,8 +180,18 @@ export function LiveMeshAudioProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // --- Boot / shutdown ---------------------------------------------------
+  //
+  // ⚠️ Dépendances : uniquement `scene?.broadcasterId` (stable tant qu'on
+  // reste dans la même scène) et `user?.id`. L'objet `scene` lui-même est
+  // recalculé à chaque changement d'`invitesState` (ex. un viewer lève la
+  // main → scene.participants change de référence même si le broadcaster
+  // est le même). Si on dépendait de `scene`, l'effet re-fire, le cleanup
+  // ne libère pas le mesh existant, et on se retrouve avec un second
+  // `getUserMedia` (leak mic) + collision `unavailable-id` sur le peer.
+  // Les changements de participants sont gérés par l'effet suivant.
   useEffect(() => {
-    if (!scene || !user) {
+    const bId = scene?.broadcasterId;
+    if (!bId || !user) {
       // Scène terminée → on coupe tout proprement.
       shutdownMesh();
       setMeshActive(false);
@@ -284,14 +294,19 @@ export function LiveMeshAudioProvider({ children }: { children: ReactNode }) {
 
     return () => {
       cancelled = true;
-      // `shutdownMesh` sera déclenché par le prochain render de ce même
-      // effet (ci-dessus) OU par l'unmount du provider.
+      // Libère mic + peer + conns AVANT que le prochain run (cas de
+      // changement de broadcaster ou de user) ne tente un nouveau
+      // `getUserMedia` / `new Peer(sameId)`. `shutdownMesh` est
+      // idempotent donc cohabiter avec la branche `!scene` ci-dessus
+      // ne pose pas de problème.
+      shutdownMesh();
     };
-    // On volontairement ignore `micEnabled` dans les deps : modifier le
-    // mute ne doit PAS reboot le mesh. Les changements de mute sont
-    // appliqués par `toggleMic()` sans passer par cet effet.
+    // On volontairement ignore `micEnabled` et `scene.participants` dans
+    // les deps : modifier le mute ne doit PAS reboot le mesh, et les
+    // changements de liste de participants sont gérés par l'effet
+    // suivant (diff des connexions, sans démonter le peer).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scene, user?.id]);
+  }, [scene?.broadcasterId, user?.id]);
 
   // --- Quand la liste des participants change, on ouvre les nouvelles
   //     connexions et on ferme celles qui ne sont plus pertinentes.
