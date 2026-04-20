@@ -161,6 +161,15 @@ export function Navbar() {
                 {n.label}
               </NavLink>
             ))}
+            {user && (
+              <NavLink
+                to="/compte"
+                onClick={() => setOpen(false)}
+                className="rounded-xl border border-royal-500/30 px-4 py-3 font-regal text-xs font-semibold tracking-[0.22em] text-ivory/80"
+              >
+                Mon compte
+              </NavLink>
+            )}
             {isQueen && (
               <NavLink
                 to="/admin"
