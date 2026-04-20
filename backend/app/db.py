@@ -62,6 +62,10 @@ def _apply_migrations() -> None:
             # PR M — grades spirituels pour streamers.
             ("streamer_xp", "INTEGER NOT NULL DEFAULT 0"),
             ("streamer_grade_override", "TEXT"),
+            # PR J — modération (ban/unban).
+            ("banned_at", "TEXT"),
+            ("banned_reason", "TEXT"),
+            ("banned_by", "TEXT"),
         ],
     }
     with engine.begin() as conn:

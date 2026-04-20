@@ -8,6 +8,7 @@ import { formatRelative } from "../lib/helpers";
 import { apiAddComment, apiDeleteComment } from "../lib/api";
 import { DREYNA_PROFILE } from "../data/mock";
 import type { Comment } from "../types";
+import { ReportButton } from "./ReportButton";
 
 interface Props {
   postId: string;
@@ -92,15 +93,27 @@ export function PostComments({ postId, comments, postAuthorId }: Props) {
                   {c.content}
                 </p>
               </div>
-              {canDelete && (
-                <button
-                  onClick={() => remove(c.id)}
-                  className="text-ivory/30 transition hover:text-rose-300"
-                  title="Supprimer ce commentaire"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              )}
+              <div className="flex items-center gap-1">
+                {user && user.id !== c.authorId && (
+                  <ReportButton
+                    targetType="comment"
+                    targetId={c.id}
+                    targetLabel={`Commentaire de ${c.authorName}`}
+                    targetUrl={`/communaute#post-${postId}`}
+                    compact
+                    className="text-ivory/30 hover:text-rose-300"
+                  />
+                )}
+                {canDelete && (
+                  <button
+                    onClick={() => remove(c.id)}
+                    className="text-ivory/30 transition hover:text-rose-300"
+                    title="Supprimer ce commentaire"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
             </li>
           );
         })}

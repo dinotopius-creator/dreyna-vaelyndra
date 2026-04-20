@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -23,20 +23,38 @@ import {
   slugify,
 } from "../lib/helpers";
 import clsx from "clsx";
+import { AdminUsersTab } from "../components/AdminUsersTab";
+import { AdminReportsTab } from "../components/AdminReportsTab";
+import { adminReportsStats } from "../lib/adminApi";
 
 const TABS = [
   { id: "dashboard", label: "Dashboard" },
   { id: "articles", label: "Chroniques" },
   { id: "products", label: "Boutique" },
   { id: "lives", label: "Lives" },
+  { id: "users", label: "Utilisateurs" },
+  { id: "reports", label: "Signalements" },
   { id: "moderation", label: "Modération" },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
 
 export function Admin() {
-  const { user } = useAuth();
+  const { user, backendMe } = useAuth();
   const { articles, products, lives, posts, orders, isLiveOn } = useStore();
   const [tab, setTab] = useState<TabId>("dashboard");
+  const [openReportsCount, setOpenReportsCount] = useState<number>(0);
+
+  // Charge le compteur de reports ouverts pour afficher le badge sur l'onglet.
+  // Rafraîchi à chaque changement d'onglet pour rester à peu près à jour
+  // sans polling lourd.
+  useEffect(() => {
+    if (backendMe?.role !== "admin") return;
+    adminReportsStats()
+      .then((s) => setOpenReportsCount(s.byStatus.open ?? 0))
+      .catch(() => {
+        /* silencieux */
+      });
+  }, [backendMe?.role, tab]);
 
   if (!user) return null;
 
@@ -75,13 +93,18 @@ export function Admin() {
             key={t.id}
             onClick={() => setTab(t.id)}
             className={clsx(
-              "rounded-full border px-4 py-2 font-regal text-[11px] font-semibold tracking-[0.22em]",
+              "relative rounded-full border px-4 py-2 font-regal text-[11px] font-semibold tracking-[0.22em]",
               tab === t.id
                 ? "border-gold-400/70 bg-gold-500/15 text-gold-200"
                 : "border-royal-500/30 text-ivory/70 hover:border-gold-400/40 hover:text-gold-200",
             )}
           >
             {t.label}
+            {t.id === "reports" && openReportsCount > 0 && (
+              <span className="ml-2 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-rose-500 px-1.5 text-[10px] font-bold text-white">
+                {openReportsCount}
+              </span>
+            )}
           </button>
         ))}
       </nav>
@@ -105,6 +128,10 @@ export function Admin() {
         {tab === "articles" && <ArticlesAdmin />}
         {tab === "products" && <ProductsAdmin />}
         {tab === "lives" && <LivesAdmin />}
+        {tab === "users" && <AdminUsersTab />}
+        {tab === "reports" && (
+          <AdminReportsTab onCountChange={setOpenReportsCount} />
+        )}
         {tab === "moderation" && <ModerationAdmin />}
       </motion.div>
     </div>

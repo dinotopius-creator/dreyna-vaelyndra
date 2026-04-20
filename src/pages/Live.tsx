@@ -36,6 +36,7 @@ import { LiveLeaderboardOverlay } from "../components/LiveLeaderboardOverlay";
 import type { TributeEntry } from "../components/LiveLeaderboardOverlay";
 import { LiveInvitePanel } from "../components/LiveInvitePanel";
 import { LiveGuestsStrip } from "../components/LiveGuestsStrip";
+import { ReportButton } from "../components/ReportButton";
 import {
   SortDAppelCaster,
   SORT_LEVELS,
@@ -862,18 +863,28 @@ export function Live() {
                         {heroDescription}
                       </p>
                       {broadcasterProfile && (
-                        <div className="mt-3 flex items-center gap-2 text-xs text-ivory/80">
-                          <img
-                            src={broadcasterProfile.avatar}
-                            alt=""
-                            className="h-6 w-6 rounded-full border border-gold-400/40 object-cover"
-                          />
-                          <span>
-                            avec{" "}
-                            <span className="font-display text-gold-200">
-                              {broadcasterProfile.username}
+                        <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-ivory/80">
+                          <div className="flex items-center gap-2">
+                            <img
+                              src={broadcasterProfile.avatar}
+                              alt=""
+                              className="h-6 w-6 rounded-full border border-gold-400/40 object-cover"
+                            />
+                            <span>
+                              avec{" "}
+                              <span className="font-display text-gold-200">
+                                {broadcasterProfile.username}
+                              </span>
                             </span>
-                          </span>
+                          </div>
+                          {user && user.id !== broadcasterId && (
+                            <ReportButton
+                              targetType="live"
+                              targetId={broadcasterId}
+                              targetLabel={`Live de ${broadcasterProfile.username}`}
+                              targetUrl={`/live/${broadcasterId}`}
+                            />
+                          )}
                         </div>
                       )}
                     </div>
