@@ -225,21 +225,34 @@ export function LiveInvitesProvider({ children }: { children: ReactNode }) {
 
   const acceptInvite = useCallback<InvitesCtx["acceptInvite"]>(
     (broadcasterId, userId) => {
-      let accepted = false;
+      // On calcule le verdict **hors** de l'updater `setState` pour ne pas
+      // dépendre du timing d'exécution (React 18 + concurrent rendering
+      // peut différer l'updater). La fenêtre TOCTOU vs un `StorageEvent`
+      // cross-tab reste minuscule et, pire cas, la scène sera brièvement
+      // à N+1 avant que le prochain batch ne réconcilie — pas de crash
+      // côté UI car `MAX_GUESTS` n'est utilisé que pour désactiver le
+      // bouton "Accepter", pas comme invariant de sécurité.
+      const reqs = state[broadcasterId];
+      if (!reqs || !reqs[userId]) return false;
+      const onStage = Object.values(reqs).filter(
+        (r) => r.status === "accepted",
+      ).length;
+      if (onStage >= MAX_GUESTS) return false;
       setState((prev) => {
-        const reqs = prev[broadcasterId];
-        if (!reqs || !reqs[userId]) return prev;
-        const onStage = Object.values(reqs).filter(
+        const cur = prev[broadcasterId];
+        // Garde défensive : l'état a pu bouger (autre onglet) entre le
+        // check et l'updater — on re-vérifie et on no-op si incohérent.
+        if (!cur || !cur[userId]) return prev;
+        const onStageNow = Object.values(cur).filter(
           (r) => r.status === "accepted",
         ).length;
-        if (onStage >= MAX_GUESTS) return prev;
-        accepted = true;
+        if (onStageNow >= MAX_GUESTS) return prev;
         return {
           ...prev,
           [broadcasterId]: {
-            ...reqs,
+            ...cur,
             [userId]: {
-              ...reqs[userId],
+              ...cur[userId],
               status: "accepted",
               acceptedAt: new Date().toISOString(),
               refusedAt: undefined,
@@ -247,9 +260,9 @@ export function LiveInvitesProvider({ children }: { children: ReactNode }) {
           },
         };
       });
-      return accepted;
+      return true;
     },
-    [],
+    [state],
   );
 
   const refuseInvite = useCallback<InvitesCtx["refuseInvite"]>(
