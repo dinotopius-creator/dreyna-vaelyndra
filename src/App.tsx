@@ -15,6 +15,7 @@ import { Login } from "./pages/Login";
 import { Register } from "./pages/Register";
 import { Me } from "./pages/Me";
 import { Compte } from "./pages/Compte";
+import { Connexions } from "./pages/Connexions";
 import { VerifyEmail } from "./pages/VerifyEmail";
 import { ForgotPassword } from "./pages/ForgotPassword";
 import { ResetPassword } from "./pages/ResetPassword";
@@ -57,6 +58,7 @@ function AnimatedRoutes() {
           <Route path="/inscription" element={<Register />} />
           <Route path="/moi" element={<Guarded><Me /></Guarded>} />
           <Route path="/compte" element={<Guarded><Compte /></Guarded>} />
+          <Route path="/connexions" element={<Guarded><Connexions /></Guarded>} />
           <Route path="/avatar" element={<Guarded><Avatar /></Guarded>} />
           <Route path="/verifier-email" element={<VerifyEmail />} />
           <Route path="/mot-de-passe-oublie" element={<ForgotPassword />} />

@@ -9,6 +9,7 @@ import {
   LogOut,
   UserCircle2,
   ShieldCheck,
+  ShieldAlert,
   X,
 } from "lucide-react";
 import { useState } from "react";
@@ -24,7 +25,7 @@ const NAV = [
 ];
 
 export function Navbar() {
-  const { user, isQueen, logout } = useAuth();
+  const { user, isQueen, logout, backendMe } = useAuth();
   const { cartCount, isLiveOn } = useStore();
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
@@ -101,7 +102,14 @@ export function Navbar() {
                 )}
                 <Link
                   to="/moi"
-                  className="flex items-center gap-2 rounded-full border border-royal-500/30 bg-night-800/60 py-1 pl-1 pr-3"
+                  className="relative flex items-center gap-2 rounded-full border border-royal-500/30 bg-night-800/60 py-1 pl-1 pr-3"
+                  title={
+                    backendMe?.totp_enabled
+                      ? "Double authentification activée"
+                      : backendMe
+                        ? "Active la double authentification"
+                        : undefined
+                  }
                 >
                   <img
                     src={user.avatar}
@@ -111,6 +119,16 @@ export function Navbar() {
                   <span className="hidden text-xs font-medium text-ivory/90 sm:inline">
                     {user.username}
                   </span>
+                  {backendMe?.totp_enabled && (
+                    <span className="absolute -bottom-0.5 -right-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/90 ring-2 ring-night-900">
+                      <ShieldCheck className="h-2.5 w-2.5 text-night-900" />
+                    </span>
+                  )}
+                  {backendMe && !backendMe.totp_enabled && (
+                    <span className="absolute -bottom-0.5 -right-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-amber-400/90 ring-2 ring-night-900">
+                      <ShieldAlert className="h-2.5 w-2.5 text-night-900" />
+                    </span>
+                  )}
                 </Link>
                 <button
                   onClick={() => {
@@ -162,13 +180,22 @@ export function Navbar() {
               </NavLink>
             ))}
             {user && (
-              <NavLink
-                to="/compte"
-                onClick={() => setOpen(false)}
-                className="rounded-xl border border-royal-500/30 px-4 py-3 font-regal text-xs font-semibold tracking-[0.22em] text-ivory/80"
-              >
-                Mon compte
-              </NavLink>
+              <>
+                <NavLink
+                  to="/compte"
+                  onClick={() => setOpen(false)}
+                  className="rounded-xl border border-royal-500/30 px-4 py-3 font-regal text-xs font-semibold tracking-[0.22em] text-ivory/80"
+                >
+                  Mon compte
+                </NavLink>
+                <NavLink
+                  to="/connexions"
+                  onClick={() => setOpen(false)}
+                  className="rounded-xl border border-royal-500/30 px-4 py-3 font-regal text-xs font-semibold tracking-[0.22em] text-ivory/80"
+                >
+                  Historique & appareils
+                </NavLink>
+              </>
             )}
             {isQueen && (
               <NavLink
