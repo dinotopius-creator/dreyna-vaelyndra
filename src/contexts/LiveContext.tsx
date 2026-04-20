@@ -270,6 +270,10 @@ export function LiveProvider({ children }: { children: ReactNode }) {
                 ? next.description
                 : c.description,
             mode: nextMode ?? c.mode,
+            category:
+              next.category !== undefined
+                ? normalizeLiveCategory(next.category)
+                : c.category,
             twitchChannel:
               typeof next.twitchChannel === "string"
                 ? next.twitchChannel
