@@ -23,6 +23,7 @@ import { SectionHeading } from "../components/SectionHeading";
 import { AvatarViewer } from "../components/AvatarViewer";
 import { UserBadges } from "../components/UserBadges";
 import { CreaturePickerModal } from "../components/CreaturePickerModal";
+import SoulBondsModal from "../components/SoulBondsModal";
 import { WishlistSection } from "../components/WishlistSection";
 import { formatDate, formatPrice, resizeImageToDataUrl } from "../lib/helpers";
 import {
@@ -43,6 +44,9 @@ export function Me() {
   const [avatar, setAvatar] = useState(user?.avatar ?? "");
   const [editingAvatar, setEditingAvatar] = useState(false);
   const [creaturePickerOpen, setCreaturePickerOpen] = useState(false);
+  const [bondsTab, setBondsTab] = useState<"followers" | "following" | null>(
+    null,
+  );
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   if (!user) return null;
@@ -140,18 +144,26 @@ export function Me() {
               Entré·e à la cour le {formatDate(user.joinedAt)}
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-ivory/70">
-              <span>
+              <button
+                type="button"
+                onClick={() => setBondsTab("followers")}
+                className="rounded-full transition hover:text-gold-100"
+              >
                 <strong className="font-display text-gold-200">
                   {serverProfile?.followersCount ?? 0}
                 </strong>{" "}
-                abonné·e·s
-              </span>
-              <span>
+                âmes liées
+              </button>
+              <button
+                type="button"
+                onClick={() => setBondsTab("following")}
+                className="rounded-full transition hover:text-gold-100"
+              >
                 <strong className="font-display text-gold-200">
                   {serverProfile?.followingCount ?? 0}
                 </strong>{" "}
-                abonnements
-              </span>
+                liens tissés
+              </button>
             </div>
           </div>
           {user.role === "queen" && (
@@ -166,6 +178,14 @@ export function Me() {
             serverProfile?.creature?.id ?? user.creatureId ?? null
           }
           onClose={() => setCreaturePickerOpen(false)}
+        />
+
+        <SoulBondsModal
+          userId={user.id}
+          username={user.username}
+          open={bondsTab !== null}
+          initialTab={bondsTab ?? "followers"}
+          onClose={() => setBondsTab(null)}
         />
 
         {editingAvatar && (
