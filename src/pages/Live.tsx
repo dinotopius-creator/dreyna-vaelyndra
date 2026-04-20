@@ -23,6 +23,7 @@ import {
   LIVE_TITLE_MAX,
   useLive,
 } from "../contexts/LiveContext";
+import { useLiveInvites } from "../contexts/LiveInvitesContext";
 import type { LiveRegistryEntry } from "../contexts/LiveContext";
 import { LIVE_CATEGORIES, getLiveCategory } from "../data/liveCategories";
 import { SectionHeading } from "../components/SectionHeading";
@@ -33,6 +34,8 @@ import { LiveChatOverlay } from "../components/LiveChatOverlay";
 import { LiveHeartsOverlay } from "../components/LiveHeartsOverlay";
 import { LiveLeaderboardOverlay } from "../components/LiveLeaderboardOverlay";
 import type { TributeEntry } from "../components/LiveLeaderboardOverlay";
+import { LiveInvitePanel } from "../components/LiveInvitePanel";
+import { LiveGuestsStrip } from "../components/LiveGuestsStrip";
 import {
   SortDAppelCaster,
   SORT_LEVELS,
@@ -542,6 +545,7 @@ export function Live() {
 
   const registryEntry = liveRegistry[broadcasterId] ?? null;
   const isHost = amBroadcaster && !!localStream;
+  const { resetBroadcast: resetInviteBroadcast } = useLiveInvites();
 
   // Rejoindre le flux du broadcaster cible (sauf si on est host).
   const remoteStreamRef = useRef<MediaStream | null>(null);
@@ -603,6 +607,16 @@ export function Live() {
     setHeartEvents([]);
     setTributes(seedTributes());
   }, [broadcasterId]);
+
+  // Purge les demandes d'invitation dès que mon live s'arrête (détecté
+  // quand je suis broadcaster et que `isActiveLive` redevient false).
+  // Sans ce cleanup, un viewer ayant levé la main verrait son état
+  // figé pour la session suivante — confusant et source de bugs.
+  useEffect(() => {
+    if (amBroadcaster && !isActiveLive) {
+      resetInviteBroadcast(broadcasterId);
+    }
+  }, [amBroadcaster, isActiveLive, broadcasterId, resetInviteBroadcast]);
 
   // Simulate viewers pulse
   useEffect(() => {
@@ -824,6 +838,9 @@ export function Live() {
                     fallbackAvatar={broadcasterProfile?.avatar ?? null}
                     showControls={amBroadcaster}
                   />
+                  {/* Bandeau d'invités sur scène (PR H). Positionné en haut
+                      du cadre, juste en-dessous du médaillon avatar. */}
+                  <LiveGuestsStrip broadcasterId={broadcasterId} />
                   <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-night-900/95 via-night-900/40 to-transparent p-6">
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
@@ -957,6 +974,17 @@ export function Live() {
               </p>
             </div>
           </div>
+
+          {/* Panneau "Demander à monter" (PR H) : bouton côté viewer,
+              file d'attente côté broadcaster. Rendu juste sous le lecteur
+              pour que les deux rôles le voient sans scroller. */}
+          <LiveInvitePanel
+            broadcasterId={broadcasterId}
+            broadcasterName={broadcasterProfile?.username ?? "la cour"}
+            isBroadcaster={amBroadcaster}
+            onAnnounce={pushSystemAnnouncement}
+            isActiveLive={isActiveLive}
+          />
 
           <LiveRoster entries={registryList} activeId={broadcasterId} />
 
