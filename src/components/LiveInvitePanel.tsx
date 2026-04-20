@@ -10,6 +10,7 @@ import {
   pendingRequestsFor,
   useLiveInvites,
 } from "../contexts/LiveInvitesContext";
+import { useLiveMeshAudio } from "../contexts/LiveMeshAudioContext";
 import { getCreature } from "../data/creatures";
 
 /**
@@ -58,6 +59,13 @@ export function LiveInvitePanel({
     refuseInvite,
     revokeInvite,
   } = useLiveInvites();
+  const {
+    meshActive,
+    micEnabled,
+    toggleMic,
+    hasMic,
+    error: meshError,
+  } = useLiveMeshAudio();
 
   const pending = useMemo(
     () => pendingRequestsFor(state, broadcasterId),
@@ -169,6 +177,13 @@ export function LiveInvitePanel({
               <Mic className="h-3.5 w-3.5" />
               Tu es sur scène
             </span>
+            <MicToggleButton
+              meshActive={meshActive}
+              micEnabled={micEnabled}
+              hasMic={hasMic}
+              error={meshError}
+              onToggle={toggleMic}
+            />
             <button
               type="button"
               onClick={handleCancelMine}
@@ -219,6 +234,16 @@ export function LiveInvitePanel({
           <span className="inline-flex items-center gap-1 rounded-full border border-rose-400/40 bg-rose-500/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-rose-200">
             Scène pleine
           </span>
+        )}
+        {onStage > 0 && (
+          <MicToggleButton
+            meshActive={meshActive}
+            micEnabled={micEnabled}
+            hasMic={hasMic}
+            error={meshError}
+            onToggle={toggleMic}
+            compact
+          />
         )}
       </header>
 
@@ -339,5 +364,74 @@ export function LiveInvitePanel({
         </div>
       </div>
     </section>
+  );
+}
+
+/**
+ * Bouton de toggle micro partagé entre la vue viewer ("Tu es sur scène")
+ * et la vue broadcaster (en-tête du panneau).
+ *
+ * Trois états visuels :
+ *  - `error` non-null → pastille rouge explicite (mic refusé / indisponible).
+ *  - `hasMic && micEnabled` → vert "Micro actif".
+ *  - `hasMic && !micEnabled` → rouge "Micro coupé".
+ *  - pas encore `meshActive` → neutre "Connexion audio…".
+ */
+function MicToggleButton({
+  meshActive,
+  micEnabled,
+  hasMic,
+  error,
+  onToggle,
+  compact,
+}: {
+  meshActive: boolean;
+  micEnabled: boolean;
+  hasMic: boolean;
+  error: string | null;
+  onToggle: () => void;
+  compact?: boolean;
+}) {
+  if (error) {
+    return (
+      <span
+        className={`inline-flex items-center gap-1.5 rounded-full border border-rose-400/50 bg-rose-500/10 text-rose-200 ${
+          compact ? "px-2 py-0.5 text-[10px]" : "px-3 py-1.5 text-xs"
+        }`}
+        title={error}
+      >
+        <MicOff className="h-3 w-3" /> Audio indisponible
+      </span>
+    );
+  }
+  if (!hasMic || !meshActive) {
+    return (
+      <span
+        className={`inline-flex items-center gap-1.5 rounded-full border border-ivory/20 bg-night-900/40 text-ivory/60 ${
+          compact ? "px-2 py-0.5 text-[10px]" : "px-3 py-1.5 text-xs"
+        }`}
+      >
+        <Mic className="h-3 w-3 animate-pulse" /> Connexion audio…
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className={`inline-flex items-center gap-1.5 rounded-full border transition ${
+        micEnabled
+          ? "border-emerald-400/50 bg-emerald-400/10 text-emerald-200 hover:bg-emerald-400/15"
+          : "border-rose-400/50 bg-rose-500/10 text-rose-200 hover:bg-rose-500/15"
+      } ${compact ? "px-2 py-0.5 text-[10px]" : "px-3 py-1.5 text-xs"}`}
+      title={micEnabled ? "Couper mon micro" : "Activer mon micro"}
+    >
+      {micEnabled ? (
+        <Mic className="h-3 w-3" />
+      ) : (
+        <MicOff className="h-3 w-3" />
+      )}
+      {micEnabled ? "Micro actif" : "Micro coupé"}
+    </button>
   );
 }

@@ -8,6 +8,7 @@ import { StoreProvider } from "./contexts/StoreContext";
 import { ToastProvider } from "./contexts/ToastContext";
 import { LiveProvider } from "./contexts/LiveContext";
 import { LiveInvitesProvider } from "./contexts/LiveInvitesContext";
+import { LiveMeshAudioProvider } from "./contexts/LiveMeshAudioContext";
 import { ProfileProvider } from "./contexts/ProfileContext";
 
 createRoot(document.getElementById("root")!).render(
@@ -19,7 +20,9 @@ createRoot(document.getElementById("root")!).render(
             <StoreProvider>
               <LiveProvider>
                 <LiveInvitesProvider>
-                  <App />
+                  <LiveMeshAudioProvider>
+                    <App />
+                  </LiveMeshAudioProvider>
                 </LiveInvitesProvider>
               </LiveProvider>
             </StoreProvider>
