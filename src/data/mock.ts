@@ -9,39 +9,27 @@ import type {
 } from "../types";
 import dreynaPhoto from "../assets/dreyna-zepeto.png";
 
+// Profil de seed de Dreyna : depuis la dé-Dreyna-isation du site, ce profil
+// est traité comme un compte animateur normal (pas de rôle "queen", pas de
+// wallet/followers préseedés). Les vrais soldes viennent du backend.
 export const DREYNA_PROFILE = {
   id: "user-dreyna",
   username: "Dreyna",
   email: "dreyna@vaelyndra.realm",
   avatar: dreynaPhoto,
-  role: "queen" as const,
+  role: "elf" as const,
   joinedAt: "2021-03-21T00:00:00Z",
-  bio:
-    "Elfe originelle du royaume de Vaelyndra. Gardienne de la Lumière d'Elennor.",
-  socials: {
-    youtube: "https://www.youtube.com/@Dreynakame",
-    youtubeHandle: "@Dreynakame",
-  },
-  titles: [
-    "Elfe originelle de Vaelyndra",
-    "Gardienne de la Lumière d'Elennor",
-    "Porteuse de la Couronne d'Aube",
-  ],
+  bio: "Animatrice de Vaelyndra.",
+  socials: {},
+  titles: [],
   stats: {
-    followers: 3_800,
-    likes: 24_800,
-    articles: 12,
-    lives: 24,
-    communityMembers: 1_240,
+    followers: 0,
+    likes: 0,
+    articles: 0,
+    lives: 0,
+    communityMembers: 0,
   },
-  gallery: [
-    "https://images.unsplash.com/photo-1578632749014-ca77efd052eb?w=1200&auto=format&fit=crop&q=80",
-    "https://images.unsplash.com/photo-1519810755548-39cd217da494?w=1200&auto=format&fit=crop&q=80",
-    "https://images.unsplash.com/photo-1470770841072-f978cf4d019e?w=1200&auto=format&fit=crop&q=80",
-    "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1200&auto=format&fit=crop&q=80",
-    "https://images.unsplash.com/photo-1447433693459-3074a3216296?w=1200&auto=format&fit=crop&q=80",
-    "https://images.unsplash.com/photo-1518709594023-6eab9bab7b23?w=1200&auto=format&fit=crop&q=80",
-  ],
+  gallery: [] as string[],
 };
 
 export const BADGES: Badge[] = [

@@ -32,8 +32,8 @@ export function MentionsLegales() {
       </p>
       <ul>
         <li>
-          <strong>Directrice de la publication :</strong> Dreyna, fondatrice du
-          Royaume
+          <strong>Direction de la publication :</strong> fondation Vaelyndra
+          (équipe éditoriale anonyme)
         </li>
         <li>
           <strong>Nature de la publication :</strong> site personnel de fan,

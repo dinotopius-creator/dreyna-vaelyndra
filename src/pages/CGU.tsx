@@ -65,8 +65,8 @@ export function CGU() {
         </li>
         <li>le spam, la publicité non sollicitée, les arnaques, le phishing ;</li>
         <li>
-          l'usurpation d'identité (notamment de Dreyna, de l'équipe ou d'un
-          autre membre) ;
+          l'usurpation d'identité (administrateurs, animateurs ou autres
+          membres) ;
         </li>
         <li>la diffusion de contenus protégés par le droit d'auteur sans autorisation ;</li>
         <li>
@@ -79,28 +79,19 @@ export function CGU() {
         </li>
       </ul>
 
-      <h2>4. Lives de Dreyna et lives des membres</h2>
+      <h2>4. Lives des membres</h2>
       <p>
-        Le Royaume propose deux types de lives :
+        Le Royaume permet à chaque membre connecté de diffuser son propre
+        live sur son profil (partage d'écran WebRTC direct ou intégration
+        Twitch via OBS / mobile). L'équipe de modération se réserve le droit
+        d'accorder, de suspendre ou de retirer l'accès à cette fonctionnalité
+        à tout moment en cas de non-respect des présentes règles.
       </p>
-      <ol>
-        <li>
-          <strong>Les lives de Dreyna</strong> : partage d'écran WebRTC direct
-          ou diffusion Twitch via OBS.
-        </li>
-        <li>
-          <strong>Les lives de membres</strong> (progressivement activés) :
-          les membres de confiance peuvent diffuser leurs propres lives sur
-          leur profil, dans le respect des présentes règles. Dreyna se réserve
-          le droit d'accorder, de suspendre ou de retirer l'accès à cette
-          fonctionnalité à tout moment.
-        </li>
-      </ol>
       <p>
         <strong>Mise en avant éditoriale.</strong> Les membres les plus actifs
-        peuvent être épinglés en « Top live » par Dreyna à sa seule discrétion.
-        Cette mise en avant ne confère aucun droit acquis ni aucune garantie de
-        durée.
+        peuvent être épinglés en « Top live » par l'équipe éditoriale à sa
+        seule discrétion. Cette mise en avant ne confère aucun droit acquis
+        ni aucune garantie de durée.
       </p>
 
       <h2>5. Monnaie virtuelle « Sylvins de Vaelyndra »</h2>
@@ -123,8 +114,8 @@ export function CGU() {
 
       <h2>6. Modération, sanctions et bannissement</h2>
       <p>
-        Dreyna et son équipe peuvent, à leur seule appréciation et sans délai,
-        modérer, masquer ou supprimer tout contenu contrevenant aux présentes
+        L'équipe de modération de Vaelyndra peut, à sa seule appréciation et
+        sans délai, modérer, masquer ou supprimer tout contenu contrevenant aux présentes
         CGU, suspendre ou résilier un compte, couper un live, retirer la
         possibilité de diffuser, ou bannir définitivement un membre. Les
         Sylvins non consommés sont perdus en cas de bannissement pour faute

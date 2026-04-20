@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { Link, useParams, Navigate } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Crown, Banknote, Coins, ArrowLeft } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
@@ -61,11 +61,6 @@ export function UserProfile() {
         /* silencieux — on garde l'état précédent */
       });
   }, [userId]);
-
-  if (profile && profile.role === "queen") {
-    // La reine a sa propre page dédiée — on redirige pour éviter un doublon.
-    return <Navigate to="/dreyna" replace />;
-  }
 
   if (!profile) {
     return (

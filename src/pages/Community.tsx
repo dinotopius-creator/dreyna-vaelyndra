@@ -20,7 +20,6 @@ import { ReportButton } from "../components/ReportButton";
 import { UserBadges } from "../components/UserBadges";
 import { StreamerLeaderboard } from "../components/StreamerLeaderboard";
 import { BFFModule } from "../components/BFFModule";
-import { DREYNA_PROFILE } from "../data/mock";
 import {
   LIVE_CATEGORIES,
   getLiveCategory,
@@ -163,7 +162,7 @@ export function Community() {
   }
 
   function profileHref(authorId: string) {
-    return authorId === DREYNA_PROFILE.id ? "/dreyna" : `/u/${authorId}`;
+    return `/u/${authorId}`;
   }
 
   return (
@@ -171,7 +170,7 @@ export function Community() {
       <SectionHeading
         eyebrow="La Cour"
         title={<>Le <span className="text-mystic">fil</span> de Vaelyndra</>}
-        subtitle="Partagez vos serments, créations et pensées. La reine passe ici chaque jour."
+        subtitle="Partagez vos serments, créations et pensées. Toutes les âmes du royaume se croisent ici."
       />
 
       {allLives.length > 0 && (

@@ -135,6 +135,7 @@ def _seed_official_accounts() -> None:
                 # veut pas écraser la photo de Dreyna par ex.).
                 if not existing.avatar_image_url and account["avatar_image_url"]:
                     existing.avatar_image_url = account["avatar_image_url"]
+
         session.commit()
 
 
