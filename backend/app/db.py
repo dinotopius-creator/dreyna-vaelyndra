@@ -33,6 +33,8 @@ engine = create_engine(
 def init_db() -> None:
     # Import déclare les modèles auprès de SQLModel.metadata avant create_all.
     from . import models  # noqa: F401
+    # Idem pour les tables d'authentification (PR "Mon compte").
+    from .auth import models as auth_models  # noqa: F401
 
     SQLModel.metadata.create_all(engine)
     _apply_migrations()

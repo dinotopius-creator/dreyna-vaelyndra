@@ -3,18 +3,38 @@ from __future__ import annotations
 
 import os
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from slowapi.errors import RateLimitExceeded
 from sqlmodel import select
 
+from .auth.rate_limit import limiter
+from .auth.routes import router as auth_router
 from .db import get_session, init_db
 from .models import UserProfile
 from .routers import posts, streamers, users
 
 app = FastAPI(title="Vaelyndra API", version="0.1.0")
 
+# Rate limiter (slowapi) — partagé entre tous les routeurs sensibles.
+app.state.limiter = limiter
 
-# En prod on restreindra aux domaines deployés ; en dev on ouvre tout.
+
+@app.exception_handler(RateLimitExceeded)
+async def _rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+    return JSONResponse(
+        status_code=429,
+        content={
+            "detail": "Trop de tentatives. Réessaie dans quelques minutes.",
+        },
+    )
+
+
+# CORS : on autorise Vaelyndra (prod + www), les previews Vercel scopées au
+# projet `dreyna-vaelyndra*` et l'ancien domaine devinapps le temps de la
+# transition. allow_credentials=True est **obligatoire** pour que le cookie
+# de session HttpOnly traverse depuis `www.vaelyndra.com` → `api.vaelyndra.com`.
 _cors_origins = os.environ.get(
     "VAELYNDRA_CORS_ORIGINS",
     "http://localhost:5173,http://localhost:4173,https://dist-tsbfgcct.devinapps.com",
@@ -23,7 +43,11 @@ _cors_origins = os.environ.get(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[o.strip() for o in _cors_origins if o.strip()],
-    allow_credentials=False,
+    # Autorise toutes les previews Vercel du projet (dreyna-vaelyndra* et
+    # dreyna-vaelyndra-<hash>.vercel.app). Regex scopée au projet pour ne
+    # pas laisser passer un site attaquant type "dreyna-vaelyndrafaux".
+    allow_origin_regex=r"https://dreyna-vaelyndra(-[a-z0-9-]+)?\.vercel\.app",
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -42,6 +66,10 @@ OFFICIAL_ACCOUNTS: list[dict[str, str]] = [
         # écraser sa photo ZEPETO si elle est déjà configurée.
         "avatar_image_url": "",
         "creature_id": "elfe",
+        # Credentials seed pour login immédiat (PR "Mon compte").
+        # À changer au premier login via /auth/change-password.
+        "email": "dreyna@vaelyndra.realm",
+        "password": "reineelfes2024",
     },
     {
         "id": "user-kamestars",
@@ -49,6 +77,8 @@ OFFICIAL_ACCOUNTS: list[dict[str, str]] = [
         "role": "animator",
         "avatar_image_url": "https://api.dicebear.com/7.x/lorelei/svg?seed=Kamestars",
         "creature_id": "fee",
+        "email": "kamestars@vaelyndra.realm",
+        "password": "kamestars2024",
     },
     {
         "id": "user-roi-des-zems",
@@ -56,6 +86,8 @@ OFFICIAL_ACCOUNTS: list[dict[str, str]] = [
         "role": "admin",
         "avatar_image_url": "https://api.dicebear.com/7.x/personas/svg?seed=RoiDesZems",
         "creature_id": "dragon",
+        "email": "roi@vaelyndra.realm",
+        "password": "zemsdiamant",
     },
 ]
 
@@ -106,10 +138,49 @@ def _seed_official_accounts() -> None:
         session.commit()
 
 
+def _seed_official_credentials() -> None:
+    """Crée les identifiants pour les comptes officiels (PR "Mon compte").
+
+    Idempotent :
+    - Si aucun Credential pour ce user_id → crée avec mot de passe seed
+      + email pré-vérifié (ces comptes n'ont pas besoin de l'étape email).
+    - Si Credential existe déjà → on ne touche à rien (pas de reset forcé,
+      le mot de passe éventuellement changé par l'utilisateur est respecté).
+    """
+    from .auth.crypto import hash_password
+    from .auth.models import Credential
+
+    with get_session() as session:
+        for account in OFFICIAL_ACCOUNTS:
+            email = account.get("email")
+            password = account.get("password")
+            if not email or not password:
+                continue
+            existing = session.get(Credential, account["id"])
+            if existing is not None:
+                continue
+            session.add(
+                Credential(
+                    user_id=account["id"],
+                    email=email.lower(),
+                    password_hash=hash_password(password),
+                    # Email pré-vérifié : ces comptes sont officiels et
+                    # pré-configurés par l'équipe Vaelyndra.
+                    email_verified_at=__import__(
+                        "datetime"
+                    ).datetime.now(
+                        __import__("datetime").timezone.utc
+                    ).isoformat(),
+                )
+            )
+        session.commit()
+
+
 @app.on_event("startup")
 def _startup() -> None:
     init_db()
     _seed_official_accounts()
+    _seed_official_credentials()
 
 
 @app.get("/healthz")
@@ -121,3 +192,4 @@ app.include_router(posts.router)
 app.include_router(users.router)
 app.include_router(users.creatures_router)
 app.include_router(streamers.router)
+app.include_router(auth_router)
