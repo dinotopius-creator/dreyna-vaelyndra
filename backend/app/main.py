@@ -15,13 +15,22 @@ app = FastAPI(title="Vaelyndra API", version="0.1.0")
 
 
 # En prod on restreindra aux domaines deployés ; en dev on ouvre tout.
-_cors_origins = os.environ.get(
-    "VAELYNDRA_CORS_ORIGINS",
-    "http://localhost:5173,http://localhost:4173,https://dist-tsbfgcct.devinapps.com",
-).split(",")
+# La liste par défaut inclut le domaine de prod (vaelyndra.com + www) et
+# les URLs Vercel de preview (tous les déploiements auto vercel.app).
+_default_cors = ",".join([
+    "http://localhost:5173",
+    "http://localhost:4173",
+    "https://dist-tsbfgcct.devinapps.com",
+    "https://vaelyndra.com",
+    "https://www.vaelyndra.com",
+])
+_cors_origins = os.environ.get("VAELYNDRA_CORS_ORIGINS", _default_cors).split(",")
 
 app.add_middleware(
     CORSMiddleware,
+    # Regex permet d'autoriser toutes les previews Vercel du projet sans
+    # avoir à les lister une par une (ex. dreyna-vaelyndra-xxx.vercel.app).
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_origins=[o.strip() for o in _cors_origins if o.strip()],
     allow_credentials=False,
     allow_methods=["*"],
