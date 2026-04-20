@@ -24,7 +24,6 @@ from pydantic import BaseModel, Field, field_validator
 from sqlmodel import Session, select
 
 from ..auth.dependencies import require_auth
-from ..auth.models import Credential
 from ..db import get_session
 from ..models import LiveSession, UserProfile
 
@@ -98,7 +97,7 @@ def _to_out(entry: LiveSession) -> LiveSessionOut:
 @router.post("/heartbeat", response_model=LiveSessionOut)
 def heartbeat(
     payload: LiveHeartbeatIn,
-    credential: Credential = Depends(require_auth),
+    user: UserProfile = Depends(require_auth),
 ) -> LiveSessionOut:
     """Upsert le live du user connecté et met à jour son heartbeat.
 
@@ -108,16 +107,20 @@ def heartbeat(
     """
     now = datetime.now(timezone.utc).isoformat()
     with get_session() as session:
-        profile = session.get(UserProfile, credential.user_id)
+        # On recharge le profil depuis la session DB courante pour que les
+        # `session.add(existing)` qui référencent `profile` restent liés à
+        # la même session (le UserProfile retourné par `require_auth` vit
+        # dans une session fermée).
+        profile = session.get(UserProfile, user.id)
         if profile is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail={"message": "profile_missing"},
             )
-        existing = session.get(LiveSession, credential.user_id)
+        existing = session.get(LiveSession, user.id)
         if existing is None:
             existing = LiveSession(
-                broadcaster_id=credential.user_id,
+                broadcaster_id=user.id,
                 broadcaster_name=profile.username,
                 broadcaster_avatar=profile.avatar_image_url,
                 title=payload.title.strip(),
@@ -146,10 +149,10 @@ def heartbeat(
 
 
 @router.delete("/stop", status_code=status.HTTP_204_NO_CONTENT)
-def stop_live(credential: Credential = Depends(require_auth)) -> Response:
+def stop_live(user: UserProfile = Depends(require_auth)) -> Response:
     """Supprime le live du user connecté (arrêt volontaire du stream)."""
     with get_session() as session:
-        existing = session.get(LiveSession, credential.user_id)
+        existing = session.get(LiveSession, user.id)
         if existing is not None:
             session.delete(existing)
             session.commit()
