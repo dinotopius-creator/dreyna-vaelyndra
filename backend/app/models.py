@@ -115,6 +115,13 @@ class UserProfile(SQLModel, table=True):
     # sans droits admin, juste un badge), "admin" (droits complets).
     # Source de vérité unique pour les badges 🎭 et 👑.
     role: str = Field(default="user", index=True)
+    # PR M — système de grades spirituels. `streamer_xp` accumule l'XP gagné
+    # par les activités du membre (cadeaux reçus, abonnés, posts…). Le grade
+    # affiché est dérivé de cet XP à la lecture (cf. `app.grades`). Un admin
+    # peut forcer un grade via `streamer_grade_override` (slug, ex.
+    # "legende-vaelyndra") — utile pour les comptes officiels / events.
+    streamer_xp: int = Field(default=0, index=True)
+    streamer_grade_override: Optional[str] = Field(default=None, max_length=32)
     created_at: str = Field(default_factory=_now_iso)
     updated_at: str = Field(default_factory=_now_iso)
 

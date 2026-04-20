@@ -170,8 +170,29 @@ export interface UserProfileDto {
   role: string;
   followersCount: number;
   followingCount: number;
+  /**
+   * PR M — grade spirituel du membre, dérivé de `streamer_xp` côté backend.
+   * `null` possible en cas de réponse d'un backend pré-PR M ; le front doit
+   * donc rester résilient et ne rien afficher plutôt que de crasher.
+   */
+  grade: StreamerGradeDto | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Miroir du DTO `StreamerGradeOut` (backend) — cf. `src/data/grades.ts`. */
+export interface StreamerGradeDto {
+  slug: string;
+  name: string;
+  emoji: string;
+  motto: string;
+  theme: string;
+  color: string;
+  minXp: number;
+  xp: number;
+  progressXp: number;
+  nextXp: number | null;
+  override: boolean;
 }
 
 export interface FollowerDto {
@@ -454,6 +475,8 @@ export interface StreamerMiniDto {
   avatarImageUrl: string;
   creature: CreatureDto | null;
   role: string;
+  /** PR M — grade spirituel (null si backend pré-PR M). */
+  grade: StreamerGradeDto | null;
 }
 
 export interface StreamerLeaderboardEntryDto {
@@ -464,6 +487,8 @@ export interface StreamerLeaderboardEntryDto {
   totalSylvins: number;
   creature: CreatureDto | null;
   role: string;
+  /** PR M — grade affiché à côté du nom dans le classement. */
+  grade: StreamerGradeDto | null;
 }
 
 export interface StreamerLeaderboardDto {

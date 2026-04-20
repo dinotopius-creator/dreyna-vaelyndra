@@ -59,6 +59,9 @@ def _apply_migrations() -> None:
             ("role", "TEXT NOT NULL DEFAULT 'user'"),
             # PR G — wishlist (items souhaités, offrables par un autre user).
             ("wishlist_json", "TEXT NOT NULL DEFAULT '[]'"),
+            # PR M — grades spirituels pour streamers.
+            ("streamer_xp", "INTEGER NOT NULL DEFAULT 0"),
+            ("streamer_grade_override", "TEXT"),
         ],
     }
     with engine.begin() as conn:
