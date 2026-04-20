@@ -8,6 +8,20 @@ dependencies = [
     "uvicorn[standard]>=0.30.0",
     "sqlmodel>=0.0.22",
     "pydantic>=2.6",
+    "email-validator>=2.2",
+    # Auth (PR "Mon compte") :
+    # - argon2-cffi : hash mots de passe (argon2id, standard 2024)
+    # - pyjwt : cookies session signés
+    # - pyotp : 2FA TOTP
+    # - qrcode : génération du QR pour 2FA setup
+    # - slowapi : rate limiting sur /auth/login + /auth/register
+    # - resend : envoi email de vérification + reset password
+    "argon2-cffi>=23.1",
+    "pyjwt>=2.9",
+    "pyotp>=2.9",
+    "qrcode[pil]>=7.4",
+    "slowapi>=0.1.9",
+    "resend>=2.4",
 ]
 
 [build-system]
