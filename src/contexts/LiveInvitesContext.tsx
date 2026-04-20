@@ -147,16 +147,39 @@ const Ctx = createContext<InvitesCtx | null>(null);
 export function LiveInvitesProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<InvitesState>(() => readState());
 
-  // Miroir **synchrone** de `state`. Indispensable pour que deux appels
-  // rapides consécutifs (ex. double-clic sur "Accepter" de deux invités
-  // différents quand il ne reste qu'une place libre) voient l'effet du
-  // premier avant que React ne re-rende. Sans ce ref, les deux callbacks
-  // utiliseraient la même closure `state` et le deuxième `setState`
-  // no-opperait en silence tout en laissant le caller croire que l'accept
-  // a réussi — exactement le scénario pointé par Devin Review.
+  // Miroir **synchrone** de `state`. Indispensable pour que deux mutations
+  // consécutives (ex. un `revokeInvite` suivi d'un `acceptInvite` dans le
+  // même tick) voient chacune le résultat de la précédente. Tous les
+  // mutators passent par `commit()` qui met à jour le ref **avant** de
+  // notifier React — impossible alors qu'un `acceptInvite` lise un état
+  // pré-revoke et écrase la révocation en committant l'ancien état.
   const stateRef = useRef<InvitesState>(state);
+
+  /**
+   * Applique une transformation pure au dernier état connu (ref), met à
+   * jour le ref de façon synchrone puis pousse la valeur dans React.
+   * Si l'updater renvoie la même référence, on court-circuite `setState`
+   * pour éviter un render inutile.
+   */
+  const commit = useCallback(
+    (updater: (prev: InvitesState) => InvitesState): InvitesState => {
+      const prev = stateRef.current;
+      const next = updater(prev);
+      if (next === prev) return prev;
+      stateRef.current = next;
+      setState(next);
+      return next;
+    },
+    [],
+  );
+
   useEffect(() => {
-    stateRef.current = state;
+    // `state` peut diverger de `stateRef.current` uniquement dans le cas
+    // marginal où un `setState` externe serait intercepté par React
+    // (ex. StrictMode double-invoke du provider). On garde ce garde-fou.
+    if (stateRef.current !== state) {
+      stateRef.current = state;
+    }
     writeState(state);
   }, [state]);
 
@@ -189,7 +212,7 @@ export function LiveInvitesProvider({ children }: { children: ReactNode }) {
     (broadcasterId, viewer) => {
       if (!broadcasterId || !viewer.id) return;
       if (broadcasterId === viewer.id) return; // on ne s'invite pas soi-même
-      setState((prev) => {
+      commit((prev) => {
         const existing = prev[broadcasterId]?.[viewer.id];
         // Si on est déjà sur scène ou en attente, pas besoin de re-créer
         // une ligne (on veut que l'UI reste stable).
@@ -216,12 +239,12 @@ export function LiveInvitesProvider({ children }: { children: ReactNode }) {
         };
       });
     },
-    [],
+    [commit],
   );
 
   const cancelInvite = useCallback<InvitesCtx["cancelInvite"]>(
     (broadcasterId, userId) => {
-      setState((prev) => {
+      commit((prev) => {
         const reqs = prev[broadcasterId];
         if (!reqs || !reqs[userId]) return prev;
         const next = { ...reqs };
@@ -234,46 +257,59 @@ export function LiveInvitesProvider({ children }: { children: ReactNode }) {
         return { ...prev, [broadcasterId]: next };
       });
     },
-    [],
+    [commit],
   );
 
   const acceptInvite = useCallback<InvitesCtx["acceptInvite"]>(
     (broadcasterId, userId) => {
-      // On lit et on muter depuis `stateRef.current` — mis à jour de manière
-      // synchrone à chaque `setState` / `StorageEvent`. Deux clics rapides
-      // sur "Accepter" (ex. le même tick avant re-render) voient donc bien
-      // l'effet du premier avant de décider du second → plus de faux
-      // succès quand il ne reste qu'une place libre.
-      const prev = stateRef.current;
-      const reqs = prev[broadcasterId];
-      if (!reqs || !reqs[userId]) return false;
-      if (reqs[userId].status === "accepted") return true; // idempotent
-      const onStage = Object.values(reqs).filter(
+      // Pré-check sur `stateRef.current` pour pouvoir retourner un verdict
+      // synchrone au caller (annonce chat / toast). Le `commit()` réapplique
+      // la même logique sur le ref à jour — en pratique les deux voient la
+      // même valeur car `commit` est synchrone et tous les autres mutators
+      // passent également par `commit`, qui met à jour le ref avant setState.
+      const snapshot = stateRef.current;
+      const reqsSnap = snapshot[broadcasterId];
+      if (!reqsSnap || !reqsSnap[userId]) return false;
+      if (reqsSnap[userId].status === "accepted") return true; // idempotent
+      const onStageSnap = Object.values(reqsSnap).filter(
         (r) => r.status === "accepted",
       ).length;
-      if (onStage >= MAX_GUESTS) return false;
-      const next: InvitesState = {
-        ...prev,
-        [broadcasterId]: {
-          ...reqs,
-          [userId]: {
-            ...reqs[userId],
-            status: "accepted",
-            acceptedAt: new Date().toISOString(),
-            refusedAt: undefined,
+      if (onStageSnap >= MAX_GUESTS) return false;
+
+      let committed = false;
+      commit((prev) => {
+        const reqs = prev[broadcasterId];
+        if (!reqs || !reqs[userId]) return prev;
+        if (reqs[userId].status === "accepted") {
+          committed = true;
+          return prev;
+        }
+        const onStage = Object.values(reqs).filter(
+          (r) => r.status === "accepted",
+        ).length;
+        if (onStage >= MAX_GUESTS) return prev;
+        committed = true;
+        return {
+          ...prev,
+          [broadcasterId]: {
+            ...reqs,
+            [userId]: {
+              ...reqs[userId],
+              status: "accepted",
+              acceptedAt: new Date().toISOString(),
+              refusedAt: undefined,
+            },
           },
-        },
-      };
-      stateRef.current = next;
-      setState(next);
-      return true;
+        };
+      });
+      return committed;
     },
-    [],
+    [commit],
   );
 
   const refuseInvite = useCallback<InvitesCtx["refuseInvite"]>(
     (broadcasterId, userId) => {
-      setState((prev) => {
+      commit((prev) => {
         const reqs = prev[broadcasterId];
         if (!reqs || !reqs[userId]) return prev;
         return {
@@ -290,12 +326,12 @@ export function LiveInvitesProvider({ children }: { children: ReactNode }) {
         };
       });
     },
-    [],
+    [commit],
   );
 
   const revokeInvite = useCallback<InvitesCtx["revokeInvite"]>(
     (broadcasterId, userId) => {
-      setState((prev) => {
+      commit((prev) => {
         const reqs = prev[broadcasterId];
         if (!reqs || !reqs[userId]) return prev;
         const next = { ...reqs };
@@ -308,19 +344,19 @@ export function LiveInvitesProvider({ children }: { children: ReactNode }) {
         return { ...prev, [broadcasterId]: next };
       });
     },
-    [],
+    [commit],
   );
 
   const resetBroadcast = useCallback<InvitesCtx["resetBroadcast"]>(
     (broadcasterId) => {
-      setState((prev) => {
+      commit((prev) => {
         if (!prev[broadcasterId]) return prev;
         const copy = { ...prev };
         delete copy[broadcasterId];
         return copy;
       });
     },
-    [],
+    [commit],
   );
 
   const value = useMemo<InvitesCtx>(
