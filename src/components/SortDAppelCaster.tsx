@@ -109,7 +109,15 @@ export function SortDAppelCaster({ onCast, disabled }: Props) {
     if (disabled || locked) return;
     const accepted = onCast(nextTier.level);
     if (accepted === false) return;
-    setCooldownUntil(Date.now() + nextTier.cooldownMs);
+    // Rafraîchir `now` en même temps que `cooldownUntil` pour éviter
+    // qu'un ancien tick (gelé depuis le dernier cooldown terminé) ne
+    // calcule un `remaining` aberrant sur le premier render qui suit
+    // le clic. Sans ça, un clic effectué longtemps après la fin du
+    // dernier cooldown affiche brièvement un décompte faux (ex : 314 s
+    // au lieu de 10 s) le temps que le `setInterval` reprenne.
+    const t = Date.now();
+    setNow(t);
+    setCooldownUntil(t + nextTier.cooldownMs);
     setNextIndex((i) => (i + 1) % SORT_LEVELS.length);
   }
 
