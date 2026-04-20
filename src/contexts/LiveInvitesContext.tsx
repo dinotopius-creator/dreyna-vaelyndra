@@ -549,11 +549,16 @@ export function LiveInvitesProvider({ children }: { children: ReactNode }) {
           if (
             pending &&
             r.status !== pending.expected &&
-            nowTs - pending.ts <= OPTIMISTIC_TTL_MS &&
-            existing
+            nowTs - pending.ts <= OPTIMISTIC_TTL_MS
           ) {
-            // On garde l'entrée locale (décision optimiste) telle quelle.
-            next[r.user_id] = existing;
+            // On garde l'entrée locale (décision optimiste) telle quelle,
+            // OU on ignore carrément la ligne serveur si l'entrée a été
+            // supprimée localement (cas `revokeInvite` qui `delete` au
+            // lieu de passer en refused). Sans ce `continue` dans la
+            // branche !existing, la stale row `accepted` du serveur
+            // ré-apparaîtrait pendant 5-10 s avant que le PATCH refused
+            // ne soit visible côté poll.
+            if (existing) next[r.user_id] = existing;
             continue;
           }
           // Le serveur a rattrapé (ou TTL expiré) : on peut clear le verrou.
