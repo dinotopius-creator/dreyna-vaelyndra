@@ -712,8 +712,10 @@ export function Live() {
     }
     const tier = SORT_LEVELS.find((s) => s.level === level);
     if (!tier) return false;
-    const romanSuffix = level === 1 ? "I" : level === 2 ? "II" : "III";
-    const glyph = level === 3 ? "🌟" : level === 2 ? "✨" : "🔥";
+    const romanSuffix =
+      level === 1 ? "I" : level === 2 ? "II" : level === 3 ? "III" : "IV";
+    const glyph =
+      level === 4 ? "👑" : level === 3 ? "🌟" : level === 2 ? "✨" : "🔥";
     notify(
       `${glyph} Sort ${romanSuffix} lancé sur ${broadcasterProfile?.username ?? "la cour"}`,
       "info",
