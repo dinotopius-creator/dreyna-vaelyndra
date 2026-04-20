@@ -8,6 +8,7 @@ import { SectionHeading } from "../components/SectionHeading";
 import { AvatarViewer } from "../components/AvatarViewer";
 import { UserBadges } from "../components/UserBadges";
 import { FollowButton } from "../components/FollowButton";
+import SoulBondsModal from "../components/SoulBondsModal";
 import { WishlistSection } from "../components/WishlistSection";
 import { formatDate, formatRelative } from "../lib/helpers";
 import { formatSylvins } from "../lib/sylvins";
@@ -24,6 +25,9 @@ export function UserProfile() {
   );
 
   const [serverProfile, setServerProfile] = useState<UserProfileDto | null>(
+    null,
+  );
+  const [bondsTab, setBondsTab] = useState<"followers" | "following" | null>(
     null,
   );
   useEffect(() => {
@@ -87,6 +91,13 @@ export function UserProfile() {
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-14">
+      <SoulBondsModal
+        userId={profile.id}
+        username={profile.username}
+        open={bondsTab !== null}
+        initialTab={bondsTab ?? "followers"}
+        onClose={() => setBondsTab(null)}
+      />
       <motion.header
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
@@ -131,18 +142,26 @@ export function UserProfile() {
               Entré·e à la cour le {formatDate(profile.joinedAt)}
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-ivory/70">
-              <span>
+              <button
+                type="button"
+                onClick={() => setBondsTab("followers")}
+                className="rounded-full transition hover:text-gold-100"
+              >
                 <strong className="font-display text-gold-200">
                   {serverProfile?.followersCount ?? 0}
                 </strong>{" "}
-                abonné·e·s
-              </span>
-              <span>
+                âmes liées
+              </button>
+              <button
+                type="button"
+                onClick={() => setBondsTab("following")}
+                className="rounded-full transition hover:text-gold-100"
+              >
                 <strong className="font-display text-gold-200">
                   {serverProfile?.followingCount ?? 0}
                 </strong>{" "}
-                abonnements
-              </span>
+                liens tissés
+              </button>
             </div>
           </div>
           <div className="flex flex-col items-end gap-2">

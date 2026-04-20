@@ -75,21 +75,21 @@ export function FollowButton({
         await unfollow(targetId);
         notify(
           targetUsername
-            ? `Tu ne suis plus ${targetUsername}.`
-            : "Abonnement retiré.",
+            ? `Lien d'âme rompu avec ${targetUsername}.`
+            : "Lien d'âme rompu.",
         );
       } else {
         await follow(targetId);
         notify(
           targetUsername
-            ? `Tu suis maintenant ${targetUsername} ✨`
-            : "Abonnement scellé ✨",
+            ? `Lien d'âme tissé avec ${targetUsername} ✨`
+            : "Lien d'âme tissé ✨",
         );
       }
       onChange?.(!previous);
     } catch {
       setIsFollowing(previous);
-      notify("Le sortilège d'abonnement a échoué.");
+      notify("Le lien d'âme n'a pas pu être tissé.");
     } finally {
       setPending(false);
     }
@@ -113,7 +113,7 @@ export function FollowButton({
         ) : (
           <UserMinus className="h-3.5 w-3.5" />
         )}
-        Abonné·e
+        Lien scellé
       </button>
     );
   }
@@ -129,7 +129,7 @@ export function FollowButton({
       ) : (
         <UserPlus className="h-3.5 w-3.5" />
       )}
-      Suivre
+      Sceller un lien
     </button>
   );
 }
