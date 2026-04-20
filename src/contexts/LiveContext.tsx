@@ -1030,8 +1030,18 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             if (me && s.broadcaster_id === me.id) continue;
             next[s.broadcaster_id] = remoteToRegistry(s);
           }
-          // 2. Ma propre entrée conservée (si je suis en live sur ce tab).
-          if (me && prev[me.id]) {
+          // 2. Ma propre entrée conservée uniquement si je suis EFFECTIVEMENT
+          //    en live sur CE tab. Sans cette garde, un rafraîchissement
+          //    de la page broadcaster laissait son ancienne entrée
+          //    persister dans le registre local (status=idle au mount →
+          //    plus de heartbeat → plus de refresh serveur → le serveur
+          //    la purge à 90 s, mais ce bloc la ré-injectait à chaque
+          //    poll depuis `prev`, la figeant pour toujours côté tab).
+          if (
+            me &&
+            prev[me.id] &&
+            configRef.current.status === "live"
+          ) {
             next[me.id] = prev[me.id];
           }
           writeRegistry(next);
