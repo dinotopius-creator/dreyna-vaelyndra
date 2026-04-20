@@ -17,6 +17,7 @@ import {
   type JoinRequestOut,
 } from "../lib/liveApi";
 import { useAuth } from "./AuthContext";
+import { useLive } from "./LiveContext";
 import { useToast } from "./ToastContext";
 
 /**
@@ -163,7 +164,12 @@ const Ctx = createContext<InvitesCtx | null>(null);
 export function LiveInvitesProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<InvitesState>(() => readState());
   const { user } = useAuth();
+  const { liveRegistry } = useLive();
   const { notify } = useToast();
+  // Broadcaster actif = l'utilisateur courant a une entrée dans le registre
+  // des lives en cours. Sans ça, chaque user connecté pollerait inutilement
+  // /live/join-requests toutes les 5 s (charge serveur × N users × 12/min).
+  const isActivelyBroadcasting = !!(user && liveRegistry[user.id]);
   const userRef = useRef(user);
   useEffect(() => {
     userRef.current = user;
@@ -475,7 +481,14 @@ export function LiveInvitesProvider({ children }: { children: ReactNode }) {
       const prevSnap = stateRef.current[broadcasterId] || {};
       const newPending: JoinRequestOut[] = [];
       for (const r of rows) {
-        if (r.status !== "pending") continue;
+        if (r.status !== "pending") {
+          // On purge l'ID dès qu'il quitte l'état pending : si le viewer
+          // refusé re-demande dans la grace window, le backend réutilise
+          // la même ligne (même `id`). Sans ce delete, le broadcaster
+          // ne verrait plus jamais le toast pour les re-demandes.
+          knownPendingIdsRef.current.delete(r.id);
+          continue;
+        }
         if (!knownPendingIdsRef.current.has(r.id)) {
           newPending.push(r);
           knownPendingIdsRef.current.add(r.id);
@@ -541,10 +554,11 @@ export function LiveInvitesProvider({ children }: { children: ReactNode }) {
     [commit, notify],
   );
 
-  // Polling broadcaster : à chaque fois que le user change ou toutes les 5 s,
-  // on rapatrie la liste.
+  // Polling broadcaster : uniquement quand l'utilisateur est EFFECTIVEMENT
+  // en train de streamer (entrée dans le liveRegistry). Sinon on économise
+  // ~12 requêtes / minute / user connecté (la plupart ne streament pas).
   useEffect(() => {
-    if (!user) return;
+    if (!user || !isActivelyBroadcasting) return;
     let cancelled = false;
     const broadcasterId = user.id;
     const poll = async () => {
@@ -564,7 +578,7 @@ export function LiveInvitesProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       clearInterval(id);
     };
-  }, [user, mergeRemoteForBroadcaster]);
+  }, [user, isActivelyBroadcasting, mergeRemoteForBroadcaster]);
 
   // Polling viewer : pour chaque broadcaster auprès duquel CE user a
   // actuellement une demande en attente (ou acceptée récemment), on
