@@ -392,9 +392,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
       })();
 
+      // On scope strictement la migration aux produits seed qui portaient
+      // réellement une référence ZEPETO (actuellement uniquement `prod-pack` :
+      // "Pack ZEPETO · Elennor" → "Pack Avatar · Elennor"). Les autres mock
+      // products (prod-crown, prod-vip, prod-sylvins-*, etc.) n'ont pas besoin
+      // de patch — si un admin les avait customisés via `updateProduct`, les
+      // écraser ici reviendrait à annuler silencieusement sa modification.
+      // Pour les prochains rebrands, ajouter l'id dans ce tableau.
+      const MIGRATION_PRODUCT_IDS = new Set(["prod-pack"]);
+
       const mergedProducts = [
         ...storedProducts.map((stored) => {
           if (!runMigration) return stored;
+          if (!MIGRATION_PRODUCT_IDS.has(stored.id)) return stored;
           const mock = init.products.find((m) => m.id === stored.id);
           return mock
             ? {
