@@ -229,8 +229,10 @@ def list_users(
             if needle in (u.username or "").lower() or needle in email.lower():
                 filtered.append(u)
         rows = filtered
-    # Tri : bannis en premier (visibilité modération), puis par date de création desc.
-    rows.sort(key=lambda u: (u.banned_at is None, -len(u.created_at or ""), u.created_at or ""))
+    # Tri stable en deux passes : d'abord date desc (nouveaux users en haut
+    # pour la visibilité modération), puis bannis en premier.
+    rows.sort(key=lambda u: u.created_at or "", reverse=True)
+    rows.sort(key=lambda u: u.banned_at is None)
     return [_admin_user_out(session, u) for u in rows[:limit]]
 
 
