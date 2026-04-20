@@ -26,7 +26,7 @@ from sqlmodel import Session, select
 
 from ..auth.dependencies import require_auth
 from ..db import get_session
-from ..models import LiveModeration, LiveSession, UserProfile
+from ..models import LiveJoinRequest, LiveModeration, LiveSession, UserProfile
 
 
 router = APIRouter(prefix="/live", tags=["live"])
@@ -341,6 +341,237 @@ def my_moderation_state(
     """
     with get_session() as session:
         return _state_for(session, broadcaster_id=broadcaster_id, target_id=user.id)
+
+
+# ---------------------------------------------------------------------------
+# Demandes de montée sur scène (PR #55)
+# ---------------------------------------------------------------------------
+# Notification temps réel (via polling) : un viewer POSTe `/live/{id}/join`
+# pour demander à monter sur scène. Le broadcaster polle `/live/join-requests`
+# toutes les 5 s pour voir les demandes en attente sur SON live, et peut
+# `PATCH` chaque demande pour l'accepter ou la refuser. Le viewer polle de
+# son côté `GET /live/{id}/join/me` pour voir si sa demande a été acceptée.
+#
+# Pourquoi un nouveau canal plutôt que le localStorage du PR H ?
+# → localStorage ne synchronise qu'intra-browser. Pour qu'un viewer sur
+#   mobile puisse demander, et que le broadcaster sur PC reçoive en
+#   temps réel (toast + badge), il faut une source serveur.
+
+
+JOIN_STATUS_PENDING = "pending"
+JOIN_STATUS_ACCEPTED = "accepted"
+JOIN_STATUS_REFUSED = "refused"
+_VALID_JOIN_STATUS = {JOIN_STATUS_PENDING, JOIN_STATUS_ACCEPTED, JOIN_STATUS_REFUSED}
+
+# Purge côté lecture : on ignore (et on supprime) les demandes refusées
+# depuis plus de X minutes pour ne pas accumuler d'historique.
+JOIN_REFUSED_GRACE_SECONDS = 60 * 3
+
+
+class JoinRequestOut(BaseModel):
+    """Représentation d'une demande de montée sur scène."""
+
+    id: int
+    broadcaster_id: str
+    user_id: str
+    username: str
+    avatar: str
+    creature_id: str = ""
+    status: str
+    requested_at: str
+    decided_at: Optional[str] = None
+
+
+class JoinDecisionIn(BaseModel):
+    status: str = Field(min_length=1, max_length=16)
+
+    @field_validator("status")
+    @classmethod
+    def _status_known(cls, v: str) -> str:
+        if v not in {JOIN_STATUS_ACCEPTED, JOIN_STATUS_REFUSED}:
+            raise ValueError("status must be accepted or refused")
+        return v
+
+
+def _to_join_out(row: LiveJoinRequest) -> JoinRequestOut:
+    return JoinRequestOut(
+        id=row.id or 0,
+        broadcaster_id=row.broadcaster_id,
+        user_id=row.user_id,
+        username=row.username,
+        avatar=row.avatar,
+        creature_id=row.creature_id,
+        status=row.status,
+        requested_at=row.requested_at,
+        decided_at=row.decided_at,
+    )
+
+
+def _purge_stale_refused(session: Session, broadcaster_id: str) -> None:
+    """Supprime les demandes refusées vieilles (grace window dépassée)."""
+    rows = session.exec(
+        select(LiveJoinRequest)
+        .where(LiveJoinRequest.broadcaster_id == broadcaster_id)
+        .where(LiveJoinRequest.status == JOIN_STATUS_REFUSED)
+    ).all()
+    now = datetime.now(timezone.utc)
+    for r in rows:
+        if not r.decided_at:
+            continue
+        try:
+            decided = datetime.fromisoformat(r.decided_at)
+        except ValueError:
+            continue
+        if decided.tzinfo is None:
+            decided = decided.replace(tzinfo=timezone.utc)
+        if (now - decided).total_seconds() > JOIN_REFUSED_GRACE_SECONDS:
+            session.delete(r)
+
+
+@router.post("/{broadcaster_id}/join", response_model=JoinRequestOut)
+def request_join(
+    broadcaster_id: str,
+    user: UserProfile = Depends(require_auth),
+) -> JoinRequestOut:
+    """Viewer : demande à monter sur scène du live d'un broadcaster.
+
+    Idempotent : si une demande existe déjà pour ce couple
+    (broadcaster, user), on remet son statut à `pending` et on
+    rafraîchit `requested_at` (utile si le viewer avait été refusé et
+    veut réessayer après la grace window).
+    """
+    if user.id == broadcaster_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"message": "cannot_request_own_live"},
+        )
+    with get_session() as session:
+        # Le live doit être actif pour recevoir des demandes.
+        live = session.get(LiveSession, broadcaster_id)
+        if live is None or not _is_fresh(live.last_heartbeat_at):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"message": "live_not_found"},
+            )
+        now = datetime.now(timezone.utc).isoformat()
+        existing = session.exec(
+            select(LiveJoinRequest)
+            .where(LiveJoinRequest.broadcaster_id == broadcaster_id)
+            .where(LiveJoinRequest.user_id == user.id)
+        ).first()
+        if existing is None:
+            row = LiveJoinRequest(
+                broadcaster_id=broadcaster_id,
+                user_id=user.id,
+                username=user.username,
+                avatar=user.avatar_image_url,
+                creature_id=getattr(user, "creature_id", "") or "",
+                status=JOIN_STATUS_PENDING,
+                requested_at=now,
+            )
+            session.add(row)
+        else:
+            existing.username = user.username
+            existing.avatar = user.avatar_image_url
+            existing.creature_id = getattr(user, "creature_id", "") or ""
+            existing.status = JOIN_STATUS_PENDING
+            existing.requested_at = now
+            existing.decided_at = None
+            row = existing
+            session.add(row)
+        session.commit()
+        session.refresh(row)
+        return _to_join_out(row)
+
+
+@router.delete(
+    "/{broadcaster_id}/join", status_code=status.HTTP_204_NO_CONTENT
+)
+def cancel_own_join_request(
+    broadcaster_id: str,
+    user: UserProfile = Depends(require_auth),
+) -> Response:
+    """Viewer : annule sa propre demande en attente."""
+    with get_session() as session:
+        existing = session.exec(
+            select(LiveJoinRequest)
+            .where(LiveJoinRequest.broadcaster_id == broadcaster_id)
+            .where(LiveJoinRequest.user_id == user.id)
+        ).first()
+        if existing is not None:
+            session.delete(existing)
+            session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/join-requests", response_model=list[JoinRequestOut])
+def list_join_requests(
+    user: UserProfile = Depends(require_auth),
+) -> list[JoinRequestOut]:
+    """Broadcaster : liste les demandes sur SON live (polled ~5s).
+
+    Inclut pending + accepted + refused récents. Le frontend filtre /
+    groupe selon l'affichage. La fraîcheur du live n'est PAS checkée
+    ici pour que le broadcaster voie ses demandes juste après avoir
+    relancé le live (et avant que le heartbeat remonte).
+    """
+    with get_session() as session:
+        _purge_stale_refused(session, broadcaster_id=user.id)
+        session.commit()
+        rows = session.exec(
+            select(LiveJoinRequest)
+            .where(LiveJoinRequest.broadcaster_id == user.id)
+            .order_by(LiveJoinRequest.requested_at.desc())
+        ).all()
+        return [_to_join_out(r) for r in rows]
+
+
+@router.get("/{broadcaster_id}/join/me", response_model=Optional[JoinRequestOut])
+def my_join_request(
+    broadcaster_id: str,
+    user: UserProfile = Depends(require_auth),
+) -> Optional[JoinRequestOut]:
+    """Viewer : polle sa propre demande pour voir si elle a été
+    acceptée / refusée. Renvoie `null` si pas de demande active."""
+    with get_session() as session:
+        row = session.exec(
+            select(LiveJoinRequest)
+            .where(LiveJoinRequest.broadcaster_id == broadcaster_id)
+            .where(LiveJoinRequest.user_id == user.id)
+        ).first()
+        if row is None:
+            return None
+        return _to_join_out(row)
+
+
+@router.patch("/join-requests/{request_id}", response_model=JoinRequestOut)
+def decide_join_request(
+    request_id: int,
+    payload: JoinDecisionIn,
+    user: UserProfile = Depends(require_auth),
+) -> JoinRequestOut:
+    """Broadcaster : accepte ou refuse une demande.
+
+    Seul le broadcaster propriétaire de la demande peut décider.
+    """
+    with get_session() as session:
+        row = session.get(LiveJoinRequest, request_id)
+        if row is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"message": "join_request_not_found"},
+            )
+        if row.broadcaster_id != user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"message": "not_your_live"},
+            )
+        row.status = payload.status
+        row.decided_at = datetime.now(timezone.utc).isoformat()
+        session.add(row)
+        session.commit()
+        session.refresh(row)
+        return _to_join_out(row)
 
 
 def _state_for(

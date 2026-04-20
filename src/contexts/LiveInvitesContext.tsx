@@ -8,6 +8,16 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import {
+  apiCancelJoin,
+  apiDecideJoinRequest,
+  apiListJoinRequests,
+  apiMyJoinRequest,
+  apiRequestJoin,
+  type JoinRequestOut,
+} from "../lib/liveApi";
+import { useAuth } from "./AuthContext";
+import { useToast } from "./ToastContext";
 
 /**
  * Contexte dédié aux **demandes d'invitation à monter sur scène** (PR H).
@@ -61,6 +71,12 @@ export interface InviteRequest {
   /** ISO du passage à "refused" — pilote la purge automatique. */
   refusedAt?: string;
   status: InviteStatus;
+  /**
+   * ID serveur de la demande. Rempli quand la ligne vient du backend
+   * (PR #55 : polling /live/join-requests), sinon indéfini. Utilisé
+   * pour les PATCH d'acceptation / de refus côté broadcaster.
+   */
+  serverId?: number;
 }
 
 /** État sérialisable : `{ broadcasterId -> { userId -> InviteRequest } }`. */
@@ -146,6 +162,17 @@ const Ctx = createContext<InvitesCtx | null>(null);
 
 export function LiveInvitesProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<InvitesState>(() => readState());
+  const { user } = useAuth();
+  const { notify } = useToast();
+  const userRef = useRef(user);
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
+  // `knownPendingIdsRef` permet de détecter les NOUVELLES demandes lors
+  // du polling broadcaster (pour ne toaster qu'une seule fois par
+  // demande, même si le poll revient toutes les 5 s).
+  const knownPendingIdsRef = useRef<Set<number>>(new Set());
 
   // Miroir **synchrone** de `state`. Indispensable pour que deux mutations
   // consécutives (ex. un `revokeInvite` suivi d'un `acceptInvite` dans le
@@ -212,6 +239,17 @@ export function LiveInvitesProvider({ children }: { children: ReactNode }) {
     (broadcasterId, viewer) => {
       if (!broadcasterId || !viewer.id) return;
       if (broadcasterId === viewer.id) return; // on ne s'invite pas soi-même
+      // Side-effect : si c'est l'utilisateur connecté qui demande (cas
+      // normal), on informe le backend pour que le broadcaster reçoive
+      // la notif temps réel cross-device (PR #55). Échec silencieux :
+      // on garde l'UX optimiste côté local storage même en cas de
+      // problème réseau — le broadcaster verra la demande au pire via
+      // son prochain poll.
+      if (userRef.current && userRef.current.id === viewer.id) {
+        apiRequestJoin(broadcasterId).catch(() => {
+          /* ignore */
+        });
+      }
       commit((prev) => {
         const existing = prev[broadcasterId]?.[viewer.id];
         // Si on est déjà sur scène ou en attente, pas besoin de re-créer
@@ -244,6 +282,15 @@ export function LiveInvitesProvider({ children }: { children: ReactNode }) {
 
   const cancelInvite = useCallback<InvitesCtx["cancelInvite"]>(
     (broadcasterId, userId) => {
+      // Side-effect : si c'est l'utilisateur connecté qui annule SA
+      // propre demande, on informe le backend pour purger la ligne
+      // serveur (sinon elle resterait visible côté broadcaster jusqu'à
+      // son TTL implicite).
+      if (userRef.current && userRef.current.id === userId) {
+        apiCancelJoin(broadcasterId).catch(() => {
+          /* ignore */
+        });
+      }
       commit((prev) => {
         const reqs = prev[broadcasterId];
         if (!reqs || !reqs[userId]) return prev;
@@ -277,6 +324,7 @@ export function LiveInvitesProvider({ children }: { children: ReactNode }) {
       if (onStageSnap >= MAX_GUESTS) return false;
 
       let committed = false;
+      let serverIdToPatch: number | undefined;
       commit((prev) => {
         const reqs = prev[broadcasterId];
         if (!reqs || !reqs[userId]) return prev;
@@ -289,6 +337,7 @@ export function LiveInvitesProvider({ children }: { children: ReactNode }) {
         ).length;
         if (onStage >= MAX_GUESTS) return prev;
         committed = true;
+        serverIdToPatch = reqs[userId].serverId;
         return {
           ...prev,
           [broadcasterId]: {
@@ -302,6 +351,20 @@ export function LiveInvitesProvider({ children }: { children: ReactNode }) {
           },
         };
       });
+      // Side-effect : si la demande vient du registre serveur (elle a un
+      // `serverId`) et que c'est bien le broadcaster qui décide, on
+      // pousse la décision au backend pour que le viewer (peut-être
+      // sur un autre device) voie son statut basculer à "accepted".
+      if (
+        committed &&
+        serverIdToPatch &&
+        userRef.current &&
+        userRef.current.id === broadcasterId
+      ) {
+        apiDecideJoinRequest(serverIdToPatch, "accepted").catch(() => {
+          /* ignore */
+        });
+      }
       return committed;
     },
     [commit],
@@ -309,9 +372,11 @@ export function LiveInvitesProvider({ children }: { children: ReactNode }) {
 
   const refuseInvite = useCallback<InvitesCtx["refuseInvite"]>(
     (broadcasterId, userId) => {
+      let serverIdToPatch: number | undefined;
       commit((prev) => {
         const reqs = prev[broadcasterId];
         if (!reqs || !reqs[userId]) return prev;
+        serverIdToPatch = reqs[userId].serverId;
         return {
           ...prev,
           [broadcasterId]: {
@@ -325,6 +390,15 @@ export function LiveInvitesProvider({ children }: { children: ReactNode }) {
           },
         };
       });
+      if (
+        serverIdToPatch &&
+        userRef.current &&
+        userRef.current.id === broadcasterId
+      ) {
+        apiDecideJoinRequest(serverIdToPatch, "refused").catch(() => {
+          /* ignore */
+        });
+      }
     },
     [commit],
   );
@@ -358,6 +432,188 @@ export function LiveInvitesProvider({ children }: { children: ReactNode }) {
     },
     [commit],
   );
+
+  // -------------------------------------------------------------------------
+  // Polling serveur (PR #55) — notifications temps réel cross-device.
+  //
+  // Broadcaster : toutes les 5 s, interroge `/live/join-requests` pour voir
+  // les demandes en attente sur SON live. Les nouvelles déclenchent un toast.
+  // Viewer : quand il a une demande en attente quelque part, il polle
+  // `/live/{b}/join/me` pour voir si elle bascule à "accepted" / "refused".
+  // -------------------------------------------------------------------------
+
+  const mergeRemoteForBroadcaster = useCallback(
+    (rows: JoinRequestOut[], broadcasterId: string) => {
+      const prevSnap = stateRef.current[broadcasterId] || {};
+      const newPending: JoinRequestOut[] = [];
+      for (const r of rows) {
+        if (r.status !== "pending") continue;
+        if (!knownPendingIdsRef.current.has(r.id)) {
+          newPending.push(r);
+          knownPendingIdsRef.current.add(r.id);
+        }
+      }
+      // Toast sur la première détection d'une nouvelle demande.
+      for (const r of newPending) {
+        notify(`✋ ${r.username} demande à monter sur scène`, "info");
+      }
+      commit((prev) => {
+        const currentBroadcaster = prev[broadcasterId] || {};
+        const next: Record<string, InviteRequest> = {};
+        // 1. On ré-importe TOUTES les lignes serveur (source de vérité pour
+        //    les demandes cross-device).
+        for (const r of rows) {
+          const existing = currentBroadcaster[r.user_id];
+          next[r.user_id] = {
+            userId: r.user_id,
+            username: r.username,
+            avatar: r.avatar,
+            creatureId: r.creature_id || null,
+            requestedAt: r.requested_at,
+            acceptedAt:
+              r.status === "accepted"
+                ? r.decided_at ?? existing?.acceptedAt
+                : undefined,
+            refusedAt:
+              r.status === "refused"
+                ? r.decided_at ?? existing?.refusedAt
+                : undefined,
+            status: r.status,
+            serverId: r.id,
+          };
+        }
+        // 2. Les demandes purement locales (non synchro serveur, ex. depuis
+        //    un autre tab de broadcast) — on les préserve telles quelles.
+        for (const [uId, req] of Object.entries(currentBroadcaster)) {
+          if (!next[uId] && !req.serverId) {
+            next[uId] = req;
+          }
+        }
+        const sameCount =
+          Object.keys(next).length === Object.keys(prevSnap).length;
+        if (
+          sameCount &&
+          Object.keys(next).every((k) => {
+            const a = next[k];
+            const b = prevSnap[k];
+            return (
+              b &&
+              a.status === b.status &&
+              a.serverId === b.serverId &&
+              a.acceptedAt === b.acceptedAt &&
+              a.refusedAt === b.refusedAt
+            );
+          })
+        ) {
+          return prev;
+        }
+        return { ...prev, [broadcasterId]: next };
+      });
+    },
+    [commit, notify],
+  );
+
+  // Polling broadcaster : à chaque fois que le user change ou toutes les 5 s,
+  // on rapatrie la liste.
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    const broadcasterId = user.id;
+    const poll = async () => {
+      try {
+        const rows = await apiListJoinRequests();
+        if (cancelled) return;
+        mergeRemoteForBroadcaster(rows, broadcasterId);
+      } catch {
+        // Backend indispo : on garde l'état local.
+      }
+    };
+    // Kick-off : premier poll immédiat pour que la file soit à jour au
+    // premier affichage du panneau.
+    poll();
+    const id = setInterval(poll, 5_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [user, mergeRemoteForBroadcaster]);
+
+  // Polling viewer : pour chaque broadcaster auprès duquel CE user a
+  // actuellement une demande en attente (ou acceptée récemment), on
+  // vérifie le statut serveur toutes les 5 s afin d'informer le viewer
+  // s'il a été accepté / refusé depuis un autre device du broadcaster.
+  useEffect(() => {
+    if (!user) return;
+    const myId = user.id;
+    let cancelled = false;
+    const poll = async () => {
+      const snap = stateRef.current;
+      const targets: string[] = [];
+      for (const [bId, reqs] of Object.entries(snap)) {
+        if (bId === myId) continue;
+        const mine = reqs[myId];
+        if (!mine) continue;
+        if (mine.status === "pending" || mine.status === "accepted") {
+          targets.push(bId);
+        }
+      }
+      for (const bId of targets) {
+        try {
+          const row = await apiMyJoinRequest(bId);
+          if (cancelled) return;
+          commit((prev) => {
+            const reqs = prev[bId];
+            if (!reqs || !reqs[myId]) return prev;
+            if (row === null) {
+              // Le broadcaster a supprimé (ex. live terminé) — on purge.
+              const copy = { ...reqs };
+              delete copy[myId];
+              if (Object.keys(copy).length === 0) {
+                const next = { ...prev };
+                delete next[bId];
+                return next;
+              }
+              return { ...prev, [bId]: copy };
+            }
+            const current = reqs[myId];
+            if (
+              current.status === row.status &&
+              current.serverId === row.id
+            ) {
+              return prev;
+            }
+            return {
+              ...prev,
+              [bId]: {
+                ...reqs,
+                [myId]: {
+                  ...current,
+                  status: row.status,
+                  serverId: row.id,
+                  acceptedAt:
+                    row.status === "accepted"
+                      ? row.decided_at ?? current.acceptedAt
+                      : undefined,
+                  refusedAt:
+                    row.status === "refused"
+                      ? row.decided_at ?? current.refusedAt
+                      : undefined,
+                },
+              },
+            };
+          });
+        } catch {
+          // ignore
+        }
+      }
+    };
+    poll();
+    const id = setInterval(poll, 5_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [user, commit]);
 
   const value = useMemo<InvitesCtx>(
     () => ({

@@ -150,3 +150,67 @@ export async function apiMyModerationState(
     `/live/moderation/me?${params.toString()}`,
   )) as LiveModerationState;
 }
+
+// ---------------------------------------------------------------------------
+// Demandes de montée sur scène — PR #55 (notif temps réel broadcaster)
+// ---------------------------------------------------------------------------
+
+export type JoinStatus = "pending" | "accepted" | "refused";
+
+export interface JoinRequestOut {
+  id: number;
+  broadcaster_id: string;
+  user_id: string;
+  username: string;
+  avatar: string;
+  creature_id: string;
+  status: JoinStatus;
+  requested_at: string;
+  decided_at: string | null;
+}
+
+/** Viewer : demande à monter sur scène du live de `broadcasterId`. */
+export async function apiRequestJoin(
+  broadcasterId: string,
+): Promise<JoinRequestOut> {
+  return (await request<JoinRequestOut>(
+    `/live/${encodeURIComponent(broadcasterId)}/join`,
+    { method: "POST" },
+  )) as JoinRequestOut;
+}
+
+/** Viewer : annule sa propre demande en attente. */
+export async function apiCancelJoin(broadcasterId: string): Promise<void> {
+  await request<null>(`/live/${encodeURIComponent(broadcasterId)}/join`, {
+    method: "DELETE",
+  });
+}
+
+/** Viewer : polle sa propre demande pour voir statut d'acceptation. */
+export async function apiMyJoinRequest(
+  broadcasterId: string,
+): Promise<JoinRequestOut | null> {
+  const res = await request<JoinRequestOut | null>(
+    `/live/${encodeURIComponent(broadcasterId)}/join/me`,
+  );
+  return res ?? null;
+}
+
+/** Broadcaster : liste des demandes sur SON live (polled ~5 s). */
+export async function apiListJoinRequests(): Promise<JoinRequestOut[]> {
+  return (await request<JoinRequestOut[]>("/live/join-requests")) ?? [];
+}
+
+/** Broadcaster : accepte ou refuse une demande. */
+export async function apiDecideJoinRequest(
+  requestId: number,
+  decision: "accepted" | "refused",
+): Promise<JoinRequestOut> {
+  return (await request<JoinRequestOut>(
+    `/live/join-requests/${requestId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ status: decision }),
+    },
+  )) as JoinRequestOut;
+}
