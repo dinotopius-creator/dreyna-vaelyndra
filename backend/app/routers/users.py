@@ -39,12 +39,14 @@ from ..schemas import (
 )
 
 
-# PR M — XP gagné par type d'activité. Réglage "doux" : recevoir 100 Sylvins
-# donne 100 XP (≈ 1 palier suivant), s'abonner à 10 personnes donne 500 XP, un
-# post de qualité 10 XP. Ajustable sans migration.
+# PR M — XP gagné par type d'activité pour les deux flux accordés dans ce
+# fichier (réception de Sylvins via gift + nouveau follower). Le troisième flux
+# XP (post créé) vit dans `routers/posts.py` avec sa propre constante
+# `XP_PER_POST`, au plus près de la route qui le déclenche — ne pas dupliquer
+# ici pour éviter qu'un mainteneur change la valeur dans users.py et croie
+# avoir mis à jour la règle côté posts.
 XP_PER_SYLVIN_RECEIVED = 1
 XP_PER_SUBSCRIBER = 50
-XP_PER_POST = 10
 
 
 router = APIRouter(prefix="/users", tags=["users"])
