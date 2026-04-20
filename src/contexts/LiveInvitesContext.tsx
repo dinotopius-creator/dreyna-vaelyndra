@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -146,7 +147,16 @@ const Ctx = createContext<InvitesCtx | null>(null);
 export function LiveInvitesProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<InvitesState>(() => readState());
 
+  // Miroir **synchrone** de `state`. Indispensable pour que deux appels
+  // rapides consécutifs (ex. double-clic sur "Accepter" de deux invités
+  // différents quand il ne reste qu'une place libre) voient l'effet du
+  // premier avant que React ne re-rende. Sans ce ref, les deux callbacks
+  // utiliseraient la même closure `state` et le deuxième `setState`
+  // no-opperait en silence tout en laissant le caller croire que l'accept
+  // a réussi — exactement le scénario pointé par Devin Review.
+  const stateRef = useRef<InvitesState>(state);
   useEffect(() => {
+    stateRef.current = state;
     writeState(state);
   }, [state]);
 
@@ -157,12 +167,16 @@ export function LiveInvitesProvider({ children }: { children: ReactNode }) {
     const onStorage = (event: StorageEvent) => {
       if (event.key !== STORAGE_KEY) return;
       if (!event.newValue) {
+        stateRef.current = {};
         setState({});
         return;
       }
       try {
         const next = JSON.parse(event.newValue) as InvitesState;
-        if (next && typeof next === "object") setState(next);
+        if (next && typeof next === "object") {
+          stateRef.current = next;
+          setState(next);
+        }
       } catch {
         // payload corrompu — on ignore
       }
@@ -225,44 +239,36 @@ export function LiveInvitesProvider({ children }: { children: ReactNode }) {
 
   const acceptInvite = useCallback<InvitesCtx["acceptInvite"]>(
     (broadcasterId, userId) => {
-      // On calcule le verdict **hors** de l'updater `setState` pour ne pas
-      // dépendre du timing d'exécution (React 18 + concurrent rendering
-      // peut différer l'updater). La fenêtre TOCTOU vs un `StorageEvent`
-      // cross-tab reste minuscule et, pire cas, la scène sera brièvement
-      // à N+1 avant que le prochain batch ne réconcilie — pas de crash
-      // côté UI car `MAX_GUESTS` n'est utilisé que pour désactiver le
-      // bouton "Accepter", pas comme invariant de sécurité.
-      const reqs = state[broadcasterId];
+      // On lit et on muter depuis `stateRef.current` — mis à jour de manière
+      // synchrone à chaque `setState` / `StorageEvent`. Deux clics rapides
+      // sur "Accepter" (ex. le même tick avant re-render) voient donc bien
+      // l'effet du premier avant de décider du second → plus de faux
+      // succès quand il ne reste qu'une place libre.
+      const prev = stateRef.current;
+      const reqs = prev[broadcasterId];
       if (!reqs || !reqs[userId]) return false;
+      if (reqs[userId].status === "accepted") return true; // idempotent
       const onStage = Object.values(reqs).filter(
         (r) => r.status === "accepted",
       ).length;
       if (onStage >= MAX_GUESTS) return false;
-      setState((prev) => {
-        const cur = prev[broadcasterId];
-        // Garde défensive : l'état a pu bouger (autre onglet) entre le
-        // check et l'updater — on re-vérifie et on no-op si incohérent.
-        if (!cur || !cur[userId]) return prev;
-        const onStageNow = Object.values(cur).filter(
-          (r) => r.status === "accepted",
-        ).length;
-        if (onStageNow >= MAX_GUESTS) return prev;
-        return {
-          ...prev,
-          [broadcasterId]: {
-            ...cur,
-            [userId]: {
-              ...cur[userId],
-              status: "accepted",
-              acceptedAt: new Date().toISOString(),
-              refusedAt: undefined,
-            },
+      const next: InvitesState = {
+        ...prev,
+        [broadcasterId]: {
+          ...reqs,
+          [userId]: {
+            ...reqs[userId],
+            status: "accepted",
+            acceptedAt: new Date().toISOString(),
+            refusedAt: undefined,
           },
-        };
-      });
+        },
+      };
+      stateRef.current = next;
+      setState(next);
       return true;
     },
-    [state],
+    [],
   );
 
   const refuseInvite = useCallback<InvitesCtx["refuseInvite"]>(
