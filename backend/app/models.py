@@ -198,6 +198,34 @@ class Report(SQLModel, table=True):
     created_at: str = Field(default_factory=_now_iso, index=True)
 
 
+class LiveSession(SQLModel, table=True):
+    """Registre serveur des lives en cours (tous streamers confondus).
+
+    Avant cette table, le "liveRegistry" était uniquement stocké en
+    localStorage côté client. Résultat : quand Alexandre lançait un live,
+    Dreyna (qui naviguait dans `/communaute` depuis son propre browser) ne
+    voyait rien. Cette table centralise les lives actifs pour qu'ils
+    apparaissent pour tout le monde, peu importe le device.
+
+    `mode` ∈ {"screen", "camera", "twitch"} — l'UI adapte le rendu
+    (iframe Twitch vs player WebRTC). `category` vient du catalogue
+    `liveCategories.ts`. `last_heartbeat_at` est mis à jour par le host
+    toutes les ~30 s ; un GET /live filtre les entrées obsolètes
+    (> 90 s sans heartbeat → crash, kill, changement d'onglet).
+    """
+
+    broadcaster_id: str = Field(primary_key=True)
+    broadcaster_name: str
+    broadcaster_avatar: str = ""
+    title: str = ""
+    description: str = ""
+    category: str = "autre"
+    mode: str = "screen"
+    twitch_channel: str = ""
+    started_at: str = Field(default_factory=_now_iso, index=True)
+    last_heartbeat_at: str = Field(default_factory=_now_iso, index=True)
+
+
 class GiftLedger(SQLModel, table=True):
     """Journal append-only de chaque cadeau Sylvins envoyé.
 
