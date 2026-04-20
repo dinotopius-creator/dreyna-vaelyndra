@@ -152,6 +152,8 @@ export interface UserProfileDto {
   avatarUrl: string | null;
   inventory: string[];
   equipped: Record<string, string>;
+  /** PR G — item ids que l'utilisateur aimerait recevoir en cadeau. */
+  wishlist: string[];
   lueurs: number;
   sylvins: number;
   sylvinsEarnings: number;
@@ -344,6 +346,77 @@ export interface GiftTransferDto {
  * (promo→promo, paid→paid) : impossible de blanchir un solde promo en
  * cashable via un complice.
  */
+// --- Wishlist (PR G) ------------------------------------------------------
+
+/**
+ * Ajoute un item à la wishlist d'un utilisateur. Idempotent côté serveur.
+ */
+export async function apiAddToWishlist(
+  userId: string,
+  itemId: string,
+): Promise<UserProfileDto> {
+  return (await request<UserProfileDto>(
+    `/users/${encodeURIComponent(userId)}/wishlist/${encodeURIComponent(
+      itemId,
+    )}`,
+    { method: "POST" },
+  )) as UserProfileDto;
+}
+
+/**
+ * Retire un item de la wishlist. Idempotent côté serveur.
+ */
+export async function apiRemoveFromWishlist(
+  userId: string,
+  itemId: string,
+): Promise<UserProfileDto> {
+  return (await request<UserProfileDto>(
+    `/users/${encodeURIComponent(userId)}/wishlist/${encodeURIComponent(
+      itemId,
+    )}`,
+    { method: "DELETE" },
+  )) as UserProfileDto;
+}
+
+export interface GiftItemDto {
+  sender: UserProfileDto;
+  receiver: UserProfileDto;
+  consumed_promo: number;
+  consumed_paid: number;
+}
+
+/**
+ * Offre un item cosmétique depuis la wishlist d'un autre utilisateur.
+ * Le serveur :
+ *   - vérifie que l'item est bien dans la wishlist du receiver,
+ *   - vérifie que le receiver ne possède pas déjà l'item,
+ *   - débite le sender (PROMO d'abord pour les Sylvins),
+ *   - ajoute l'item à l'inventaire du receiver + le retire de sa wishlist.
+ * Atomique.
+ */
+export async function apiGiftItem(input: {
+  senderId: string;
+  receiverId: string;
+  itemId: string;
+  price: number;
+  currency: "lueurs" | "sylvins";
+  reason?: string;
+}): Promise<GiftItemDto> {
+  return (await request<GiftItemDto>(
+    `/users/${encodeURIComponent(input.senderId)}/gift-item`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        receiver_id: input.receiverId,
+        item_id: input.itemId,
+        price: input.price,
+        currency: input.currency,
+        reason: input.reason,
+      }),
+    },
+  )) as GiftItemDto;
+}
+
 export async function apiGiftSylvins(input: {
   senderId: string;
   receiverId: string;

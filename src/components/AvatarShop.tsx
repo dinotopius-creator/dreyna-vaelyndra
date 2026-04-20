@@ -11,7 +11,7 @@
  */
 import { useMemo, useState } from "react";
 import clsx from "clsx";
-import { Lock, Check, Sparkles } from "lucide-react";
+import { Lock, Check, Heart, Sparkles } from "lucide-react";
 import { SHOP_CATALOG, type ShopCategory, type ShopItem } from "../lib/avatarShop";
 import { useProfile } from "../contexts/ProfileContext";
 import { useToast } from "../contexts/ToastContext";
@@ -47,14 +47,21 @@ const TABS: { id: ShopCategory; label: string; hint: string }[] = [
 ];
 
 export function AvatarShop() {
-  const { profile, buyItem } = useProfile();
+  const { profile, buyItem, addToWishlist, removeFromWishlist } = useProfile();
   const { notify } = useToast();
   const [tab, setTab] = useState<ShopCategory>("style");
   const [busyId, setBusyId] = useState<string | null>(null);
+  // Pendant un toggle wishlist on empêche les clics répétés sur le même
+  // cœur (latence réseau). Les autres items restent interactifs.
+  const [wishlistBusyId, setWishlistBusyId] = useState<string | null>(null);
 
   const ownedIds = useMemo(
     () => new Set(profile?.inventory ?? []),
     [profile?.inventory],
+  );
+  const wishlistIds = useMemo(
+    () => new Set(profile?.wishlist ?? []),
+    [profile?.wishlist],
   );
 
   const items = SHOP_CATALOG.filter((item) => item.category === tab);
@@ -87,6 +94,28 @@ export function AvatarShop() {
       notify("L'achat n'a pas abouti. Réessayez.", "error");
     } finally {
       setBusyId(null);
+    }
+  }
+
+  async function handleToggleWishlist(item: ShopItem) {
+    if (!profile) {
+      notify("Connectez-vous pour utiliser la wishlist.", "error");
+      return;
+    }
+    setWishlistBusyId(item.id);
+    const isWished = wishlistIds.has(item.id);
+    try {
+      if (isWished) {
+        await removeFromWishlist(item.id);
+        notify(`${item.name} retiré de votre liste de souhaits.`);
+      } else {
+        await addToWishlist(item.id);
+        notify(`${item.name} ajouté à votre liste de souhaits ❤️`);
+      }
+    } catch {
+      notify("Impossible de mettre à jour la liste de souhaits.", "error");
+    } finally {
+      setWishlistBusyId(null);
     }
   }
 
@@ -144,10 +173,12 @@ export function AvatarShop() {
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {items.map((item) => {
           const owned = ownedIds.has(item.id);
+          const wished = wishlistIds.has(item.id);
           const balance =
             profile?.[item.currency === "lueurs" ? "lueurs" : "sylvins"] ?? 0;
           const canAfford = balance >= item.price;
           const busy = busyId === item.id;
+          const wishlistBusy = wishlistBusyId === item.id;
           return (
             <article
               key={item.id}
@@ -162,9 +193,42 @@ export function AvatarShop() {
                 <span className="text-3xl" aria-hidden>
                   {item.icon}
                 </span>
-                <span className="text-[10px] uppercase tracking-[0.22em] text-ivory/50">
-                  {CATEGORY_LABEL[item.category]}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] uppercase tracking-[0.22em] text-ivory/50">
+                    {CATEGORY_LABEL[item.category]}
+                  </span>
+                  {!owned && (
+                    <button
+                      type="button"
+                      onClick={() => handleToggleWishlist(item)}
+                      disabled={wishlistBusy || !profile}
+                      aria-pressed={wished}
+                      aria-label={
+                        wished
+                          ? "Retirer de ma liste de souhaits"
+                          : "Ajouter à ma liste de souhaits"
+                      }
+                      title={
+                        wished
+                          ? "Retirer de ma liste de souhaits"
+                          : "Ajouter à ma liste de souhaits"
+                      }
+                      className={clsx(
+                        "inline-flex h-7 w-7 items-center justify-center rounded-full border transition",
+                        wished
+                          ? "border-rose-400/60 bg-rose-500/20 text-rose-200 hover:bg-rose-500/30"
+                          : "border-royal-500/40 text-ivory/55 hover:border-rose-300/60 hover:text-rose-200",
+                        wishlistBusy && "opacity-60",
+                      )}
+                    >
+                      <Heart
+                        className="h-3.5 w-3.5"
+                        fill={wished ? "currentColor" : "none"}
+                        strokeWidth={1.8}
+                      />
+                    </button>
+                  )}
+                </div>
               </div>
               <h4 className="mt-3 font-display text-lg text-ivory">
                 {item.name}

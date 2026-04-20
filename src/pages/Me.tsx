@@ -23,6 +23,7 @@ import { SectionHeading } from "../components/SectionHeading";
 import { AvatarViewer } from "../components/AvatarViewer";
 import { UserBadges } from "../components/UserBadges";
 import { CreaturePickerModal } from "../components/CreaturePickerModal";
+import { WishlistSection } from "../components/WishlistSection";
 import { formatDate, formatPrice, resizeImageToDataUrl } from "../lib/helpers";
 import {
   MIN_PAYOUT_EUR,
@@ -315,6 +316,16 @@ export function Me() {
             </Link>
           </div>
         </div>
+      </section>
+
+      <section className="mt-12">
+        <WishlistSection
+          wishlist={serverProfile?.wishlist ?? []}
+          ownedIds={serverProfile?.inventory ?? []}
+          targetUserId={user.id}
+          targetUsername={user.username}
+          isSelf
+        />
       </section>
 
       <section className="mt-12">

@@ -19,6 +19,8 @@ from ..schemas import (
     DailyClaimOut,
     FollowAction,
     FollowerOut,
+    GiftItem,
+    GiftItemOut,
     GiftTransfer,
     GiftTransferOut,
     InventoryUpdate,
@@ -92,6 +94,7 @@ def _to_out(p: UserProfile, session: Session | None = None) -> UserProfileOut:
         avatarUrl=p.avatar_url,
         inventory=json.loads(p.inventory_json or "[]"),
         equipped=json.loads(p.equipped_json or "{}"),
+        wishlist=json.loads(p.wishlist_json or "[]"),
         lueurs=p.lueurs,
         sylvins=p.sylvins + p.sylvins_paid,
         sylvinsEarnings=p.sylvins_earnings + p.earnings_paid,
@@ -276,6 +279,66 @@ def update_inventory(
     return _to_out(p, session)
 
 
+# --- Wishlist (PR G) -------------------------------------------------------
+
+
+def _load_wishlist(p: UserProfile) -> list[str]:
+    try:
+        data = json.loads(p.wishlist_json or "[]")
+    except (TypeError, ValueError):
+        return []
+    return [str(x) for x in data if isinstance(x, str) and x]
+
+
+def _store_wishlist(p: UserProfile, items: list[str]) -> None:
+    # Déduplique en préservant l'ordre d'insertion (les plus récents en fin).
+    seen: dict[str, None] = {}
+    for item_id in items:
+        if item_id and item_id not in seen:
+            seen[item_id] = None
+    p.wishlist_json = json.dumps(list(seen.keys()))
+
+
+@router.post("/{user_id}/wishlist/{item_id}", response_model=UserProfileOut)
+def add_to_wishlist(
+    user_id: str,
+    item_id: str,
+    session: Session = Depends(_session_dep),
+) -> UserProfileOut:
+    """Ajoute `item_id` à la wishlist de `user_id` (idempotent)."""
+    p = session.get(UserProfile, user_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Profil introuvable.")
+    current = _load_wishlist(p)
+    if item_id not in current:
+        current.append(item_id)
+        _store_wishlist(p, current)
+        _touch(p)
+        session.commit()
+        session.refresh(p)
+    return _to_out(p, session)
+
+
+@router.delete("/{user_id}/wishlist/{item_id}", response_model=UserProfileOut)
+def remove_from_wishlist(
+    user_id: str,
+    item_id: str,
+    session: Session = Depends(_session_dep),
+) -> UserProfileOut:
+    """Retire `item_id` de la wishlist de `user_id` (idempotent)."""
+    p = session.get(UserProfile, user_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Profil introuvable.")
+    current = _load_wishlist(p)
+    if item_id in current:
+        current = [x for x in current if x != item_id]
+        _store_wishlist(p, current)
+        _touch(p)
+        session.commit()
+        session.refresh(p)
+    return _to_out(p, session)
+
+
 def _apply_legacy_sylvins_delta(p: UserProfile, delta: int) -> None:
     """Route un delta sur le champ legacy `sylvins` vers les deux pots.
 
@@ -441,6 +504,89 @@ def gift_sylvins(
     session.refresh(sender)
     session.refresh(receiver)
     return GiftTransferOut(
+        sender=_to_out(sender, session),
+        receiver=_to_out(receiver, session),
+        consumed_promo=take_promo,
+        consumed_paid=take_paid,
+    )
+
+
+@router.post("/{sender_id}/gift-item", response_model=GiftItemOut)
+def gift_item(
+    sender_id: str,
+    payload: GiftItem,
+    session: Session = Depends(_session_dep),
+) -> GiftItemOut:
+    """Offre un item cosmétique depuis la wishlist d'un autre utilisateur.
+
+    Règles :
+    - sender ≠ receiver (pas de cadeau à soi-même).
+    - L'item doit être dans la wishlist du receiver (anti-triche : on ne peut
+      pas offrir un item arbitraire en contournant l'UI).
+    - Le receiver ne doit pas déjà posséder l'item.
+    - En Sylvins, consomme PROMO d'abord puis PAID (même logique que
+      `gift-sylvins` — impossible de blanchir un solde promo en cashable en
+      passant par un achat croisé).
+    - Atomique : soit tout passe (débit + inventaire + retrait wishlist),
+      soit rien (commit unique en fin).
+    """
+    if sender_id == payload.receiver_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Impossible de s'offrir un cadeau à soi-même.",
+        )
+    sender = session.get(UserProfile, sender_id)
+    if not sender:
+        raise HTTPException(status_code=404, detail="Sender introuvable.")
+    receiver = session.get(UserProfile, payload.receiver_id)
+    if not receiver:
+        raise HTTPException(status_code=404, detail="Receiver introuvable.")
+
+    wishlist = _load_wishlist(receiver)
+    if payload.item_id not in wishlist:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cet item n'est pas dans la liste de souhaits.",
+        )
+
+    inventory = json.loads(receiver.inventory_json or "[]")
+    if payload.item_id in inventory:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Le destinataire possède déjà cet item.",
+        )
+
+    take_promo = 0
+    take_paid = 0
+    if payload.currency == "lueurs":
+        if sender.lueurs < payload.price:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Solde Lueurs insuffisant.",
+            )
+        sender.lueurs -= payload.price
+    else:  # sylvins
+        if sender.sylvins + sender.sylvins_paid < payload.price:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Solde Sylvins insuffisant.",
+            )
+        take_promo = min(payload.price, max(0, sender.sylvins))
+        take_paid = payload.price - take_promo
+        sender.sylvins -= take_promo
+        sender.sylvins_paid -= take_paid
+
+    # Crédite l'inventaire du receiver + retire de sa wishlist.
+    inventory.append(payload.item_id)
+    receiver.inventory_json = json.dumps(inventory)
+    _store_wishlist(receiver, [x for x in wishlist if x != payload.item_id])
+
+    _touch(sender)
+    _touch(receiver)
+    session.commit()
+    session.refresh(sender)
+    session.refresh(receiver)
+    return GiftItemOut(
         sender=_to_out(sender, session),
         receiver=_to_out(receiver, session),
         consumed_promo=take_promo,

@@ -55,6 +55,8 @@ def _apply_migrations() -> None:
             # PR A — créatures + rôles officiels.
             ("creature_id", "TEXT"),
             ("role", "TEXT NOT NULL DEFAULT 'user'"),
+            # PR G — wishlist (items souhaités, offrables par un autre user).
+            ("wishlist_json", "TEXT NOT NULL DEFAULT '[]'"),
         ],
     }
     with engine.begin() as conn:
