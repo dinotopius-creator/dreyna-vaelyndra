@@ -16,6 +16,7 @@ import { useLive } from "../contexts/LiveContext";
 import { useToast } from "../contexts/ToastContext";
 import { SectionHeading } from "../components/SectionHeading";
 import { PostComments } from "../components/PostComments";
+import { ReportButton } from "../components/ReportButton";
 import { UserBadges } from "../components/UserBadges";
 import { StreamerLeaderboard } from "../components/StreamerLeaderboard";
 import { BFFModule } from "../components/BFFModule";
@@ -371,15 +372,26 @@ export function Community() {
                       {p.content}
                     </p>
                   </div>
-                  {(user?.id === p.authorId || isQueen) && (
-                    <button
-                      onClick={() => removePost(p.id)}
-                      className="text-ivory/40 hover:text-rose-300"
-                      title="Supprimer"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  )}
+                  <div className="flex items-center gap-1.5">
+                    {user && user.id !== p.authorId && (
+                      <ReportButton
+                        targetType="post"
+                        targetId={p.id}
+                        targetLabel={`Post de ${p.authorName}`}
+                        targetUrl={`/communaute#post-${p.id}`}
+                        compact
+                      />
+                    )}
+                    {(user?.id === p.authorId || isQueen) && (
+                      <button
+                        onClick={() => removePost(p.id)}
+                        className="text-ivory/40 hover:text-rose-300"
+                        title="Supprimer"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
                 </header>
                 {p.imageUrl && (
                   <img

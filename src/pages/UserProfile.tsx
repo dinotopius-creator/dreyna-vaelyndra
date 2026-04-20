@@ -11,6 +11,8 @@ import { FollowButton } from "../components/FollowButton";
 import SoulBondsModal from "../components/SoulBondsModal";
 import StreamerGradeBadge from "../components/StreamerGradeBadge";
 import { WishlistSection } from "../components/WishlistSection";
+import { AdminUserPanel } from "../components/AdminUserPanel";
+import { ReportButton } from "../components/ReportButton";
 import { formatDate, formatRelative } from "../lib/helpers";
 import { formatSylvins } from "../lib/sylvins";
 import { apiGetProfile, type UserProfileDto } from "../lib/api";
@@ -191,12 +193,28 @@ export function UserProfile() {
                 );
               }}
             />
+            {currentUser && currentUser.id !== profile.id && (
+              <ReportButton
+                targetType="user"
+                targetId={profile.id}
+                targetLabel={profile.username}
+                targetUrl={`/u/${profile.id}`}
+              />
+            )}
           </div>
         </div>
         {profile.bio && (
           <p className="mt-6 text-sm text-ivory/80">{profile.bio}</p>
         )}
       </motion.header>
+
+      <section className="mt-10">
+        <AdminUserPanel
+          targetUserId={profile.id}
+          targetUsername={profile.username}
+          onChange={refreshServerProfile}
+        />
+      </section>
 
       <section className="mt-10 grid gap-4 md:grid-cols-2">
         <div className="card-royal p-5">

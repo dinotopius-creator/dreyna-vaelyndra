@@ -122,6 +122,12 @@ class UserProfile(SQLModel, table=True):
     # "legende-vaelyndra") — utile pour les comptes officiels / events.
     streamer_xp: int = Field(default=0, index=True)
     streamer_grade_override: Optional[str] = Field(default=None, max_length=32)
+    # PR J — modération : None = compte actif ; ISO timestamp = date du bannissement.
+    # Un compte banni ne peut plus se connecter (ses sessions actives sont
+    # révoquées à la pose du ban) et apparaît marqué "suspendu" côté admin.
+    banned_at: Optional[str] = Field(default=None, index=True)
+    banned_reason: Optional[str] = None
+    banned_by: Optional[str] = None
     created_at: str = Field(default_factory=_now_iso)
     updated_at: str = Field(default_factory=_now_iso)
 
@@ -137,6 +143,59 @@ class Follow(SQLModel, table=True):
     follower_id: str = Field(index=True)
     following_id: str = Field(index=True)
     created_at: str = Field(default_factory=_now_iso)
+
+
+class AdminAuditLog(SQLModel, table=True):
+    """Journal append-only des actions admin (PR J).
+
+    Trace qui a fait quoi sur qui, quand, combien et pourquoi. Ce journal
+    est consultable depuis `/admin → Utilisateurs → Journal`, et sert à
+    la responsabilisation mutuelle des admins + à un éventuel rollback
+    manuel.
+
+    `action` est un slug parmi :
+      - `wallet_adjust` — détails : currency, delta, pot, reason
+      - `role_change` — détails : old_role, new_role
+      - `ban` / `unban` — détails : reason
+    `details_json` est un JSON libre pour les données spécifiques à
+    l'action (gardé plat pour pouvoir être lu par un script de rollback).
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    actor_id: str = Field(index=True)
+    actor_username: str
+    target_id: str = Field(index=True)
+    target_username: str
+    action: str = Field(index=True)
+    details_json: str = Field(default="{}")
+    created_at: str = Field(default_factory=_now_iso, index=True)
+
+
+class Report(SQLModel, table=True):
+    """Signalement posé par un user contre un profil, un live ou un post (PR K).
+
+    `target_type` ∈ {"user", "live", "post", "comment"} et `target_id` est
+    l'id opaque du contenu. `target_url` est une URL cliquable calculée
+    côté serveur à la création — permet à l'admin de cliquer directement
+    dessus dans l'inbox sans avoir à reconstruire la route.
+
+    `status` ∈ {"open", "resolved", "rejected"}. `resolved_by` et
+    `resolved_at` tracent qui a fermé le signalement.
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    reporter_id: str = Field(index=True)
+    reporter_username: str
+    target_type: str = Field(index=True)
+    target_id: str = Field(index=True)
+    target_label: str = ""
+    target_url: str = ""
+    reason: str = Field(index=True)
+    description: str = ""
+    status: str = Field(default="open", index=True)
+    resolved_by: Optional[str] = None
+    resolved_at: Optional[str] = None
+    created_at: str = Field(default_factory=_now_iso, index=True)
 
 
 class GiftLedger(SQLModel, table=True):

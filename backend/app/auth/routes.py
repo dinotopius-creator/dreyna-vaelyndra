@@ -524,6 +524,27 @@ def login(payload: LoginIn, request: Request, response: Response) -> dict:
         if user is None:
             raise generic_error
 
+        # Compte banni : refus d'accès (PR J). On renvoie 403 avec un message
+        # explicite pour que le frontend puisse afficher une page dédiée
+        # "compte suspendu" au lieu d'un générique "mauvais mot de passe".
+        if user.banned_at:
+            _log_login_attempt(
+                db,
+                email=email,
+                user_id=credential.user_id,
+                success=False,
+                request=request,
+                failure_reason="banned",
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "code": "account_banned",
+                    "message": "Ce compte est suspendu.",
+                    "reason": user.banned_reason or "",
+                },
+            )
+
         # Rotation de hash si paramètres argon2 ont évolué.
         if needs_rehash(credential.password_hash):
             credential.password_hash = hash_password(payload.password)
