@@ -20,10 +20,13 @@ import {
   type ReactNode,
 } from "react";
 import {
+  apiAddToWishlist,
   apiApplyWalletDelta,
   apiDailyClaim,
   apiFollow,
   apiGetProfile,
+  apiGiftItem,
+  apiRemoveFromWishlist,
   apiSetCreature,
   apiUnfollow,
   apiUpdateAvatar,
@@ -31,6 +34,7 @@ import {
   apiUpsertProfile,
   ApiError,
   type DailyClaimDto,
+  type GiftItemDto,
   type UserProfileDto,
 } from "../lib/api";
 import { useAuth } from "./AuthContext";
@@ -69,6 +73,21 @@ interface ProfileCtx {
   follow: (targetId: string) => Promise<UserProfileDto | null>;
   /** Se désabonne. */
   unfollow: (targetId: string) => Promise<UserProfileDto | null>;
+  /** PR G — Ajoute un item à sa propre wishlist (idempotent côté serveur). */
+  addToWishlist: (itemId: string) => Promise<UserProfileDto | null>;
+  /** PR G — Retire un item de sa propre wishlist. */
+  removeFromWishlist: (itemId: string) => Promise<UserProfileDto | null>;
+  /**
+   * PR G — Offre un item cosmétique depuis la wishlist d'un autre user.
+   * Le serveur débite la bourse de l'expéditeur, ajoute l'item à
+   * l'inventaire du destinataire et le retire de sa wishlist.
+   */
+  giftItem: (input: {
+    receiverId: string;
+    itemId: string;
+    price: number;
+    currency: "lueurs" | "sylvins";
+  }) => Promise<GiftItemDto | null>;
   /** Permet aux autres contextes (Store) de pousser un état serveur frais. */
   setProfile: (next: UserProfileDto | null) => void;
 }
@@ -258,6 +277,50 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     [user, profile],
   );
 
+  const addToWishlist = useCallback(
+    async (itemId: string): Promise<UserProfileDto | null> => {
+      if (!user) return null;
+      const updated = await apiAddToWishlist(user.id, itemId);
+      setProfile(updated);
+      return updated;
+    },
+    [user],
+  );
+
+  const removeFromWishlist = useCallback(
+    async (itemId: string): Promise<UserProfileDto | null> => {
+      if (!user) return null;
+      const updated = await apiRemoveFromWishlist(user.id, itemId);
+      setProfile(updated);
+      return updated;
+    },
+    [user],
+  );
+
+  const giftItem = useCallback(
+    async (input: {
+      receiverId: string;
+      itemId: string;
+      price: number;
+      currency: "lueurs" | "sylvins";
+    }): Promise<GiftItemDto | null> => {
+      if (!user) return null;
+      const res = await apiGiftItem({
+        senderId: user.id,
+        receiverId: input.receiverId,
+        itemId: input.itemId,
+        price: input.price,
+        currency: input.currency,
+        reason: `gift-item:${input.itemId}`,
+      });
+      // On met à jour le profil local avec le sender renvoyé (ne pas oublier
+      // que l'appelant est forcément le sender — le receiver vit ailleurs).
+      setProfile(res.sender);
+      return res;
+    },
+    [user],
+  );
+
   const claimDaily = useCallback(async (): Promise<DailyClaimDto | null> => {
     if (!user) return null;
     const res = await apiDailyClaim(user.id);
@@ -293,6 +356,9 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       setCreature,
       follow,
       unfollow,
+      addToWishlist,
+      removeFromWishlist,
+      giftItem,
       setProfile,
     }),
     [
@@ -306,6 +372,9 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       setCreature,
       follow,
       unfollow,
+      addToWishlist,
+      removeFromWishlist,
+      giftItem,
     ],
   );
 

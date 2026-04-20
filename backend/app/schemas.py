@@ -146,6 +146,27 @@ class WalletDelta(BaseModel):
     reason: Optional[str] = Field(default=None, max_length=128)
 
 
+class GiftItem(BaseModel):
+    """Offre un item cosmétique depuis la wishlist d'un autre utilisateur.
+
+    Le serveur :
+    - Vérifie que l'item est bien dans la wishlist du receiver (anti-triche :
+      on ne peut pas forcer un item quelconque).
+    - Vérifie que le receiver ne possède pas déjà l'item.
+    - Débite le sender (consomme PROMO d'abord, déborde sur PAID), crédite le
+      receiver (inventaire + retire de sa wishlist). Atomique.
+    - Price + currency sont portés par le client (catalogue boutique figé
+      côté front). Le serveur rejette les prix négatifs (pydantic) et les
+      soldes insuffisants.
+    """
+
+    receiver_id: str = Field(..., min_length=1, max_length=128)
+    item_id: str = Field(..., min_length=1, max_length=128)
+    price: int = Field(..., gt=0)
+    currency: str = Field(..., pattern=r"^(lueurs|sylvins)$")
+    reason: Optional[str] = Field(default=None, max_length=128)
+
+
 class GiftTransfer(BaseModel):
     """Transfert atomique de Sylvins du pot sender vers les earnings receiver.
 
@@ -167,6 +188,10 @@ class UserProfileOut(BaseModel):
     avatarUrl: Optional[str] = None
     inventory: List[str] = []
     equipped: Dict[str, str] = {}
+    # PR G — liste de souhaits (item ids). Exposée partout pour afficher la
+    # section "Liste de souhaits" sur /moi et /u/:id + cœur filled/empty dans
+    # la boutique.
+    wishlist: List[str] = []
     lueurs: int = 0
     # Champs legacy (= pots PROMO) conservés pour les anciens clients qui
     # lisent encore `sylvins` / `sylvinsEarnings`. Un client à jour lit les
@@ -200,6 +225,20 @@ class GiftTransferOut(BaseModel):
     receiver: UserProfileOut
     consumed_promo: int
     consumed_paid: int
+
+
+class GiftItemOut(BaseModel):
+    """Résultat d'un cadeau d'item (PR G).
+
+    Expose sender + receiver mis à jour (le receiver a l'item dans son
+    inventaire + il est retiré de sa wishlist) ainsi que la consommation
+    détaillée PROMO/PAID côté sender.
+    """
+
+    sender: UserProfileOut
+    receiver: UserProfileOut
+    consumed_promo: int = 0
+    consumed_paid: int = 0
 
 
 # --- Classement streamers + BFF -------------------------------------------

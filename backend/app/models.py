@@ -92,6 +92,11 @@ class UserProfile(SQLModel, table=True):
     # types structurés nativement, on garde du texte pour rester portable.
     inventory_json: str = Field(default="[]")
     equipped_json: str = Field(default="{}")
+    # Liste de souhaits : item ids que le user aimerait recevoir en cadeau
+    # (PR G). JSON sérialisé, dédupliqué à l'écriture. Un item peut être dans
+    # la wishlist en étant déjà possédé (ex. si l'utilisateur a oublié de
+    # l'enlever), mais l'UI filtre à l'affichage.
+    wishlist_json: str = Field(default="[]")
     lueurs: int = Field(default=0)
     # ⚠️ La colonne `sylvins` stocke désormais uniquement le pot PROMO (cf.
     # docstring). Pour le solde "payé" vraiment retirable, voir

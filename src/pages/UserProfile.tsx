@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { Link, useParams, Navigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Crown, Banknote, Coins, ArrowLeft } from "lucide-react";
@@ -8,13 +8,14 @@ import { SectionHeading } from "../components/SectionHeading";
 import { AvatarViewer } from "../components/AvatarViewer";
 import { UserBadges } from "../components/UserBadges";
 import { FollowButton } from "../components/FollowButton";
+import { WishlistSection } from "../components/WishlistSection";
 import { formatDate, formatRelative } from "../lib/helpers";
 import { formatSylvins } from "../lib/sylvins";
 import { apiGetProfile, type UserProfileDto } from "../lib/api";
 
 export function UserProfile() {
   const { userId = "" } = useParams();
-  const { users } = useAuth();
+  const { users, user: currentUser } = useAuth();
   const { posts, walletOf } = useStore();
 
   const profile = useMemo(
@@ -43,6 +44,15 @@ export function UserProfile() {
     return () => {
       cancelled = true;
     };
+  }, [userId]);
+
+  const refreshServerProfile = useCallback(() => {
+    if (!userId) return;
+    apiGetProfile(userId)
+      .then((p) => setServerProfile(p))
+      .catch(() => {
+        /* silencieux — on garde l'état précédent */
+      });
   }, [userId]);
 
   if (profile && profile.role === "queen") {
@@ -187,6 +197,19 @@ export function UserProfile() {
           </p>
         </div>
       </section>
+
+      {serverProfile && (
+        <section className="mt-10">
+          <WishlistSection
+            wishlist={serverProfile.wishlist ?? []}
+            ownedIds={serverProfile.inventory ?? []}
+            targetUserId={profile.id}
+            targetUsername={profile.username}
+            isSelf={currentUser?.id === profile.id}
+            onGifted={refreshServerProfile}
+          />
+        </section>
+      )}
 
       <section className="mt-12">
         <SectionHeading
