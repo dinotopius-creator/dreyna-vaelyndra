@@ -239,27 +239,21 @@ export function LiveInvitesProvider({ children }: { children: ReactNode }) {
     (broadcasterId, viewer) => {
       if (!broadcasterId || !viewer.id) return;
       if (broadcasterId === viewer.id) return; // on ne s'invite pas soi-même
-      // Side-effect : si c'est l'utilisateur connecté qui demande (cas
-      // normal), on informe le backend pour que le broadcaster reçoive
-      // la notif temps réel cross-device (PR #55). Échec silencieux :
-      // on garde l'UX optimiste côté local storage même en cas de
-      // problème réseau — le broadcaster verra la demande au pire via
-      // son prochain poll.
-      if (userRef.current && userRef.current.id === viewer.id) {
-        apiRequestJoin(broadcasterId).catch(() => {
-          /* ignore */
-        });
-      }
+      let shouldNotifyBackend = false;
       commit((prev) => {
         const existing = prev[broadcasterId]?.[viewer.id];
         // Si on est déjà sur scène ou en attente, pas besoin de re-créer
-        // une ligne (on veut que l'UI reste stable).
+        // une ligne (on veut que l'UI reste stable — et surtout ne PAS
+        // re-pousser un POST /join qui, côté serveur, est un upsert qui
+        // reset le status à "pending" → ça kickerait un invité déjà
+        // accepté à chaque re-render qui déclenche cette fonction).
         if (
           existing &&
           (existing.status === "pending" || existing.status === "accepted")
         ) {
           return prev;
         }
+        shouldNotifyBackend = true;
         const request: InviteRequest = {
           userId: viewer.id,
           username: viewer.username,
@@ -276,24 +270,30 @@ export function LiveInvitesProvider({ children }: { children: ReactNode }) {
           },
         };
       });
+      // Side-effect : si c'est l'utilisateur connecté qui demande (cas
+      // normal) ET qu'on vient EFFECTIVEMENT de créer une nouvelle
+      // ligne locale, on informe le backend pour que le broadcaster
+      // reçoive la notif temps réel cross-device. Échec silencieux.
+      if (
+        shouldNotifyBackend &&
+        userRef.current &&
+        userRef.current.id === viewer.id
+      ) {
+        apiRequestJoin(broadcasterId).catch(() => {
+          /* ignore */
+        });
+      }
     },
     [commit],
   );
 
   const cancelInvite = useCallback<InvitesCtx["cancelInvite"]>(
     (broadcasterId, userId) => {
-      // Side-effect : si c'est l'utilisateur connecté qui annule SA
-      // propre demande, on informe le backend pour purger la ligne
-      // serveur (sinon elle resterait visible côté broadcaster jusqu'à
-      // son TTL implicite).
-      if (userRef.current && userRef.current.id === userId) {
-        apiCancelJoin(broadcasterId).catch(() => {
-          /* ignore */
-        });
-      }
+      let shouldNotifyBackend = false;
       commit((prev) => {
         const reqs = prev[broadcasterId];
         if (!reqs || !reqs[userId]) return prev;
+        shouldNotifyBackend = true;
         const next = { ...reqs };
         delete next[userId];
         if (Object.keys(next).length === 0) {
@@ -303,6 +303,18 @@ export function LiveInvitesProvider({ children }: { children: ReactNode }) {
         }
         return { ...prev, [broadcasterId]: next };
       });
+      // Side-effect : si c'est l'utilisateur connecté qui annule SA
+      // propre demande, on informe le backend pour purger la ligne
+      // serveur (sinon elle resterait visible côté broadcaster).
+      if (
+        shouldNotifyBackend &&
+        userRef.current &&
+        userRef.current.id === userId
+      ) {
+        apiCancelJoin(broadcasterId).catch(() => {
+          /* ignore */
+        });
+      }
     },
     [commit],
   );
