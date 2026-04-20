@@ -74,6 +74,15 @@ const SYSTEM_AUTHOR = {
 };
 
 /**
+ * Taille maximale du buffer de messages du chat — partagée entre
+ * `sendMessage`, `pushSystemAnnouncement` et le générateur de bots
+ * automatiques pour que le panneau d'historique puisse vraiment
+ * remonter aussi loin (PR P). Sans ce partage, un message système
+ * tronquait immédiatement le buffer à une valeur plus petite.
+ */
+const CHAT_BUFFER_MAX = 200;
+
+/**
  * Formate une durée en secondes → "2 min", "1 h", "45 s" selon la taille.
  * Utilisé par les notifications de modération (mute/kick).
  */
@@ -920,7 +929,7 @@ export function Live() {
             content: line,
             createdAt: new Date().toISOString(),
           },
-        ].slice(-60),
+        ].slice(-CHAT_BUFFER_MAX),
       );
     }, 4200);
     return () => clearInterval(t);
@@ -934,17 +943,23 @@ export function Live() {
       notify("Connectez-vous pour écrire dans la cour.", "info");
       return;
     }
-    if (isMuted) {
-      // Mute actif → on bloque l'envoi, côté UI uniquement pour l'instant
-      // (le chat est non persisté : il n'y a rien à envoyer au serveur).
-      const until = myMuteUntil ? new Date(myMuteUntil) : null;
+    if (isKicked || isMuted) {
+      // Mute ou kick actif → on bloque l'envoi, côté UI uniquement pour
+      // l'instant (le chat n'est pas persisté côté serveur). Le kick
+      // l'emporte sur le mute (plus grave) pour le message affiché.
+      const untilIso = isKicked ? myKickUntil : myMuteUntil;
+      const until = untilIso ? new Date(untilIso) : null;
       const remaining = until
         ? Math.max(1, Math.round((until.getTime() - Date.now()) / 1000))
         : null;
       notify(
-        remaining
-          ? `Tu es en sourdine pour encore ${formatDuration(remaining)}.`
-          : "Tu es en sourdine sur ce live.",
+        isKicked
+          ? remaining
+            ? `Tu es expulsé du live pour encore ${formatDuration(remaining)}.`
+            : "Tu es expulsé de ce live."
+          : remaining
+            ? `Tu es en sourdine pour encore ${formatDuration(remaining)}.`
+            : "Tu es en sourdine sur ce live.",
         "info",
       );
       return;
@@ -961,7 +976,7 @@ export function Live() {
           createdAt: new Date().toISOString(),
           highlight: user.role === "queen",
         },
-      ].slice(-200),
+      ].slice(-CHAT_BUFFER_MAX),
     );
   }
 
@@ -1025,7 +1040,7 @@ export function Live() {
           createdAt: new Date().toISOString(),
           highlight: true,
         },
-      ].slice(-60),
+      ].slice(-CHAT_BUFFER_MAX),
     );
   }
 

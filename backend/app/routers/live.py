@@ -262,6 +262,16 @@ def moderate(
     now = datetime.now(timezone.utc)
     expires_at = (now + timedelta(seconds=duration)).isoformat()
     with get_session() as session:
+        # Vérifier que le caller a bien un live actif (heartbeat frais) —
+        # on ne veut pas qu'un user quelconque crée des lignes de
+        # modération sur un "live" qui n'existe pas. La fraîcheur est
+        # vérifiée de la même façon que dans `list_live` (< 90 s).
+        live = session.get(LiveSession, user.id)
+        if live is None or not _is_fresh(live.last_heartbeat_at):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"message": "no_active_live"},
+            )
         # Vérifier que le target existe pour renvoyer une erreur claire
         # plutôt qu'une ligne orpheline.
         target = session.get(UserProfile, payload.target_user_id)
