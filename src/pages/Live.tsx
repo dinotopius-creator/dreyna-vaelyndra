@@ -15,6 +15,10 @@ import {
   Video,
   Camera,
   RefreshCw,
+  Maximize,
+  Minimize,
+  MessageSquare,
+  MessageSquareOff,
 } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { useStore } from "../contexts/StoreContext";
@@ -850,6 +854,48 @@ export function Live() {
     () => seedTributes(),
   );
 
+  // Optimisation mobile : le cadre vidéo peut passer en plein écran
+  // (Fullscreen API) et l'overlay de chat flottant peut être masqué pour
+  // ne pas manger la vidéo sur petit écran. `playerCardRef` pointe sur
+  // la carte contenant le player pour que `requestFullscreen` prenne
+  // aussi les overlays (chat flottant, avatar, cadeaux) et pas juste
+  // l'élément <video>.
+  const playerCardRef = useRef<HTMLDivElement | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isChatVisible, setIsChatVisible] = useState(true);
+
+  useEffect(() => {
+    function onFsChange() {
+      setIsFullscreen(
+        !!document.fullscreenElement &&
+          document.fullscreenElement === playerCardRef.current,
+      );
+    }
+    document.addEventListener("fullscreenchange", onFsChange);
+    return () => document.removeEventListener("fullscreenchange", onFsChange);
+  }, []);
+
+  async function toggleFullscreen() {
+    const el = playerCardRef.current;
+    if (!el) return;
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      } else if (el.requestFullscreen) {
+        await el.requestFullscreen();
+      } else {
+        // iOS Safari ne supporte pas requestFullscreen sur un div : on
+        // informe l'utilisateur plutôt que d'échouer silencieusement.
+        notify(
+          "Le plein écran n'est pas supporté par ton navigateur. Essaie en rotation paysage ou masque le chat pour agrandir la vidéo.",
+          "info",
+        );
+      }
+    } catch {
+      notify("Impossible de passer en plein écran sur ce navigateur.", "info");
+    }
+  }
+
   // Reset du chat + des cœurs + du leaderboard quand on change de
   // broadcaster pour éviter la confusion (tout est spécifique au live).
   useEffect(() => {
@@ -1146,7 +1192,7 @@ export function Live() {
   );
 
   return (
-    <div className="mx-auto max-w-7xl px-6 py-12">
+    <div className="mx-auto max-w-7xl px-3 py-6 sm:px-6 sm:py-12">
       <SectionHeading
         eyebrow="La Salle des Lives"
         title={<>La cour <span className="text-mystic">en direct</span></>}
@@ -1157,10 +1203,26 @@ export function Live() {
         }
       />
 
-      <div className="mt-10">
+      <div className="mt-6 sm:mt-10">
         <div>
-          <div className="card-royal relative overflow-hidden">
-            <div className="relative aspect-video w-full overflow-hidden bg-night-900">
+          {/*
+            Carte du lecteur : portée d'ancrage du ref pour la Fullscreen
+            API (on met en plein écran la carte entière, pas juste la
+            balise <video>, pour garder overlays + chat dans la vue).
+            Quand `isFullscreen` est vrai, on passe en noir plein cadre
+            pour cacher le fond nocturne qui baverait au bord.
+          */}
+          <div
+            ref={playerCardRef}
+            className={`card-royal relative overflow-hidden ${
+              isFullscreen ? "bg-night-900" : ""
+            }`}
+          >
+            <div
+              className={`relative w-full overflow-hidden bg-night-900 ${
+                isFullscreen ? "h-screen" : "aspect-video"
+              }`}
+            >
               {showViewer ? (
                 <>
                   {(activeMode === "screen" ||
@@ -1297,8 +1359,11 @@ export function Live() {
               )}
 
               {/* Chat flottant TikTok/Twitch : visible uniquement si un
-                  live est effectivement en cours sur ce broadcaster. */}
-              {isActiveLive && (
+                  live est effectivement en cours sur ce broadcaster, et
+                  seulement si l'utilisateur ne l'a pas masqué via le
+                  bouton "masquer le chat" (utile sur mobile pour voir
+                  la vidéo sans que le flot de messages mange l'écran). */}
+              {isActiveLive && isChatVisible && (
                 <LiveChatOverlay
                   key={broadcasterId}
                   messages={messages}
@@ -1313,8 +1378,59 @@ export function Live() {
                 />
               )}
 
-              <div className="pointer-events-none absolute right-4 top-4 flex items-center gap-2 rounded-full bg-night-900/70 px-3 py-1.5 text-xs text-ivory/80 backdrop-blur">
-                <Users className="h-3.5 w-3.5 text-gold-300" /> {viewers} elfes
+              {/* Barre d'outils du lecteur (top-right) :
+                   - masquer / afficher le chat flottant
+                   - basculer en plein écran
+                  Avec le compteur de viewers. Les boutons sont
+                  pointer-events:auto pour rester cliquables par-dessus
+                  les overlays, et assez grands pour être tappables
+                  au doigt (h-8 w-8 = 32 px). */}
+              <div className="absolute right-2 top-2 z-30 flex items-center gap-2 sm:right-4 sm:top-4">
+                <div className="pointer-events-none flex items-center gap-2 rounded-full bg-night-900/70 px-3 py-1.5 text-xs text-ivory/80 backdrop-blur">
+                  <Users className="h-3.5 w-3.5 text-gold-300" /> {viewers}
+                </div>
+                {isActiveLive && (
+                  <button
+                    type="button"
+                    onClick={() => setIsChatVisible((v) => !v)}
+                    className="pointer-events-auto inline-flex h-8 w-8 items-center justify-center rounded-full bg-night-900/70 text-ivory/80 backdrop-blur transition hover:bg-night-900/90 hover:text-gold-200"
+                    aria-label={
+                      isChatVisible ? "Masquer le chat" : "Afficher le chat"
+                    }
+                    aria-pressed={!isChatVisible}
+                    title={
+                      isChatVisible ? "Masquer le chat" : "Afficher le chat"
+                    }
+                  >
+                    {isChatVisible ? (
+                      <MessageSquareOff className="h-4 w-4" />
+                    ) : (
+                      <MessageSquare className="h-4 w-4" />
+                    )}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={toggleFullscreen}
+                  className="pointer-events-auto inline-flex h-8 w-8 items-center justify-center rounded-full bg-night-900/70 text-ivory/80 backdrop-blur transition hover:bg-night-900/90 hover:text-gold-200"
+                  aria-label={
+                    isFullscreen
+                      ? "Quitter le plein écran"
+                      : "Passer en plein écran"
+                  }
+                  aria-pressed={isFullscreen}
+                  title={
+                    isFullscreen
+                      ? "Quitter le plein écran"
+                      : "Passer en plein écran"
+                  }
+                >
+                  {isFullscreen ? (
+                    <Minimize className="h-4 w-4" />
+                  ) : (
+                    <Maximize className="h-4 w-4" />
+                  )}
+                </button>
               </div>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3 p-4">
