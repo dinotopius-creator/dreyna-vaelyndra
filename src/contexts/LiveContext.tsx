@@ -254,6 +254,11 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   const hostPeerRef = useRef<Peer | null>(null);
   const viewerPeerRef = useRef<Peer | null>(null);
   const hostConnectionsRef = useRef<Set<MediaConnection>>(new Set());
+  // Garde-fou anti double-clic sur `switchCamera` : `getUserMedia` prend
+  // 100-500 ms sur mobile, sans ce verrou deux clics rapides créent deux
+  // MediaStream concurrents et la première fuite (tracks jamais
+  // `stop()`-ées → caméra/micro restent actifs en tâche de fond).
+  const switchingCameraRef = useRef(false);
   // Ref miroir sur le flux local pour que `cleanup` puisse toujours couper
   // les tracks même quand il est appelé depuis un callback qui a capturé
   // l'ancienne valeur de state (ex. listener "ended" ou erreur peer).
@@ -689,6 +694,10 @@ export function LiveProvider({ children }: { children: ReactNode }) {
    */
   const switchCamera = useCallback(async () => {
     if (configRef.current.mode !== "camera") return;
+    // Verrou re-entrant : tant que le swap précédent n'est pas fini, on
+    // ignore les nouveaux appels. Sans ça un double-tap rapide ouvre deux
+    // MediaStream, le premier n'est jamais stoppé (fuite caméra/micro).
+    if (switchingCameraRef.current) return;
     const current = localStreamRef.current;
     if (!current) return;
     if (
@@ -698,62 +707,74 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     ) {
       return;
     }
-    const nextFacing: CameraFacing =
-      cameraFacing === "user" ? "environment" : "user";
-    let next: MediaStream;
+    switchingCameraRef.current = true;
     try {
-      next = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { ideal: nextFacing },
-          frameRate: { ideal: 30 },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-        },
-      });
-    } catch (err) {
-      if (err instanceof Error) {
-        setLastError(`Impossible de changer de caméra : ${err.message}`);
-      }
-      return;
-    }
-
-    const newVideoTrack = next.getVideoTracks()[0];
-    const newAudioTrack = next.getAudioTracks()[0];
-    if (!newVideoTrack) {
-      next.getTracks().forEach((t) => t.stop());
-      return;
-    }
-
-    // Remplace les tracks sur toutes les MediaConnection viewers en cours.
-    // `replaceTrack` est préféré à la renégociation complète : pas de
-    // re-offer SDP, pas de coupure visible côté viewers.
-    hostConnectionsRef.current.forEach((call) => {
-      const senders = call.peerConnection?.getSenders() ?? [];
-      for (const sender of senders) {
-        if (sender.track?.kind === "video") {
-          sender.replaceTrack(newVideoTrack).catch(() => {
-            /* ignore — la connexion peut être en cours de fermeture */
-          });
-        } else if (sender.track?.kind === "audio" && newAudioTrack) {
-          sender.replaceTrack(newAudioTrack).catch(() => {
-            /* ignore */
-          });
+      const nextFacing: CameraFacing =
+        cameraFacing === "user" ? "environment" : "user";
+      let next: MediaStream;
+      try {
+        next = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: nextFacing },
+            frameRate: { ideal: 30 },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+          },
+        });
+      } catch (err) {
+        if (err instanceof Error) {
+          setLastError(`Impossible de changer de caméra : ${err.message}`);
         }
+        return;
       }
-    });
 
-    // Stoppe l'ancien stream (tracks) puis publie le nouveau côté host.
-    current.getTracks().forEach((t) => t.stop());
-    newVideoTrack.addEventListener("ended", () => {
-      if (localStreamRef.current === next) stopLive();
-    });
-    localStreamRef.current = next;
-    setLocalStream(next);
-    setCameraFacing(nextFacing);
+      // Si le live a été stoppé pendant le `await` (stopLive l'a nettoyé),
+      // on jette le nouveau stream au lieu de le raccrocher à un peer mort.
+      if (localStreamRef.current !== current) {
+        next.getTracks().forEach((t) => t.stop());
+        return;
+      }
+
+      const newVideoTrack = next.getVideoTracks()[0];
+      const newAudioTrack = next.getAudioTracks()[0];
+      if (!newVideoTrack) {
+        next.getTracks().forEach((t) => t.stop());
+        return;
+      }
+
+      // Remplace les tracks sur toutes les MediaConnection viewers en cours.
+      // `replaceTrack` est préféré à la renégociation complète : pas de
+      // re-offer SDP, pas de coupure visible côté viewers.
+      hostConnectionsRef.current.forEach((call) => {
+        const senders = call.peerConnection?.getSenders() ?? [];
+        for (const sender of senders) {
+          if (sender.track?.kind === "video") {
+            sender.replaceTrack(newVideoTrack).catch(() => {
+              /* ignore — la connexion peut être en cours de fermeture */
+            });
+          } else if (sender.track?.kind === "audio" && newAudioTrack) {
+            sender.replaceTrack(newAudioTrack).catch(() => {
+              /* ignore */
+            });
+          }
+        }
+      });
+
+      // Stoppe l'ancien stream (tracks) puis publie le nouveau côté host.
+      current.getTracks().forEach((t) => t.stop());
+      newVideoTrack.addEventListener("ended", () => {
+        if (localStreamRef.current === next) stopLive();
+      });
+      localStreamRef.current = next;
+      setLocalStream(next);
+      setCameraFacing(nextFacing);
+    } finally {
+      switchingCameraRef.current = false;
+    }
   }, [cameraFacing, stopLive]);
 
   /**
