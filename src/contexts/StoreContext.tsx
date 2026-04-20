@@ -367,16 +367,49 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // NOT resurrected on reload.
       const storedProducts = parsed.products ?? init.products;
       const deletedMockProductIds = parsed.deletedMockProductIds ?? [];
+      // Migration PR L (pivot mini-réseau) : rattrape les mock products
+      // déjà persistés dans le localStorage des users existants — on réécrit
+      // nom/description/tags depuis la source mock quand l'id match, ce qui
+      // remplace automatiquement "Pack ZEPETO · Elennor" par le nouveau nom
+      // sans effacer les produits admin personnalisés.
       const mergedProducts = [
-        ...storedProducts,
+        ...storedProducts.map((stored) => {
+          const mock = init.products.find((m) => m.id === stored.id);
+          return mock
+            ? {
+                ...stored,
+                name: mock.name,
+                description: mock.description,
+                tags: mock.tags,
+              }
+            : stored;
+        }),
         ...init.products.filter(
           (mock) =>
             !storedProducts.some((p) => p.id === mock.id) &&
             !deletedMockProductIds.includes(mock.id),
         ),
       ];
+      // Migration PR L : rattrape la catégorie article "IRL / ZEPETO"
+      // (obsolète) → "Lifestyle", + retitre "art-2" si l'ancien slug/title
+      // ZEPETO est encore persisté. On ne touche pas aux articles custom
+      // créés par l'admin.
+      const storedArticles = parsed.articles ?? init.articles;
+      const migratedArticles = storedArticles.map((art) => {
+        const mock = init.articles.find((m) => m.id === art.id);
+        const patch: Partial<typeof art> = {};
+        if ((art.category as string) === "IRL / ZEPETO") {
+          patch.category = "Lifestyle";
+        }
+        if (mock && art.id === "art-2") {
+          patch.slug = mock.slug;
+          patch.title = mock.title;
+          patch.category = mock.category;
+        }
+        return Object.keys(patch).length > 0 ? { ...art, ...patch } : art;
+      });
       return {
-        articles: parsed.articles ?? init.articles,
+        articles: migratedArticles,
         products: mergedProducts,
         posts: parsed.posts ?? init.posts,
         lives: parsed.lives ?? init.lives,
