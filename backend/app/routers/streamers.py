@@ -140,10 +140,15 @@ def streamer_leaderboard(
                 role=p.role or "user",
             )
         )
+    # `end` est le lundi suivant (exclusif côté ledger). On expose au
+    # client le dimanche de la semaine demandée (inclusif) pour que
+    # l'intervalle affiché [weekStart, weekEnd] soit intuitivement
+    # "lundi → dimanche". NB : `date - timedelta(seconds=1)` est un no-op
+    # (timedelta.days == 0), il faut bien passer par `days=1`.
     return StreamerLeaderboardOut(
         week=week,
         weekStart=start.isoformat(),
-        weekEnd=(end - timedelta(seconds=1)).isoformat(),
+        weekEnd=(end - timedelta(days=1)).isoformat(),
         entries=entries,
     )
 
