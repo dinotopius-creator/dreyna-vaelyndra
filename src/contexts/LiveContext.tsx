@@ -21,13 +21,19 @@ import {
 /**
  * Contexte dédié aux lives (queen + cour). Multi-utilisateur.
  *
- * Deux modes disponibles :
+ * Trois modes disponibles :
  *  - "twitch" : le broadcaster streame depuis OBS vers Twitch. Le site embed le
  *    lecteur Twitch officiel. La clé de stream OBS est stockée en local chez
  *    le broadcaster uniquement (jamais envoyée nulle part).
  *  - "screen" : partage d'écran direct depuis le navigateur via WebRTC
  *    (peerjs + broker public gratuit). Pas d'OBS nécessaire, le broadcaster
  *    clique "Partager mon écran" et les viewers reçoivent le flux en direct.
+ *    ⚠️ `getDisplayMedia` n'est pas supporté sur iOS Safari ni sur la plupart
+ *    des navigateurs mobiles Android. Pour le mobile, utiliser le mode
+ *    "camera" qui s'appuie sur `getUserMedia` (caméra frontale ou arrière).
+ *  - "camera" : live caméra natif du navigateur via `getUserMedia`. Marche
+ *    sur desktop (webcam) ET sur mobile (caméra frontale/arrière
+ *    sélectionnables). Même pipeline WebRTC que "screen" côté viewers.
  *
  * Chaque broadcaster possède son propre peer-ID déterministe
  * `vaelyndra-live-<userId>`, ce qui permet à plusieurs membres de la cour
@@ -46,7 +52,9 @@ export function getLivePeerId(userId: string): string {
   return `vaelyndra-live-v2-${userId}`;
 }
 
-export type LiveMode = "twitch" | "screen";
+export type LiveMode = "twitch" | "screen" | "camera";
+
+export type CameraFacing = "user" | "environment";
 
 export interface LiveConfig {
   status: "idle" | "live";
@@ -191,6 +199,20 @@ interface LiveCtx {
   announceTwitchLive: (channelOverride?: string) => void;
   /** Côté host : démarrer le partage d'écran via WebRTC. */
   startScreenShare: () => Promise<void>;
+  /**
+   * Côté host : démarrer un live caméra (`getUserMedia`). Marche sur
+   * desktop (webcam) et sur mobile (caméra frontale ou arrière selon
+   * `facingMode`). Même pipeline peerjs que `startScreenShare`.
+   */
+  startCameraShare: (facingMode?: CameraFacing) => Promise<void>;
+  /**
+   * Côté host : bascule entre caméra frontale et arrière sans couper le
+   * peer (on replace la vidéo track sur toutes les connexions actives).
+   * No-op hors du mode caméra.
+   */
+  switchCamera: () => Promise<void>;
+  /** Côté host : orientation actuelle de la caméra (user = frontale). */
+  cameraFacing: CameraFacing;
   /** Côté host : arrêter mon live. */
   stopLive: () => void;
   /**
@@ -224,6 +246,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
+  const [cameraFacing, setCameraFacing] = useState<CameraFacing>("user");
   const [viewingMeta, setViewingMeta] = useState<
     { title: string; description: string; mode: LiveMode } | null
   >(null);
@@ -231,6 +254,11 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   const hostPeerRef = useRef<Peer | null>(null);
   const viewerPeerRef = useRef<Peer | null>(null);
   const hostConnectionsRef = useRef<Set<MediaConnection>>(new Set());
+  // Garde-fou anti double-clic sur `switchCamera` : `getUserMedia` prend
+  // 100-500 ms sur mobile, sans ce verrou deux clics rapides créent deux
+  // MediaStream concurrents et la première fuite (tracks jamais
+  // `stop()`-ées → caméra/micro restent actifs en tâche de fond).
+  const switchingCameraRef = useRef(false);
   // Ref miroir sur le flux local pour que `cleanup` puisse toujours couper
   // les tracks même quand il est appelé depuis un callback qui a capturé
   // l'ancienne valeur de state (ex. listener "ended" ou erreur peer).
@@ -259,7 +287,9 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         try {
           const next = JSON.parse(event.newValue) as Partial<LiveConfig>;
           const nextMode =
-            next.mode === "twitch" || next.mode === "screen"
+            next.mode === "twitch" ||
+            next.mode === "screen" ||
+            next.mode === "camera"
               ? next.mode
               : undefined;
           setConfig((c) => ({
@@ -425,6 +455,129 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     [updateRegistry],
   );
 
+  /**
+   * Attache un `MediaStream` (écran ou caméra) à un peer hôte et démarre
+   * le broadcast. Partagé entre `startScreenShare` et `startCameraShare`
+   * pour éviter la duplication de toute la mécanique peerjs.
+   */
+  const attachStreamToPeer = useCallback(
+    async (
+      stream: MediaStream,
+      mode: Extract<LiveMode, "screen" | "camera">,
+    ) => {
+      const me = userRef.current;
+      if (!me) {
+        stream.getTracks().forEach((t) => t.stop());
+        setLastError("Connecte-toi pour lancer un live.");
+        return;
+      }
+      try {
+        const { default: PeerCtor } = await import("peerjs");
+        // Garde-fou anti race-condition : si le host a stoppé le partage ou
+        // quitté la page pendant l'import dynamique, `stopLive()` a déjà tourné
+        // et `localStreamRef.current` ne pointe plus sur notre stream.
+        if (localStreamRef.current !== stream) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        const peerId = getLivePeerId(me.id);
+        const peer = new PeerCtor(peerId, { debug: 1 });
+        hostPeerRef.current = peer;
+        let peerOpened = false;
+
+        peer.on("open", () => {
+          peerOpened = true;
+          const startedAt = new Date().toISOString();
+          setConfig((c) => ({
+            ...c,
+            status: "live",
+            mode,
+            startedAt,
+          }));
+          updateRegistry((r) => ({
+            ...r,
+            [me.id]: {
+              userId: me.id,
+              username: me.username,
+              avatar: me.avatar,
+              title:
+                configRef.current.title.trim() || `${me.username} en direct`,
+              description: configRef.current.description.trim(),
+              mode,
+              category: configRef.current.category,
+              twitchChannel: "",
+              startedAt,
+              lastHeartbeat: startedAt,
+            },
+          }));
+        });
+
+        peer.on("error", (err: Error & { type?: string }) => {
+          if (!peerOpened) {
+            const friendly =
+              err.type === "unavailable-id"
+                ? "Un live Vaelyndra est déjà actif à ton nom ailleurs. Ferme l'autre onglet."
+                : `Impossible de démarrer le relais live : ${err.message || err.type || "erreur inconnue"}`;
+            setLastError(friendly);
+            stopLive();
+            return;
+          }
+          console.warn("PeerJS host error after open", err);
+        });
+
+        peer.on("disconnected", () => {
+          if (peerOpened) {
+            setLastError(
+              "La connexion au serveur de relais a été perdue. Relance un live quand tu es prêt.",
+            );
+            stopLive();
+          }
+        });
+
+        peer.on("call", (incoming) => {
+          // Un viewer nous appelle — on lui envoie toujours le flux actif
+          // (`localStreamRef.current`, pas la capture locale `stream`). Ça
+          // garantit qu'un `switchCamera` qui recrée le stream sert la
+          // nouvelle source aux nouveaux viewers (les anciens gardent leur
+          // track remplacée via `RTCRtpSender.replaceTrack`).
+          const active = localStreamRef.current ?? stream;
+          incoming.answer(active);
+          hostConnectionsRef.current.add(incoming);
+          incoming.on("close", () => {
+            hostConnectionsRef.current.delete(incoming);
+          });
+        });
+
+        peer.on("connection", (dataConn) => {
+          // Le viewer ouvre une DataConnection juste pour réclamer les métas.
+          dataConn.on("open", () => {
+            try {
+              dataConn.send({
+                type: "live-meta",
+                title: configRef.current.title,
+                description: configRef.current.description,
+                mode,
+              });
+            } catch {
+              // ignore
+            }
+          });
+        });
+      } catch (err) {
+        setLastError(
+          `Impossible de démarrer le relais WebRTC : ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+        stream.getTracks().forEach((t) => t.stop());
+        localStreamRef.current = null;
+        setLocalStream(null);
+        return;
+      }
+    },
+    [stopLive, updateRegistry],
+  );
+
   const startScreenShare = useCallback(async () => {
     const me = userRef.current;
     if (!me) {
@@ -439,8 +592,17 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     // navigateur actif sans moyen de le couper depuis l'app.
     if (hostPeerRef.current || localStreamRef.current) return;
     setLastError(null);
-    if (typeof navigator === "undefined" || !navigator.mediaDevices) {
-      setLastError("Ton navigateur ne supporte pas le partage d'écran.");
+    if (
+      typeof navigator === "undefined" ||
+      !navigator.mediaDevices ||
+      typeof navigator.mediaDevices.getDisplayMedia !== "function"
+    ) {
+      // iOS Safari (<= 18) et la plupart des navigateurs Android n'exposent
+      // pas `getDisplayMedia`. On le signale explicitement pour que l'UI
+      // oriente vers le mode "camera" au lieu d'un échec silencieux.
+      setLastError(
+        "Ton navigateur ne supporte pas le partage d'écran. Utilise le mode caméra (dispo sur mobile).",
+      );
       return;
     }
     let stream: MediaStream;
@@ -465,107 +627,155 @@ export function LiveProvider({ children }: { children: ReactNode }) {
 
     localStreamRef.current = stream;
     setLocalStream(stream);
+    await attachStreamToPeer(stream, "screen");
+  }, [attachStreamToPeer, stopLive]);
 
-    try {
-      const { default: PeerCtor } = await import("peerjs");
-      // Garde-fou anti race-condition : si le host a stoppé le partage ou
-      // quitté la page pendant l'import dynamique, `stopLive()` a déjà tourné
-      // et `localStreamRef.current` ne pointe plus sur notre stream.
-      if (localStreamRef.current !== stream) {
-        stream.getTracks().forEach((t) => t.stop());
+  const startCameraShare = useCallback(
+    async (facingMode: CameraFacing = "user") => {
+      const me = userRef.current;
+      if (!me) {
+        setLastError("Connecte-toi pour lancer un live.");
         return;
       }
-      const peerId = getLivePeerId(me.id);
-      const peer = new PeerCtor(peerId, { debug: 1 });
-      hostPeerRef.current = peer;
-      let peerOpened = false;
-
-      peer.on("open", () => {
-        peerOpened = true;
-        const startedAt = new Date().toISOString();
-        setConfig((c) => ({
-          ...c,
-          status: "live",
-          mode: "screen",
-          startedAt,
-        }));
-        // Enregistre dans le registre public pour que le fil
-        // communautaire et les autres onglets voient le live.
-        updateRegistry((r) => ({
-          ...r,
-          [me.id]: {
-            userId: me.id,
-            username: me.username,
-            avatar: me.avatar,
-            title: configRef.current.title.trim() || `${me.username} en direct`,
-            description: configRef.current.description.trim(),
-            mode: "screen",
-            category: configRef.current.category,
-            twitchChannel: "",
-            startedAt,
-            lastHeartbeat: startedAt,
+      if (hostPeerRef.current || localStreamRef.current) return;
+      setLastError(null);
+      if (
+        typeof navigator === "undefined" ||
+        !navigator.mediaDevices ||
+        typeof navigator.mediaDevices.getUserMedia !== "function"
+      ) {
+        setLastError("Ton navigateur ne supporte pas l'accès caméra.");
+        return;
+      }
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          // `facingMode` est un hint : sur desktop (webcam unique), le
+          // navigateur ignore et prend la seule caméra dispo.
+          video: {
+            facingMode: { ideal: facingMode },
+            frameRate: { ideal: 30 },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
           },
-        }));
-      });
-
-      peer.on("error", (err: Error & { type?: string }) => {
-        if (!peerOpened) {
-          const friendly =
-            err.type === "unavailable-id"
-              ? "Un live Vaelyndra est déjà actif à ton nom ailleurs. Ferme l'autre onglet."
-              : `Impossible de démarrer le relais live : ${err.message || err.type || "erreur inconnue"}`;
-          setLastError(friendly);
-          stopLive();
-          return;
-        }
-        console.warn("PeerJS host error after open", err);
-      });
-
-      peer.on("disconnected", () => {
-        if (peerOpened) {
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+          },
+        });
+      } catch (err) {
+        if (err instanceof Error && err.name !== "NotAllowedError") {
+          setLastError(`Impossible d'accéder à la caméra : ${err.message}`);
+        } else if (err instanceof Error) {
           setLastError(
-            "La connexion au serveur de relais a été perdue. Relance un live quand tu es prêt.",
+            "Autorise l'accès à la caméra et au micro pour lancer ton live.",
           );
-          stopLive();
         }
-      });
-
-      peer.on("call", (incoming) => {
-        // Un viewer nous appelle — on lui envoie notre flux.
-        incoming.answer(stream);
-        hostConnectionsRef.current.add(incoming);
-        incoming.on("close", () => {
-          hostConnectionsRef.current.delete(incoming);
+        return;
+      }
+      setCameraFacing(facingMode);
+      stream.getVideoTracks().forEach((track) => {
+        track.addEventListener("ended", () => {
+          if (localStreamRef.current === stream) stopLive();
         });
       });
+      localStreamRef.current = stream;
+      setLocalStream(stream);
+      await attachStreamToPeer(stream, "camera");
+    },
+    [attachStreamToPeer, stopLive],
+  );
 
-      peer.on("connection", (dataConn) => {
-        // Le viewer ouvre une DataConnection juste pour réclamer les métas.
-        dataConn.on("open", () => {
-          try {
-            dataConn.send({
-              type: "live-meta",
-              title: configRef.current.title,
-              description: configRef.current.description,
-              mode: "screen",
-            });
-          } catch {
-            // ignore
-          }
-        });
-      });
-    } catch (err) {
-      setLastError(
-        `Impossible de démarrer le relais WebRTC : ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      );
-      stream.getTracks().forEach((t) => t.stop());
-      localStreamRef.current = null;
-      setLocalStream(null);
+  /**
+   * Bascule entre caméra frontale et arrière sans couper le peer. On
+   * ouvre un nouveau flux avec l'autre `facingMode`, on remplace la
+   * track vidéo sur tous les `RTCRtpSender` existants (viewers en cours),
+   * et on stoppe l'ancienne track.
+   */
+  const switchCamera = useCallback(async () => {
+    if (configRef.current.mode !== "camera") return;
+    // Verrou re-entrant : tant que le swap précédent n'est pas fini, on
+    // ignore les nouveaux appels. Sans ça un double-tap rapide ouvre deux
+    // MediaStream, le premier n'est jamais stoppé (fuite caméra/micro).
+    if (switchingCameraRef.current) return;
+    const current = localStreamRef.current;
+    if (!current) return;
+    if (
+      typeof navigator === "undefined" ||
+      !navigator.mediaDevices ||
+      typeof navigator.mediaDevices.getUserMedia !== "function"
+    ) {
       return;
     }
-  }, [stopLive, updateRegistry]);
+    switchingCameraRef.current = true;
+    try {
+      const nextFacing: CameraFacing =
+        cameraFacing === "user" ? "environment" : "user";
+      let next: MediaStream;
+      try {
+        next = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: nextFacing },
+            frameRate: { ideal: 30 },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+          },
+        });
+      } catch (err) {
+        if (err instanceof Error) {
+          setLastError(`Impossible de changer de caméra : ${err.message}`);
+        }
+        return;
+      }
+
+      // Si le live a été stoppé pendant le `await` (stopLive l'a nettoyé),
+      // on jette le nouveau stream au lieu de le raccrocher à un peer mort.
+      if (localStreamRef.current !== current) {
+        next.getTracks().forEach((t) => t.stop());
+        return;
+      }
+
+      const newVideoTrack = next.getVideoTracks()[0];
+      const newAudioTrack = next.getAudioTracks()[0];
+      if (!newVideoTrack) {
+        next.getTracks().forEach((t) => t.stop());
+        return;
+      }
+
+      // Remplace les tracks sur toutes les MediaConnection viewers en cours.
+      // `replaceTrack` est préféré à la renégociation complète : pas de
+      // re-offer SDP, pas de coupure visible côté viewers.
+      hostConnectionsRef.current.forEach((call) => {
+        const senders = call.peerConnection?.getSenders() ?? [];
+        for (const sender of senders) {
+          if (sender.track?.kind === "video") {
+            sender.replaceTrack(newVideoTrack).catch(() => {
+              /* ignore — la connexion peut être en cours de fermeture */
+            });
+          } else if (sender.track?.kind === "audio" && newAudioTrack) {
+            sender.replaceTrack(newAudioTrack).catch(() => {
+              /* ignore */
+            });
+          }
+        }
+      });
+
+      // Stoppe l'ancien stream (tracks) puis publie le nouveau côté host.
+      current.getTracks().forEach((t) => t.stop());
+      newVideoTrack.addEventListener("ended", () => {
+        if (localStreamRef.current === next) stopLive();
+      });
+      localStreamRef.current = next;
+      setLocalStream(next);
+      setCameraFacing(nextFacing);
+    } finally {
+      switchingCameraRef.current = false;
+    }
+  }, [cameraFacing, stopLive]);
 
   /**
    * Côté viewer : tente activement de rejoindre le live d'un broadcaster
@@ -637,7 +847,9 @@ export function LiveProvider({ children }: { children: ReactNode }) {
                     ? meta.description
                     : "",
                 mode:
-                  meta.mode === "twitch" || meta.mode === "screen"
+                  meta.mode === "twitch" ||
+                  meta.mode === "screen" ||
+                  meta.mode === "camera"
                     ? meta.mode
                     : "screen",
               });
@@ -761,6 +973,9 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       liveRegistry,
       announceTwitchLive,
       startScreenShare,
+      startCameraShare,
+      switchCamera,
+      cameraFacing,
       stopLive,
       joinAsViewer,
       remoteStream,
@@ -775,6 +990,9 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       liveRegistry,
       announceTwitchLive,
       startScreenShare,
+      startCameraShare,
+      switchCamera,
+      cameraFacing,
       stopLive,
       joinAsViewer,
       remoteStream,

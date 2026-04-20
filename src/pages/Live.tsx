@@ -13,6 +13,8 @@ import {
   Eye,
   EyeOff,
   Video,
+  Camera,
+  RefreshCw,
 } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { useStore } from "../contexts/StoreContext";
@@ -135,6 +137,136 @@ function TwitchEmbed({ channel }: { channel: string }) {
  * permet de démarrer son propre live (partage d'écran pour tous, OBS/Twitch
  * gatekeeping réservé aux admins/animateurs officiels).
  */
+/**
+ * Détection support `getDisplayMedia`. iOS Safari (toutes versions à date
+ * d'avril 2026) et la plupart des navigateurs Android renvoient `undefined`.
+ * On bascule l'UI de mode de diffusion en fonction pour éviter de proposer
+ * "Partage d'écran" à un mobile qui ne pourra pas l'exécuter.
+ *
+ * Pas de `useState` ici : les capacités du navigateur sont stables pendant
+ * la durée de vie de la page (pas de SSR dans Vaelyndra, c'est du Vite SPA),
+ * donc un simple test synchrone suffit.
+ */
+function isScreenShareSupported(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return (
+    !!navigator.mediaDevices &&
+    typeof navigator.mediaDevices.getDisplayMedia === "function"
+  );
+}
+
+function isCameraSupported(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return (
+    !!navigator.mediaDevices &&
+    typeof navigator.mediaDevices.getUserMedia === "function"
+  );
+}
+
+/**
+ * Panneau d'aide pour les users iPhone : explique le parcours "streamer
+ * depuis mon iPhone" via Twitch Mobile → embed automatique sur Vaelyndra.
+ * Sur iOS, le partage d'écran web n'est pas possible (Apple bloque
+ * `getDisplayMedia`), donc l'app Twitch est le chemin officiel.
+ *
+ * `prominent` : si true, le panel est affiché déplié d'emblée (cas d'un
+ * user qui a pas getDisplayMedia). Sinon il apparaît replié en
+ * collapsible pour ne pas polluer l'UI desktop.
+ */
+function IosStreamingHelp({
+  prominent,
+  isQueen,
+}: {
+  prominent: boolean;
+  isQueen: boolean;
+}) {
+  const [open, setOpen] = useState(prominent);
+  return (
+    <div
+      className={`mt-5 overflow-hidden rounded-2xl border ${
+        prominent
+          ? "border-amber-400/40 bg-amber-500/5"
+          : "border-royal-500/30 bg-night-900/30"
+      }`}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+      >
+        <span className="flex items-center gap-2">
+          <span className="text-lg" aria-hidden>
+            📱
+          </span>
+          <span>
+            <span className="block font-display text-sm text-gold-200">
+              Tu streames depuis un iPhone&nbsp;?
+            </span>
+            <span className="block text-[11px] leading-snug text-ivory/55">
+              {prominent
+                ? "Apple bloque le partage d'écran web sur iOS — voici le chemin officiel."
+                : "Pas-à-pas pour streamer tes jeux mobiles via Twitch."}
+            </span>
+          </span>
+        </span>
+        <span className="text-ivory/45">{open ? "−" : "+"}</span>
+      </button>
+      {open && (
+        <div className="space-y-3 border-t border-ivory/10 px-4 py-4 text-xs text-ivory/70">
+          <p>
+            Sur iPhone, le partage d'écran direct via navigateur n'est pas
+            supporté (décision d'Apple, rien à voir avec Vaelyndra). Le
+            chemin officiel pour streamer tes jeux ou apps mobiles&nbsp;:
+          </p>
+          <ol className="list-decimal space-y-2 pl-5">
+            <li>
+              Installe <strong className="text-gold-200">Twitch</strong>{" "}
+              depuis l'App Store (gratuit).
+            </li>
+            <li>
+              Crée un compte Twitch (si pas déjà fait) et connecte-toi dans
+              l'app.
+            </li>
+            <li>
+              Dans l'app Twitch, appuie sur ton avatar →{" "}
+              <strong>Go Live</strong> → <strong>Partager l'écran</strong>.
+              Tu peux streamer n'importe quel jeu / application ouverte
+              sur ton iPhone.
+            </li>
+            <li>
+              Récupère ton <strong>nom de chaîne Twitch</strong> (ex:{" "}
+              <code className="rounded bg-night-900/60 px-1 py-0.5">
+                tonpseudo
+              </code>
+              ).
+            </li>
+            {isQueen ? (
+              <li>
+                Sur Vaelyndra, choisis le mode{" "}
+                <strong>OBS + Twitch</strong> ci-dessus, colle ton nom de
+                chaîne, clique "Annoncer le live Twitch". Vaelyndra embed
+                automatiquement ton flux Twitch.
+              </li>
+            ) : (
+              <li>
+                Sur Vaelyndra, demande à un <strong>admin/animateur</strong>{" "}
+                d'activer le mode Twitch pour ton compte (bientôt
+                accessible à tous les streamers certifiés — le mode est
+                pour l'instant en beta réservée).
+              </li>
+            )}
+          </ol>
+          <p className="text-ivory/50">
+            Android fonctionne directement via le mode "Partage d'écran"
+            ci-dessus (Chrome supporte nativement le partage d'écran depuis
+            Android). Pas besoin de Twitch sur Android sauf si tu préfères.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function BroadcasterControls() {
   const { user, isQueen } = useAuth();
   const { notify } = useToast();
@@ -142,11 +274,16 @@ function BroadcasterControls() {
     config,
     updateConfig,
     startScreenShare,
+    startCameraShare,
+    switchCamera,
+    cameraFacing,
     stopLive,
     announceTwitchLive,
     lastError,
   } = useLive();
   const [showKey, setShowKey] = useState(false);
+  const screenShareSupported = isScreenShareSupported();
+  const cameraSupported = isCameraSupported();
 
   const isLive = config.status === "live";
 
@@ -154,10 +291,16 @@ function BroadcasterControls() {
     if (lastError) notify(lastError, "info");
   }, [lastError, notify]);
 
-  // Les non-queen n'ont que le mode "screen". On force.
+  // Les non-queen n'ont pas accès au mode "twitch" (gatekeeping officiels).
+  // Si leur config pointe dessus (bascule dev/admin puis retour user), on
+  // réoriente vers le partage d'écran par défaut. On NE bascule PAS
+  // automatiquement vers "camera" sur mobile : Android Chrome supporte
+  // getDisplayMedia pour streamer ses jeux, et les users iOS préfèrent
+  // utiliser l'app Twitch mobile (documentée plus bas) plutôt que la
+  // caméra frontale. L'utilisateur choisit explicitement.
   useEffect(() => {
     if (!user) return;
-    if (!isQueen && config.mode !== "screen") {
+    if (!isQueen && config.mode === "twitch") {
       updateConfig({ mode: "screen" });
     }
   }, [user, isQueen, config.mode, updateConfig]);
@@ -178,19 +321,25 @@ function BroadcasterControls() {
       notify("Donne un titre à ton live.", "info");
       return;
     }
+    if (config.mode === "camera") {
+      // `facing` par défaut = frontale sur mobile (selfie), seule caméra
+      // dispo sur desktop (webcam intégrée).
+      await startCameraShare("user");
+      return;
+    }
     if (config.mode === "screen") {
       await startScreenShare();
-    } else {
-      const handle = extractTwitchChannel(config.twitchChannel);
-      if (!handle) {
-        notify("Renseigne ton nom de chaîne Twitch.", "info");
-        return;
-      }
-      updateConfig({ twitchChannel: handle });
-      // On passe explicitement `handle` : updateConfig est batché donc
-      // configRef.current lit encore la valeur brute pré-normalisation.
-      announceTwitchLive(handle);
+      return;
     }
+    const handle = extractTwitchChannel(config.twitchChannel);
+    if (!handle) {
+      notify("Renseigne ton nom de chaîne Twitch.", "info");
+      return;
+    }
+    updateConfig({ twitchChannel: handle });
+    // On passe explicitement `handle` : updateConfig est batché donc
+    // configRef.current lit encore la valeur brute pré-normalisation.
+    announceTwitchLive(handle);
   }
 
   return (
@@ -300,33 +449,75 @@ function BroadcasterControls() {
         </div>
       </fieldset>
 
-      {isQueen && (
-        <fieldset className="mt-5">
-          <legend className="mb-2 font-regal text-[11px] uppercase tracking-[0.22em] text-ivory/60">
-            Mode de diffusion
-          </legend>
-          <div className="grid gap-3 md:grid-cols-2">
-            <button
-              type="button"
-              onClick={() => !isLive && updateConfig({ mode: "screen" })}
-              disabled={isLive}
-              className={`card-royal flex items-start gap-3 p-4 text-left transition ${
-                config.mode === "screen"
-                  ? "ring-1 ring-gold-400/60"
-                  : "opacity-80 hover:opacity-100"
-              } disabled:cursor-not-allowed`}
-            >
-              <Monitor className="mt-0.5 h-5 w-5 text-gold-300" />
-              <div>
-                <p className="font-display text-base text-gold-200">
-                  Partage d'écran direct
-                </p>
-                <p className="mt-1 text-xs text-ivory/60">
-                  Zéro install. Ton navigateur partage un écran/onglet/appli
-                  et les viewers le voient en live via WebRTC.
-                </p>
-              </div>
-            </button>
+      <fieldset className="mt-5">
+        <legend className="mb-2 font-regal text-[11px] uppercase tracking-[0.22em] text-ivory/60">
+          Mode de diffusion
+        </legend>
+        <div
+          className={`grid gap-3 ${
+            isQueen ? "md:grid-cols-3" : "md:grid-cols-2"
+          }`}
+        >
+          <button
+            type="button"
+            onClick={() =>
+              !isLive && cameraSupported && updateConfig({ mode: "camera" })
+            }
+            disabled={isLive || !cameraSupported}
+            className={`card-royal flex items-start gap-3 p-4 text-left transition ${
+              config.mode === "camera"
+                ? "ring-1 ring-gold-400/60"
+                : "opacity-80 hover:opacity-100"
+            } disabled:cursor-not-allowed disabled:opacity-40`}
+          >
+            <Camera className="mt-0.5 h-5 w-5 text-gold-300" />
+            <div>
+              <p className="font-display text-base text-gold-200">
+                Caméra
+                <span className="ml-2 rounded-full border border-emerald-300/40 bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.2em] text-emerald-200">
+                  mobile + pc
+                </span>
+              </p>
+              <p className="mt-1 text-xs text-ivory/60">
+                {cameraSupported
+                  ? "Lance un live depuis ta caméra (frontale ou arrière sur mobile, webcam sur PC). Le mode le plus simple."
+                  : "Ton navigateur ne donne pas accès à la caméra."}
+              </p>
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              !isLive && screenShareSupported && updateConfig({ mode: "screen" })
+            }
+            disabled={isLive || !screenShareSupported}
+            className={`card-royal flex items-start gap-3 p-4 text-left transition ${
+              config.mode === "screen"
+                ? "ring-1 ring-gold-400/60"
+                : "opacity-80 hover:opacity-100"
+            } disabled:cursor-not-allowed disabled:opacity-40`}
+            title={
+              screenShareSupported
+                ? undefined
+                : "Le partage d'écran web n'est pas supporté sur iPhone. Utilise l'app Twitch mobile (pas-à-pas ci-dessous)."
+            }
+          >
+            <Monitor className="mt-0.5 h-5 w-5 text-gold-300" />
+            <div>
+              <p className="font-display text-base text-gold-200">
+                Partage d'écran
+                <span className="ml-2 rounded-full border border-sky-300/40 bg-sky-500/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.2em] text-sky-200">
+                  pc + android
+                </span>
+              </p>
+              <p className="mt-1 text-xs text-ivory/60">
+                {screenShareSupported
+                  ? "Stream ton écran (jeu, appli, navigateur…) directement. Marche sur PC et sur Android Chrome."
+                  : "Ton navigateur ne permet pas le partage d'écran. Sur iPhone, utilise l'app Twitch mobile (voir ci-dessous)."}
+              </p>
+            </div>
+          </button>
+          {isQueen && (
             <button
               type="button"
               onClick={() => !isLive && updateConfig({ mode: "twitch" })}
@@ -348,9 +539,14 @@ function BroadcasterControls() {
                 </p>
               </div>
             </button>
-          </div>
-        </fieldset>
-      )}
+          )}
+        </div>
+      </fieldset>
+
+      <IosStreamingHelp
+        prominent={!screenShareSupported}
+        isQueen={isQueen}
+      />
 
       {isQueen && config.mode === "twitch" && (
         <div className="mt-5 grid gap-4 md:grid-cols-2">
@@ -424,14 +620,34 @@ function BroadcasterControls() {
         {!isLive ? (
           <button onClick={goLive} className="btn-royal">
             <Radio className="h-4 w-4" />
-            {config.mode === "screen"
-              ? "Partager mon écran"
-              : "Annoncer le live Twitch"}
+            {config.mode === "camera"
+              ? "Passer en direct (caméra)"
+              : config.mode === "screen"
+                ? "Partager mon écran"
+                : "Annoncer le live Twitch"}
           </button>
         ) : (
           <button onClick={stopLive} className="btn-ghost">
             <StopCircle className="h-4 w-4" /> Terminer mon live
           </button>
+        )}
+        {isLive && config.mode === "camera" && (
+          <button
+            onClick={() => switchCamera()}
+            className="btn-ghost"
+            title="Basculer entre caméra frontale et arrière"
+          >
+            <RefreshCw className="h-4 w-4" />
+            {cameraFacing === "user"
+              ? "Passer en caméra arrière"
+              : "Passer en caméra frontale"}
+          </button>
+        )}
+        {isLive && config.mode === "camera" && (
+          <p className="text-xs text-ivory/55">
+            Autorise caméra + micro dans ton navigateur. Garde cet onglet
+            ouvert.
+          </p>
         )}
         {isLive && config.mode === "screen" && (
           <p className="text-xs text-ivory/55">
@@ -572,7 +788,7 @@ export function Live() {
   const twitchChannel = extractTwitchChannel(
     registryEntry?.twitchChannel ?? (amBroadcaster ? config.twitchChannel : ""),
   );
-  const activeMode: "screen" | "twitch" =
+  const activeMode: "screen" | "camera" | "twitch" =
     registryEntry?.mode ??
     viewingMeta?.mode ??
     (amBroadcaster ? config.mode : "screen");
@@ -815,7 +1031,8 @@ export function Live() {
             <div className="relative aspect-video w-full overflow-hidden bg-night-900">
               {showViewer ? (
                 <>
-                  {activeMode === "screen" && (
+                  {(activeMode === "screen" ||
+                    activeMode === "camera") && (
                     <LiveVideoStage
                       isHost={isHost}
                       localStream={localStream}
@@ -890,7 +1107,8 @@ export function Live() {
                     </div>
                   </div>
                 </>
-              ) : isActiveLive && activeMode === "screen" ? (
+              ) : isActiveLive &&
+                (activeMode === "screen" || activeMode === "camera") ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-center">
                   <img
                     src={broadcasterProfile?.avatar ?? DREYNA_PROFILE.avatar}
