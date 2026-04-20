@@ -250,7 +250,7 @@ function ArticlesAdmin() {
             }
           >
             <option>Lore</option>
-            <option>IRL / ZEPETO</option>
+            <option>Lifestyle</option>
             <option>Annonces</option>
             <option>Communauté</option>
           </select>

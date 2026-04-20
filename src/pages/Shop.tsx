@@ -42,7 +42,7 @@ export function Shop() {
       <SectionHeading
         eyebrow="Boutique Royale"
         title={<>Les trésors de <span className="text-mystic">Vaelyndra</span></>}
-        subtitle="Merch fantasy, drops ZEPETO, accès VIP et objets sacrés. Stock limité."
+        subtitle="Merch fantasy, tenues numériques, accès VIP et objets sacrés. Stock limité."
       />
 
       {featured && (

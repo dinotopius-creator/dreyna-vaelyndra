@@ -18,19 +18,17 @@ export function CGU() {
 
       <h2>1. Objet du Royaume</h2>
       <p>
-        Vaelyndra est une plateforme communautaire animée par{" "}
-        <strong>Dreyna</strong>, créatrice ZEPETO (programme HOT), rassemblant
-        ses fans autour d'un univers fantasy. Le Royaume permet notamment :
+        Vaelyndra est un <strong>mini-réseau social féerique</strong> : une
+        plateforme communautaire où chaque membre peut poster, streamer, tisser
+        des liens d'âme et gravir les grades de la cour. Le Royaume permet
+        notamment :
       </p>
       <ul>
-        <li>la lecture de chroniques, la découverte du profil de Dreyna,</li>
+        <li>la lecture de chroniques et la découverte des profils d'autres membres,</li>
         <li>la participation à une communauté (posts, commentaires, réactions),</li>
-        <li>l'accès aux lives de Dreyna (partage d'écran ou flux Twitch),</li>
-        <li>
-          à terme, la réalisation de <strong>lives personnels</strong> par les
-          membres autorisés, avec mise en avant graduelle des plus actifs dans
-          la rubrique « Top lives »,
-        </li>
+        <li>la réalisation de <strong>lives personnels</strong> par les membres
+          autorisés, avec mise en avant graduelle des plus actifs dans la rubrique
+          « Top lives » et progression automatique dans les 6 grades de streamer,</li>
         <li>
           l'achat de <strong>Sylvins de Vaelyndra</strong> (monnaie virtuelle
           interne) permettant d'offrir des cadeaux animés en direct,

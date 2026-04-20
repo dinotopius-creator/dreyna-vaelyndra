@@ -132,7 +132,7 @@ function TwitchEmbed({ channel }: { channel: string }) {
 /**
  * Panneau de contrôle du broadcaster : visible à tout membre connecté, lui
  * permet de démarrer son propre live (partage d'écran pour tous, OBS/Twitch
- * réservé à la reine pour garder le garde-fou ZEPETO).
+ * gatekeeping réservé aux admins/animateurs officiels).
  */
 function BroadcasterControls() {
   const { user, isQueen } = useAuth();

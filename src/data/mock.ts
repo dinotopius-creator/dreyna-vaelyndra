@@ -7,42 +7,30 @@ import type {
   LiveSession,
   Product,
 } from "../types";
-import dreynaZepetoPhoto from "../assets/dreyna-zepeto.png";
-import zepetoStats from "./zepeto-stats.json";
-
-export const ZEPETO_LIVE_STATS = zepetoStats as {
-  source: string;
-  handle: string;
-  followers: number;
-  following: number | null;
-  posts: number;
-  fetchedAt: string;
-};
+import dreynaPhoto from "../assets/dreyna-zepeto.png";
 
 export const DREYNA_PROFILE = {
   id: "user-dreyna",
   username: "Dreyna",
   email: "dreyna@vaelyndra.realm",
-  avatar: dreynaZepetoPhoto,
+  avatar: dreynaPhoto,
   role: "queen" as const,
   joinedAt: "2021-03-21T00:00:00Z",
   bio:
-    "Reine des elfes du royaume de Vaelyndra. Gardienne de la Lumière d'Elennor, créatrice ZEPETO du programme HOT 🔥, Top 2 de l'événement Magic Academy.",
+    "Elfe originelle du royaume de Vaelyndra. Gardienne de la Lumière d'Elennor.",
   socials: {
-    zepeto: "https://web.zepeto.me/share/user/profile/dreynakame",
     youtube: "https://www.youtube.com/@Dreynakame",
-    zepetoHandle: "@dreynakame",
     youtubeHandle: "@Dreynakame",
   },
   titles: [
-    "Reine des Elfes de Vaelyndra",
+    "Elfe originelle de Vaelyndra",
     "Gardienne de la Lumière d'Elennor",
     "Porteuse de la Couronne d'Aube",
   ],
   stats: {
-    followers: ZEPETO_LIVE_STATS.followers,
+    followers: 3_800,
     likes: 24_800,
-    articles: ZEPETO_LIVE_STATS.posts,
+    articles: 12,
     lives: 24,
     communityMembers: 1_240,
   },
@@ -79,10 +67,10 @@ export const BADGES: Badge[] = [
     rarity: "rare",
   },
   {
-    id: "zepeto-hot",
-    name: "Programme HOT · ZEPETO",
+    id: "flamme-royale",
+    name: "Flamme Royale",
     description:
-      "Créatrice sélectionnée dans le programme HOT de ZEPETO — flammes de la cour.",
+      "Réservé aux étincelles reconnues par la cour — portent la flamme des anciens.",
     icon: "🔥",
     rarity: "mythique",
   },
@@ -142,19 +130,19 @@ export const INITIAL_ARTICLES: Article[] = [
   },
   {
     id: "art-2",
-    slug: "nouvelle-collection-zepeto-aube",
-    title: "La collection ZEPETO « Aube d'Elennor » est arrivée",
+    slug: "nouvelle-collection-aube",
+    title: "La collection « Aube d'Elennor » est arrivée",
     excerpt:
       "Une collection entière inspirée des robes de lune et des armures de feuillage argenté.",
     content:
       "Cette saison, j'ai imaginé une collection en trois actes : **Aube**, **Crépuscule**, **Nocturne**. Chaque pièce porte la marque d'un sort elfique que j'ai rêvé des semaines durant.\n\nLes items exclusifs sont disponibles dès maintenant dans la Boutique Royale — certains ne reviendront jamais.",
-    category: "IRL / ZEPETO",
+    category: "Lifestyle",
     cover:
       "https://images.unsplash.com/photo-1578632749014-ca77efd052eb?w=1600&auto=format&fit=crop&q=80",
     author: "Dreyna",
     createdAt: "2025-04-02T15:00:00Z",
     readingTime: 3,
-    tags: ["zepeto", "collection", "mode"],
+    tags: ["collection", "mode", "aube"],
     likes: [],
     comments: [],
   },
@@ -231,10 +219,11 @@ export const INITIAL_PRODUCTS: Product[] = [
   },
   {
     id: "prod-pack",
-    name: "Pack ZEPETO · Elennor",
+    name: "Pack Avatar · Elennor",
     tagline: "Tenue numérique exclusive",
     description:
-      "Tenue, coiffe et accessoires animés pour votre avatar ZEPETO, signés Dreyna.",
+      "Tenue, coiffe et accessoires animés pour votre avatar Vaelyndra — signés par la cour.",
+
     price: 19,
     currency: "€",
     image:
@@ -242,7 +231,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     category: "Digital",
     rating: 4.7,
     stock: 500,
-    tags: ["digital", "zepeto"],
+    tags: ["digital", "avatar"],
     featured: true,
   },
   {
@@ -410,7 +399,7 @@ export const INITIAL_LIVES: LiveSession[] = [
   },
   {
     id: "live-2",
-    title: "ZEPETO Runway · Collection Aube",
+    title: "Runway · Collection Aube",
     description: "Défilé numérique, tirages au sort et révélations.",
     cover:
       "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=1600&auto=format&fit=crop&q=80",
