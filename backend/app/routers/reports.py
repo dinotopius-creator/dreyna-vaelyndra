@@ -14,7 +14,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
@@ -59,6 +59,7 @@ class ReportCreateOut(BaseModel):
 @router.post("", response_model=ReportCreateOut, status_code=201)
 def create_report(
     body: ReportCreateIn,
+    response: Response,
     user: UserProfile = Depends(require_auth),
     session: Session = Depends(_session_dep),
 ) -> ReportCreateOut:
@@ -87,6 +88,10 @@ def create_report(
     ).all()
     for r in existing:
         if (r.created_at or "").startswith(today_prefix):
+            # Doublon : on renvoie l'existant en 200 (pas 201 comme la création
+            # d'un nouveau report) pour que le client puisse distinguer les deux
+            # cas — override du status_code=201 du décorateur via `response`.
+            response.status_code = 200
             return ReportCreateOut(id=r.id or 0, createdAt=r.created_at)
 
     entry = Report(
