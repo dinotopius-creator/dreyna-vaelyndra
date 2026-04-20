@@ -100,7 +100,14 @@ export function formatXp(xp: number): string {
  * un type local pour éviter d'éparpiller la shape dans tout le frontend.
  */
 export interface StreamerGrade {
-  slug: GradeSlug;
+  /**
+   * Slug du grade. Côté backend c'est toujours une valeur de `GradeSlug`,
+   * mais on le laisse `string` ici pour rester compatible avec le DTO
+   * `StreamerGradeDto` produit par l'API (qui est pareil structurellement
+   * mais typé `string`). Le badge ne fait pas de switch dessus — il consomme
+   * directement `emoji`, `name`, `color`, etc.
+   */
+  slug: string;
   name: string;
   emoji: string;
   motto: string;
