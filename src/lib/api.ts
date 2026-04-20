@@ -363,6 +363,78 @@ export async function apiGiftSylvins(input: {
   )) as GiftTransferDto;
 }
 
+// --- Classement streamers + BFF -------------------------------------------
+
+export interface CreatureDto {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  description: string;
+}
+
+export interface StreamerMiniDto {
+  id: string;
+  username: string;
+  avatarImageUrl: string;
+  creature: CreatureDto | null;
+  role: string;
+}
+
+export interface StreamerLeaderboardEntryDto {
+  rank: number;
+  userId: string;
+  username: string;
+  avatarImageUrl: string;
+  totalSylvins: number;
+  creature: CreatureDto | null;
+  role: string;
+}
+
+export interface StreamerLeaderboardDto {
+  week: "this" | "last";
+  weekStart: string;
+  weekEnd: string;
+  entries: StreamerLeaderboardEntryDto[];
+}
+
+export interface BFFEntryDto {
+  streamer: StreamerMiniDto;
+  donor: StreamerMiniDto;
+  totalSylvins: number;
+}
+
+/**
+ * Classement hebdomadaire des streamers par Sylvins reçus.
+ * - `week=this` (défaut) : semaine ISO en cours, mise à jour temps réel
+ *   (chaque cadeau écrit une ligne de ledger côté backend).
+ * - `week=last` : semaine précédente, figée.
+ */
+export async function apiGetStreamerLeaderboard(
+  week: "this" | "last" = "this",
+  limit = 50,
+): Promise<StreamerLeaderboardDto> {
+  return (await request<StreamerLeaderboardDto>(
+    `/streamers/leaderboard?week=${week}&limit=${limit}`,
+  )) as StreamerLeaderboardDto;
+}
+
+/**
+ * Duos BFF : pour chaque streamer, son plus gros donateur.
+ * `week="all"` par défaut (historique complet) — choix délibéré pour
+ * refléter une relation stable plutôt qu'éphémère.
+ */
+export async function apiGetBFFs(
+  week: "this" | "last" | "all" = "all",
+  limit = 20,
+): Promise<BFFEntryDto[]> {
+  return (
+    (await request<BFFEntryDto[]>(
+      `/streamers/bff?week=${week}&limit=${limit}`,
+    )) ?? []
+  );
+}
+
 export async function apiDailyClaim(userId: string): Promise<DailyClaimDto> {
   return (await request<DailyClaimDto>(
     `/users/${encodeURIComponent(userId)}/daily-claim`,

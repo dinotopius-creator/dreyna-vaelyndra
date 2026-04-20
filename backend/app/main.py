@@ -9,7 +9,7 @@ from sqlmodel import select
 
 from .db import get_session, init_db
 from .models import UserProfile
-from .routers import posts, users
+from .routers import posts, streamers, users
 
 app = FastAPI(title="Vaelyndra API", version="0.1.0")
 
@@ -120,3 +120,4 @@ def healthz() -> dict[str, str]:
 app.include_router(posts.router)
 app.include_router(users.router)
 app.include_router(users.creatures_router)
+app.include_router(streamers.router)

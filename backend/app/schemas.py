@@ -200,3 +200,39 @@ class GiftTransferOut(BaseModel):
     receiver: UserProfileOut
     consumed_promo: int
     consumed_paid: int
+
+
+# --- Classement streamers + BFF -------------------------------------------
+
+
+class StreamerMiniOut(BaseModel):
+    """Profil minimal utilisé dans les modules classement / BFF."""
+
+    id: str
+    username: str
+    avatarImageUrl: str
+    creature: Optional[CreatureOut] = None
+    role: str = "user"
+
+
+class StreamerLeaderboardEntryOut(BaseModel):
+    rank: int
+    userId: str
+    username: str
+    avatarImageUrl: str
+    totalSylvins: int
+    creature: Optional[CreatureOut] = None
+    role: str = "user"
+
+
+class StreamerLeaderboardOut(BaseModel):
+    week: str  # "this" | "last"
+    weekStart: str  # ISO date (YYYY-MM-DD)
+    weekEnd: str  # ISO datetime (fin de semaine)
+    entries: List[StreamerLeaderboardEntryOut] = []
+
+
+class BFFEntryOut(BaseModel):
+    streamer: StreamerMiniOut
+    donor: StreamerMiniOut
+    totalSylvins: int

@@ -76,6 +76,16 @@ def _apply_migrations() -> None:
             "CREATE UNIQUE INDEX IF NOT EXISTS follow_unique_pair "
             "ON follow (follower_id, following_id)"
         )
+        # Index composites pour accélérer le classement hebdo streamers
+        # (WHERE week_start_iso = ? GROUP BY receiver_id / sender_id).
+        conn.exec_driver_sql(
+            "CREATE INDEX IF NOT EXISTS giftledger_week_receiver "
+            "ON giftledger (week_start_iso, receiver_id)"
+        )
+        conn.exec_driver_sql(
+            "CREATE INDEX IF NOT EXISTS giftledger_receiver_sender "
+            "ON giftledger (receiver_id, sender_id)"
+        )
 
 
 def get_session() -> Session:
