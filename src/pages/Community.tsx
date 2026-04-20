@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   ExternalLink,
@@ -20,6 +20,11 @@ import { UserBadges } from "../components/UserBadges";
 import { StreamerLeaderboard } from "../components/StreamerLeaderboard";
 import { BFFModule } from "../components/BFFModule";
 import { DREYNA_PROFILE } from "../data/mock";
+import {
+  LIVE_CATEGORIES,
+  getLiveCategory,
+  type LiveCategoryId,
+} from "../data/liveCategories";
 import { getOfficial } from "../data/officials";
 import { formatRelative, parseVideoUrl } from "../lib/helpers";
 import {
@@ -35,7 +40,7 @@ export function Community() {
   const { user, isQueen } = useAuth();
   const { liveRegistry } = useLive();
   const { notify } = useToast();
-  const activeLives = useMemo(
+  const allLives = useMemo(
     () =>
       Object.values(liveRegistry).sort(
         (a, b) =>
@@ -43,6 +48,33 @@ export function Community() {
       ),
     [liveRegistry],
   );
+  // Filtre optionnel par catégorie. `null` = aucun filtre (tous les lives).
+  // La liste des catégories proposées se limite à celles effectivement
+  // représentées dans le registre, pour éviter d'afficher un filtre qui
+  // donnerait zéro résultat.
+  const [categoryFilter, setCategoryFilter] = useState<LiveCategoryId | null>(
+    null,
+  );
+  const availableCategories = useMemo(() => {
+    const seen = new Set<LiveCategoryId>();
+    for (const l of allLives) seen.add(getLiveCategory(l.category).id);
+    return LIVE_CATEGORIES.filter((c) => seen.has(c.id));
+  }, [allLives]);
+  // Auto-reset si la catégorie sélectionnée a disparu (dernier streamer
+  // de cette catégorie a quitté son live). Sans ça, l'utilisateur
+  // resterait bloqué sur un filtre qui renvoie 0 résultat.
+  useEffect(() => {
+    if (!categoryFilter) return;
+    if (!availableCategories.some((c) => c.id === categoryFilter)) {
+      setCategoryFilter(null);
+    }
+  }, [availableCategories, categoryFilter]);
+  const activeLives = useMemo(() => {
+    if (!categoryFilter) return allLives;
+    return allLives.filter(
+      (l) => getLiveCategory(l.category).id === categoryFilter,
+    );
+  }, [allLives, categoryFilter]);
   const [draft, setDraft] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
@@ -141,7 +173,7 @@ export function Community() {
         subtitle="Partagez vos serments, créations et pensées. La reine passe ici chaque jour."
       />
 
-      {activeLives.length > 0 && (
+      {allLives.length > 0 && (
         <section className="mt-10 card-royal p-5">
           <header className="mb-3 flex items-center gap-2">
             <Radio className="h-4 w-4 animate-pulse text-rose-300" />
@@ -153,6 +185,36 @@ export function Community() {
               {activeLives.length > 1 ? "s" : ""} en direct
             </span>
           </header>
+          {availableCategories.length >= 2 && (
+            <div className="mb-3 flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                onClick={() => setCategoryFilter(null)}
+                className={`rounded-full border px-2.5 py-0.5 text-[10px] uppercase tracking-[0.18em] transition ${
+                  categoryFilter === null
+                    ? "border-gold-400/60 bg-gold-400/15 text-gold-100"
+                    : "border-royal-500/30 text-ivory/60 hover:text-ivory"
+                }`}
+              >
+                Toutes
+              </button>
+              {availableCategories.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => setCategoryFilter(c.id)}
+                  className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[10px] uppercase tracking-[0.18em] transition ${
+                    categoryFilter === c.id
+                      ? "border-gold-400/60 bg-gold-400/15 text-gold-100"
+                      : "border-royal-500/30 text-ivory/60 hover:text-ivory"
+                  }`}
+                >
+                  <span aria-hidden>{c.icon}</span>
+                  {c.label}
+                </button>
+              ))}
+            </div>
+          )}
           <ul className="grid gap-3 md:grid-cols-2">
             {activeLives.map((l) => (
               <li key={l.userId}>
@@ -170,11 +232,22 @@ export function Community() {
                       Live
                     </span>
                   </div>
-                  <div className="flex-1">
-                    <p className="flex items-center gap-2 text-sm">
+                  <div className="flex-1 min-w-0">
+                    <p className="flex flex-wrap items-center gap-2 text-sm">
                       <span className="font-display text-gold-200">
                         {l.username}
                       </span>
+                      {(() => {
+                        const cat = getLiveCategory(l.category);
+                        return (
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] uppercase tracking-[0.18em] ${cat.chipClass}`}
+                          >
+                            <span aria-hidden>{cat.icon}</span>
+                            {cat.label}
+                          </span>
+                        );
+                      })()}
                       <span className="text-xs text-ivory/50">
                         {formatRelative(l.startedAt)}
                       </span>
