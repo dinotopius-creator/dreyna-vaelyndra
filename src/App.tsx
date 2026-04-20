@@ -10,7 +10,6 @@ import { Shop } from "./pages/Shop";
 import { Cart } from "./pages/Cart";
 import { Live } from "./pages/Live";
 import { Community } from "./pages/Community";
-import { DreynaProfile } from "./pages/DreynaProfile";
 import { Login } from "./pages/Login";
 import { Register } from "./pages/Register";
 import { Me } from "./pages/Me";
@@ -52,7 +51,6 @@ function AnimatedRoutes() {
           <Route path="/live" element={<Live />} />
           <Route path="/live/:broadcasterId" element={<Live />} />
           <Route path="/communaute" element={<Community />} />
-          <Route path="/dreyna" element={<DreynaProfile />} />
           <Route path="/u/:userId" element={<UserProfile />} />
           <Route path="/connexion" element={<Login />} />
           <Route path="/inscription" element={<Register />} />

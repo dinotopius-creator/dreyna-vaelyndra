@@ -46,7 +46,6 @@ import {
 } from "../components/SortDAppelCaster";
 import {
   AUTO_CHAT_LINES,
-  DREYNA_PROFILE,
   SEED_CHAT,
 } from "../data/mock";
 import type { ChatMessage, Gift, User } from "../types";
@@ -164,10 +163,12 @@ function isCameraSupported(): boolean {
 }
 
 /**
- * Panneau d'aide pour les users iPhone : explique le parcours "streamer
- * depuis mon iPhone" via Twitch Mobile → embed automatique sur Vaelyndra.
- * Sur iOS, le partage d'écran web n'est pas possible (Apple bloque
- * `getDisplayMedia`), donc l'app Twitch est le chemin officiel.
+ * Panneau d'aide pour les users iPhone / iPad : explique le parcours
+ * "streamer depuis mon appareil Apple" via Twitch Mobile → embed
+ * automatique sur Vaelyndra. Sur iOS/iPadOS, le partage d'écran web n'est
+ * pas possible (Apple bloque `getDisplayMedia` sur tous les navigateurs
+ * iPad/iPhone, y compris Chrome et Firefox qui sont obligés d'utiliser
+ * WebKit), donc l'app Twitch est le chemin officiel.
  *
  * `prominent` : si true, le panel est affiché déplié d'emblée (cas d'un
  * user qui a pas getDisplayMedia). Sinon il apparaît replié en
@@ -200,12 +201,12 @@ function IosStreamingHelp({
           </span>
           <span>
             <span className="block font-display text-sm text-gold-200">
-              Tu streames depuis un iPhone&nbsp;?
+              Tu streames depuis un iPhone ou un iPad&nbsp;?
             </span>
             <span className="block text-[11px] leading-snug text-ivory/55">
               {prominent
-                ? "Apple bloque le partage d'écran web sur iOS — voici le chemin officiel."
-                : "Pas-à-pas pour streamer tes jeux mobiles via Twitch."}
+                ? "Apple bloque le partage d'écran web sur iOS/iPadOS — voici le chemin officiel."
+                : "Pas-à-pas pour streamer tes jeux ou apps via Twitch."}
             </span>
           </span>
         </span>
@@ -214,14 +215,17 @@ function IosStreamingHelp({
       {open && (
         <div className="space-y-3 border-t border-ivory/10 px-4 py-4 text-xs text-ivory/70">
           <p>
-            Sur iPhone, le partage d'écran direct via navigateur n'est pas
-            supporté (décision d'Apple, rien à voir avec Vaelyndra). Le
-            chemin officiel pour streamer tes jeux ou apps mobiles&nbsp;:
+            Sur iPhone et iPad, le partage d'écran direct via navigateur
+            n'est pas supporté (décision d'Apple, rien à voir avec
+            Vaelyndra — toutes les apps de navigateur sur iPad passent
+            obligatoirement par le moteur WebKit, qui bloque
+            {" "}<code>getDisplayMedia</code>). Le chemin officiel pour
+            streamer tes jeux ou apps&nbsp;:
           </p>
           <ol className="list-decimal space-y-2 pl-5">
             <li>
               Installe <strong className="text-gold-200">Twitch</strong>{" "}
-              depuis l'App Store (gratuit).
+              depuis l'App Store (gratuit, dispo iPhone et iPad).
             </li>
             <li>
               Crée un compte Twitch (si pas déjà fait) et connecte-toi dans
@@ -230,8 +234,8 @@ function IosStreamingHelp({
             <li>
               Dans l'app Twitch, appuie sur ton avatar →{" "}
               <strong>Go Live</strong> → <strong>Partager l'écran</strong>.
-              Tu peux streamer n'importe quel jeu / application ouverte
-              sur ton iPhone.
+              Tu peux streamer n'importe quel jeu ou application ouverte
+              sur ton appareil (iPhone comme iPad).
             </li>
             <li>
               Récupère ton <strong>nom de chaîne Twitch</strong> (ex:{" "}
@@ -257,9 +261,10 @@ function IosStreamingHelp({
             )}
           </ol>
           <p className="text-ivory/50">
-            Android fonctionne directement via le mode "Partage d'écran"
-            ci-dessus (Chrome supporte nativement le partage d'écran depuis
-            Android). Pas besoin de Twitch sur Android sauf si tu préfères.
+            Android (téléphone comme tablette) fonctionne directement via
+            le mode "Partage d'écran" ci-dessus (Chrome supporte
+            nativement le partage d'écran depuis Android 10+). Pas besoin
+            de Twitch sur Android sauf si tu préfères.
           </p>
         </div>
       )}
@@ -499,7 +504,7 @@ function BroadcasterControls() {
             title={
               screenShareSupported
                 ? undefined
-                : "Le partage d'écran web n'est pas supporté sur iPhone. Utilise l'app Twitch mobile (pas-à-pas ci-dessous)."
+                : "Le partage d'écran web n'est pas supporté sur iPhone/iPad. Utilise l'app Twitch mobile (pas-à-pas ci-dessous)."
             }
           >
             <Monitor className="mt-0.5 h-5 w-5 text-gold-300" />
@@ -513,7 +518,7 @@ function BroadcasterControls() {
               <p className="mt-1 text-xs text-ivory/60">
                 {screenShareSupported
                   ? "Stream ton écran (jeu, appli, navigateur…) directement. Marche sur PC et sur Android Chrome."
-                  : "Ton navigateur ne permet pas le partage d'écran. Sur iPhone, utilise l'app Twitch mobile (voir ci-dessous)."}
+                  : "Ton navigateur ne permet pas le partage d'écran. Sur iPhone/iPad, utilise l'app Twitch mobile (voir ci-dessous)."}
               </p>
             </div>
           </button>
@@ -560,7 +565,7 @@ function BroadcasterControls() {
               onChange={(e) =>
                 updateConfig({ twitchChannel: e.target.value })
               }
-              placeholder="dreynakame"
+              placeholder="ton_pseudo_twitch"
               className="input-royal"
               disabled={isLive}
             />
@@ -742,23 +747,19 @@ export function Live() {
     viewingMeta,
   } = useLive();
 
-  // Quel broadcaster regarde-t-on ? Priorité URL > Dreyna par défaut.
-  const broadcasterId = paramBroadcasterId ?? DREYNA_PROFILE.id;
-  const amBroadcaster = !!user && user.id === broadcasterId;
+  // Quel broadcaster regarde-t-on ?
+  // Priorité : URL > premier live actif du registre > l'utilisateur connecté
+  // (pour qu'il puisse démarrer son propre live sans URL) > chaîne vide
+  // (état "aucun live").
+  const firstLiveId = Object.keys(liveRegistry)[0];
+  const broadcasterId =
+    paramBroadcasterId ?? firstLiveId ?? user?.id ?? "";
+  const amBroadcaster = !!user && !!broadcasterId && user.id === broadcasterId;
   // Résout le profil du broadcaster (pour nom/avatar/pseudo dans le HUD + GiftPanel).
-  const broadcasterProfile = useMemo<User | null>(() => {
-    if (broadcasterId === DREYNA_PROFILE.id) {
-      return {
-        id: DREYNA_PROFILE.id,
-        username: DREYNA_PROFILE.username,
-        email: "dreyna@vaelyndra.realm",
-        avatar: DREYNA_PROFILE.avatar,
-        role: "queen",
-        joinedAt: new Date().toISOString(),
-      };
-    }
-    return users.find((u) => u.id === broadcasterId) ?? null;
-  }, [broadcasterId, users]);
+  const broadcasterProfile = useMemo<User | null>(
+    () => users.find((u) => u.id === broadcasterId) ?? null,
+    [broadcasterId, users],
+  );
 
   const registryEntry = liveRegistry[broadcasterId] ?? null;
   const isHost = amBroadcaster && !!localStream;
@@ -1006,7 +1007,7 @@ export function Live() {
     (amBroadcaster ? config.description?.trim() : "") ||
     (broadcasterProfile
       ? `Avec ${broadcasterProfile.username} · depuis l'archipel de Vaelyndra`
-      : "Avec la reine Dreyna · depuis l'archipel de Vaelyndra");
+      : "Depuis l'archipel de Vaelyndra");
 
   const registryList = useMemo(
     () => Object.values(liveRegistry),
@@ -1110,11 +1111,13 @@ export function Live() {
               ) : isActiveLive &&
                 (activeMode === "screen" || activeMode === "camera") ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-center">
-                  <img
-                    src={broadcasterProfile?.avatar ?? DREYNA_PROFILE.avatar}
-                    alt=""
-                    className="absolute inset-0 h-full w-full scale-105 object-cover opacity-40 blur-sm"
-                  />
+                  {broadcasterProfile?.avatar && (
+                    <img
+                      src={broadcasterProfile.avatar}
+                      alt=""
+                      className="absolute inset-0 h-full w-full scale-105 object-cover opacity-40 blur-sm"
+                    />
+                  )}
                   <div className="relative z-10 flex flex-col items-center gap-3">
                     <Radio className="h-10 w-10 animate-pulse text-rose-300" />
                     <p className="font-display text-2xl text-gold-200">

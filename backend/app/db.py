@@ -98,6 +98,27 @@ def _apply_migrations() -> None:
             "ON giftledger (receiver_id, sender_id)"
         )
 
+        # One-shot : reset du wallet de Dreyna (dé-Dreyna-isation du site).
+        # Son compte devient un profil normal d'animatrice ; on purge les
+        # Sylvins/Lueurs qui ont pu être accumulés pendant la phase où elle
+        # avait un traitement spécial. Idempotent via PRAGMA user_version :
+        # tant que la version < 1, on applique et on bump. Les éventuels
+        # Sylvins gagnés après le déploiement sont respectés.
+        user_version = conn.exec_driver_sql(
+            "PRAGMA user_version"
+        ).fetchone()[0]
+        if user_version < 1:
+            conn.exec_driver_sql(
+                "UPDATE userprofile SET "
+                "lueurs = 0, "
+                "sylvins = 0, "
+                "sylvins_paid = 0, "
+                "sylvins_earnings = 0, "
+                "earnings_paid = 0 "
+                "WHERE id = 'user-dreyna'"
+            )
+            conn.exec_driver_sql("PRAGMA user_version = 1")
+
 
 def get_session() -> Session:
     return Session(engine)

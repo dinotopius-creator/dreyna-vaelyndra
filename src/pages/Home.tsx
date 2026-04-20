@@ -12,10 +12,10 @@ import {
   Heart,
 } from "lucide-react";
 import { useStore } from "../contexts/StoreContext";
-import { DREYNA_PROFILE, TOP_FANS } from "../data/mock";
+import { TOP_FANS } from "../data/mock";
+import { formatNumber } from "../lib/helpers";
 import { SectionHeading } from "../components/SectionHeading";
 import { RuneDivider } from "../components/RuneDivider";
-import { formatNumber } from "../lib/helpers";
 
 export function Home() {
   const { articles, products, isLiveOn } = useStore();
@@ -55,17 +55,17 @@ function Hero({ isLiveOn }: { isLiveOn: boolean }) {
             Ton histoire commence ici.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
-            <Link to="/blog" className="btn-gold">
-              <BookOpen className="h-4 w-4" /> Voir le blog
+            <Link to="/inscription" className="btn-gold">
+              <Crown className="h-4 w-4" /> Créer mon compte
             </Link>
-            <Link to="/boutique" className="btn-royal">
-              <ShoppingBag className="h-4 w-4" /> Accéder à la boutique
-            </Link>
-            <Link to="/live" className="btn-ghost">
+            <Link to="/live" className="btn-royal">
               <Radio className="h-4 w-4" /> Rejoindre les lives
               {isLiveOn && (
                 <span className="ml-1 h-1.5 w-1.5 animate-pulse rounded-full bg-rose-400" />
               )}
+            </Link>
+            <Link to="/communaute" className="btn-ghost">
+              <Users className="h-4 w-4" /> Le fil de la cour
             </Link>
           </div>
           <div className="mt-10 flex items-center gap-6 text-sm text-ivory/60">
@@ -79,10 +79,7 @@ function Hero({ isLiveOn }: { isLiveOn: boolean }) {
                 />
               ))}
             </div>
-            <p>
-              <span className="text-ivory">{formatNumber(DREYNA_PROFILE.stats.communityMembers)}</span>{" "}
-              elfes ont déjà rejoint la cour
-            </p>
+            <p>Chaque âme écrit sa propre page du royaume.</p>
           </div>
         </motion.div>
 
@@ -93,20 +90,25 @@ function Hero({ isLiveOn }: { isLiveOn: boolean }) {
           className="relative mx-auto aspect-[3/4] w-full max-w-md"
         >
           <div className="absolute -inset-4 rounded-[2.5rem] bg-gradient-to-br from-gold-400/40 via-royal-500/30 to-celeste-500/30 blur-2xl" />
-          <div className="card-royal relative h-full w-full overflow-hidden rounded-[2rem]">
-            <img
-              src={DREYNA_PROFILE.avatar}
-              alt="Dreyna, reine des elfes"
-              className="h-full w-full origin-top scale-[1.06] object-cover object-top"
-            />
-            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-night-900 via-night-900/80 to-transparent p-6 pt-24">
-              <p className="font-regal text-[10px] tracking-[0.35em] text-gold-300">
-                Couronnée à l'aube d'Elennor
-              </p>
-              <h3 className="font-display text-3xl text-gold-200">Dreyna</h3>
-              <p className="mt-1 text-xs text-ivory/70">
-                Gardienne de la Lumière · Elfe originelle du royaume
-              </p>
+          <div className="card-royal relative flex h-full w-full flex-col items-center justify-center overflow-hidden rounded-[2rem] p-10 text-center">
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_30%,rgba(212,175,55,0.2),transparent_60%)]" />
+            <span className="relative flex h-20 w-20 items-center justify-center rounded-full border border-gold-400/50 bg-gold-500/10 text-gold-300 shadow-glow-gold">
+              <Crown className="h-9 w-9" />
+            </span>
+            <h3 className="relative mt-6 font-display text-3xl text-gold-200">
+              Un royaume pour tous
+            </h3>
+            <p className="relative mt-3 max-w-xs text-sm text-ivory/70">
+              Streame, poste, vote, offre des Sylvins, gravis les six grades
+              spirituels. Chacun peut devenir une Légende de Vaelyndra.
+            </p>
+            <div className="relative mt-6 flex flex-wrap items-center justify-center gap-2 text-[10px] tracking-[0.22em]">
+              <span className="rounded-full border border-royal-500/30 bg-night-900/40 px-3 py-1 text-royal-200">
+                🌱 NOVICE
+              </span>
+              <span className="rounded-full border border-gold-400/30 bg-night-900/40 px-3 py-1 text-gold-300">
+                👑 LÉGENDE
+              </span>
             </div>
             <motion.div
               className="absolute right-4 top-4 rounded-full bg-night-900/70 p-2 text-gold-300 backdrop-blur"
@@ -132,13 +134,13 @@ type StatItem = {
 function StatsBar() {
   const items: StatItem[] = [
     {
-      value: formatNumber(DREYNA_PROFILE.stats.communityMembers),
+      value: "∞",
       label: "Âmes du royaume",
       icon: <Users className="h-4 w-4" />,
     },
     {
-      value: formatNumber(DREYNA_PROFILE.stats.likes),
-      label: "Cœurs échangés",
+      value: "2",
+      label: "Monnaies — Lueurs & Sylvins",
       icon: <Heart className="h-4 w-4" />,
     },
     {
@@ -147,8 +149,8 @@ function StatsBar() {
       icon: <Sparkles className="h-4 w-4" />,
     },
     {
-      value: DREYNA_PROFILE.stats.lives,
-      label: "Lives célébrés",
+      value: "24/7",
+      label: "Salle des lives",
       icon: <Radio className="h-4 w-4" />,
     },
   ];

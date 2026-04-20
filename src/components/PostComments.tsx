@@ -6,7 +6,6 @@ import { useStore } from "../contexts/StoreContext";
 import { useToast } from "../contexts/ToastContext";
 import { formatRelative } from "../lib/helpers";
 import { apiAddComment, apiDeleteComment } from "../lib/api";
-import { DREYNA_PROFILE } from "../data/mock";
 import type { Comment } from "../types";
 import { ReportButton } from "./ReportButton";
 
@@ -24,7 +23,7 @@ export function PostComments({ postId, comments, postAuthorId }: Props) {
   const [draft, setDraft] = useState("");
 
   function profileHref(authorId: string) {
-    return authorId === DREYNA_PROFILE.id ? "/dreyna" : `/u/${authorId}`;
+    return `/u/${authorId}`;
   }
 
   async function submit(e: React.FormEvent) {
