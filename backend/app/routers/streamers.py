@@ -24,14 +24,60 @@ from sqlalchemy import func
 from sqlmodel import Session, select
 
 from ..db import get_session
+from ..grades import (
+    grade_by_slug,
+    grade_for_xp,
+    next_grade,
+    progress_in_current_grade,
+)
 from ..models import GiftLedger, UserProfile
 from ..schemas import (
     BFFEntryOut,
     CreatureOut,
+    StreamerGradeOut,
     StreamerLeaderboardEntryOut,
     StreamerLeaderboardOut,
 )
 from ..creatures import get_creature
+
+
+def _grade_out_for(p: UserProfile | None) -> StreamerGradeOut | None:
+    """Retourne le grade d'un profil (ou None si compte absent / supprimé)."""
+    if p is None:
+        return None
+    xp = max(0, int(p.streamer_xp or 0))
+    override_slug = p.streamer_grade_override
+    override_grade = grade_by_slug(override_slug) if override_slug else None
+    if override_grade is not None:
+        nxt = next_grade(override_grade)
+        return StreamerGradeOut(
+            slug=override_grade.slug,
+            name=override_grade.name,
+            emoji=override_grade.emoji,
+            motto=override_grade.motto,
+            theme=override_grade.theme,
+            color=override_grade.color,
+            minXp=override_grade.min_xp,
+            xp=xp,
+            progressXp=0,
+            nextXp=(nxt.min_xp - override_grade.min_xp) if nxt else None,
+            override=True,
+        )
+    g = grade_for_xp(xp)
+    progress, next_threshold = progress_in_current_grade(xp)
+    return StreamerGradeOut(
+        slug=g.slug,
+        name=g.name,
+        emoji=g.emoji,
+        motto=g.motto,
+        theme=g.theme,
+        color=g.color,
+        minXp=g.min_xp,
+        xp=xp,
+        progressXp=progress,
+        nextXp=next_threshold,
+        override=False,
+    )
 
 
 router = APIRouter(prefix="/streamers", tags=["streamers"])
@@ -126,6 +172,7 @@ def streamer_leaderboard(
                     totalSylvins=int(total or 0),
                     creature=None,
                     role="user",
+                    grade=None,
                 )
             )
             continue
@@ -138,6 +185,7 @@ def streamer_leaderboard(
                 totalSylvins=int(total or 0),
                 creature=_creature_dto(p.creature_id),
                 role=p.role or "user",
+                grade=_grade_out_for(p),
             )
         )
     # `end` est le lundi suivant (exclusif côté ledger). On expose au

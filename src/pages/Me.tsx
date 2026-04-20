@@ -22,6 +22,7 @@ import { useProfile } from "../contexts/ProfileContext";
 import { SectionHeading } from "../components/SectionHeading";
 import { AvatarViewer } from "../components/AvatarViewer";
 import { UserBadges } from "../components/UserBadges";
+import StreamerGradeBadge from "../components/StreamerGradeBadge";
 import { CreaturePickerModal } from "../components/CreaturePickerModal";
 import SoulBondsModal from "../components/SoulBondsModal";
 import { WishlistSection } from "../components/WishlistSection";
@@ -165,6 +166,11 @@ export function Me() {
                 liens tissés
               </button>
             </div>
+            {serverProfile?.grade && (
+              <div className="mt-4 max-w-sm">
+                <StreamerGradeBadge grade={serverProfile.grade} size="lg" />
+              </div>
+            )}
           </div>
           {user.role === "queen" && (
             <span className="rounded-full border border-gold-400/50 bg-gold-500/15 px-3 py-1 font-regal text-[10px] font-semibold tracking-[0.22em] text-gold-200">

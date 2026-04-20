@@ -181,6 +181,30 @@ class GiftTransfer(BaseModel):
     reason: Optional[str] = Field(default=None, max_length=128)
 
 
+class StreamerGradeOut(BaseModel):
+    """Grade spirituel d'un membre (PR M).
+
+    - `slug` identifie le palier (stable, ex. "gardien-flux").
+    - `xp` est le total cumulé ; `progressXp` / `nextXp` sont extraits pour
+      alimenter la barre de progression. `nextXp=None` signifie que le
+      membre est au palier maximum ("Légende de Vaelyndra").
+    - `override=True` quand un admin a forcé le grade (utile pour ne pas
+      afficher la progression dans ce cas).
+    """
+
+    slug: str
+    name: str
+    emoji: str
+    motto: str
+    theme: str
+    color: str
+    minXp: int
+    xp: int
+    progressXp: int
+    nextXp: Optional[int] = None
+    override: bool = False
+
+
 class UserProfileOut(BaseModel):
     id: str
     username: str
@@ -210,8 +234,23 @@ class UserProfileOut(BaseModel):
     role: str = "user"
     followersCount: int = 0
     followingCount: int = 0
+    # PR M — grade spirituel dérivé de streamer_xp (+ override admin).
+    grade: Optional[StreamerGradeOut] = None
     createdAt: str
     updatedAt: str
+
+
+class GradeOverridePayload(BaseModel):
+    """Admin override du grade d'un streamer (slug figé, ou None pour retirer)."""
+
+    grade_slug: Optional[str] = Field(default=None, max_length=32)
+
+
+class XPAdjustPayload(BaseModel):
+    """Admin adjust XP — delta signé + raison pour l'audit."""
+
+    delta: int
+    reason: Optional[str] = Field(default=None, max_length=128)
 
 
 class DailyClaimOut(BaseModel):
@@ -252,6 +291,7 @@ class StreamerMiniOut(BaseModel):
     avatarImageUrl: str
     creature: Optional[CreatureOut] = None
     role: str = "user"
+    grade: Optional["StreamerGradeOut"] = None
 
 
 class StreamerLeaderboardEntryOut(BaseModel):
@@ -262,6 +302,7 @@ class StreamerLeaderboardEntryOut(BaseModel):
     totalSylvins: int
     creature: Optional[CreatureOut] = None
     role: str = "user"
+    grade: Optional["StreamerGradeOut"] = None
 
 
 class StreamerLeaderboardOut(BaseModel):

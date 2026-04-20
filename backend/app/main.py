@@ -191,5 +191,6 @@ def healthz() -> dict[str, str]:
 app.include_router(posts.router)
 app.include_router(users.router)
 app.include_router(users.creatures_router)
+app.include_router(users.admin_grades_router)
 app.include_router(streamers.router)
 app.include_router(auth_router)

@@ -20,7 +20,7 @@ _QUEEN_IDS = {
 
 
 from ..db import get_session  # noqa: E402
-from ..models import Comment, Post, Reaction  # noqa: E402
+from ..models import Comment, Post, Reaction, UserProfile  # noqa: E402
 from ..schemas import (  # noqa: E402
     CommentCreate,
     CommentOut,
@@ -28,6 +28,13 @@ from ..schemas import (  # noqa: E402
     PostOut,
     ReactionToggle,
 )
+
+
+# PR M — XP offert à l'auteur quand son post est publié. Volontairement bas
+# (10 XP = 10 % d'un palier de base) pour éviter qu'un spam de posts vides
+# ne propulse un compte dans les grades supérieurs. Le gros du XP vient des
+# Sylvins reçus (=engagement) et des nouveaux liens d'âme.
+XP_PER_POST = 10
 
 
 def _is_queen(user_id: str) -> bool:
@@ -125,6 +132,13 @@ def create_post(
         video_url=payload.video_url,
     )
     session.add(post)
+    # PR M — crédit XP à l'auteur. On fait un `get` sur la clé primaire
+    # plutôt qu'une requête indexée : la plupart des auteurs ont déjà un
+    # profil en DB (créé lors du premier login). Si le profil n'existe pas
+    # (cas d'un compte externe / historique), on skip silencieusement.
+    author = session.get(UserProfile, payload.author_id)
+    if author is not None:
+        author.streamer_xp = (author.streamer_xp or 0) + XP_PER_POST
     session.commit()
     session.refresh(post)
     return _serialize_post(post, {}, [])

@@ -9,6 +9,7 @@ import { AvatarViewer } from "../components/AvatarViewer";
 import { UserBadges } from "../components/UserBadges";
 import { FollowButton } from "../components/FollowButton";
 import SoulBondsModal from "../components/SoulBondsModal";
+import StreamerGradeBadge from "../components/StreamerGradeBadge";
 import { WishlistSection } from "../components/WishlistSection";
 import { formatDate, formatRelative } from "../lib/helpers";
 import { formatSylvins } from "../lib/sylvins";
@@ -163,6 +164,11 @@ export function UserProfile() {
                 liens tissés
               </button>
             </div>
+            {serverProfile?.grade && (
+              <div className="mt-4 max-w-sm">
+                <StreamerGradeBadge grade={serverProfile.grade} size="lg" />
+              </div>
+            )}
           </div>
           <div className="flex flex-col items-end gap-2">
             {profile.role === "queen" && (
