@@ -14,6 +14,10 @@ import { DreynaProfile } from "./pages/DreynaProfile";
 import { Login } from "./pages/Login";
 import { Register } from "./pages/Register";
 import { Me } from "./pages/Me";
+import { Compte } from "./pages/Compte";
+import { VerifyEmail } from "./pages/VerifyEmail";
+import { ForgotPassword } from "./pages/ForgotPassword";
+import { ResetPassword } from "./pages/ResetPassword";
 import { Admin } from "./pages/Admin";
 import { NotFound } from "./pages/NotFound";
 import { MentionsLegales } from "./pages/MentionsLegales";
@@ -52,7 +56,11 @@ function AnimatedRoutes() {
           <Route path="/connexion" element={<Login />} />
           <Route path="/inscription" element={<Register />} />
           <Route path="/moi" element={<Guarded><Me /></Guarded>} />
+          <Route path="/compte" element={<Guarded><Compte /></Guarded>} />
           <Route path="/avatar" element={<Guarded><Avatar /></Guarded>} />
+          <Route path="/verifier-email" element={<VerifyEmail />} />
+          <Route path="/mot-de-passe-oublie" element={<ForgotPassword />} />
+          <Route path="/reinitialiser-mot-de-passe" element={<ResetPassword />} />
           <Route path="/admin" element={<Guarded queenOnly><Admin /></Guarded>} />
           <Route path="/mentions-legales" element={<MentionsLegales />} />
           <Route path="/confidentialite" element={<Confidentialite />} />

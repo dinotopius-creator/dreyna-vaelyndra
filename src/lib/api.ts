@@ -9,8 +9,10 @@ import type { CommunityPost, Comment, Creature } from "../types";
 
 const BASE = (
   import.meta.env.VITE_API_URL ??
-  "https://vaelyndra-backend-qjfhvenc.fly.dev"
+  "https://api.vaelyndra.com"
 ).replace(/\/$/, "");
+
+export const API_BASE = BASE;
 
 interface AuthorPayload {
   author_id: string;
