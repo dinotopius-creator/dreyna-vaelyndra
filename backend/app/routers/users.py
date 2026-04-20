@@ -646,12 +646,15 @@ def gift_item(
     inventory.append(payload.item_id)
     receiver.inventory_json = json.dumps(inventory)
     _store_wishlist(receiver, [x for x in wishlist if x != payload.item_id])
-    # PR M — XP accordé au receiver : on réutilise le taux Sylvins (le prix
-    # de l'item = nombre de Sylvins effectivement "dépensés" par le sender
-    # pour lui, donc cohérent avec `gift_sylvins`).
-    receiver.streamer_xp = (
-        (receiver.streamer_xp or 0) + payload.price * XP_PER_SYLVIN_RECEIVED
-    )
+    # PR M — XP accordé au receiver uniquement si le cadeau a été payé en
+    # Sylvins (monnaie premium). Les achats en Lueurs (monnaie gratuite
+    # via daily claim) ne donnent PAS d'XP, sinon deux comptes complices
+    # pourraient se faire grimper en grade gratuitement en s'offrant des
+    # items en boucle.
+    if payload.currency == "sylvins":
+        receiver.streamer_xp = (
+            (receiver.streamer_xp or 0) + payload.price * XP_PER_SYLVIN_RECEIVED
+        )
 
     _touch(sender)
     _touch(receiver)

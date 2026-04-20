@@ -269,6 +269,7 @@ def streamers_bff(
                 "avatarImageUrl": "",
                 "creature": None,
                 "role": "user",
+                "grade": None,
             }
         return {
             "id": p.id,
@@ -276,6 +277,7 @@ def streamers_bff(
             "avatarImageUrl": p.avatar_image_url,
             "creature": _creature_dto(p.creature_id),
             "role": p.role or "user",
+            "grade": _grade_out_for(p),
         }
 
     out: list[BFFEntryOut] = []
