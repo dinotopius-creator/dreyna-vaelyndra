@@ -156,26 +156,29 @@ export function ReportButton({
                   Description (optionnelle, 2000 car. max)
                 </label>
                 <textarea
-                  className="glass-input mt-2 h-28 w-full resize-none"
+                  className="glass-input mt-2 min-h-[160px] w-full resize-y text-base leading-relaxed"
+                  rows={6}
                   placeholder="Ce qui s'est passé, quand, preuves éventuelles…"
                   value={description}
                   onChange={(e) =>
                     setDescription(e.target.value.slice(0, 2000))
                   }
                   disabled={submitting}
+                  autoComplete="off"
+                  autoCapitalize="sentences"
                 />
                 <p className="mt-1 text-right text-[10px] text-ivory/50">
                   {description.length} / 2000
                 </p>
               </div>
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-[10px] text-ivory/50">
                   Ton signalement est anonyme vis-à-vis de la personne
                   signalée — seul·e un·e admin le verra.
                 </p>
                 <button
                   type="submit"
-                  className="btn-gold"
+                  className="btn-gold w-full sm:w-auto"
                   disabled={submitting}
                 >
                   {submitting ? "Envoi…" : "Envoyer"}
