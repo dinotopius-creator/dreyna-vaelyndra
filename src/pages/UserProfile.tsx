@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { Link, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Crown, Banknote, Coins, ArrowLeft } from "lucide-react";
+import { Banknote, Coins, ArrowLeft } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useStore } from "../contexts/StoreContext";
 import { SectionHeading } from "../components/SectionHeading";
@@ -14,6 +14,7 @@ import { WishlistSection } from "../components/WishlistSection";
 import { AdminUserPanel } from "../components/AdminUserPanel";
 import { ReportButton } from "../components/ReportButton";
 import { formatDate, formatRelative } from "../lib/helpers";
+import { roleLabelWithIcon } from "../lib/roleLabel";
 import { formatSylvins } from "../lib/sylvins";
 import { apiGetProfile, type UserProfileDto } from "../lib/api";
 
@@ -67,10 +68,10 @@ export function UserProfile() {
       <div className="mx-auto max-w-3xl px-6 py-16 text-center">
         <SectionHeading
           eyebrow="Page manquante"
-          title="Cet elfe s'est volatilisé"
+          title="Ce profil a disparu"
         />
         <p className="mt-6 text-sm text-ivory/60">
-          Le profil demandé n'existe pas dans les archives de Vaelyndra.
+          Le profil demandé n'existe pas (ou plus) sur Vaelyndra.
         </p>
         <Link to="/communaute" className="btn-gold mt-8 inline-flex">
           <ArrowLeft className="h-4 w-4" /> Retour au fil
@@ -123,9 +124,7 @@ export function UserProfile() {
           )}
           <div className="flex-1">
             <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
-              {profile.role === "knight"
-                ? "Chevalier·e lunaire"
-                : "Elfe de la cour"}
+              {roleLabelWithIcon(serverProfile?.role ?? profile.role)}
             </p>
             <h1 className="mt-1 font-display text-3xl text-gold-200 md:text-4xl">
               {profile.username}
@@ -137,7 +136,7 @@ export function UserProfile() {
               className="mt-2"
             />
             <p className="mt-2 text-sm text-ivory/60">
-              Entré·e à la cour le {formatDate(profile.joinedAt)}
+              Inscrit·e le {formatDate(profile.joinedAt)}
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-ivory/70">
               <button
@@ -168,11 +167,7 @@ export function UserProfile() {
             )}
           </div>
           <div className="flex flex-col items-end gap-2">
-            {profile.role === "queen" && (
-              <span className="rounded-full border border-gold-400/50 bg-gold-500/15 px-3 py-1 font-regal text-[10px] font-semibold tracking-[0.22em] text-gold-200">
-                <Crown className="mr-1 inline h-3 w-3" /> Trône
-              </span>
-            )}
+
             <FollowButton
               targetId={profile.id}
               targetUsername={profile.username}
@@ -252,8 +247,8 @@ export function UserProfile() {
       <section className="mt-12">
         <SectionHeading
           align="left"
-          eyebrow="Fil de la cour"
-          title="Ses dernières paroles"
+          eyebrow="Publications"
+          title="Ses dernières publications"
         />
         <ul className="mt-6 space-y-4">
           {myPosts.map((p) => (
@@ -268,7 +263,7 @@ export function UserProfile() {
           ))}
           {myPosts.length === 0 && (
             <li className="text-center text-sm text-ivory/50">
-              Silence… cet elfe n'a pas encore pris la parole.
+              Ce membre n'a pas encore publié.
             </li>
           )}
         </ul>

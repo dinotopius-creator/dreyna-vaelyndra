@@ -63,14 +63,14 @@ export function Admin() {
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <span className="tag-gold">
-            <ShieldCheck className="h-3 w-3" /> Salle du Trône
+            <ShieldCheck className="h-3 w-3" /> Espace admin
           </span>
           <h1 className="heading-gold mt-3 text-4xl md:text-5xl">
-            Dashboard de la Reine
+            Dashboard Administrateur
           </h1>
           <p className="mt-2 text-ivory/70">
-            Chroniques, boutique, lives et modération — tout le royaume au bout
-            de la couronne.
+            Publications, boutique, lives et modération — pilote toute la
+            plateforme depuis ici.
           </p>
         </div>
         <Link

@@ -25,7 +25,7 @@ export function Register() {
     e.preventDefault();
     setError(null);
     if (username.trim().length < 2) {
-      setError("Votre nom elfique est trop court.");
+      setError("Votre pseudo est trop court.");
       return;
     }
     if (!/^\S+@\S+\.\S+$/.test(email)) {
@@ -33,7 +33,7 @@ export function Register() {
       return;
     }
     if (password.length < 8) {
-      setError("Le sortilège doit faire 8 caractères minimum.");
+      setError("Le mot de passe doit faire 8 caractères minimum.");
       return;
     }
     setStep("creature");
@@ -41,7 +41,7 @@ export function Register() {
 
   async function finalize() {
     if (!creatureId) {
-      setError("Choisis ta créature pour franchir le portail.");
+      setError("Choisis une créature pour finaliser ton compte.");
       return;
     }
     setSubmitting(true);
@@ -58,14 +58,14 @@ export function Register() {
       if (res.pendingVerification) {
         setSentMessage(
           res.message ??
-            `Compte créé ${creatureLabel?.icon ?? "✨"} — regarde ta boîte mail pour activer ton accès au royaume (lien valable 24 h).`,
+            `Compte créé ${creatureLabel?.icon ?? "✨"} — regarde ta boîte mail pour activer ton compte (lien valable 24 h).`,
         );
         setStep("sent");
         notify("Email de vérification envoyé.");
         return;
       }
       notify(
-        `Bienvenue dans la cour, ${username} ${creatureLabel?.icon ?? "👑"}`,
+        `Bienvenue sur Vaelyndra, ${username} ${creatureLabel?.icon ?? "✨"}`,
       );
       navigate("/moi");
     } finally {
@@ -88,12 +88,12 @@ export function Register() {
         {step !== "sent" && (
           <>
             <h1 className="heading-gold mt-5 text-center text-3xl">
-              {step === "identity" ? "Rejoindre la cour" : "Choisis ta créature"}
+              {step === "identity" ? "Créer mon compte" : "Choisis ta créature"}
             </h1>
             <p className="mt-2 text-center text-sm text-ivory/70">
               {step === "identity"
-                ? "Prononce ton nom elfique et scelle ton pacte."
-                : "Ton essence détermine comment le royaume te reconnaît."}
+                ? "Choisis ton pseudo, ton email, ton mot de passe. C'est parti."
+                : "Ta créature, c'est ton badge décoratif — visible partout sur ton profil."}
             </p>
           </>
         )}
@@ -106,7 +106,7 @@ export function Register() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
-                placeholder="Ton nom elfique"
+                placeholder="Ton pseudo"
                 className="glass-input pl-9"
               />
             </div>
@@ -117,7 +117,7 @@ export function Register() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                placeholder="Mail elfique"
+                placeholder="Ton email"
                 className="glass-input pl-9"
               />
             </div>
@@ -128,7 +128,7 @@ export function Register() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                placeholder="Sortilège d'entrée (4+ caractères)"
+                placeholder="Mot de passe (8+ caractères)"
                 className="glass-input pl-9"
               />
             </div>

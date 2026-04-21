@@ -41,7 +41,7 @@ export function Login() {
         setError(res.error ?? "Erreur inconnue");
         return;
       }
-      notify(res.legacy ? "Bienvenue (mode hors-ligne)" : "Bienvenue à la cour ✨");
+      notify(res.legacy ? "Bienvenue (mode hors-ligne)" : "Bienvenue sur Vaelyndra ✨");
       navigate(location.state?.from ?? "/moi");
     } finally {
       setSubmitting(false);
@@ -70,10 +70,10 @@ export function Login() {
           </span>
         </div>
         <h1 className="heading-gold mt-5 text-center text-3xl">
-          Entrée à la cour
+          Connexion
         </h1>
         <p className="mt-2 text-center text-sm text-ivory/70">
-          Prononcez le sortilège qui vous est propre.
+          Connecte-toi avec ton email et ton mot de passe.
         </p>
         <form onSubmit={submit} className="mt-8 space-y-4">
           <div className="relative">
@@ -87,7 +87,7 @@ export function Login() {
                 setPendingEmail(false);
               }}
               required
-              placeholder="mail elfique"
+              placeholder="ton email"
               className="glass-input pl-9"
               autoComplete="email"
             />
@@ -99,7 +99,7 @@ export function Login() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              placeholder="sortilège d'entrée"
+              placeholder="ton mot de passe"
               className="glass-input pl-9"
               autoComplete="current-password"
             />
@@ -134,34 +134,20 @@ export function Login() {
             disabled={submitting}
             className="btn-gold w-full justify-center disabled:opacity-60"
           >
-            {submitting ? "Incantation…" : "Entrer dans Vaelyndra"}
+            {submitting ? "Connexion…" : "Se connecter"}
           </button>
         </form>
         <p className="mt-6 text-center text-sm text-ivory/60">
-          Nouveau dans le royaume ?{" "}
+          Pas encore de compte ?{" "}
           <Link to="/inscription" className="text-gold-300 hover:text-gold-200">
-            Rejoindre la cour
+            Créer mon compte
           </Link>
         </p>
         <p className="mt-2 text-center text-xs text-ivory/50">
           <Link to="/mot-de-passe-oublie" className="hover:text-ivory/80">
-            Sortilège oublié ?
+            Mot de passe oublié ?
           </Link>
         </p>
-        <div className="mt-6 rounded-xl border border-gold-400/30 bg-gold-500/5 p-4 text-xs text-ivory/70">
-          <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
-            Comptes officiels
-          </p>
-          <ul className="mt-2 space-y-1">
-            <li>
-              👑 <code>dreyna@vaelyndra.realm</code> /{" "}
-              <code>reineelfes2024</code>
-            </li>
-            <li>
-              💎 <code>roi@vaelyndra.realm</code> / <code>zemsdiamant</code>
-            </li>
-          </ul>
-        </div>
       </motion.div>
     </div>
   );

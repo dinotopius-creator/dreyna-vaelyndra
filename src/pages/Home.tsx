@@ -45,13 +45,13 @@ function Hero({ isLiveOn }: { isLiveOn: boolean }) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.9, ease: "easeOut" }}
         >
-          <span className="tag-gold"><Crown className="h-3 w-3" /> Royaume de Vaelyndra</span>
+          <span className="tag-gold"><Crown className="h-3 w-3" /> Mini réseau social</span>
           <h1 className="heading-gold mt-6 text-5xl leading-[1.05] md:text-7xl">
             Bienvenue à<br />Vaelyndra
           </h1>
           <p className="mt-6 max-w-xl text-lg text-ivory/80 md:text-xl">
-            Le mini-réseau féerique où <span className="text-mystic font-semibold">chacun peut percer</span>{" "}
-            — streamer, poster, tisser des liens d'âme, gravir les grades de la cour.
+            Le mini-réseau social féerique où <span className="text-mystic font-semibold">chacun peut percer</span>{" "}
+            — lance tes lives, poste, tisse des liens d'âme, grimpe dans les 6 grades de streamer.
             Ton histoire commence ici.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -65,7 +65,7 @@ function Hero({ isLiveOn }: { isLiveOn: boolean }) {
               )}
             </Link>
             <Link to="/communaute" className="btn-ghost">
-              <Users className="h-4 w-4" /> Le fil de la cour
+              <Users className="h-4 w-4" /> Le fil communautaire
             </Link>
           </div>
           <div className="mt-10 flex items-center gap-6 text-sm text-ivory/60">
@@ -79,7 +79,7 @@ function Hero({ isLiveOn }: { isLiveOn: boolean }) {
                 />
               ))}
             </div>
-            <p>Chaque âme écrit sa propre page du royaume.</p>
+            <p>Chaque membre écrit sa propre page de Vaelyndra.</p>
           </div>
         </motion.div>
 
@@ -96,7 +96,7 @@ function Hero({ isLiveOn }: { isLiveOn: boolean }) {
               <Crown className="h-9 w-9" />
             </span>
             <h3 className="relative mt-6 font-display text-3xl text-gold-200">
-              Un royaume pour tous
+              Un réseau pour tous
             </h3>
             <p className="relative mt-3 max-w-xs text-sm text-ivory/70">
               Streame, poste, vote, offre des Sylvins, gravis les six grades
@@ -135,7 +135,7 @@ function StatsBar() {
   const items: StatItem[] = [
     {
       value: "∞",
-      label: "Âmes du royaume",
+      label: "Membres de Vaelyndra",
       icon: <Users className="h-4 w-4" />,
     },
     {
@@ -150,7 +150,7 @@ function StatsBar() {
     },
     {
       value: "24/7",
-      label: "Salle des lives",
+      label: "Lives possibles",
       icon: <Radio className="h-4 w-4" />,
     },
   ];
@@ -199,9 +199,9 @@ function Pillars() {
       tint: "from-celeste-500/20 to-royal-700/10",
     },
     {
-      title: "La Cour & Communauté",
+      title: "Le fil communautaire",
       to: "/communaute",
-      desc: "Le fil social du royaume. Poster, réagir, briller.",
+      desc: "Le fil social de Vaelyndra. Poster, réagir, se suivre.",
       icon: <Users className="h-5 w-5" />,
       tint: "from-royal-400/25 to-gold-500/10",
     },
@@ -209,9 +209,9 @@ function Pillars() {
   return (
     <section className="mx-auto max-w-7xl px-6 pt-16">
       <SectionHeading
-        eyebrow="Les piliers du royaume"
-        title={<>Quatre portes vers <span className="text-mystic">Vaelyndra</span></>}
-        subtitle="Choisissez votre chemin. Chacun mène à une part du royaume."
+        eyebrow="Explore Vaelyndra"
+        title={<>Quatre espaces pour <span className="text-mystic">percer</span></>}
+        subtitle="Choisis ton chemin. Chacun mène à une part du réseau."
       />
       <div className="mt-12 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
         {cards.map((c, i) => (
@@ -387,13 +387,13 @@ function CommunityTeaser() {
           <div>
             <SectionHeading
               align="left"
-              eyebrow="La Cour de Vaelyndra"
-              title={<>Rejoignez la <span className="text-mystic">communauté</span> elfique</>}
-              subtitle="Postez vos créations, prêtez serment, débloquez des badges rares et montez les rangs de la cour."
+              eyebrow="Communauté Vaelyndra"
+              title={<>Rejoins la <span className="text-mystic">communauté</span></>}
+              subtitle="Publie, réagis, suis tes streamers préférés, débloque des badges et monte dans les 6 grades."
             />
             <div className="mt-6 flex gap-3">
               <Link to="/inscription" className="btn-gold">
-                Rejoindre la cour
+                Créer mon compte
               </Link>
               <Link to="/communaute" className="btn-ghost">
                 Voir le fil
@@ -441,14 +441,14 @@ function CTA() {
       >
         <Sparkles className="mx-auto h-8 w-8 text-gold-300" />
         <h2 className="heading-gold mt-4 text-3xl md:text-5xl">
-          Le royaume n'attend que vous
+          Ta place est ici
         </h2>
         <p className="mt-4 text-ivory/75 md:text-lg">
-          Allumez une bougie. Prononcez le serment. Entrez dans Vaelyndra.
+          Crée ton compte, choisis ta créature, lance ton premier live.
         </p>
         <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
           <Link to="/inscription" className="btn-gold">
-            Rejoindre la cour
+            Créer mon compte
           </Link>
           <Link to="/communaute" className="btn-royal">
             Voir la communauté

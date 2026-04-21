@@ -94,7 +94,7 @@ export function Community() {
   async function publish(e: React.FormEvent) {
     e.preventDefault();
     if (!user) {
-      notify("Connectez-vous pour publier dans la cour.", "info");
+      notify("Connecte-toi pour publier.", "info");
       return;
     }
     if (!draft.trim()) return;
@@ -124,10 +124,10 @@ export function Community() {
       setDraft("");
       setImageUrl("");
       setVideoUrl("");
-      notify("Votre parole brille dans la cour 🌟");
+      notify("Publication envoyée ✨");
     } catch (err) {
       console.warn(err);
-      notify("Le parchemin n'a pas pu être envoyé. Réessayez.", "error");
+      notify("La publication n'a pas pu être envoyée. Réessaie.", "error");
     }
   }
 
@@ -157,7 +157,7 @@ export function Community() {
       dispatch({ type: "deletePost", id: postId });
     } catch (err) {
       console.warn(err);
-      notify("Suppression refusée par le royaume.", "error");
+      notify("Suppression refusée.", "error");
     }
   }
 
@@ -168,9 +168,9 @@ export function Community() {
   return (
     <div className="mx-auto max-w-6xl px-6 py-14">
       <SectionHeading
-        eyebrow="La Cour"
+        eyebrow="Fil communautaire"
         title={<>Le <span className="text-mystic">fil</span> de Vaelyndra</>}
-        subtitle="Partagez vos serments, créations et pensées. Toutes les âmes du royaume se croisent ici."
+        subtitle="Poste tes créations, pensées et annonces. Tous les membres se croisent ici."
       />
 
       {allLives.length > 0 && (
@@ -292,8 +292,8 @@ export function Community() {
                   onChange={(e) => setDraft(e.target.value)}
                   placeholder={
                     user
-                      ? "Dites quelque chose à la cour..."
-                      : "Connectez-vous pour poster..."
+                      ? "Partage quelque chose avec la communauté…"
+                      : "Connecte-toi pour poster…"
                   }
                   rows={3}
                   className="glass-input resize-none"
@@ -461,12 +461,12 @@ export function Community() {
 
           <div className="card-royal p-5">
             <h3 className="font-display text-lg text-gold-200">
-              Règles de la cour
+              Règles du réseau
             </h3>
             <ul className="mt-3 space-y-2 text-sm text-ivory/75">
-              <li>✦ Respect pour chaque elfe du royaume.</li>
-              <li>✦ Aucun sort de haine, ni de spam obscur.</li>
-              <li>✦ Créez, inspirez, illuminez Vaelyndra.</li>
+              <li>✦ Respect pour chaque membre.</li>
+              <li>✦ Pas de haine, pas de spam.</li>
+              <li>✦ Crée, inspire, fais briller Vaelyndra.</li>
             </ul>
           </div>
         </aside>

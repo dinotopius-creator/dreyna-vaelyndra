@@ -5,7 +5,6 @@ import {
   Play,
   Archive,
   Heart,
-  Crown,
   Monitor,
   Gamepad2,
   StopCircle,
@@ -381,13 +380,9 @@ function BroadcasterControls() {
   return (
     <section className="card-royal mt-8 p-5 md:p-6">
       <div className="flex items-center gap-2">
-        {isQueen ? (
-          <Crown className="h-4 w-4 text-gold-300" />
-        ) : (
-          <Video className="h-4 w-4 text-gold-300" />
-        )}
+        <Video className="h-4 w-4 text-gold-300" />
         <h3 className="font-display text-lg text-gold-200">
-          {isQueen ? "Salle du Trône — Diffuser" : "Lancer mon live"}
+          Lancer mon live
         </h3>
         {isLive && (
           <span className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-rose-400/50 bg-rose-500/20 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-rose-200">
