@@ -1810,6 +1810,58 @@ export function Live() {
             </div>
           </div>
 
+          {/* Carte « présentation du streamer » : nom en grand juste
+              sous le lecteur pour que les viewers qui débarquent
+              comprennent instantanément chez qui ils sont. On affiche
+              l'avatar, le pseudo, éventuellement le handle `@xxx`, le
+              diminutif de grade [BRM/SEN/FLX/…] et un lien cliquable
+              vers le profil. Cachée seulement si on n'a pas encore
+              résolu le broadcaster (rare, transitoire). */}
+          {broadcasterProfile && (
+            <div className="mt-4 flex flex-wrap items-center gap-4 rounded-2xl border border-gold-400/25 bg-night-900/60 p-4 sm:p-5">
+              <Link
+                to={
+                  broadcasterProfile.handle
+                    ? `/profil/@${broadcasterProfile.handle}`
+                    : `/profil/${broadcasterProfile.id}`
+                }
+                className="group flex items-center gap-4"
+              >
+                <img
+                  src={broadcasterProfile.avatar}
+                  alt=""
+                  className="h-14 w-14 rounded-full border-2 border-gold-400/60 object-cover transition group-hover:border-gold-300 sm:h-16 sm:w-16"
+                />
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {broadcasterGradeSlug &&
+                      (() => {
+                        const g = gradeBySlug(broadcasterGradeSlug);
+                        if (!g) return null;
+                        return (
+                          <span
+                            className="inline-flex items-center gap-1 rounded-full border border-gold-400/40 bg-gold-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-gold-200"
+                            title={g.name}
+                          >
+                            <span aria-hidden>{g.emoji}</span>
+                            [{g.short}]
+                          </span>
+                        );
+                      })()}
+                  </div>
+                  <h2 className="font-display text-2xl text-gold-100 transition group-hover:text-gold-200 sm:text-3xl">
+                    {broadcasterProfile.username}
+                  </h2>
+                  {broadcasterProfile.handle && (
+                    <p className="text-xs text-ivory/55">
+                      @{broadcasterProfile.handle}
+                    </p>
+                  )}
+                </div>
+              </Link>
+            </div>
+          )}
+
           {/* Historique complet du chat (PR P/Q) : permet de remonter
               dans le temps pour voir les messages qui ont disparu de
               l'overlay flottant, et pour le broadcaster, d'accéder au
