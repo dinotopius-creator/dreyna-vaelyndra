@@ -12,6 +12,7 @@ import type Peer from "peerjs";
 import type { MediaConnection } from "peerjs";
 import { useAuth } from "./AuthContext";
 import { useLive } from "./LiveContext";
+import { getPeerOptions } from "../lib/peerConfig";
 import {
   acceptedGuestsFor,
   inviteStateOf,
@@ -238,7 +239,7 @@ export function LiveMeshAudioProvider({ children }: { children: ReactNode }) {
           localStreamRef.current = null;
           return;
         }
-        const peer = new PeerCtor(getMeshAudioPeerId(user.id), { debug: 1 });
+        const peer = new PeerCtor(getMeshAudioPeerId(user.id), getPeerOptions());
         peerRef.current = peer;
 
         peer.on("open", () => {
@@ -274,6 +275,8 @@ export function LiveMeshAudioProvider({ children }: { children: ReactNode }) {
           const remoteUserId = resolveUserIdFromPeerId(incoming.peer);
           if (!remoteUserId) return;
           registerConnection(remoteUserId, incoming, stream, gen);
+          // Le `config.iceServers` est propagé depuis le Peer parent,
+          // donc pas besoin de le redupliquer sur chaque answer().
           incoming.answer(stream);
         });
       } catch (err) {
