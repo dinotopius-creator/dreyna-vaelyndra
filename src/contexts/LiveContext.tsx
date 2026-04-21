@@ -107,6 +107,39 @@ export interface LiveRegistryEntry {
 
 const CONFIG_STORAGE_KEY = "vaelyndra_live_config_v1";
 const REGISTRY_STORAGE_KEY = "vaelyndra_live_registry_v1";
+const RESUME_MARKER_KEY = "vaelyndra_live_resume_marker_v1";
+/**
+ * TTL du marker de reprise. Au-delà, on considère que le user a vraiment
+ * fermé son live (pas juste rafraîchi la page). 5 minutes est un bon
+ * compromis : assez long pour couvrir un refresh + reconfigure réseau
+ * (4G → WiFi), assez court pour ne pas proposer de reprendre un live
+ * abandonné 20 min plus tôt.
+ */
+const RESUME_MARKER_TTL_MS = 1000 * 60 * 5;
+
+/**
+ * Marker persisté quand un user est en train de broadcaster. Permet de
+ * lui proposer une reprise de live après un rafraîchissement de page
+ * (F5, pull-to-refresh mobile, crash onglet) plutôt que d'afficher
+ * "Le rideau est tiré" alors qu'il était juste en train de streamer.
+ *
+ * ⚠️ Le MediaStream (getUserMedia / getDisplayMedia) ne survit PAS au
+ * rechargement : une reprise re-prompte le navigateur pour la caméra /
+ * l'écran. C'est une contrainte du modèle de sécurité WebRTC, pas un
+ * bug de l'appli. Le marker sert juste à proposer un bouton
+ * "Reprendre mon live" au lieu de laisser le user croire qu'il a été
+ * déconnecté du réseau.
+ */
+interface LiveResumeMarker {
+  userId: string;
+  mode: LiveMode;
+  facing: CameraFacing;
+  title: string;
+  description: string;
+  category: LiveCategoryId;
+  twitchChannel: string;
+  savedAt: string;
+}
 
 const DEFAULT_CONFIG: LiveConfig = {
   status: "idle",
@@ -212,6 +245,61 @@ function writeRegistry(registry: Record<string, LiveRegistryEntry>) {
   }
 }
 
+function readResumeMarker(): LiveResumeMarker | null {
+  try {
+    const raw = localStorage.getItem(RESUME_MARKER_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<LiveResumeMarker>;
+    if (
+      typeof parsed.userId !== "string" ||
+      typeof parsed.savedAt !== "string"
+    ) {
+      return null;
+    }
+    const savedAt = new Date(parsed.savedAt).getTime();
+    if (!Number.isFinite(savedAt)) return null;
+    if (Date.now() - savedAt > RESUME_MARKER_TTL_MS) {
+      // Marker trop vieux : le user a vraiment fermé, pas juste refreshé.
+      localStorage.removeItem(RESUME_MARKER_KEY);
+      return null;
+    }
+    const mode: LiveMode =
+      parsed.mode === "twitch" || parsed.mode === "camera" ? parsed.mode : "screen";
+    const facing: CameraFacing =
+      parsed.facing === "environment" ? "environment" : "user";
+    return {
+      userId: parsed.userId,
+      mode,
+      facing,
+      title: typeof parsed.title === "string" ? parsed.title : "",
+      description:
+        typeof parsed.description === "string" ? parsed.description : "",
+      category: normalizeLiveCategory(parsed.category),
+      twitchChannel:
+        typeof parsed.twitchChannel === "string" ? parsed.twitchChannel : "",
+      savedAt: parsed.savedAt,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeResumeMarker(marker: LiveResumeMarker) {
+  try {
+    localStorage.setItem(RESUME_MARKER_KEY, JSON.stringify(marker));
+  } catch {
+    // quota exceeded, on ignore
+  }
+}
+
+function clearResumeMarker() {
+  try {
+    localStorage.removeItem(RESUME_MARKER_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 interface LiveCtx {
   /** Config du live du user connecté (son propre broadcast). */
   config: LiveConfig;
@@ -283,6 +371,21 @@ interface LiveCtx {
    * cleanup à appeler au démontage.
    */
   subscribeChatMessages: (handler: (msg: ChatMessage) => void) => () => void;
+  /**
+   * Si présent, le user a été broadcaster il y a moins de 5 min et sa
+   * page a été rafraîchie (ou l'onglet rouvert) — on peut lui proposer
+   * de reprendre son live en re-prompt getUserMedia / getDisplayMedia.
+   * `null` sinon (nouveau visiteur, vraie fin de live, TTL expiré).
+   */
+  resumableLive: LiveResumeMarker | null;
+  /**
+   * Relance le broadcast en réutilisant la config du marker (mode,
+   * facing, titre, description…). Re-prompte le navigateur pour l'accès
+   * caméra / écran — c'est obligatoire côté sécurité WebRTC.
+   */
+  resumeLive: () => Promise<void>;
+  /** Jette le marker : l'user veut démarrer un nouveau live, pas reprendre. */
+  dismissResumableLive: () => void;
 }
 
 const Ctx = createContext<LiveCtx | null>(null);
@@ -302,6 +405,12 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   const [viewingMeta, setViewingMeta] = useState<
     { title: string; description: string; mode: LiveMode } | null
   >(null);
+  // Marker de reprise de live (post-refresh). Initialisé à partir de
+  // localStorage : si un user a broadcasté il y a < 5 min et refreshé,
+  // on récupère l'info pour lui proposer `resumeLive()`.
+  const [resumableLive, setResumableLive] = useState<LiveResumeMarker | null>(
+    () => readResumeMarker(),
+  );
 
   const hostPeerRef = useRef<Peer | null>(null);
   const viewerPeerRef = useRef<Peer | null>(null);
@@ -425,6 +534,37 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     },
     [],
   );
+
+  /**
+   * Pose / rafraîchit le marker de reprise. Appelé à chaque démarrage de
+   * live ET périodiquement via le heartbeat, pour garder `savedAt` frais
+   * tant que la diffusion est active. Un refresh / crash laisse donc
+   * toujours un marker récent à disposition de la page Live au boot.
+   */
+  const persistResumeMarker = useCallback(() => {
+    const me = userRef.current;
+    if (!me) return;
+    const c = configRef.current;
+    if (c.status !== "live") return;
+    const marker: LiveResumeMarker = {
+      userId: me.id,
+      mode: c.mode,
+      facing: cameraFacing,
+      title: c.title,
+      description: c.description,
+      category: c.category,
+      twitchChannel: c.twitchChannel,
+      savedAt: new Date().toISOString(),
+    };
+    writeResumeMarker(marker);
+    setResumableLive(marker);
+  }, [cameraFacing]);
+
+  /** Supprime le marker (fin volontaire de live ou dismiss utilisateur). */
+  const dismissResumableLive = useCallback(() => {
+    clearResumeMarker();
+    setResumableLive(null);
+  }, []);
 
   /**
    * Valide et normalise un message de chat reçu par le canal WebRTC.
@@ -597,6 +737,9 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     // qu'on est en train de regarder sur un autre user (viewerPeerRef).
     stopHosting();
     setConfig((c) => ({ ...c, status: "idle", startedAt: null }));
+    // Clic volontaire sur "stopper le live" → plus de reprise possible.
+    clearResumeMarker();
+    setResumableLive(null);
     if (me) {
       updateRegistry((r) => {
         if (!(me.id in r)) return r;
@@ -649,8 +792,23 @@ export function LiveProvider({ children }: { children: ReactNode }) {
           lastHeartbeat: startedAt,
         },
       }));
+      // Marker de reprise posé immédiatement : un F5 juste après le
+      // lancement du live doit proposer la reprise, même si le
+      // heartbeat n'a pas encore eu le temps de tourner.
+      const marker: LiveResumeMarker = {
+        userId: me.id,
+        mode: "twitch",
+        facing: cameraFacing,
+        title: c.title,
+        description: c.description,
+        category: c.category,
+        twitchChannel: channel,
+        savedAt: startedAt,
+      };
+      writeResumeMarker(marker);
+      setResumableLive(marker);
     },
-    [updateRegistry],
+    [updateRegistry, cameraFacing],
   );
 
   /**
@@ -709,6 +867,21 @@ export function LiveProvider({ children }: { children: ReactNode }) {
               lastHeartbeat: startedAt,
             },
           }));
+          // Marker de reprise posé ici : dès que le peer est ouvert,
+          // on considère le broadcast comme actif et on persiste
+          // l'info pour qu'un éventuel F5 puisse proposer la reprise.
+          const marker: LiveResumeMarker = {
+            userId: me.id,
+            mode,
+            facing: cameraFacing,
+            title: configRef.current.title,
+            description: configRef.current.description,
+            category: configRef.current.category,
+            twitchChannel: "",
+            savedAt: startedAt,
+          };
+          writeResumeMarker(marker);
+          setResumableLive(marker);
         });
 
         peer.on("error", (err: Error & { type?: string }) => {
@@ -807,7 +980,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         return;
       }
     },
-    [stopLive, updateRegistry],
+    [stopLive, updateRegistry, cameraFacing],
   );
 
   const startScreenShare = useCallback(async () => {
@@ -1225,12 +1398,16 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     // Premier POST immédiat pour que les viewers voient le live tout de
     // suite (sans attendre 30 s), puis tick régulier.
     tickServer();
+    persistResumeMarker();
     const id = setInterval(() => {
       tickLocal();
       tickServer();
+      // Rafraîchit `savedAt` du marker de reprise — tant qu'on diffuse,
+      // le marker reste "jeune" et la reprise post-F5 reste proposée.
+      persistResumeMarker();
     }, 30_000);
     return () => clearInterval(id);
-  }, [config.status]);
+  }, [config.status, persistResumeMarker]);
 
   // Sync registre serveur → registre local. Toutes les 10 s, on récupère
   // la liste publique des lives actifs depuis le backend et on la
@@ -1347,6 +1524,49 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  /**
+   * Reprend un live post-refresh : réinjecte la config (titre,
+   * description, catégorie, chaîne Twitch, mode) dans le state et
+   * relance la bonne source (Twitch announce, partage d'écran, ou
+   * caméra avec le bon `facingMode`). Le navigateur re-prompte pour
+   * la caméra / l'écran (c'est obligatoire côté sécurité WebRTC).
+   */
+  const resumeLive = useCallback(async () => {
+    const me = userRef.current;
+    if (!me) {
+      setLastError("Connecte-toi pour reprendre ton live.");
+      return;
+    }
+    const marker = readResumeMarker();
+    if (!marker || marker.userId !== me.id) {
+      setResumableLive(null);
+      return;
+    }
+    setLastError(null);
+    // Restaure la config avant de relancer le stream, pour que
+    // announceTwitchLive / attachStreamToPeer retrouvent les bons
+    // champs (titre, description, catégorie…).
+    setConfig((c) => ({
+      ...c,
+      mode: marker.mode,
+      title: marker.title,
+      description: marker.description,
+      category: marker.category,
+      twitchChannel: marker.twitchChannel,
+    }));
+    if (marker.mode === "twitch") {
+      announceTwitchLive(marker.twitchChannel);
+      return;
+    }
+    if (marker.mode === "screen") {
+      await startScreenShare();
+      return;
+    }
+    // camera
+    setCameraFacing(marker.facing);
+    await startCameraShare(marker.facing);
+  }, [announceTwitchLive, startScreenShare, startCameraShare]);
+
   const value = useMemo<LiveCtx>(
     () => ({
       config,
@@ -1366,6 +1586,9 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       viewingMeta,
       publishChatMessage,
       subscribeChatMessages,
+      resumableLive,
+      resumeLive,
+      dismissResumableLive,
     }),
     [
       config,
@@ -1385,6 +1608,9 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       viewingMeta,
       publishChatMessage,
       subscribeChatMessages,
+      resumableLive,
+      resumeLive,
+      dismissResumableLive,
     ],
   );
 
