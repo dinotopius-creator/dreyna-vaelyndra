@@ -12,12 +12,17 @@ from pydantic import BaseModel, Field
 
 class AuthorIn(BaseModel):
     author_id: str = Field(..., min_length=1, max_length=128)
-    author_name: str = Field(..., min_length=1, max_length=64)
-    # Avatar peut être vide : les membres n'ont pas toujours uploadé d'image
-    # (ex. compte admin "Le roi des zems" sans DiceBear). On acceptait déjà une
-    # chaîne vide côté modèle stocké ; c'est le schéma d'entrée qui rejetait
-    # la payload avec 422 "string too short" et bloquait les commentaires.
-    author_avatar: str = Field(default="", max_length=512)
+    # Pseudo : max 64 chars utiles mais on tolère jusqu'à 128 pour absorber
+    # emojis composés (ZWJ sequences, skin tones) qui explosent la taille UTF-8.
+    author_name: str = Field(..., min_length=1, max_length=128)
+    # Avatar peut être :
+    # - vide (compte sans photo)
+    # - URL courte (DiceBear, pravatar, S3…)
+    # - data URI base64 (upload depuis l'app, jusqu'à ~200 KB côté front)
+    # On accepte jusqu'à 300 KB pour couvrir le data URI ; le routeur se charge
+    # ensuite de tronquer vers "" si c'est un data URI pour éviter de polluer
+    # la table posts/comments.
+    author_avatar: str = Field(default="", max_length=300_000)
 
 
 class PostCreate(AuthorIn):
