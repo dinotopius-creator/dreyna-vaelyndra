@@ -57,6 +57,7 @@ export interface AdminUser {
   bannedReason: string | null;
   activeSessions: number;
   reportsAgainstCount: number;
+  totpEnabled: boolean;
 }
 
 export type WalletPot =
@@ -193,6 +194,19 @@ export async function adminResetPassword(
         new_password: body.newPassword,
         reason: body.reason,
       }),
+    },
+  )) as AdminUser;
+}
+
+export async function adminDisableTotp(
+  userId: string,
+  reason: string,
+): Promise<AdminUser> {
+  return (await authRequest<AdminUser>(
+    `/admin/users/${encodeURIComponent(userId)}/totp`,
+    {
+      method: "DELETE",
+      body: JSON.stringify({ reason }),
     },
   )) as AdminUser;
 }

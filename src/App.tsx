@@ -1,6 +1,7 @@
 import { Route, Routes, useLocation } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Navbar } from "./components/Navbar";
+import { OfflineBanner } from "./components/OfflineBanner";
 import { Footer } from "./components/Footer";
 import { MagicBackground } from "./components/MagicBackground";
 import { Home } from "./pages/Home";
@@ -80,6 +81,7 @@ function App() {
       <MagicBackground />
       <EasterEggs />
       <Navbar />
+      <OfflineBanner />
       <main className="flex-1">
         <AnimatedRoutes />
       </main>

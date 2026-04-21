@@ -355,26 +355,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 "Trop de tentatives. Réessaie dans quelques minutes.",
             };
           }
-          // 2) Fallback legacy (localStorage) sur 401/404 — pour les
-          //    comptes créés avant la migration backend.
+          // 401 / 404 backend : NE PAS retomber sur le localStorage.
+          //
+          // Historique : on tentait ici un fallback legacy "hors-ligne"
+          // si l'email + legacyHash(password) matchait un StoredUser.
+          // Problème constaté en prod : si un user a simplement tapé un
+          // mauvais mdp (ou qu'un seed legacy subsiste avec un hash
+          // obsolète), on le connectait en mode dégradé SANS qu'il
+          // comprenne pourquoi les fonctionnalités backend (lueurs,
+          // 2FA, pdp, reset mdp, admin) ne marchaient plus. Ça a
+          // masqué plusieurs bugs sur des comptes officiels pendant
+          // longtemps. On préfère maintenant refuser franchement.
           if (err.status === 401 || err.status === 404) {
-            const local = users.find(
-              (x) => x.email.toLowerCase() === email.toLowerCase(),
-            );
-            if (local && local.passwordHash === legacyHash(password)) {
-              setUserId(local.id);
-              setBackendMe(null);
-              return { ok: true, legacy: true };
-            }
             return {
               ok: false,
-              error:
-                "Identifiants incorrects — ou compte non encore migré. Recrée un compte.",
+              error: "Email ou mot de passe incorrect.",
             };
           }
           return { ok: false, error: err.message || "Erreur backend." };
         }
-        // Erreur réseau : fallback localStorage pour ne pas bloquer la démo.
+        // Erreur réseau (fetch a jeté une TypeError → backend vraiment
+        // injoignable) : seul cas où on autorise le fallback legacy,
+        // pour qu'un user puisse consulter ses infos locales même si
+        // l'API est down. Une reconnexion propre sera exigée dès que
+        // le backend revient.
         const local = users.find(
           (x) => x.email.toLowerCase() === email.toLowerCase(),
         );
