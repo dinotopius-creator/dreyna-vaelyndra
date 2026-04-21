@@ -152,6 +152,26 @@ const DEFAULT_CONFIG: LiveConfig = {
   startedAt: null,
 };
 
+async function captureDisplayStream(): Promise<MediaStream> {
+  try {
+    return await navigator.mediaDevices.getDisplayMedia({
+      video: { frameRate: { ideal: 30 } },
+      // Demande le son d'onglet/système quand le navigateur le permet.
+      // Certains navigateurs rejettent toute la capture avec `audio:true`;
+      // dans ce cas on retente en vidéo seule au lieu de laisser le live bloqué.
+      audio: true,
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === "NotAllowedError") {
+      throw err;
+    }
+    return await navigator.mediaDevices.getDisplayMedia({
+      video: { frameRate: { ideal: 30 } },
+      audio: false,
+    });
+  }
+}
+
 function readConfig(): LiveConfig {
   try {
     const raw = localStorage.getItem(CONFIG_STORAGE_KEY);
@@ -1105,18 +1125,9 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       );
       return;
     }
-    let stream: MediaStream;
+    let displayStream: MediaStream;
     try {
-      stream = await navigator.mediaDevices.getDisplayMedia({
-        video: { frameRate: { ideal: 30 } },
-        // `audio: true` tente de capter le son du système/onglet. Dans les
-        // faits, Chrome Windows est le seul navigateur qui le fait vraiment
-        // (et uniquement sur "l'onglet" ou "la fenêtre" pas "tout l'écran").
-        // Safari / Firefox / Chrome mac&linux l'ignorent silencieusement →
-        // la piste système peut manquer, mais on veut au moins le micro,
-        // donc on capture le micro séparément juste après.
-        audio: true,
-      });
+      displayStream = await captureDisplayStream();
     } catch (err) {
       if (err instanceof Error && err.name !== "NotAllowedError") {
         setLastError(`Impossible d'accéder à l'écran : ${err.message}`);
@@ -1133,6 +1144,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     // navigateur "en train de partager l'écran" reste bloqué sans bouton
     // pour arrêter). Ça bloque aussi un double-clic involontaire sur le
     // bouton "live" via le guard au début de la fonction.
+    const stream = displayStream;
     stream.getVideoTracks().forEach((track) => {
       track.addEventListener("ended", () => {
         if (localStreamRef.current === stream) stopLive();
