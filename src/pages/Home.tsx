@@ -50,7 +50,7 @@ function Hero({ isLiveOn }: { isLiveOn: boolean }) {
             Bienvenue à<br />Vaelyndra
           </h1>
           <p className="mt-6 max-w-xl text-lg text-ivory/80 md:text-xl">
-            Le mini-réseau social féerique où <span className="text-mystic font-semibold">chacun peut percer</span>{" "}
+            Le mini-réseau social magique où <span className="text-mystic font-semibold">chacun peut percer</span>{" "}
             — lance tes lives, poste, tisse des liens d'âme, grimpe dans les 6 grades de streamer.
             Ton histoire commence ici.
           </p>
