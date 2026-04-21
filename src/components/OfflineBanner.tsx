@@ -21,9 +21,16 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 
 export function OfflineBanner() {
-  const { user, backendMe, logout } = useAuth();
+  const { user, backendMe, logout, initializing } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Tant que le premier `/auth/me` n'a pas répondu, `backendMe` est
+  // `null` même pour un compte parfaitement authentifié — si on ne
+  // gate pas sur `initializing`, le bandeau flashe quelques centaines
+  // de ms à chaque reload et un clic malheureux sur "Se reconnecter"
+  // logout un user sain.
+  if (initializing) return null;
 
   // Caché quand l'utilisateur est authentifié côté backend OU qu'il
   // n'y a pas de session locale (pas d'utilisateur du tout).
