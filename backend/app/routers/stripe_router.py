@@ -37,7 +37,7 @@ from __future__ import annotations
 import logging
 import os
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 import stripe
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -215,17 +215,24 @@ async def stripe_webhook(request: Request, session: Session = Depends(_session_d
     except stripe.error.SignatureVerificationError:
         raise HTTPException(status_code=400, detail="Signature Stripe invalide.")
 
-    event_type = event.get("type")
-    data_object = event.get("data", {}).get("object", {}) or {}
+    # stripe-python renvoie un `stripe.Event` (subclass de `StripeObject`) qui
+    # supporte l'accès par index (`event["type"]`) et l'accès par attribut
+    # (`event.type`) mais **pas** `.get()`. On utilise `_sg()` pour normaliser
+    # l'accès et retourner `None` si la clé manque.
+    event_type = _sg(event, "type")
+    data_section = _sg(event, "data") or {}
+    data_object = _sg(data_section, "object") or {}
 
     if event_type == "checkout.session.completed":
-        checkout_id = data_object.get("id")
+        checkout_id = _sg(data_object, "id")
         if not checkout_id:
-            log.warning("stripe_webhook_missing_session_id event=%s", event.get("id"))
+            log.warning(
+                "stripe_webhook_missing_session_id event=%s", _sg(event, "id")
+            )
             return {"received": True}
         _apply_paid_checkout(session, checkout_id, data_object)
     elif event_type == "checkout.session.async_payment_failed":
-        checkout_id = data_object.get("id")
+        checkout_id = _sg(data_object, "id")
         if checkout_id:
             record = session.get(StripePayment, checkout_id)
             if record is not None and record.status == "pending":
@@ -240,10 +247,32 @@ async def stripe_webhook(request: Request, session: Session = Depends(_session_d
     return {"received": True}
 
 
+def _sg(obj: Any, key: str) -> Any:
+    """Accès tolérant dict / `stripe.StripeObject`.
+
+    `stripe.StripeObject` (et `stripe.Event`) ne possède pas `.get()`.
+    On supporte : `None`, `dict`, et `StripeObject` (accès par index,
+    avec `in` pour éviter `KeyError`).
+    """
+    if obj is None:
+        return None
+    if isinstance(obj, dict):
+        return obj.get(key)
+    try:
+        # StripeObject : supporte `key in obj` et `obj[key]`.
+        return obj[key] if key in obj else None
+    except (KeyError, TypeError, AttributeError):
+        return getattr(obj, key, None)
+
+
 def _apply_paid_checkout(
-    session: Session, checkout_id: str, stripe_object: dict
+    session: Session, checkout_id: str, stripe_object: Any
 ) -> None:
-    """Crédite les Sylvins correspondants à une session Stripe payée."""
+    """Crédite les Sylvins correspondants à une session Stripe payée.
+
+    `stripe_object` est typé `Any` car Stripe renvoie un `StripeObject`
+    (pas un `dict`) qui n'a pas `.get()` ; on passe par `_sg()`.
+    """
     record: Optional[StripePayment] = session.get(StripePayment, checkout_id)
     if record is None:
         # La session a été créée côté Stripe mais pas via notre endpoint
@@ -254,7 +283,7 @@ def _apply_paid_checkout(
         log.warning(
             "stripe_webhook_unknown_session session_id=%s payment_status=%s",
             checkout_id,
-            stripe_object.get("payment_status"),
+            _sg(stripe_object, "payment_status"),
         )
         return
 
@@ -263,7 +292,7 @@ def _apply_paid_checkout(
         log.info("stripe_webhook_duplicate session_id=%s", checkout_id)
         return
 
-    payment_status = stripe_object.get("payment_status")
+    payment_status = _sg(stripe_object, "payment_status")
     if payment_status != "paid":
         log.info(
             "stripe_webhook_not_paid session_id=%s payment_status=%s",

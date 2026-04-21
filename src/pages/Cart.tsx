@@ -58,10 +58,13 @@ export function Cart() {
     // MVP : un seul pack Sylvins à la fois (le plus coûteux si plusieurs).
     // Les autres items restent en panier après le retour du paiement.
     if (sylvinsInCart.length > 0) {
-      // On redirige sur le pack le plus cher du panier (ordre décidable
-      // par l'utilisateur : il peut virer les autres s'il ne veut pas
-      // celui-là).
-      const firstSylvin = sylvinsInCart[0];
+      // On redirige sur le pack le plus cher du panier (l'utilisateur
+      // peut virer les autres s'il ne veut pas celui-là).
+      const firstSylvin = [...sylvinsInCart].sort((a, b) => {
+        const pa = products.find((pp) => pp.id === a.productId);
+        const pb = products.find((pp) => pp.id === b.productId);
+        return (pb?.price ?? 0) - (pa?.price ?? 0);
+      })[0];
       if (otherInCart.length > 0) {
         notify(
           "Stripe ne gère pour l'instant qu'un pack Sylvins à la fois. " +
