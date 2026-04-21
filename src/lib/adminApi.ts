@@ -218,6 +218,28 @@ export async function adminUnbanUser(userId: string): Promise<AdminUser> {
   )) as AdminUser;
 }
 
+export interface AdminHardDeleteResult {
+  userId: string;
+  username: string;
+  email: string | null;
+}
+
+export async function adminHardDeleteUser(
+  userId: string,
+  body: { confirmUsername: string; reason: string },
+): Promise<AdminHardDeleteResult> {
+  return (await authRequest<AdminHardDeleteResult>(
+    `/admin/users/${encodeURIComponent(userId)}`,
+    {
+      method: "DELETE",
+      body: JSON.stringify({
+        confirm_username: body.confirmUsername,
+        reason: body.reason,
+      }),
+    },
+  )) as AdminHardDeleteResult;
+}
+
 export async function adminListAuditLog(params?: {
   targetId?: string;
   action?: string;
