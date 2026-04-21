@@ -15,13 +15,14 @@
  * consultable depuis `/admin → Utilisateurs → Journal`.
  */
 import { useEffect, useState } from "react";
-import { ShieldCheck, ShieldAlert, Coins, UserCog, Ban, RotateCcw } from "lucide-react";
+import { ShieldCheck, ShieldAlert, Coins, UserCog, Ban, RotateCcw, KeyRound } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
 import {
   adminAdjustWallet,
   adminBanUser,
   adminGetUser,
+  adminResetPassword,
   adminSetRole,
   adminUnbanUser,
   WALLET_POT_LABELS,
@@ -48,9 +49,9 @@ const POTS: WalletPot[] = [
 ];
 
 const ROLES: { id: string; label: string }[] = [
-  { id: "user", label: "Elfe (user)" },
+  { id: "user", label: "Membre (user)" },
   { id: "animator", label: "Animateur (🎭 badge)" },
-  { id: "admin", label: "Admin (👑 droits complets)" },
+  { id: "admin", label: "Admin (🛡️ droits complets)" },
 ];
 
 export function AdminUserPanel({ targetUserId, targetUsername, onChange }: Props) {
@@ -64,8 +65,11 @@ export function AdminUserPanel({ targetUserId, targetUsername, onChange }: Props
   const [reason, setReason] = useState<string>("");
   const [roleDraft, setRoleDraft] = useState<string>("user");
   const [banReason, setBanReason] = useState<string>("");
+  const [newPassword, setNewPassword] = useState<string>("");
+  const [pwReason, setPwReason] = useState<string>("");
 
   const isAdmin = backendMe?.role === "admin";
+  const isSelf = backendMe?.id === targetUserId;
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -168,6 +172,55 @@ export function AdminUserPanel({ targetUserId, targetUsername, onChange }: Props
     } catch (err) {
       notify(
         err instanceof Error ? err.message : "Échec du bannissement.",
+        "error",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handlePasswordReset(e: React.FormEvent) {
+    e.preventDefault();
+    if (isSelf) {
+      notify(
+        "Utilise /compte pour changer ton propre mot de passe (il faut l'ancien).",
+        "error",
+      );
+      return;
+    }
+    if (newPassword.length < 10) {
+      notify("Mot de passe trop court (10 caractères minimum).", "error");
+      return;
+    }
+    if (pwReason.trim().length < 2) {
+      notify("Donne une raison (min. 2 caractères) pour le journal.", "error");
+      return;
+    }
+    if (
+      !window.confirm(
+        `Confirmer le reset du mot de passe de ${targetUsername} ? ` +
+          "Toutes ses sessions seront révoquées et il devra se reconnecter.",
+      )
+    ) {
+      return;
+    }
+    setLoading(true);
+    try {
+      const updated = await adminResetPassword(targetUserId, {
+        newPassword,
+        reason: pwReason.trim(),
+      });
+      setDetail(updated);
+      setNewPassword("");
+      setPwReason("");
+      notify(
+        `Mot de passe de ${targetUsername} mis à jour. Transmets-lui le nouveau.`,
+        "success",
+      );
+      onChange?.();
+    } catch (err) {
+      notify(
+        err instanceof Error ? err.message : "Échec du reset.",
         "error",
       );
     } finally {
@@ -343,6 +396,43 @@ export function AdminUserPanel({ targetUserId, targetUsername, onChange }: Props
           </button>
         </div>
       </div>
+
+      {/* --- Reset mot de passe ---------------------------------------- */}
+      {!isSelf && (
+        <form
+          onSubmit={handlePasswordReset}
+          className="mt-6 space-y-3 rounded-lg border border-gold-400/20 bg-royal-800/30 p-4"
+        >
+          <h3 className="flex items-center gap-2 font-display text-sm text-gold-200">
+            <KeyRound className="h-4 w-4 text-gold-300" /> Réinitialiser le mot de passe
+          </h3>
+          <p className="text-[11px] text-ivory/60">
+            Définit directement un nouveau mot de passe pour {targetUsername}.
+            Utile tant que l'email transac n'est pas en place, ou pour
+            débloquer un compte coincé en "mode hors-ligne". Toutes ses
+            sessions seront révoquées.
+          </p>
+          <input
+            className="glass-input w-full"
+            type="text"
+            autoComplete="new-password"
+            placeholder="Nouveau mot de passe (10 caractères min.)"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            disabled={loading}
+          />
+          <input
+            className="glass-input w-full"
+            placeholder="Raison (obligatoire, loguée — ex : 'mdp oublié, demandé via Discord')"
+            value={pwReason}
+            onChange={(e) => setPwReason(e.target.value)}
+            disabled={loading}
+          />
+          <button type="submit" className="btn-gold" disabled={loading}>
+            <KeyRound className="h-4 w-4" /> Appliquer le nouveau mot de passe
+          </button>
+        </form>
+      )}
 
       {/* --- Ban / unban ------------------------------------------------- */}
       <div className="mt-6 space-y-3 rounded-lg border border-rose-400/20 bg-rose-900/10 p-4">

@@ -181,6 +181,22 @@ export async function adminBanUser(
   )) as AdminUser;
 }
 
+export async function adminResetPassword(
+  userId: string,
+  body: { newPassword: string; reason: string },
+): Promise<AdminUser> {
+  return (await authRequest<AdminUser>(
+    `/admin/users/${encodeURIComponent(userId)}/reset-password`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        new_password: body.newPassword,
+        reason: body.reason,
+      }),
+    },
+  )) as AdminUser;
+}
+
 export async function adminUnbanUser(userId: string): Promise<AdminUser> {
   return (await authRequest<AdminUser>(
     `/admin/users/${encodeURIComponent(userId)}/ban`,

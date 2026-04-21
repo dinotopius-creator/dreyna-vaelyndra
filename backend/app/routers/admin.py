@@ -182,6 +182,16 @@ class BanIn(BaseModel):
     reason: str = Field(..., min_length=2, max_length=500)
 
 
+class PasswordResetIn(BaseModel):
+    # Même règle que `_check_password_strength` côté auth/routes.py :
+    # PASSWORD_MIN_LEN = 10. Limite haute généreuse pour ne pas bloquer
+    # des passphrases ; la force exacte est aussi revalidée par
+    # `_check_password_strength` dans le handler, pour rester en phase
+    # avec /auth/change-password même si la constante bouge plus tard.
+    new_password: str = Field(..., min_length=10, max_length=256)
+    reason: str = Field(..., min_length=2, max_length=300)
+
+
 class AuditLogOut(BaseModel):
     id: int
     actorId: str
@@ -326,6 +336,73 @@ def change_role(
             "old_role": old_role,
             "new_role": body.role,
             "reason": body.reason or "",
+        },
+    )
+    session.commit()
+    session.refresh(user)
+    return _admin_user_out(session, user)
+
+
+@router.post("/users/{user_id}/reset-password", response_model=AdminUserOut)
+def admin_reset_password(
+    user_id: str,
+    body: PasswordResetIn,
+    admin: UserProfile = Depends(require_admin),
+    session: Session = Depends(_session_dep),
+) -> AdminUserOut:
+    """Permet à un admin de définir directement le mot de passe d'un user.
+
+    Cas d'usage : débloquer un compte coincé en "mode hors-ligne" parce
+    que le user a oublié son mot de passe, OU tant que l'email transac
+    (Resend/DKIM) n'est pas encore verified et donc que le flow
+    `/auth/request-password-reset` ne peut pas fournir un lien
+    utilisable.
+
+    Effets de bord :
+    - hash argon2id du nouveau mdp
+    - toutes les sessions auth actives du user sont révoquées (il doit
+      se reconnecter)
+    - action `password_reset` loggée dans AdminAuditLog (sans le mdp)
+
+    Un admin ne peut PAS reset son propre mdp via cet endpoint — il doit
+    passer par `/auth/change-password` (qui demande l'ancien mdp). Ça
+    évite qu'un admin compromis n'efface la piste d'audit d'un reset
+    self-inflicted.
+    """
+    from ..auth.crypto import hash_password
+
+    if user_id == admin.id:
+        raise HTTPException(
+            400,
+            "Utilise /auth/change-password pour changer ton propre mot de passe.",
+        )
+    user = _user_or_404(session, user_id)
+    credential = session.get(Credential, user_id)
+    if credential is None:
+        raise HTTPException(
+            404,
+            "Cet utilisateur n'a pas de credential backend (compte legacy).",
+        )
+
+    # Check de force minimale identique à /auth/change-password.
+    from ..auth.routes import _check_password_strength
+
+    _check_password_strength(body.new_password)
+
+    credential.password_hash = hash_password(body.new_password)
+    credential.updated_at = _now_iso()
+    session.add(credential)
+
+    revoked = _revoke_all_sessions(session, user_id)
+
+    _log_action(
+        session,
+        actor=admin,
+        target=user,
+        action="password_reset",
+        details={
+            "reason": body.reason,
+            "sessions_revoked": revoked,
         },
     )
     session.commit()
