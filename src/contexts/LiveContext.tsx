@@ -566,6 +566,27 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     setResumableLive(null);
   }, []);
 
+  // Expire le marker de reprise côté state quand son TTL localStorage
+  // est dépassé. `readResumeMarker()` applique déjà le TTL à la lecture,
+  // mais le state React est lu une fois au mount et conservé ensuite :
+  // sans ce tick, un user qui ouvrirait /live puis laisserait l'onglet
+  // ouvert > 5 min verrait le bouton "Reprendre" rester affiché à vie
+  // (clic silencieusement inopérant) et `imBroadcastingNow` resterait
+  // verrouillé sur son user.id, bloquant l'auto-redirect vers un autre
+  // live. On re-vérifie donc périodiquement tant qu'on n'est pas soi-
+  // même en train de diffuser (le heartbeat rafraîchit déjà savedAt).
+  useEffect(() => {
+    if (!resumableLive) return;
+    if (config.status === "live") return;
+    const check = () => {
+      const fresh = readResumeMarker();
+      if (!fresh) setResumableLive(null);
+    };
+    check();
+    const id = setInterval(check, 30_000);
+    return () => clearInterval(id);
+  }, [resumableLive, config.status]);
+
   /**
    * Valide et normalise un message de chat reçu par le canal WebRTC.
    * Retourne null si la payload est mal formée (pour se protéger d'un
