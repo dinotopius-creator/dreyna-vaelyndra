@@ -93,10 +93,6 @@ app.add_middleware(
     # donc ce pattern ne matche QUE les URLs de previews de ce projet.
     allow_origin_regex=r"https://dreyna-vaelyndra(-[a-z0-9-]+)?\.vercel\.app",
     allow_origins=[o.strip() for o in _cors_origins if o.strip()],
-    # Autorise toutes les previews Vercel du projet (dreyna-vaelyndra* et
-    # dreyna-vaelyndra-<hash>.vercel.app). Regex scopée au projet pour ne
-    # pas laisser passer un site attaquant type "dreyna-vaelyndrafaux".
-    allow_origin_regex=r"https://dreyna-vaelyndra(-[a-z0-9-]+)?\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
