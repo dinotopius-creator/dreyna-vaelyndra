@@ -676,9 +676,14 @@ PROTECTED_USER_IDS: set[str] = {
 
 class UnverifiedAccountOut(BaseModel):
     userId: str
-    username: str
+    # Null quand il n'y a plus de UserProfile pour ce user_id (credential
+    # orphelin à purger).
+    username: Optional[str]
     email: Optional[str]
+    # Null quand il n'y a plus de UserProfile (créé_at inconnu,
+    # on retombe sur `Credential.created_at`).
     createdAt: str
+    orphan: bool = False
 
 
 class CleanupUnverifiedOut(BaseModel):
@@ -687,25 +692,30 @@ class CleanupUnverifiedOut(BaseModel):
     deleted: list[UnverifiedAccountOut]
 
 
-def _list_unverified(session: Session) -> list[tuple[UserProfile, Credential]]:
-    """Retourne les (UserProfile, Credential) dont l'email n'a jamais été
-    vérifié. Exclut les comptes protégés (officiels seedés)."""
+def _list_unverified(
+    session: Session,
+) -> list[tuple[Optional[UserProfile], Credential]]:
+    """Retourne les `(UserProfile | None, Credential)` dont l'email n'a
+    jamais été vérifié. Exclut les comptes protégés (officiels seedés) et
+    tout compte avec un rôle admin. Si le `UserProfile` correspondant
+    n'existe plus (credential orphelin), on retourne quand même la ligne
+    pour qu'elle puisse être purgée."""
     creds = session.exec(
         select(Credential).where(Credential.email_verified_at.is_(None))  # type: ignore[union-attr]
     ).all()
-    out: list[tuple[UserProfile, Credential]] = []
+    out: list[tuple[Optional[UserProfile], Credential]] = []
     for cred in creds:
         if cred.user_id in PROTECTED_USER_IDS:
             continue
         profile = session.get(UserProfile, cred.user_id)
-        if profile is None:
-            # Credential orphelin : on le purgera quand même dans le POST.
-            continue
-        if (profile.role or "user") == "admin":
+        if profile is not None and (profile.role or "user") == "admin":
             # Parachute : jamais de suppression d'un admin, même non vérifié.
             continue
         out.append((profile, cred))
-    out.sort(key=lambda pair: pair[0].created_at or "")
+    out.sort(
+        key=lambda pair: (pair[0].created_at if pair[0] else pair[1].created_at)
+        or ""
+    )
     return out
 
 
@@ -725,10 +735,12 @@ def list_unverified_accounts(
         count=len(rows),
         deleted=[
             UnverifiedAccountOut(
-                userId=profile.id,
-                username=profile.username,
+                userId=cred.user_id,
+                username=profile.username if profile else None,
                 email=cred.email,
-                createdAt=profile.created_at,
+                createdAt=(profile.created_at if profile else cred.created_at)
+                or cred.created_at,
+                orphan=profile is None,
             )
             for profile, cred in rows
         ],
@@ -753,7 +765,11 @@ def delete_unverified_accounts(
     pairs = _list_unverified(session)
     deleted_out: list[UnverifiedAccountOut] = []
     for profile, cred in pairs:
-        uid = profile.id
+        uid = cred.user_id
+        username = profile.username if profile else None
+        created_at = (
+            (profile.created_at if profile else cred.created_at) or cred.created_at
+        )
         for token in session.exec(
             select(EmailVerificationToken).where(
                 EmailVerificationToken.user_id == uid,
@@ -775,21 +791,35 @@ def delete_unverified_accounts(
         ).all():
             session.delete(attempt)
         session.delete(cred)
-        session.delete(profile)
+        if profile is not None:
+            session.delete(profile)
         deleted_out.append(
             UnverifiedAccountOut(
                 userId=uid,
-                username=profile.username,
+                username=username,
                 email=cred.email,
-                createdAt=profile.created_at,
+                createdAt=created_at,
+                orphan=profile is None,
             )
+        )
+        # _log_action exige un target UserProfile ; pour les orphelins on
+        # forge un objet léger mémoire-only (jamais persisté) avec les
+        # infos qu'on a, pour ne pas perdre la trace dans l'audit log.
+        audit_target = profile or UserProfile(
+            id=uid,
+            username=username or f"(orphelin:{uid})",
+            creature_id=None,
         )
         _log_action(
             session,
             actor=admin,
-            target=profile,
+            target=audit_target,
             action="cleanup_unverified_delete",
-            details={"email": cred.email, "createdAt": profile.created_at},
+            details={
+                "email": cred.email,
+                "createdAt": created_at,
+                "orphan": profile is None,
+            },
         )
     session.commit()
     return CleanupUnverifiedOut(
