@@ -31,7 +31,20 @@ from ..auth.models import (
     PasswordResetToken,
 )
 from ..db import get_session
-from ..models import AdminAuditLog, Report, UserProfile
+from ..models import (
+    AdminAuditLog,
+    Comment,
+    DirectMessage,
+    Follow,
+    GiftLedger,
+    LiveJoinRequest,
+    LiveModeration,
+    LiveSession,
+    Post,
+    Reaction,
+    Report,
+    UserProfile,
+)
 
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -540,6 +553,200 @@ def unban_user(
     session.commit()
     session.refresh(user)
     return _admin_user_out(session, user)
+
+
+# --- Suppression hard d'un compte ------------------------------------------
+
+
+class HardDeleteIn(BaseModel):
+    # `confirm_username` = pseudo exact du user ciblé, demandé côté UI pour
+    # empêcher un clic accidentel (équivalent GitHub "Type XXX to confirm").
+    confirm_username: str = Field(min_length=1)
+    reason: str = Field(min_length=2, max_length=500)
+
+
+class HardDeleteOut(BaseModel):
+    userId: str
+    username: str
+    email: Optional[str]
+
+
+def _hard_delete_user(
+    session: Session,
+    user: UserProfile,
+    cred: Optional[Credential],
+) -> None:
+    """Purge toutes les lignes rattachées à `user.id` puis supprime le
+    profil et son credential. Les `AdminAuditLog` sont conservés
+    volontairement (traçabilité) — les colonnes `actor_id` / `target_id` y
+    sont de simples strings, pas des FK, donc rien ne casse si elles
+    pointent vers un user disparu.
+    """
+    uid = user.id
+
+    # Auth (tokens + sessions + historique login)
+    for token in session.exec(
+        select(EmailVerificationToken).where(
+            EmailVerificationToken.user_id == uid,
+        )
+    ).all():
+        session.delete(token)
+    for token in session.exec(
+        select(PasswordResetToken).where(
+            PasswordResetToken.user_id == uid,
+        )
+    ).all():
+        session.delete(token)
+    for auth_s in session.exec(
+        select(AuthSession).where(AuthSession.user_id == uid)
+    ).all():
+        session.delete(auth_s)
+    for attempt in session.exec(
+        select(LoginAttempt).where(LoginAttempt.user_id == uid)
+    ).all():
+        session.delete(attempt)
+
+    # Contenus produits par le user
+    for react in session.exec(
+        select(Reaction).where(Reaction.user_id == uid)
+    ).all():
+        session.delete(react)
+    for comment in session.exec(
+        select(Comment).where(Comment.author_id == uid)
+    ).all():
+        session.delete(comment)
+    for post in session.exec(
+        select(Post).where(Post.author_id == uid)
+    ).all():
+        # Supprime les réactions + commentaires rattachés au post
+        # avant le post lui-même (FK).
+        for r in session.exec(select(Reaction).where(Reaction.post_id == post.id)).all():
+            session.delete(r)
+        for c in session.exec(select(Comment).where(Comment.post_id == post.id)).all():
+            session.delete(c)
+        session.delete(post)
+
+    # Relations sociales
+    for f in session.exec(
+        select(Follow).where(Follow.follower_id == uid)
+    ).all():
+        session.delete(f)
+    for f in session.exec(
+        select(Follow).where(Follow.following_id == uid)
+    ).all():
+        session.delete(f)
+
+    # Lives
+    for ls in session.exec(
+        select(LiveSession).where(LiveSession.broadcaster_id == uid)
+    ).all():
+        session.delete(ls)
+    for mod in session.exec(
+        select(LiveModeration).where(LiveModeration.broadcaster_id == uid)
+    ).all():
+        session.delete(mod)
+    for mod in session.exec(
+        select(LiveModeration).where(LiveModeration.target_user_id == uid)
+    ).all():
+        session.delete(mod)
+    for jr in session.exec(
+        select(LiveJoinRequest).where(LiveJoinRequest.broadcaster_id == uid)
+    ).all():
+        session.delete(jr)
+    for jr in session.exec(
+        select(LiveJoinRequest).where(LiveJoinRequest.user_id == uid)
+    ).all():
+        session.delete(jr)
+
+    # Messages privés (envoyés ET reçus)
+    for dm in session.exec(
+        select(DirectMessage).where(DirectMessage.sender_id == uid)
+    ).all():
+        session.delete(dm)
+    for dm in session.exec(
+        select(DirectMessage).where(DirectMessage.recipient_id == uid)
+    ).all():
+        session.delete(dm)
+
+    # Gifts — on garde le journal pour la compta streamer, mais on
+    # purge les lignes *envoyées* par ce user (il ne peut plus rien
+    # recevoir non plus vu qu'il disparaît).
+    for g in session.exec(
+        select(GiftLedger).where(GiftLedger.sender_id == uid)
+    ).all():
+        session.delete(g)
+    for g in session.exec(
+        select(GiftLedger).where(GiftLedger.receiver_id == uid)
+    ).all():
+        session.delete(g)
+
+    # Signalements posés par le user (les signalements *contre* lui
+    # restent — ils ont une valeur historique pour la modération).
+    for rep in session.exec(
+        select(Report).where(Report.reporter_id == uid)
+    ).all():
+        session.delete(rep)
+
+    # Enfin le credential et le profil
+    if cred is not None:
+        session.delete(cred)
+    session.delete(user)
+
+
+@router.delete(
+    "/users/{user_id}",
+    response_model=HardDeleteOut,
+)
+def hard_delete_user(
+    user_id: str,
+    body: HardDeleteIn,
+    admin: UserProfile = Depends(require_admin),
+    session: Session = Depends(_session_dep),
+) -> HardDeleteOut:
+    """Supprime définitivement un compte et toutes ses données liées.
+
+    Destructif : cette action **ne peut pas être annulée**. À réserver aux
+    cas de demande RGPD, doublon, ou compte créé par erreur. Pour une
+    simple sanction, utiliser `POST /admin/users/{user_id}/ban`.
+
+    Protections :
+      - comptes officiels seedés (`PROTECTED_USER_IDS`) → 400
+      - auto-suppression interdite → 400
+      - autre admin → 400 (retirer le rôle d'abord)
+      - confirm_username doit matcher le pseudo exact du user
+    """
+    user = _user_or_404(session, user_id)
+    if user.id in PROTECTED_USER_IDS:
+        raise HTTPException(400, "Compte officiel protégé — suppression interdite.")
+    if user.id == admin.id:
+        raise HTTPException(400, "Tu ne peux pas supprimer ton propre compte depuis ici.")
+    if user.role == "admin":
+        raise HTTPException(
+            400,
+            "Impossible de supprimer un autre admin. Retire-lui d'abord le rôle.",
+        )
+    if body.confirm_username.strip() != user.username:
+        raise HTTPException(
+            400,
+            "Le pseudo de confirmation ne correspond pas au compte ciblé.",
+        )
+
+    cred = session.get(Credential, user.id)
+    email = cred.email if cred else None
+    username = user.username
+
+    # Log AVANT la suppression pour que `target_username` capture le
+    # pseudo final (après la suppression, l'objet n'existe plus).
+    _log_action(
+        session,
+        actor=admin,
+        target=user,
+        action="hard_delete",
+        details={"email": email, "reason": body.reason},
+    )
+    _hard_delete_user(session, user, cred)
+    session.commit()
+    return HardDeleteOut(userId=user_id, username=username, email=email)
 
 
 # --- Journal d'audit -------------------------------------------------------

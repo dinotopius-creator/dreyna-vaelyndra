@@ -15,7 +15,7 @@
  * consultable depuis `/admin → Utilisateurs → Journal`.
  */
 import { useEffect, useState } from "react";
-import { ShieldCheck, ShieldAlert, Coins, UserCog, Ban, RotateCcw, KeyRound, ShieldOff } from "lucide-react";
+import { ShieldCheck, ShieldAlert, Coins, UserCog, Ban, RotateCcw, KeyRound, ShieldOff, Trash2 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
 import {
@@ -23,6 +23,7 @@ import {
   adminBanUser,
   adminDisableTotp,
   adminGetUser,
+  adminHardDeleteUser,
   adminResetPassword,
   adminSetRole,
   adminUnbanUser,
@@ -69,6 +70,9 @@ export function AdminUserPanel({ targetUserId, targetUsername, onChange }: Props
   const [newPassword, setNewPassword] = useState<string>("");
   const [pwReason, setPwReason] = useState<string>("");
   const [totpReason, setTotpReason] = useState<string>("");
+  const [deleteConfirm, setDeleteConfirm] = useState<string>("");
+  const [deleteReason, setDeleteReason] = useState<string>("");
+  const [deleted, setDeleted] = useState<boolean>(false);
 
   const isAdmin = backendMe?.role === "admin";
   const isSelf = backendMe?.id === targetUserId;
@@ -223,6 +227,57 @@ export function AdminUserPanel({ targetUserId, targetUsername, onChange }: Props
     } catch (err) {
       notify(
         err instanceof Error ? err.message : "Échec du reset.",
+        "error",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleHardDelete() {
+    if (!detail) return;
+    if (isSelf) {
+      notify("Tu ne peux pas supprimer ton propre compte depuis ici.", "error");
+      return;
+    }
+    if (detail.role === "admin") {
+      notify("Retire d'abord le rôle admin avant de supprimer.", "error");
+      return;
+    }
+    if (deleteConfirm.trim() !== targetUsername) {
+      notify(
+        `Tape exactement le pseudo "${targetUsername}" pour confirmer.`,
+        "error",
+      );
+      return;
+    }
+    if (deleteReason.trim().length < 2) {
+      notify("Donne une raison (min. 2 caractères) pour le journal.", "error");
+      return;
+    }
+    if (
+      !window.confirm(
+        `Suppression DÉFINITIVE de ${targetUsername} ? ` +
+          "Tous ses posts, messages, likes, follows, cadeaux et sessions seront purgés. " +
+          "Cette action est irréversible.",
+      )
+    ) {
+      return;
+    }
+    setLoading(true);
+    try {
+      await adminHardDeleteUser(targetUserId, {
+        confirmUsername: deleteConfirm.trim(),
+        reason: deleteReason.trim(),
+      });
+      setDeleted(true);
+      setDeleteConfirm("");
+      setDeleteReason("");
+      notify(`${targetUsername} supprimé·e définitivement.`, "success");
+      onChange?.();
+    } catch (err) {
+      notify(
+        err instanceof Error ? err.message : "Échec de la suppression.",
         "error",
       );
     } finally {
@@ -539,6 +594,55 @@ export function AdminUserPanel({ targetUserId, targetUsername, onChange }: Props
           </div>
         )}
       </div>
+
+      {/* --- Suppression définitive ------------------------------------- */}
+      {!isSelf && detail?.role !== "admin" && (
+        <div className="mt-6 space-y-3 rounded-lg border-2 border-rose-500/60 bg-rose-950/40 p-4">
+          <h3 className="flex items-center gap-2 font-display text-sm text-rose-100">
+            <Trash2 className="h-4 w-4 text-rose-300" /> Zone dangereuse
+          </h3>
+          {deleted ? (
+            <p className="text-xs text-rose-100/90">
+              Compte supprimé. Cette section ne fait plus rien — rafraîchis la liste admin.
+            </p>
+          ) : (
+            <>
+              <p className="text-[11px] leading-relaxed text-rose-100/80">
+                Suppression <strong>définitive</strong> du compte. Purge : profil, credentials,
+                sessions, tokens, posts, commentaires, réactions, follows, lives, messages privés,
+                signalements posés par l'user et gifts. Les signalements <em>contre</em> l'user et
+                le journal d'audit sont conservés. Action <strong>irréversible</strong>.
+              </p>
+              <input
+                className="glass-input w-full"
+                placeholder={`Tape "${targetUsername}" pour confirmer`}
+                value={deleteConfirm}
+                onChange={(e) => setDeleteConfirm(e.target.value)}
+                disabled={loading}
+              />
+              <input
+                className="glass-input w-full"
+                placeholder="Raison (obligatoire, loguée — ex : 'RGPD', 'doublon', 'test')"
+                value={deleteReason}
+                onChange={(e) => setDeleteReason(e.target.value)}
+                disabled={loading}
+              />
+              <button
+                type="button"
+                className="rounded-full border-2 border-rose-400/80 bg-rose-600/40 px-4 py-2 font-regal text-[11px] font-semibold tracking-[0.22em] text-rose-50 hover:bg-rose-600/70 disabled:opacity-40"
+                onClick={handleHardDelete}
+                disabled={
+                  loading ||
+                  deleteConfirm.trim() !== targetUsername ||
+                  deleteReason.trim().length < 2
+                }
+              >
+                <Trash2 className="mr-1 inline h-4 w-4" /> Supprimer définitivement
+              </button>
+            </>
+          )}
+        </div>
+      )}
     </section>
   );
 }
