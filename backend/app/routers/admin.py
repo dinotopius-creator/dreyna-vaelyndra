@@ -668,13 +668,18 @@ def _hard_delete_user(
     ).all():
         session.delete(dm)
 
-    # Gifts — on garde le journal pour la compta streamer, mais on
-    # purge les lignes *envoyées* par ce user (il ne peut plus rien
-    # recevoir non plus vu qu'il disparaît).
+    # Gifts — on garde les lignes *envoyées* par ce user (le streamer
+    # qui les a reçues compte toujours dessus pour son classement hebdo
+    # et son BFF). On anonymise juste le sender_id pour enlever le lien
+    # avec le compte disparu : l'agrégation SUM(amount) GROUP BY
+    # receiver_id reste intacte, aucun streamer ne perd d'earnings sur
+    # son leaderboard. Les lignes *reçues* par ce user peuvent partir
+    # (personne d'autre n'en dépend, le receiver n'existe plus).
     for g in session.exec(
         select(GiftLedger).where(GiftLedger.sender_id == uid)
     ).all():
-        session.delete(g)
+        g.sender_id = GIFT_DELETED_SENDER_ID
+        session.add(g)
     for g in session.exec(
         select(GiftLedger).where(GiftLedger.receiver_id == uid)
     ).all():
@@ -879,6 +884,13 @@ PROTECTED_USER_IDS: set[str] = {
     "user-kamestars",
     "user-roi-des-zems",
 }
+
+# Sentinel posé sur `GiftLedger.sender_id` quand le compte émetteur est
+# hard-delete. On ne supprime pas la ligne (sinon le total reçu du
+# streamer côté classement hebdo + BFF baisse silencieusement, ce qui
+# casse l'invariant "earnings_paid/promo du receiver == SUM ledger du
+# receiver"). On anonymise juste le lien vers le compte disparu.
+GIFT_DELETED_SENDER_ID = "user-deleted"
 
 
 class UnverifiedAccountOut(BaseModel):
