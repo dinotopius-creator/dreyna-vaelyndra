@@ -27,7 +27,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
-from ..auth.dependencies import require_admin, require_auth
+from ..auth.dependencies import (
+    require_admin,
+    require_admin_or_animator,
+    require_auth,
+)
 from ..db import get_session
 from ..models import CatalogArticle, CatalogProduct, UserProfile
 
@@ -347,7 +351,7 @@ def add_article_comment(
 @router_admin.post("/articles", response_model=ArticleOut)
 def create_article(
     body: ArticleIn,
-    admin: UserProfile = Depends(require_admin),
+    editor: UserProfile = Depends(require_admin_or_animator),
     session: Session = Depends(_session_dep),
 ) -> ArticleOut:
     aid = body.id or f"art-{uuid.uuid4().hex[:10]}"
@@ -380,7 +384,7 @@ def create_article(
 def update_article(
     article_id: str,
     body: ArticlePatch,
-    admin: UserProfile = Depends(require_admin),
+    editor: UserProfile = Depends(require_admin_or_animator),
     session: Session = Depends(_session_dep),
 ) -> ArticleOut:
     article = session.get(CatalogArticle, article_id)
@@ -404,7 +408,7 @@ def update_article(
 @router_admin.delete("/articles/{article_id}")
 def delete_article(
     article_id: str,
-    admin: UserProfile = Depends(require_admin),
+    editor: UserProfile = Depends(require_admin_or_animator),
     session: Session = Depends(_session_dep),
 ) -> dict:
     article = session.get(CatalogArticle, article_id)
