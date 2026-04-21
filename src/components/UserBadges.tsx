@@ -76,10 +76,10 @@ export function RoleBadge({ role, size = "sm" }: RoleBadgeProps) {
     return (
       <span
         className={`inline-flex items-center rounded-full border border-gold-400/60 bg-gold-500/15 ${base} font-semibold text-gold-200`}
-        title="Administrateur principal"
+        title="Administrateur de la plateforme"
       >
-        <span aria-hidden>👑</span>
-        <span>Admin</span>
+        <span aria-hidden>🛡️</span>
+        <span>Administrateur</span>
       </span>
     );
   }
@@ -87,10 +87,10 @@ export function RoleBadge({ role, size = "sm" }: RoleBadgeProps) {
     return (
       <span
         className={`inline-flex items-center rounded-full border border-fuchsia-400/50 bg-fuchsia-500/15 ${base} font-semibold text-fuchsia-200`}
-        title="Animatrice officielle Vaelyndra"
+        title="Animateur / animatrice officiel·le Vaelyndra"
       >
         <span aria-hidden>🎭</span>
-        <span>Animatrice</span>
+        <span>Animateur</span>
       </span>
     );
   }
