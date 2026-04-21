@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import AsyncIterator, Dict, List, Optional, Set, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -80,45 +80,66 @@ class SendMessagePayload(BaseModel):
 
 # Un subscriber = une queue asyncio qui reçoit les events qui concernent
 # son user (nouveau message où il est sender OU recipient, ou mise à jour
-# read_at sur un fil où il est sender).
-_subscribers: Dict[str, Set[asyncio.Queue]] = {}
+# read_at sur un fil où il est sender). Chaque queue est associée à la
+# boucle asyncio qui la possède, pour pouvoir republier depuis un thread
+# de threadpool (FastAPI exécute les handlers `def` hors event loop).
+_subscribers: Dict[str, Set[Tuple[asyncio.Queue, asyncio.AbstractEventLoop]]] = {}
 _subscribers_lock = asyncio.Lock()
 
 
-async def _subscribe(user_id: str) -> asyncio.Queue:
+async def _subscribe(
+    user_id: str,
+) -> Tuple[asyncio.Queue, asyncio.AbstractEventLoop]:
+    loop = asyncio.get_running_loop()
     async with _subscribers_lock:
         queue: asyncio.Queue = asyncio.Queue(maxsize=100)
-        _subscribers.setdefault(user_id, set()).add(queue)
-        return queue
+        _subscribers.setdefault(user_id, set()).add((queue, loop))
+        return queue, loop
 
 
-async def _unsubscribe(user_id: str, queue: asyncio.Queue) -> None:
+async def _unsubscribe(
+    user_id: str,
+    entry: Tuple[asyncio.Queue, asyncio.AbstractEventLoop],
+) -> None:
     async with _subscribers_lock:
         if user_id in _subscribers:
-            _subscribers[user_id].discard(queue)
+            _subscribers[user_id].discard(entry)
             if not _subscribers[user_id]:
                 del _subscribers[user_id]
+
+
+def _safe_put(q: asyncio.Queue, event: dict) -> None:
+    """Push best-effort appelé depuis la thread de l'event loop.
+
+    Si la queue est pleine (consommateur lent en retard de 100 events),
+    on drop plutôt que bloquer l'event loop : le client pourra resync via
+    un GET classique au pire.
+    """
+    try:
+        q.put_nowait(event)
+    except asyncio.QueueFull:
+        pass
 
 
 def _publish(user_ids: Tuple[str, ...], event: dict) -> None:
     """Push un event à tous les subscribers de la liste d'users donnée.
 
-    Volontairement non-async : on veut pouvoir appeler depuis les handlers
-    POST synchrones sans faire sauter tout le routeur en async. Les puts
-    sur `asyncio.Queue` depuis du sync se font via `put_nowait`, en best
-    effort — si la queue d'un client lent est saturée (100 msgs en retard),
-    on drop plutôt que bloquer le POST.
+    Volontairement non-async : appelé depuis les handlers POST/GET
+    synchrones (exécutés en threadpool par FastAPI). `asyncio.Queue`
+    n'est pas thread-safe → on programme le put via `call_soon_threadsafe`
+    sur l'event loop qui possède la queue, sinon le selector ne se
+    réveillerait pas avant le timeout de 25 s (retard SSE visible).
     """
     for uid in user_ids:
-        queues = _subscribers.get(uid)
-        if not queues:
+        entries = _subscribers.get(uid)
+        if not entries:
             continue
-        for q in list(queues):
+        for q, loop in list(entries):
             try:
-                q.put_nowait(event)
-            except asyncio.QueueFull:
-                # Consommateur trop lent — on laisse tomber, il resyncera
-                # via le GET classique.
+                loop.call_soon_threadsafe(_safe_put, q, event)
+            except RuntimeError:
+                # Boucle fermée (client déconnecté, cleanup en cours) —
+                # on ignore silencieusement.
                 pass
 
 
@@ -317,10 +338,12 @@ def send_message(
         except ValueError:
             pass
 
-    # Rate-limit horaire (500 msgs/h/sender).
+    # Rate-limit horaire (500 msgs/h/sender) — vraie fenêtre glissante
+    # de 60 min (pas un reset au changement d'heure UTC qui permettrait
+    # 500 msgs à HH:59 + 500 msgs à HH+1:00 = 1000 en 60 s).
     hour_ago = (
-        datetime.now(timezone.utc).replace(microsecond=0)
-    ).isoformat()[:13]  # "YYYY-MM-DDTHH" — OK pour préfixe ISO
+        datetime.now(timezone.utc) - timedelta(hours=1)
+    ).isoformat()
     recent_count = session.exec(
         select(func.count(DirectMessage.id)).where(
             DirectMessage.sender_id == me.id,
@@ -370,7 +393,8 @@ async def stream(
     user_id = me.id
 
     async def event_source() -> AsyncIterator[bytes]:
-        queue = await _subscribe(user_id)
+        entry = await _subscribe(user_id)
+        queue, _ = entry
         try:
             # Heartbeat initial pour forcer le flush du header HTTP et
             # confirmer côté client que le stream est bien ouvert.
@@ -386,7 +410,7 @@ async def stream(
                     # la connexion après 30s d'inactivité.
                     yield b": ping\n\n"
         finally:
-            await _unsubscribe(user_id, queue)
+            await _unsubscribe(user_id, entry)
 
     return StreamingResponse(
         event_source(),
