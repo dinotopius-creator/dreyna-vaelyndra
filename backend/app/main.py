@@ -214,7 +214,10 @@ def _seed_official_credentials() -> None:
                 # (TLD inventé → bounce garanti) par l'email officiel courant.
                 # On ne touche PAS à un email déjà "réel" changé par l'admin
                 # depuis l'UI, pour ne pas écraser une personnalisation.
-                if existing.email.lower().endswith("@vaelyndra.realm"):
+                if (
+                    existing.email.lower().endswith("@vaelyndra.realm")
+                    and email.lower() != existing.email.lower()
+                ):
                     # Vérifie l'unicité : si un autre user a déjà l'email
                     # cible (par ex. l'admin l'a pris pour son propre compte),
                     # on ne fait rien plutôt que de crasher au commit.
