@@ -82,7 +82,12 @@ class UserProfileUpsert(BaseModel):
 
     id: str = Field(..., min_length=1, max_length=128)
     username: str = Field(..., min_length=1, max_length=64)
-    avatar_image_url: str = Field(..., min_length=1, max_length=1024)
+    # Peut être :
+    # - une URL courte (DiceBear, CDN, image hébergée)
+    # - un data URI base64 généré par l'écran /moi après import local
+    #   + redimensionnement client. On autorise une taille large pour ne
+    #   pas rejeter ces avatars au POST /users lors d'une sauvegarde profil.
+    avatar_image_url: str = Field(..., min_length=1, max_length=300_000)
     creature_id: Optional[str] = Field(default=None, max_length=32)
 
 
@@ -131,7 +136,9 @@ class FollowerOut(BaseModel):
 
 class AvatarUpdate(BaseModel):
     avatar_url: Optional[str] = Field(default=None, max_length=1024)
-    avatar_image_url: Optional[str] = Field(default=None, max_length=1024)
+    # Même contrainte que UserProfileUpsert : les photos importées depuis le
+    # PC arrivent en data URI redimensionné côté client.
+    avatar_image_url: Optional[str] = Field(default=None, max_length=300_000)
 
 
 class InventoryUpdate(BaseModel):
