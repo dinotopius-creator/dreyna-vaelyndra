@@ -1313,7 +1313,32 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         viewerPeer.on("open", () => {
           if (cancelled) return;
           const targetPeerId = getLivePeerId(broadcasterId);
-          const call = viewerPeer.call(targetPeerId, new MediaStream());
+          // On passe un `MediaStream` vide côté viewer (il ne publie
+          // rien), mais Chrome en unified-plan génère alors un SDP
+          // sans aucune m-line → l'answer du host ne peut pas
+          // transporter les tracks vidéo/audio et `call.on("stream")`
+          // ne fire jamais. Le viewer reste bloqué sur
+          // "Connexion au flux…" — symptôme reproduit en mode partage
+          // d'écran. On force donc des transceivers `recvonly` via
+          // `offerToReceiveAudio/Video` pour garantir que l'offre
+          // contient bien les m-lines que le host peut remplir.
+          //
+          // `CallOption` dans les types publics de PeerJS n'expose pas
+          // `constraints`, mais `_makeOffer` passe bel et bien
+          // `this.connection.options.constraints` à `createOffer`
+          // (cf. node_modules/peerjs/dist/bundler.mjs :
+          //   createOffer(this.connection.options.constraints)).
+          // On passe donc via un cast étroit.
+          const call = viewerPeer.call(
+            targetPeerId,
+            new MediaStream(),
+            {
+              constraints: {
+                offerToReceiveAudio: true,
+                offerToReceiveVideo: true,
+              },
+            } as unknown as Parameters<typeof viewerPeer.call>[2],
+          );
           if (!call) {
             setIsConnecting(false);
             return;
