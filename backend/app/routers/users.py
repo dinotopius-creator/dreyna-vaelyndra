@@ -1144,6 +1144,13 @@ def admin_set_grade_override(
             # retenterait, mais l'idempotency check (`previous_override !=
             # LEGEND_SLUG`) serait maintenant False donc le DM serait
             # perdu. Mieux vaut un sacre sans DM qu'un admin confus.
+            #
+            # Rollback impératif : si l'erreur est survenue *pendant*
+            # `session.commit()` de `post_system_dm`, la session reste en
+            # "pending rollback" — le `_to_out(...)` ci-dessous (qui ré-exec
+            # des SELECT pour calculer followers/following) lèverait alors
+            # `PendingRollbackError` et on renverrait quand même un 500.
+            session.rollback()
             logger.exception(
                 "DM de sacre Légende impossible (user %s) ; sacre maintenu",
                 p.id,
