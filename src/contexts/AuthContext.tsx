@@ -36,7 +36,7 @@ import {
 } from "react";
 import type { User } from "../types";
 import { DREYNA_PROFILE } from "../data/mock";
-import { ApiError } from "../lib/api";
+import { ApiError, apiUpdateAvatar, apiUpsertProfile } from "../lib/api";
 import {
   authLogin,
   authLogout,
@@ -95,7 +95,7 @@ interface AuthCtx {
     username?: string;
     avatar?: string;
     bio?: string;
-  }) => { ok: boolean; error?: string };
+  }) => Promise<{ ok: boolean; error?: string }>;
 }
 
 const Ctx = createContext<AuthCtx | null>(null);
@@ -583,7 +583,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const updateProfile = useCallback(
-    (patch: { username?: string; avatar?: string; bio?: string }) => {
+    async (patch: { username?: string; avatar?: string; bio?: string }) => {
       if (!userId) return { ok: false, error: "Non connecté." };
       if (patch.username !== undefined && patch.username.trim().length < 2)
         return { ok: false, error: "Ton pseudo est trop court." };
@@ -592,24 +592,66 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           ok: false,
           error: "Image trop grande : compresse-la ou utilise une URL.",
         };
+
+      // Persiste les modifications côté backend avant de toucher au state
+      // local, sinon un refresh restaurerait l'ancienne valeur depuis
+      // `/auth/me`.
+      const trimmedUsername =
+        patch.username !== undefined ? patch.username.trim() : undefined;
+      const trimmedAvatar =
+        patch.avatar !== undefined && patch.avatar.trim().length > 0
+          ? patch.avatar.trim()
+          : undefined;
+
+      try {
+        if (trimmedAvatar !== undefined) {
+          await apiUpdateAvatar(userId, { avatarImageUrl: trimmedAvatar });
+        }
+        if (trimmedUsername !== undefined) {
+          // `upsert_user` met à jour le username même si le profil existe
+          // déjà ; il n'écrase pas `avatar_image_url` s'il est non-vide,
+          // donc on peut renvoyer la même valeur sans risque d'effacer
+          // le rendu RPM.
+          await apiUpsertProfile({
+            id: userId,
+            username: trimmedUsername,
+            avatarImageUrl: trimmedAvatar ?? "",
+          });
+        }
+      } catch (err) {
+        const msg =
+          err instanceof ApiError
+            ? err.message || "Enregistrement côté serveur impossible."
+            : "Enregistrement côté serveur impossible.";
+        return { ok: false, error: msg };
+      }
+
       setUsers((arr) =>
         arr.map((u) => {
           if (u.id !== userId) return u;
           return {
             ...u,
-            username:
-              patch.username !== undefined ? patch.username.trim() : u.username,
-            avatar:
-              patch.avatar !== undefined && patch.avatar.trim().length > 0
-                ? patch.avatar.trim()
-                : u.avatar,
+            username: trimmedUsername ?? u.username,
+            avatar: trimmedAvatar ?? u.avatar,
             bio: patch.bio !== undefined ? patch.bio : u.bio,
           };
         }),
       );
+      // Recharge `backendMe` pour que `OfflineBanner`, le badge de
+      // profil et les écrans qui lisent `avatar_image_url` affichent
+      // la nouvelle image sans nécessiter de refresh.
+      try {
+        const me = await authMe();
+        if (me) {
+          setBackendMe(me);
+          syncBackendUser(me);
+        }
+      } catch {
+        /* non bloquant : le state local a déjà été mis à jour */
+      }
       return { ok: true };
     },
-    [userId],
+    [userId, syncBackendUser],
   );
 
   const value = useMemo<AuthCtx>(
