@@ -330,7 +330,10 @@ def register(payload: RegisterIn, request: Request) -> dict:
                 id=new_user_id,
                 username=username,
                 handle=handle,
-                handle_updated_at=_now_iso(),
+                # On laisse `handle_updated_at=None` (défaut) pour qu'un user
+                # fraîchement inscrit puisse changer son handle auto-dérivé
+                # sans attendre 30 j. Le cooldown ne démarre qu'au 1er
+                # changement explicite via PATCH /users/{id}/handle.
                 avatar_image_url=f"https://api.dicebear.com/7.x/personas/svg?seed={username}",
                 creature_id=creature_id,
                 role="user",
