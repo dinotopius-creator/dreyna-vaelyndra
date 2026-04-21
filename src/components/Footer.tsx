@@ -15,7 +15,7 @@ export function Footer() {
             </span>
           </div>
           <p className="text-sm text-ivory/70">
-            Mini-réseau social féerique. Streamers, créateurs, âmes connectées —
+            Mini-réseau social magique. Streamers, créateurs, âmes connectées —
             chacun peut percer, chacun peut briller.
           </p>
         </div>

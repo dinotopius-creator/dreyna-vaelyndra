@@ -18,7 +18,7 @@ export function CGU() {
 
       <h2>1. Objet du Royaume</h2>
       <p>
-        Vaelyndra est un <strong>mini-réseau social féerique</strong> : une
+        Vaelyndra est un <strong>mini-réseau social magique</strong> : une
         plateforme communautaire où chaque membre peut poster, streamer, tisser
         des liens d'âme et gravir les grades de la cour. Le Royaume permet
         notamment :
