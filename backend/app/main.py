@@ -73,13 +73,25 @@ async def _validation_error_handler(
 # projet `dreyna-vaelyndra*` et l'ancien domaine devinapps le temps de la
 # transition. allow_credentials=True est **obligatoire** pour que le cookie
 # de session HttpOnly traverse depuis `www.vaelyndra.com` → `api.vaelyndra.com`.
-_cors_origins = os.environ.get(
-    "VAELYNDRA_CORS_ORIGINS",
-    "http://localhost:5173,http://localhost:4173,https://dist-tsbfgcct.devinapps.com",
-).split(",")
+# La liste par défaut inclut le domaine de prod (vaelyndra.com + www) pour
+# que le backend soit bon out-of-the-box même si la variable d'env Fly
+# `VAELYNDRA_CORS_ORIGINS` est absente.
+_default_cors = ",".join([
+    "http://localhost:5173",
+    "http://localhost:4173",
+    "https://dist-tsbfgcct.devinapps.com",
+    "https://vaelyndra.com",
+    "https://www.vaelyndra.com",
+])
+_cors_origins = os.environ.get("VAELYNDRA_CORS_ORIGINS", _default_cors).split(",")
 
 app.add_middleware(
     CORSMiddleware,
+    # Regex scopée au projet Vercel uniquement (dreyna-vaelyndra-*.vercel.app)
+    # pour éviter qu'un tiers malveillant héberge un site pirate sur vercel.app
+    # et lise nos endpoints publics via CORS. Starlette fait un `fullmatch`,
+    # donc ce pattern ne matche QUE les URLs de previews de ce projet.
+    allow_origin_regex=r"https://dreyna-vaelyndra(-[a-z0-9-]+)?\.vercel\.app",
     allow_origins=[o.strip() for o in _cors_origins if o.strip()],
     # Autorise toutes les previews Vercel du projet (dreyna-vaelyndra* et
     # dreyna-vaelyndra-<hash>.vercel.app). Regex scopée au projet pour ne
