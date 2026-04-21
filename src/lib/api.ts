@@ -192,6 +192,8 @@ export interface UserProfileDto {
 export interface StreamerGradeDto {
   slug: string;
   name: string;
+  /** Diminutif 3 lettres (ex. "BRM", "LEG") affiché entre crochets devant le pseudo. */
+  short: string;
   emoji: string;
   motto: string;
   theme: string;

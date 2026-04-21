@@ -22,17 +22,27 @@ export type GradeSlug =
 export interface Grade {
   slug: GradeSlug;
   name: string;
+  /** Diminutif 3 lettres affiché entre crochets à côté du pseudo (ex. "BRM"). */
+  short: string;
   emoji: string;
   motto: string;
   theme: string;
   minXp: number;
   color: string;
+  /**
+   * True pour les grades qui ne peuvent pas être obtenus via accumulation
+   * d'XP (programme admin). Actuellement seul Légende est admin-only. La
+   * sélecteur de grade admin affiche un indicateur pour distinguer ces
+   * grades "sacres" des grades automatiques.
+   */
+  adminOnly?: boolean;
 }
 
 export const GRADES: Grade[] = [
   {
     slug: "novice-brumes",
     name: "Novice des Brumes",
+    short: "BRM",
     emoji: "🌱",
     motto: "Les âmes viennent de s'éveiller",
     theme: "Brume magique, énergie instable",
@@ -42,6 +52,7 @@ export const GRADES: Grade[] = [
   {
     slug: "apprenti-sentiers",
     name: "Apprenti des Sentiers",
+    short: "SEN",
     emoji: "🌿",
     motto: "L'énergie commence à circuler",
     theme: "Forêt vivante, runes simples",
@@ -51,6 +62,7 @@ export const GRADES: Grade[] = [
   {
     slug: "gardien-flux",
     name: "Gardien des Flux",
+    short: "FLX",
     emoji: "🌙",
     motto: "L'équilibre commence à se stabiliser",
     theme: "Magie lunaire, symboles protecteurs",
@@ -60,6 +72,7 @@ export const GRADES: Grade[] = [
   {
     slug: "arcaniste-eveille",
     name: "Arcaniste Éveillé",
+    short: "ARC",
     emoji: "🔥",
     motto: "La magie devient puissance",
     theme: "Flammes mystiques, runes dorées",
@@ -69,6 +82,7 @@ export const GRADES: Grade[] = [
   {
     slug: "elite-regent",
     name: "Élite du Régent",
+    short: "ELT",
     emoji: "⚔️",
     motto: "Les piliers du royaume",
     theme: "Armure magique royale",
@@ -78,11 +92,13 @@ export const GRADES: Grade[] = [
   {
     slug: "legende-vaelyndra",
     name: "Légende de Vaelyndra",
+    short: "LEG",
     emoji: "👑",
     motto: "Les êtres rares qui façonnent le monde",
     theme: "Aura divine, couronne d'énergie",
     minXp: 50000,
     color: "#e6c274",
+    adminOnly: true,
   },
 ];
 
@@ -109,6 +125,8 @@ export interface StreamerGrade {
    */
   slug: string;
   name: string;
+  /** Diminutif 3 lettres (ex. "BRM", "LEG") affiché entre crochets devant le pseudo. */
+  short: string;
   emoji: string;
   motto: string;
   theme: string;
@@ -116,7 +134,7 @@ export interface StreamerGrade {
   minXp: number;
   xp: number;
   progressXp: number;
-  /** null quand le user est au grade max (Légende). */
+  /** null quand le user est au grade auto max (Élite du Régent). */
   nextXp: number | null;
   /** True quand un admin a forcé le grade (la progression est gelée). */
   override: boolean;

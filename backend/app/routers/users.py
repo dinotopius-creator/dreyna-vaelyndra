@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import List
 
@@ -9,10 +10,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
+logger = logging.getLogger(__name__)
+
 from ..auth.dependencies import require_auth
 from ..creatures import CREATURES, get_creature
 from ..db import get_session
 from ..grades import (
+    LEGEND_SLUG,
     grade_by_slug,
     grade_for_xp,
     next_grade,
@@ -24,6 +28,11 @@ from ..handles import (
     suggest_unique_handle,
 )
 from ..models import Follow, GiftLedger, UserProfile
+from .messages import (
+    DIRECT_MESSAGE_LEGEND_SACRE,
+    DREYNA_USER_ID,
+    post_system_dm,
+)
 from .streamers import iso_week_start
 from ..schemas import (
     AvatarUpdate,
@@ -120,6 +129,7 @@ def _grade_out(p: UserProfile) -> StreamerGradeOut:
         return StreamerGradeOut(
             slug=override_grade.slug,
             name=override_grade.name,
+            short=override_grade.short,
             emoji=override_grade.emoji,
             motto=override_grade.motto,
             theme=override_grade.theme,
@@ -135,6 +145,7 @@ def _grade_out(p: UserProfile) -> StreamerGradeOut:
     return StreamerGradeOut(
         slug=g.slug,
         name=g.name,
+        short=g.short,
         emoji=g.emoji,
         motto=g.motto,
         theme=g.theme,
@@ -1093,6 +1104,7 @@ def admin_set_grade_override(
     p = session.get(UserProfile, user_id)
     if not p:
         raise HTTPException(status_code=404, detail="Profil introuvable.")
+    previous_override = p.streamer_grade_override
     if payload.grade_slug is not None:
         if grade_by_slug(payload.grade_slug) is None:
             raise HTTPException(
@@ -1105,6 +1117,44 @@ def admin_set_grade_override(
     _touch(p)
     session.commit()
     session.refresh(p)
+
+    # Si on vient d'accorder le sacre Légende (et qu'il n'était pas déjà posé),
+    # on envoie un DM de félicitations de la part de Dreyna au membre sacré.
+    # On ne renvoie PAS le message si l'admin re-sauvegarde le même override
+    # (évite de spammer le membre si on tâtonne dans l'UI). On ne l'envoie pas
+    # non plus si le membre sacré **est** Dreyna (impossible en pratique mais
+    # défensif, `post_system_dm` lèverait sinon).
+    just_awarded_legend = (
+        payload.grade_slug == LEGEND_SLUG and previous_override != LEGEND_SLUG
+    )
+    if just_awarded_legend and p.id != DREYNA_USER_ID:
+        try:
+            post_system_dm(
+                session,
+                sender_id=DREYNA_USER_ID,
+                recipient_id=p.id,
+                content=DIRECT_MESSAGE_LEGEND_SACRE,
+            )
+        except Exception:  # noqa: BLE001 — DM best-effort, le sacre est déjà committé
+            # On catche large volontairement : le sacre (grade_override) est
+            # déjà committé ligne ~1115. Si le DM échoue pour n'importe
+            # quelle raison (DB error transitoire, race sur la table
+            # `direct_messages`, texte mal formé…), on ne veut pas renvoyer
+            # un 500 à l'admin — il croirait que le sacre n'a pas marché et
+            # retenterait, mais l'idempotency check (`previous_override !=
+            # LEGEND_SLUG`) serait maintenant False donc le DM serait
+            # perdu. Mieux vaut un sacre sans DM qu'un admin confus.
+            #
+            # Rollback impératif : si l'erreur est survenue *pendant*
+            # `session.commit()` de `post_system_dm`, la session reste en
+            # "pending rollback" — le `_to_out(...)` ci-dessous (qui ré-exec
+            # des SELECT pour calculer followers/following) lèverait alors
+            # `PendingRollbackError` et on renverrait quand même un 500.
+            session.rollback()
+            logger.exception(
+                "DM de sacre Légende impossible (user %s) ; sacre maintenu",
+                p.id,
+            )
     return _to_out(p, session)
 
 
