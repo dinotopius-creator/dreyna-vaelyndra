@@ -28,6 +28,8 @@ import { CGV } from "./pages/CGV";
 import { Cookies } from "./pages/Cookies";
 import { UserProfile } from "./pages/UserProfile";
 import { Avatar } from "./pages/Avatar";
+import { Messages } from "./pages/Messages";
+import { MessageThread } from "./pages/MessageThread";
 import { Guarded } from "./components/Guarded";
 import { EasterEggs } from "./components/EasterEggs";
 import { CookieBanner } from "./components/CookieBanner";
@@ -59,6 +61,8 @@ function AnimatedRoutes() {
           <Route path="/compte" element={<Guarded><Compte /></Guarded>} />
           <Route path="/connexions" element={<Guarded><Connexions /></Guarded>} />
           <Route path="/avatar" element={<Guarded><Avatar /></Guarded>} />
+          <Route path="/messages" element={<Guarded><Messages /></Guarded>} />
+          <Route path="/messages/:userId" element={<Guarded><MessageThread /></Guarded>} />
           <Route path="/verifier-email" element={<VerifyEmail />} />
           <Route path="/mot-de-passe-oublie" element={<ForgotPassword />} />
           <Route path="/reinitialiser-mot-de-passe" element={<ResetPassword />} />

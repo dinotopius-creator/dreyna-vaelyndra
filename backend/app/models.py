@@ -378,3 +378,22 @@ class GiftLedger(SQLModel, table=True):
     amount_promo: int = Field(default=0)
     week_start_iso: str = Field(index=True)
     created_at: str = Field(default_factory=_now_iso, index=True)
+
+
+class DirectMessage(SQLModel, table=True):
+    """Message privé entre deux membres (1-to-1, texte).
+
+    - `conversation_key` = `"{min(a,b)}|{max(a,b)}"` (ids triés). Une seule
+      clé par paire de users, ce qui permet d'indexer un fil sans se
+      soucier de savoir qui a envoyé à qui. Renseigné à l'insertion.
+    - `read_at` : ISO timestamp posé quand le destinataire ouvre le fil.
+      `None` = pas encore lu → l'UI affiche "Envoyé". Sinon "Vu à HH:MM".
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    conversation_key: str = Field(index=True)
+    sender_id: str = Field(index=True)
+    recipient_id: str = Field(index=True)
+    content: str
+    created_at: str = Field(default_factory=_now_iso, index=True)
+    read_at: Optional[str] = Field(default=None, index=True)

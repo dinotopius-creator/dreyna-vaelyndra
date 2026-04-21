@@ -1,9 +1,11 @@
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useStore } from "../contexts/StoreContext";
+import { useMessages } from "../contexts/MessagesContext";
 import {
   Crown,
   Menu,
+  MessageCircle,
   ShoppingBag,
   Radio,
   LogOut,
@@ -26,6 +28,7 @@ const NAV = [
 export function Navbar() {
   const { user, isQueen, logout, backendMe } = useAuth();
   const { cartCount, isLiveOn } = useStore();
+  const { unreadCount } = useMessages();
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
 
@@ -77,6 +80,21 @@ export function Navbar() {
               <Radio className="h-4 w-4" />
               Lives
             </Link>
+            {user && (
+              <Link
+                to="/messages"
+                className="relative inline-flex items-center gap-1.5 rounded-full border border-royal-500/30 px-3 py-2 text-xs text-ivory/80 transition hover:border-gold-400/60 hover:text-gold-200"
+                aria-label="Messagerie privée"
+              >
+                <MessageCircle className="h-4 w-4" />
+                <span className="hidden sm:inline">Messages</span>
+                {unreadCount > 0 && (
+                  <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-gold-shine px-1 text-[10px] font-bold text-night-900">
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </span>
+                )}
+              </Link>
+            )}
             <Link
               to="/panier"
               className="relative inline-flex items-center gap-1.5 rounded-full border border-royal-500/30 px-3 py-2 text-xs text-ivory/80 transition hover:border-gold-400/60 hover:text-gold-200"
