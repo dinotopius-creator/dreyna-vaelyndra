@@ -12,6 +12,7 @@ import type Peer from "peerjs";
 import type { MediaConnection } from "peerjs";
 import { useStore } from "./StoreContext";
 import { useAuth } from "./AuthContext";
+import { getPeerOptions } from "../lib/peerConfig";
 import {
   DEFAULT_LIVE_CATEGORY,
   normalizeLiveCategory,
@@ -513,7 +514,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
           return;
         }
         const peerId = getLivePeerId(me.id);
-        const peer = new PeerCtor(peerId, { debug: 1 });
+        const peer = new PeerCtor(peerId, getPeerOptions());
         hostPeerRef.current = peer;
         let peerOpened = false;
 
@@ -573,6 +574,10 @@ export function LiveProvider({ children }: { children: ReactNode }) {
           // nouvelle source aux nouveaux viewers (les anciens gardent leur
           // track remplacée via `RTCRtpSender.replaceTrack`).
           const active = localStreamRef.current ?? stream;
+          // Le `config.iceServers` est propagé par PeerJS depuis
+          // `new Peer(..., getPeerOptions())` vers chaque
+          // `RTCPeerConnection` créée pour une MediaConnection, donc
+          // pas besoin de le redupliquer ici.
           incoming.answer(active);
           hostConnectionsRef.current.add(incoming);
           incoming.on("close", () => {
@@ -830,9 +835,14 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       try {
         const { default: PeerCtor } = await import("peerjs");
         if (cancelled) return;
+        // Sans id → PeerJS génère un id via son broker. PeerJS expose
+        // deux signatures (`new Peer(options)` et `new Peer(id,
+        // options?)`) ; seule la version nommée est typée publiquement,
+        // donc on passe par un cast léger pour garder la version
+        // anonyme utilisée ici.
         const viewerPeer = new (PeerCtor as unknown as {
-          new (id?: string, options?: { debug?: number }): Peer;
-        })(undefined, { debug: 1 });
+          new (options: ReturnType<typeof getPeerOptions>): Peer;
+        })(getPeerOptions());
         viewerPeerRef.current = viewerPeer;
 
         viewerPeer.on("open", () => {
