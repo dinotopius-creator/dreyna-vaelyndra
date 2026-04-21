@@ -249,6 +249,34 @@ class LiveModeration(SQLModel, table=True):
     created_at: str = Field(default_factory=_now_iso)
 
 
+class LiveJoinRequest(SQLModel, table=True):
+    """Demande temps réel d'un viewer pour monter sur scène d'un live.
+
+    Remplace le flux localStorage du PR H par un canal serveur polled,
+    afin que la demande d'un viewer (mobile) arrive au broadcaster (PC)
+    même quand ils ne sont pas sur le même browser.
+
+    Statuts :
+      - "pending" : file d'attente, en haut de la liste côté broadcaster
+      - "accepted" : invité accepté (le broadcaster devra ouvrir l'audio)
+      - "refused" : refusé récemment (purgé après 3 min côté client)
+
+    Clé logique : `(broadcaster_id, user_id)` — un viewer ne peut avoir
+    qu'une demande active par broadcaster. Si elle existe déjà, on
+    met à jour le statut / l'horodatage (upsert idempotent).
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    broadcaster_id: str = Field(index=True)
+    user_id: str = Field(index=True)
+    username: str = ""
+    avatar: str = ""
+    creature_id: str = ""
+    status: str = Field(default="pending", index=True)
+    requested_at: str = Field(default_factory=_now_iso, index=True)
+    decided_at: Optional[str] = None
+
+
 class GiftLedger(SQLModel, table=True):
     """Journal append-only de chaque cadeau Sylvins envoyé.
 
