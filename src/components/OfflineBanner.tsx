@@ -16,14 +16,48 @@
  * Le bandeau ne s'affiche JAMAIS pour un compte authentifié proprement
  * (backend + cookie), donc aucun coût UX pour les utilisateurs normaux.
  */
-import { AlertTriangle, LogIn, LogOut } from "lucide-react";
+import { AlertTriangle, LogIn, LogOut, X } from "lucide-react";
+import { useEffect, useReducer } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+
+const DISMISS_KEY = "vaelyndra_offline_banner_dismissed_v1";
+
+function readDismissed(): boolean {
+  try {
+    return localStorage.getItem(DISMISS_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
 
 export function OfflineBanner() {
   const { user, backendMe, logout, initializing } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+
+  // `forceRender` permet au bandeau de se ré-évaluer après qu'on a muté
+  // `localStorage[DISMISS_KEY]` (clic sur la croix). On lit le flag à
+  // chaque rendu plutôt que de le mettre dans un `useState` pour éviter
+  // le pattern `setState-in-effect` (lint react-hooks/set-state-in-effect)
+  // lorsqu'on veut le ré-armer à la reconnexion backend.
+  const [, forceRender] = useReducer((x: number) => x + 1, 0);
+  const dismissed = readDismissed();
+
+  // Ré-arme le bandeau dès qu'on a une session backend valide : si
+  // l'utilisateur redevient authentifié, son prochain "hors-ligne" sera
+  // à nouveau affiché (au moins une fois, jusqu'à ce qu'il le ferme).
+  // On touche seulement `localStorage` ici, sans setState, pour rester
+  // compatible avec `react-hooks/set-state-in-effect`.
+  useEffect(() => {
+    if (backendMe) {
+      try {
+        localStorage.removeItem(DISMISS_KEY);
+      } catch {
+        /* noop */
+      }
+    }
+  }, [backendMe]);
 
   // Tant que le premier `/auth/me` n'a pas répondu, `backendMe` est
   // `null` même pour un compte parfaitement authentifié — si on ne
@@ -35,6 +69,10 @@ export function OfflineBanner() {
   // Caché quand l'utilisateur est authentifié côté backend OU qu'il
   // n'y a pas de session locale (pas d'utilisateur du tout).
   if (!user || backendMe) return null;
+
+  // Le user a explicitement fermé le bandeau : on respecte son choix
+  // jusqu'à sa prochaine session backend valide.
+  if (dismissed) return null;
 
   // Pas d'intérêt à afficher le bandeau sur les pages de (re)connexion
   // et d'inscription — l'utilisateur est déjà en train d'agir.
@@ -94,6 +132,22 @@ export function OfflineBanner() {
             title="Se déconnecter complètement (nettoie la session locale)"
           >
             <LogOut className="h-3.5 w-3.5" /> Déconnexion
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              try {
+                localStorage.setItem(DISMISS_KEY, "1");
+              } catch {
+                /* noop */
+              }
+              forceRender();
+            }}
+            aria-label="Masquer le bandeau"
+            title="Masquer jusqu'à ma prochaine reconnexion"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-amber-300/30 text-amber-100/70 transition hover:border-amber-300/70 hover:text-amber-50"
+          >
+            <X className="h-3.5 w-3.5" />
           </button>
         </div>
       </div>
