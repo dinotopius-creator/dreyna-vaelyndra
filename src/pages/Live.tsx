@@ -117,30 +117,78 @@ function LiveVideoStage({
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const stream = isHost ? localStream : remoteStream;
+  // iOS Safari et Chrome mobile bloquent `autoplay` avec son tant que
+  // l'user n'a pas cliqué dans la page courante. `<video>.play()` rejette
+  // avec `NotAllowedError`. Pour ne pas laisser le viewer avec un écran
+  // figé + zéro son, on détecte ce cas et on superpose un bouton "Activer
+  // le son" qui lance un `play()` sous gesture utilisateur.
+  const [needsUnmute, setNeedsUnmute] = useState(false);
 
   useEffect(() => {
     const el = videoRef.current;
     if (!el) return;
     el.srcObject = stream;
-    if (stream) {
-      el.play().catch(() => {
-        // Navigateur bloque l'autoplay tant qu'il n'y a pas d'interaction.
-      });
+    if (!stream) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setNeedsUnmute(false);
+      return;
     }
-  }, [stream]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setNeedsUnmute(false);
+    el.play().catch(() => {
+      if (isHost) return;
+      // Fallback viewer : on essaie de démarrer en muted (autoplay sans
+      // son, toujours autorisé). Comme ça au moins la vidéo tourne, et
+      // on affiche un bouton "Activer le son" pour récupérer l'audio
+      // après un tap utilisateur.
+      el.muted = true;
+      el.play()
+        .then(() => {
+          setNeedsUnmute(true);
+        })
+        .catch(() => {
+          setNeedsUnmute(true);
+        });
+    });
+  }, [stream, isHost]);
+
+  const handleUnmute = () => {
+    const el = videoRef.current;
+    if (!el) return;
+    el.muted = false;
+    el.play()
+      .then(() => setNeedsUnmute(false))
+      .catch(() => {
+        // Rare : l'autoplay échoue même sous gesture. On laisse le bouton
+        // affiché pour que l'user re-tape.
+      });
+  };
 
   if (!stream) return null;
 
   return (
-    <video
-      ref={videoRef}
-      autoPlay
-      playsInline
-      // Le host se voit sans son (sinon larsen). Les viewers entendent.
-      muted={isHost}
-      controls={!isHost}
-      className="absolute inset-0 h-full w-full bg-night-900 object-contain"
-    />
+    <>
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        // Le host se voit sans son (sinon larsen). Les viewers entendent.
+        muted={isHost}
+        controls={!isHost}
+        className="absolute inset-0 h-full w-full bg-night-900 object-contain"
+      />
+      {needsUnmute ? (
+        <button
+          type="button"
+          onClick={handleUnmute}
+          className="absolute inset-0 z-10 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+        >
+          <span className="rounded-full border border-gold-200/40 bg-night-900/80 px-5 py-3 font-display text-sm text-gold-100 shadow-lg">
+            🔊 Activer le son
+          </span>
+        </button>
+      ) : null}
+    </>
   );
 }
 

@@ -1035,6 +1035,12 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     try {
       stream = await navigator.mediaDevices.getDisplayMedia({
         video: { frameRate: { ideal: 30 } },
+        // `audio: true` tente de capter le son du système/onglet. Dans les
+        // faits, Chrome Windows est le seul navigateur qui le fait vraiment
+        // (et uniquement sur "l'onglet" ou "la fenêtre" pas "tout l'écran").
+        // Safari / Firefox / Chrome mac&linux l'ignorent silencieusement →
+        // la piste système peut manquer, mais on veut au moins le micro,
+        // donc on capture le micro séparément juste après.
         audio: true,
       });
     } catch (err) {
@@ -1042,6 +1048,38 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         setLastError(`Impossible d'accéder à l'écran : ${err.message}`);
       }
       return;
+    }
+
+    // En partage d'écran, `getDisplayMedia` ne capte quasiment jamais le
+    // micro du streamer — il propose uniquement l'audio système/onglet et
+    // même ça dépend du navigateur. Sans fallback dédié, le flux diffusé
+    // aux viewers n'a aucune piste audio → les spectateurs voient l'image
+    // mais n'entendent ni le streamer ni les invités audio.
+    //
+    // On demande donc explicitement le micro via `getUserMedia` et on
+    // ajoute la piste au stream principal avant de l'envoyer aux peers.
+    // Si l'utilisateur refuse le micro, on laisse le live démarrer sans
+    // voix (c'est un choix de son côté).
+    try {
+      const micStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+        video: false,
+      });
+      micStream.getAudioTracks().forEach((track) => {
+        stream.addTrack(track);
+      });
+    } catch (err) {
+      if (err instanceof Error && err.name === "NotAllowedError") {
+        setLastError(
+          "Micro refusé : les spectateurs ne t'entendront pas. Autorise le micro pour être audible.",
+        );
+      } else if (err instanceof Error) {
+        console.warn("mic fallback pour screen share indisponible", err);
+      }
     }
 
     // Quand on arrête le partage depuis le prompt navigateur, on stoppe.
