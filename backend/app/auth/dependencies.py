@@ -6,9 +6,9 @@ Exposent :
 - `require_auth` / `require_admin` : dépendances qui lèvent 401/403.
 - `optional_user` : None si pas connecté, sinon le UserProfile.
 
-Le cookie est HttpOnly + Secure (prod) + SameSite=Lax pour limiter le CSRF
-sur les requêtes cross-origin (le frontend est sur vaelyndra.com, le
-backend sur api.vaelyndra.com — même site eTLD+1, donc SameSite=Lax marche).
+Le cookie est HttpOnly + Secure en prod. En prod, SameSite=None permet aussi
+à l'app mobile Capacitor (origine localhost/capacitor) d'appeler
+api.vaelyndra.com avec credentials.
 """
 from __future__ import annotations
 
@@ -40,22 +40,29 @@ def set_session_cookie(response: Response, token: str, *, ttl_days: int = 30) ->
 
     - HttpOnly : JS ne peut pas le lire → protection XSS
     - Secure en prod : cookie ne part qu'en HTTPS
-    - SameSite=Lax : envoyé sur navigation top-level (OK pour auth normal),
-      pas sur les POST cross-origin (protection CSRF basique)
+    - SameSite=None en prod : requis pour l'app mobile Capacitor qui appelle
+      api.vaelyndra.com depuis une origine app/localhost.
+    - SameSite=Lax en local : garde un comportement dev simple en HTTP.
     """
+    same_site = "none" if is_prod() else "lax"
     response.set_cookie(
         key=COOKIE_NAME,
         value=token,
         max_age=ttl_days * 24 * 3600,
         httponly=True,
         secure=is_prod(),
-        samesite="lax",
+        samesite=same_site,
         path="/",
     )
 
 
 def clear_session_cookie(response: Response) -> None:
-    response.delete_cookie(key=COOKIE_NAME, path="/", samesite="lax")
+    response.delete_cookie(
+        key=COOKIE_NAME,
+        path="/",
+        samesite="none" if is_prod() else "lax",
+        secure=is_prod(),
+    )
 
 
 def _resolve_session(
