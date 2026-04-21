@@ -40,6 +40,7 @@ from sqlmodel import Session, select
 
 from ..creatures import CREATURES
 from ..db import get_session
+from ..handles import slugify_handle, suggest_unique_handle
 from ..models import UserProfile
 from . import emailer
 from .crypto import (
@@ -319,9 +320,17 @@ def register(payload: RegisterIn, request: Request) -> dict:
             user.updated_at = _now_iso()
             db.add(user)
         else:
+            # PR S — on génère un `@handle` unique dès la création pour que le
+            # user l'ait immédiatement (sinon il reste `None` jusqu'au prochain
+            # restart backend qui fait tourner `_backfill_handles`).
+            new_user_id = f"user-{uuid.uuid4().hex[:12]}"
+            base_handle = slugify_handle(username)
+            handle = suggest_unique_handle(db, base_handle, user_id=new_user_id)
             user = UserProfile(
-                id=f"user-{uuid.uuid4().hex[:12]}",
+                id=new_user_id,
                 username=username,
+                handle=handle,
+                handle_updated_at=_now_iso(),
                 avatar_image_url=f"https://api.dicebear.com/7.x/personas/svg?seed={username}",
                 creature_id=creature_id,
                 role="user",
