@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { Link, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Banknote, Coins, ArrowLeft } from "lucide-react";
+import { Banknote, Coins, ArrowLeft, MessageCircle } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useStore } from "../contexts/StoreContext";
 import { SectionHeading } from "../components/SectionHeading";
@@ -190,6 +190,15 @@ export function UserProfile() {
                 );
               }}
             />
+            {currentUser && currentUser.id !== profile.id && (
+              <Link
+                to={`/messages/${encodeURIComponent(profile.id)}`}
+                className="inline-flex items-center gap-1.5 rounded-full border border-gold-400/50 bg-gold-500/10 px-3 py-2 text-xs font-semibold text-gold-200 hover:bg-gold-500/20"
+              >
+                <MessageCircle className="h-4 w-4" />
+                Envoyer un message
+              </Link>
+            )}
             {currentUser && currentUser.id !== profile.id && (
               <ReportButton
                 targetType="user"
