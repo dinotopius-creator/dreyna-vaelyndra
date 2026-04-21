@@ -402,7 +402,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const register = useCallback<AuthCtx["register"]>(
     async (username, email, password, creatureId) => {
       if (username.length < 2)
-        return { ok: false, error: "Votre nom elfique est trop court." };
+        return { ok: false, error: "Ton pseudo est trop court." };
       if (!/^\S+@\S+\.\S+$/.test(email))
         return { ok: false, error: "Un mail valide est requis." };
       if (password.length < 8)
@@ -471,7 +471,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     (patch: { username?: string; avatar?: string; bio?: string }) => {
       if (!userId) return { ok: false, error: "Non connecté." };
       if (patch.username !== undefined && patch.username.trim().length < 2)
-        return { ok: false, error: "Votre nom elfique est trop court." };
+        return { ok: false, error: "Ton pseudo est trop court." };
       if (patch.avatar !== undefined && patch.avatar.length > 200_000)
         return {
           ok: false,
