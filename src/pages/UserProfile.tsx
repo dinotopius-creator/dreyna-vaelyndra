@@ -18,19 +18,28 @@ import { formatDate, formatRelative } from "../lib/helpers";
 import { roleLabelWithIcon } from "../lib/roleLabel";
 import { formatSylvins } from "../lib/sylvins";
 import { apiGetProfile, type UserProfileDto } from "../lib/api";
+import type { User } from "../types";
 
 export function UserProfile() {
   const { userId = "" } = useParams();
   const { users, user: currentUser } = useAuth();
   const { posts, walletOf } = useStore();
 
-  const profile = useMemo(
+  const localProfile = useMemo(
     () => users.find((u) => u.id === userId),
     [users, userId],
   );
 
   const [serverProfile, setServerProfile] = useState<UserProfileDto | null>(
     null,
+  );
+  // "loading" tant que le fetch tourne, "ok" si 2xx, "missing" si 404 /
+  // erreur serveur explicite. On n'affiche l'écran "profil disparu" QUE
+  // si le fetch serveur est en "missing" ET qu'on n'a pas non plus le
+  // profil en cache local — sinon un admin qui clique sur un autre user
+  // depuis /admin (donc pas dans `users` local) voyait la page vide.
+  const [serverState, setServerState] = useState<"loading" | "ok" | "missing">(
+    "loading",
   );
   const [bondsTab, setBondsTab] = useState<"followers" | "following" | null>(
     null,
@@ -40,15 +49,20 @@ export function UserProfile() {
     // Reset immédiat : sinon l'ancien avatar serveur reste affiché pendant
     // la latence de fetch quand on passe de /u/alice à /u/bob.
     setServerProfile(null);
+    setServerState("loading");
     let cancelled = false;
     apiGetProfile(userId)
       .then((p) => {
-        if (!cancelled) setServerProfile(p);
+        if (!cancelled) {
+          setServerProfile(p);
+          setServerState("ok");
+        }
       })
       .catch(() => {
-        // Pas encore de profil serveur (ex. user jamais connecté) — on laisse
-        // le fallback 2D s'afficher.
-        if (!cancelled) setServerProfile(null);
+        if (!cancelled) {
+          setServerProfile(null);
+          setServerState("missing");
+        }
       });
     return () => {
       cancelled = true;
@@ -58,13 +72,54 @@ export function UserProfile() {
   const refreshServerProfile = useCallback(() => {
     if (!userId) return;
     apiGetProfile(userId)
-      .then((p) => setServerProfile(p))
+      .then((p) => {
+        setServerProfile(p);
+        setServerState("ok");
+      })
       .catch(() => {
         /* silencieux — on garde l'état précédent */
       });
   }, [userId]);
 
+  // Fallback : si le profil n'est pas dans le cache local `users`
+  // (cas typique : admin qui clique sur un user arbitraire depuis la
+  // liste admin, user jamais rencontré dans ce navigateur…) on
+  // reconstruit un objet `User`-compatible à partir du DTO serveur.
+  const profile = useMemo(() => {
+    if (localProfile) return localProfile;
+    if (!serverProfile) return undefined;
+    const fallback: User = {
+      id: serverProfile.id,
+      username: serverProfile.username,
+      handle: serverProfile.handle ?? undefined,
+      email: `${serverProfile.id}@vaelyndra.realm`,
+      avatar:
+        serverProfile.avatarImageUrl ||
+        `https://i.pravatar.cc/150?u=${serverProfile.id}`,
+      role:
+        serverProfile.role === "admin"
+          ? "queen"
+          : serverProfile.role === "animator"
+            ? "knight"
+            : "elf",
+      joinedAt: serverProfile.createdAt,
+      bio: "",
+      creatureId: serverProfile.creature?.id,
+    };
+    return fallback;
+  }, [localProfile, serverProfile]);
+
   if (!profile) {
+    // Aucune donnée locale ET pas de profil serveur : soit le fetch est
+    // encore en cours (on reste silencieux), soit il a renvoyé 404 (on
+    // affiche l'écran "disparu").
+    if (serverState === "loading") {
+      return (
+        <div className="mx-auto max-w-3xl px-6 py-16 text-center">
+          <p className="text-sm text-ivory/50">Chargement du profil…</p>
+        </div>
+      );
+    }
     return (
       <div className="mx-auto max-w-3xl px-6 py-16 text-center">
         <SectionHeading
