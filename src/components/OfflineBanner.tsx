@@ -35,7 +35,7 @@ export function OfflineBanner() {
     location.pathname.startsWith("/connexion") ||
     location.pathname.startsWith("/inscription") ||
     location.pathname.startsWith("/mot-de-passe-oublie") ||
-    location.pathname.startsWith("/reset-mot-de-passe")
+    location.pathname.startsWith("/reinitialiser-mot-de-passe")
   ) {
     return null;
   }

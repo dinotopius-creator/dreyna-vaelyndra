@@ -148,6 +148,8 @@ def _admin_user_out(session: Session, user: UserProfile) -> AdminUserOut:
             )
         ).all()
     )
+    credential = session.get(Credential, user.id)
+    totp_enabled = bool(credential and credential.totp_enabled)
     return AdminUserOut(
         id=user.id,
         username=user.username,
