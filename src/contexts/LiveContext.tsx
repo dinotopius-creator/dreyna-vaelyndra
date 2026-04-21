@@ -289,7 +289,7 @@ const Ctx = createContext<LiveCtx | null>(null);
 
 export function LiveProvider({ children }: { children: ReactNode }) {
   const { isLiveOn, setLiveOn } = useStore();
-  const { user } = useAuth();
+  const { user, users } = useAuth();
   const [config, setConfig] = useState<LiveConfig>(() => readConfig());
   const [liveRegistry, setLiveRegistry] = useState<
     Record<string, LiveRegistryEntry>
@@ -338,6 +338,14 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   // Ref miroir sur l'utilisateur courant pour les callbacks asynchrones.
   const userRef = useRef(user);
   userRef.current = user;
+  // Ref miroir sur la liste des utilisateurs connus, utilisée par le
+  // host pour recalculer le `highlight` des messages de chat côté
+  // serveur (cf. broadcastChatFromHost). On ne peut pas faire confiance
+  // au `highlight` envoyé par un viewer : n'importe qui pourrait
+  // usurper le badge « reine ». On le re-dérive donc depuis le rôle
+  // réel de l'auteur tel que connu localement.
+  const usersRef = useRef(users);
+  usersRef.current = users;
 
   useEffect(() => {
     try {
@@ -446,7 +454,12 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         authorAvatar,
         content: content.slice(0, 500), // anti-flood / anti-troll-wall-of-text
         createdAt,
-        highlight: p.highlight === true,
+        // Le flag `highlight` NE doit JAMAIS être accepté tel quel en
+        // provenance du réseau : un viewer malveillant pourrait sinon
+        // se faire passer pour la reine (badge 👑 + bordure dorée dans
+        // `LiveChatOverlay`). Il sera recalculé côté host à partir du
+        // rôle réel de `authorId` dans `broadcastChatFromHost`.
+        highlight: false,
       };
     },
     [],
@@ -480,19 +493,28 @@ export function LiveProvider({ children }: { children: ReactNode }) {
    * Côté host uniquement : diffuse un message de chat à toutes les
    * DataConnection viewer ouvertes, ET le livre localement (pour que
    * le broadcaster voie aussi son propre chat et celui de ses viewers).
+   *
+   * Le flag `highlight` est recalculé ici à partir du rôle réel de
+   * l'auteur (`users[authorId].role === "queen"`). On ignore donc ce
+   * que le viewer a pu mettre dans son payload : sans ça, n'importe
+   * quel viewer pourrait usurper le badge 👑 reine en mettant
+   * `highlight: true` dans son envoi WebRTC.
    */
   const broadcastChatFromHost = useCallback(
     (msg: ChatMessage) => {
+      const author = usersRef.current.find((u) => u.id === msg.authorId);
+      const highlight = author?.role === "queen";
+      const safeMsg: ChatMessage = { ...msg, highlight };
       hostDataConnectionsRef.current.forEach((dc) => {
         if (!dc.open) return;
         try {
-          dc.send({ type: "chat-message", ...msg });
+          dc.send({ type: "chat-message", ...safeMsg });
         } catch {
           // ignore — la DataConnection a peut-être été fermée entre
           // le test `open` et le send, pas grave.
         }
       });
-      deliverChatLocally(msg);
+      deliverChatLocally(safeMsg);
     },
     [deliverChatLocally],
   );
