@@ -188,8 +188,8 @@ export function AdminUserPanel({ targetUserId, targetUsername, onChange }: Props
       );
       return;
     }
-    if (newPassword.length < 8) {
-      notify("Mot de passe trop court (8 caractères minimum).", "error");
+    if (newPassword.length < 10) {
+      notify("Mot de passe trop court (10 caractères minimum).", "error");
       return;
     }
     if (pwReason.trim().length < 2) {
@@ -416,7 +416,7 @@ export function AdminUserPanel({ targetUserId, targetUsername, onChange }: Props
             className="glass-input w-full"
             type="text"
             autoComplete="new-password"
-            placeholder="Nouveau mot de passe (8 caractères min.)"
+            placeholder="Nouveau mot de passe (10 caractères min.)"
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
             disabled={loading}

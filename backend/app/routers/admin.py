@@ -184,9 +184,11 @@ class BanIn(BaseModel):
 
 class PasswordResetIn(BaseModel):
     # Même règle que `_check_password_strength` côté auth/routes.py :
-    # 8 chars min, limite haute généreuse pour ne pas bloquer des
-    # passphrases, la force est validée côté fonction.
-    new_password: str = Field(..., min_length=8, max_length=256)
+    # PASSWORD_MIN_LEN = 10. Limite haute généreuse pour ne pas bloquer
+    # des passphrases ; la force exacte est aussi revalidée par
+    # `_check_password_strength` dans le handler, pour rester en phase
+    # avec /auth/change-password même si la constante bouge plus tard.
+    new_password: str = Field(..., min_length=10, max_length=256)
     reason: str = Field(..., min_length=2, max_length=300)
 
 
