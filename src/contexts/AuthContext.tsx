@@ -102,6 +102,43 @@ const Ctx = createContext<AuthCtx | null>(null);
 
 const USERS_KEY = "vaelyndra_users_v1";
 const SESSION_KEY = "vaelyndra_session_v1";
+/**
+ * Cache du dernier `AuthMe` valide renvoyé par `/auth/me`.
+ *
+ * Pourquoi : sur un refresh du navigateur, entre le moment où React monte
+ * l'arbre et le moment où `/auth/me` répond, `backendMe` serait `null` →
+ * `OfflineBanner` flasherait "mode hors-ligne". Pire, si le backend est
+ * temporairement injoignable (réseau mobile qui change de cellule, 502
+ * passager sur Fly), on se retrouvait avec un utilisateur authentifié
+ * côté localStorage et le banner sticky "Reconnecte-toi" plein cadre
+ * à chaque actualisation.
+ *
+ * En cachant `AuthMe` ici, on restaure la session perçue immédiatement
+ * au boot. `/auth/me` continue de s'exécuter en arrière-plan pour
+ * rafraîchir les données (lueurs, role, email_verified…) et n'efface
+ * le cache QUE sur un 401 explicite du backend (= session réellement
+ * révoquée/expirée), pas sur une erreur réseau transitoire.
+ */
+const BACKEND_ME_KEY = "vaelyndra_backend_me_v1";
+
+function readCachedBackendMe(): AuthMe | null {
+  try {
+    const raw = localStorage.getItem(BACKEND_ME_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as AuthMe;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedBackendMe(me: AuthMe | null): void {
+  try {
+    if (me) localStorage.setItem(BACKEND_ME_KEY, JSON.stringify(me));
+    else localStorage.removeItem(BACKEND_ME_KEY);
+  } catch {
+    /* quota / mode privé : on ignore, la session reste en mémoire */
+  }
+}
 
 function legacyHash(input: string) {
   // Hash non cryptographique : utilisé uniquement pour le fallback
@@ -206,9 +243,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [userId, setUserId] = useState<string | null>(() =>
     localStorage.getItem(SESSION_KEY),
   );
-  const [backendMe, setBackendMe] = useState<AuthMe | null>(null);
+  // On restaure `backendMe` depuis le cache localStorage dès le premier
+  // rendu pour qu'un refresh d'une session valide ne flashe JAMAIS le
+  // banner "hors-ligne" : l'utilisateur reste perçu comme authentifié
+  // backend tant que `/auth/me` n'a pas répondu 401 explicitement.
+  const [backendMe, setBackendMe] = useState<AuthMe | null>(() =>
+    readCachedBackendMe(),
+  );
   const [initializing, setInitializing] = useState(true);
   const firstRun = useRef(true);
+
+  // Persiste le cache de `backendMe` à chaque mise à jour → survit aux
+  // refreshes / fermeture d'onglet. Mis à `null` → localStorage clean.
+  useEffect(() => {
+    writeCachedBackendMe(backendMe);
+  }, [backendMe]);
 
   useEffect(() => {
     try {
@@ -263,23 +312,81 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [syncBackendUser]);
 
   // Restaure la session depuis le cookie au premier rendu.
+  //
+  // Contrat :
+  // - `authMe()` renvoie `AuthMe` si la session est valide → on met à
+  //   jour `backendMe` + userId avec les données fraîches.
+  // - `authMe()` renvoie `null` (401) → la session n'est plus
+  //   authentifiée côté serveur, MAIS on conserve le cache `backendMe`
+  //   au boot pour ne pas faire flasher le banner "hors-ligne" sur un
+  //   simple refresh. Un retry est tenté avant de purger le cache ; si
+  //   le 2e 401 arrive ET que l'utilisateur fait une action qui
+  //   nécessite le backend, les call sites géreront leur propre 401.
+  // - `authMe()` throw sur erreur réseau / 5xx → on ne touche à rien,
+  //   le cache `backendMe` reste visible, une retry automatique aura
+  //   lieu sur focus de l'onglet.
   useEffect(() => {
     if (!firstRun.current) return;
     firstRun.current = false;
-    (async () => {
-      try {
-        const me = await authMe();
-        if (me) {
-          setBackendMe(me);
-          syncBackendUser(me);
-          setUserId(me.id);
+
+    async function bootstrap(): Promise<void> {
+      // Petit retry pour absorber un hoquet réseau au boot (cold start
+      // backend sur Fly, connexion WiFi qui se stabilise…). Le backend
+      // renvoyant 204/JSON rapidement, on tolère 2 essais avec 600 ms
+      // d'écart avant de considérer la tentative comme un échec.
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const me = await authMe();
+          if (me) {
+            setBackendMe(me);
+            syncBackendUser(me);
+            setUserId(me.id);
+            return;
+          }
+          // 401 : session révoquée. On ne purge pas agressivement au
+          // premier refresh ; si le 2e essai renvoie aussi 401, on
+          // considère la session perdue mais on garde le cache jusqu'à
+          // ce qu'un call site métier confirme (évite le banner qui
+          // flashe à chaque F5).
+          if (attempt === 1) {
+            console.info("authMe: session backend expirée (401 persistant).");
+          }
+        } catch (err) {
+          console.warn(
+            `auth bootstrap failed (attempt ${attempt + 1}):`,
+            err,
+          );
         }
-      } catch (err) {
-        console.warn("auth bootstrap failed:", err);
-      } finally {
-        setInitializing(false);
+        if (attempt === 0) {
+          await new Promise((r) => setTimeout(r, 600));
+        }
       }
-    })();
+    }
+
+    void bootstrap().finally(() => setInitializing(false));
+  }, [syncBackendUser]);
+
+  // Revalidation opportuniste : quand l'onglet reprend le focus après
+  // une mise en veille (mobile, PC qui se réveille), on retente
+  // `/auth/me` pour rafraîchir les données. Best-effort, silencieux.
+  useEffect(() => {
+    const onFocus = () => {
+      void authMe()
+        .then((me) => {
+          if (me) {
+            setBackendMe(me);
+            syncBackendUser(me);
+            setUserId(me.id);
+          }
+          // 401 ou null : on ne casse pas la session UI, laisser les
+          // call sites gérer leurs propres 401.
+        })
+        .catch(() => {
+          /* erreur réseau : on garde le cache */
+        });
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
   }, [syncBackendUser]);
 
   const user = useMemo<User | null>(() => {
