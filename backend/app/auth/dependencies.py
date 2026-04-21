@@ -90,6 +90,18 @@ def _resolve_session(
     if not user:
         return None, None
 
+    # Défense en profondeur contre les bans : on vérifie `banned_at` à chaque
+    # requête authentifiée. `/auth/login` bloque déjà la création de nouvelles
+    # sessions pour les comptes bannis (403 `account_banned`) et
+    # `admin.ban_user` révoque toutes les sessions actives au moment du ban.
+    # Mais une race (nouvelle session créée entre le SELECT et le COMMIT de la
+    # révocation) peut laisser passer une session "orpheline" qui survivrait au
+    # ban. Sans ce check, le user banni garderait l'accès API (/auth/me,
+    # /reports, etc.) tant que sa session non révoquée reste active. On rend
+    # donc `_resolve_session` strict : un user avec `banned_at` ne résout plus.
+    if user.banned_at:
+        return None, None
+
     # Best-effort : on refresh `last_seen_at` si plus de 5 min depuis la
     # dernière requête (évite d'écrire en DB à chaque requête).
     try:
