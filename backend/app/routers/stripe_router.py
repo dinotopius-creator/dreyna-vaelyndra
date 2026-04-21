@@ -315,7 +315,13 @@ def _apply_paid_checkout(
         session.commit()
         return
 
-    profile.sylvins_paid = (profile.sylvins_paid or 0) + record.sylvins_amount
+    # Incrément atomique côté SQL pour éviter la lost-update race :
+    # si deux webhooks pour le même utilisateur (packs différents)
+    # arrivent en parallèle, un read-modify-write Python ferait perdre
+    # un des crédits. En passant par l'expression de colonne SQLAlchemy
+    # (`UserProfile.sylvins_paid + N`), le SQL généré est
+    # `SET sylvins_paid = sylvins_paid + N`, qui est atomique côté DB.
+    profile.sylvins_paid = UserProfile.sylvins_paid + record.sylvins_amount
     profile.updated_at = _now_iso()
     record.status = "paid"
     record.completed_at = _now_iso()
