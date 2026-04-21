@@ -721,15 +721,34 @@ export function Live() {
     joinAsViewer,
     liveRegistry,
     viewingMeta,
+    publishChatMessage,
+    subscribeChatMessages,
   } = useLive();
 
   // Quel broadcaster regarde-t-on ?
-  // Priorité : URL > premier live actif du registre > l'utilisateur connecté
-  // (pour qu'il puisse démarrer son propre live sans URL) > chaîne vide
-  // (état "aucun live").
+  // Priorité :
+  //  1. URL (`/live/:broadcasterId`) — on respecte toujours la demande
+  //     explicite du viewer.
+  //  2. Le user courant s'il est lui-même en live (ou sur le point de
+  //     l'être : `config.status === "live"`). Sans cette priorité, un
+  //     broadcaster qui cliquait sur « LIVES » tombait sur le live de
+  //     quelqu'un d'autre déjà présent dans le registre (ex : Dreyna),
+  //     et son propre flux était attribué au mauvais user — bug
+  //     visible tel quel dans l'UI ("Dreyna en direct" alors que c'est
+  //     Alexandre qui streame).
+  //  3. Le premier live actif du registre (fallback spectateur).
+  //  4. L'utilisateur connecté — pour qu'il puisse ouvrir l'écran de
+  //     démarrage de live sans URL ni broadcaster actif.
+  //  5. Chaîne vide — état "aucun live".
   const firstLiveId = Object.keys(liveRegistry)[0];
+  const imBroadcastingNow =
+    !!user && (user.id in liveRegistry || config.status === "live");
   const broadcasterId =
-    paramBroadcasterId ?? firstLiveId ?? user?.id ?? "";
+    paramBroadcasterId ??
+    (imBroadcastingNow && user ? user.id : undefined) ??
+    firstLiveId ??
+    user?.id ??
+    "";
   const amBroadcaster = !!user && !!broadcasterId && user.id === broadcasterId;
   // Résout le profil du broadcaster (pour nom/avatar/pseudo dans le HUD + GiftPanel).
   const broadcasterProfile = useMemo<User | null>(
@@ -863,6 +882,21 @@ export function Live() {
     // vide au lieu d'auto-redirect ailleurs.
     wasLiveOnceRef.current = false;
   }, [broadcasterId]);
+
+  // Abonnement au flux des messages de chat transitant par le
+  // DataChannel WebRTC (messages des autres viewers + host). Ajoute
+  // chaque message entrant au buffer local, avec dédup par id (le
+  // LiveContext dédup déjà côté transport, mais on protège aussi
+  // l'UI au cas où un ancien message ferait double aller-retour).
+  useEffect(() => {
+    const unsubscribe = subscribeChatMessages((msg) => {
+      setMessages((m) => {
+        if (m.some((existing) => existing.id === msg.id)) return m;
+        return [...m, msg].slice(-CHAT_BUFFER_MAX);
+      });
+    });
+    return unsubscribe;
+  }, [subscribeChatMessages, broadcasterId]);
 
   // Polling de mes éventuelles sanctions (mute/kick) sur le live courant.
   // On n'appelle pas l'endpoint si :
@@ -1036,20 +1070,21 @@ export function Live() {
       );
       return;
     }
-    setMessages((m) =>
-      [
-        ...m,
-        {
-          id: generateId("msg"),
-          authorId: user.id,
-          authorName: user.username,
-          authorAvatar: user.avatar,
-          content: content.trim(),
-          createdAt: new Date().toISOString(),
-          highlight: user.role === "queen",
-        },
-      ].slice(-CHAT_BUFFER_MAX),
-    );
+    // Publie via le contexte Live → WebRTC DataChannel. Le message
+    // arrive ensuite dans le state local via le subscriber (plus bas
+    // dans le composant) ; ça garantit que :
+    //  - tous les viewers voient notre message, pas juste nous ;
+    //  - on voit les messages des autres viewers (bidirectionnel) ;
+    //  - la dédup par id empêche le doublon avec l'écho optimiste.
+    publishChatMessage({
+      id: generateId("msg"),
+      authorId: user.id,
+      authorName: user.username,
+      authorAvatar: user.avatar,
+      content: content.trim(),
+      createdAt: new Date().toISOString(),
+      highlight: user.role === "queen",
+    });
   }
 
   // ---------------------------------------------------------------------------
