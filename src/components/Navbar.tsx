@@ -31,6 +31,9 @@ export function Navbar() {
   const { unreadCount } = useMessages();
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
+  const canAccessAdmin =
+    isQueen || backendMe?.role === "admin" || backendMe?.role === "animator";
+  const adminLabel = backendMe?.role === "animator" ? "Chroniques" : "Salle du Trone";
 
   return (
     <header className="sticky top-0 z-40">
@@ -109,12 +112,12 @@ export function Navbar() {
             </Link>
             {user ? (
               <div className="flex items-center gap-2">
-                {isQueen && (
+                {canAccessAdmin && (
                   <Link
                     to="/admin"
                     className="hidden items-center gap-1.5 rounded-full border border-gold-400/40 bg-gold-500/10 px-3 py-2 text-xs font-semibold text-gold-200 hover:bg-gold-500/20 md:inline-flex"
                   >
-                    <ShieldCheck className="h-4 w-4" /> Salle du Trône
+                    <ShieldCheck className="h-4 w-4" /> {adminLabel}
                   </Link>
                 )}
                 <Link
@@ -214,13 +217,13 @@ export function Navbar() {
                 </NavLink>
               </>
             )}
-            {isQueen && (
+            {canAccessAdmin && (
               <NavLink
                 to="/admin"
                 onClick={() => setOpen(false)}
                 className="rounded-xl border border-gold-400/40 bg-gold-500/10 px-4 py-3 font-regal text-xs font-semibold tracking-[0.22em] text-gold-200"
               >
-                Salle du Trône
+                {adminLabel}
               </NavLink>
             )}
           </nav>

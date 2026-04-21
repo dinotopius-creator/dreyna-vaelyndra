@@ -67,7 +67,14 @@ function AnimatedRoutes() {
           <Route path="/verifier-email" element={<VerifyEmail />} />
           <Route path="/mot-de-passe-oublie" element={<ForgotPassword />} />
           <Route path="/reinitialiser-mot-de-passe" element={<ResetPassword />} />
-          <Route path="/admin" element={<Guarded queenOnly><Admin /></Guarded>} />
+          <Route
+            path="/admin"
+            element={
+              <Guarded allowBackendRoles={["admin", "animator"]}>
+                <Admin />
+              </Guarded>
+            }
+          />
           <Route path="/mentions-legales" element={<MentionsLegales />} />
           <Route path="/confidentialite" element={<Confidentialite />} />
           <Route path="/cgu" element={<CGU />} />

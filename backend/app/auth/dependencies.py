@@ -159,3 +159,14 @@ def require_admin(user: UserProfile = Depends(require_auth)) -> UserProfile:
             detail="Accès réservé aux administrateurs.",
         )
     return user
+
+
+def require_admin_or_animator(
+    user: UserProfile = Depends(require_auth),
+) -> UserProfile:
+    if user.role not in {"admin", "animator"}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Accès réservé aux administrateurs et animateurs.",
+        )
+    return user

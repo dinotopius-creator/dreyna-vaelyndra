@@ -43,12 +43,15 @@ const TABS = [
   { id: "moderation", label: "Modération" },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
+const ANIMATOR_TABS = [{ id: "articles", label: "Chroniques" }] as const;
 
 export function Admin() {
   const { user, backendMe } = useAuth();
   const { articles, products, lives, posts, orders, isLiveOn } = useStore();
   const [tab, setTab] = useState<TabId>("dashboard");
   const [openReportsCount, setOpenReportsCount] = useState<number>(0);
+  const isAdmin = backendMe?.role === "admin";
+  const tabs = isAdmin ? TABS : ANIMATOR_TABS;
 
   // Charge le compteur de reports ouverts pour afficher le badge sur l'onglet.
   // Rafraîchi à chaque changement d'onglet pour rester à peu près à jour
@@ -62,6 +65,11 @@ export function Admin() {
       });
   }, [backendMe?.role, tab]);
 
+  useEffect(() => {
+    if (tabs.some((t) => t.id === tab)) return;
+    setTab("articles");
+  }, [tab, tabs]);
+
   if (!user) return null;
 
   return (
@@ -69,10 +77,10 @@ export function Admin() {
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <span className="tag-gold">
-            <ShieldCheck className="h-3 w-3" /> Espace admin
+            <ShieldCheck className="h-3 w-3" /> {isAdmin ? "Espace admin" : "Espace animateur"}
           </span>
           <h1 className="heading-gold mt-3 text-4xl md:text-5xl">
-            Dashboard Administrateur
+            {isAdmin ? "Dashboard Administrateur" : "Gestion des chroniques"}
           </h1>
           <p className="mt-2 text-ivory/70">
             Publications, boutique, lives et modération — pilote toute la
@@ -94,7 +102,7 @@ export function Admin() {
       </header>
 
       <nav className="mt-8 flex flex-wrap gap-2">
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
@@ -132,13 +140,13 @@ export function Admin() {
           />
         )}
         {tab === "articles" && <ArticlesAdmin />}
-        {tab === "products" && <ProductsAdmin />}
-        {tab === "lives" && <LivesAdmin />}
-        {tab === "users" && <AdminUsersTab />}
-        {tab === "reports" && (
+        {isAdmin && tab === "products" && <ProductsAdmin />}
+        {isAdmin && tab === "lives" && <LivesAdmin />}
+        {isAdmin && tab === "users" && <AdminUsersTab />}
+        {isAdmin && tab === "reports" && (
           <AdminReportsTab onCountChange={setOpenReportsCount} />
         )}
-        {tab === "moderation" && <ModerationAdmin />}
+        {isAdmin && tab === "moderation" && <ModerationAdmin />}
       </motion.div>
     </div>
   );
@@ -193,6 +201,7 @@ function Dashboard({
 
 function ArticlesAdmin() {
   const { articles, dispatch } = useStore();
+  const { backendMe, user } = useAuth();
   const { notify } = useToast();
   const [form, setForm] = useState<{
     title: string;
@@ -223,7 +232,7 @@ function ArticlesAdmin() {
         cover:
           form.cover.trim() ||
           "https://images.unsplash.com/photo-1470813740244-df37b8c1edcb?w=1600&auto=format&fit=crop&q=80",
-        author: "Dreyna",
+        author: backendMe?.username ?? user?.username ?? "Dreyna",
         readingTime: readingTime(form.content || form.excerpt),
         tags: form.tags
           .split(",")
