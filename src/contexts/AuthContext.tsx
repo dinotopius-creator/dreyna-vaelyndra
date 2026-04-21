@@ -317,11 +317,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // - `authMe()` renvoie `AuthMe` si la session est valide → on met à
   //   jour `backendMe` + userId avec les données fraîches.
   // - `authMe()` renvoie `null` (401) → la session n'est plus
-  //   authentifiée côté serveur, MAIS on conserve le cache `backendMe`
-  //   au boot pour ne pas faire flasher le banner "hors-ligne" sur un
-  //   simple refresh. Un retry est tenté avant de purger le cache ; si
-  //   le 2e 401 arrive ET que l'utilisateur fait une action qui
-  //   nécessite le backend, les call sites géreront leur propre 401.
+  //   authentifiée côté serveur. On retente une fois pour absorber un
+  //   400 transitoire, puis si le 2e essai confirme le 401, on
+  //   **purge** le cache `backendMe` pour que l'état reflète la
+  //   réalité serveur : sinon la vue Admin verrait un rôle admin
+  //   périmé, la page Compte lirait un email/2FA stale, et
+  //   `OfflineBanner` ne s'afficherait plus jamais.
   // - `authMe()` throw sur erreur réseau / 5xx → on ne touche à rien,
   //   le cache `backendMe` reste visible, une retry automatique aura
   //   lieu sur focus de l'onglet.
@@ -331,9 +332,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     async function bootstrap(): Promise<void> {
       // Petit retry pour absorber un hoquet réseau au boot (cold start
-      // backend sur Fly, connexion WiFi qui se stabilise…). Le backend
-      // renvoyant 204/JSON rapidement, on tolère 2 essais avec 600 ms
-      // d'écart avant de considérer la tentative comme un échec.
+      // backend sur Fly, connexion WiFi qui se stabilise…). 2 essais
+      // avec 600 ms d'écart avant de conclure.
+      let confirmedUnauthenticated = false;
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
           const me = await authMe();
@@ -343,13 +344,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setUserId(me.id);
             return;
           }
-          // 401 : session révoquée. On ne purge pas agressivement au
-          // premier refresh ; si le 2e essai renvoie aussi 401, on
-          // considère la session perdue mais on garde le cache jusqu'à
-          // ce qu'un call site métier confirme (évite le banner qui
-          // flashe à chaque F5).
+          // 401 explicite du backend cet essai.
           if (attempt === 1) {
-            console.info("authMe: session backend expirée (401 persistant).");
+            // 2e 401 consécutif → la session est réellement morte côté
+            // serveur, on purge le cache pour empêcher les pages
+            // sensibles (Admin, Compte) d'afficher des données périmées.
+            confirmedUnauthenticated = true;
           }
         } catch (err) {
           console.warn(
@@ -361,6 +361,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await new Promise((r) => setTimeout(r, 600));
         }
       }
+      if (confirmedUnauthenticated) {
+        console.info("authMe: session backend expirée (401 persistant).");
+        setBackendMe(null);
+      }
     }
 
     void bootstrap().finally(() => setInitializing(false));
@@ -368,7 +372,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Revalidation opportuniste : quand l'onglet reprend le focus après
   // une mise en veille (mobile, PC qui se réveille), on retente
-  // `/auth/me` pour rafraîchir les données. Best-effort, silencieux.
+  // `/auth/me`. Sur 401 on purge aussi le cache — l'utilisateur est
+  // bien actif (il vient de revenir sur l'onglet), donc un état réel
+  // "session expirée" doit apparaître tout de suite pour éviter un
+  // Admin / Compte qui lit du stale.
   useEffect(() => {
     const onFocus = () => {
       void authMe()
@@ -377,12 +384,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setBackendMe(me);
             syncBackendUser(me);
             setUserId(me.id);
+          } else {
+            // 401 explicite lors du focus → session révoquée, on clean.
+            setBackendMe(null);
           }
-          // 401 ou null : on ne casse pas la session UI, laisser les
-          // call sites gérer leurs propres 401.
         })
         .catch(() => {
-          /* erreur réseau : on garde le cache */
+          /* erreur réseau : on garde le cache, retry au prochain focus. */
         });
     };
     window.addEventListener("focus", onFocus);
