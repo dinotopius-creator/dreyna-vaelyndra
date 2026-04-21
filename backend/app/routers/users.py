@@ -305,48 +305,66 @@ def upsert_user(
     - Abonne automatiquement le nouveau user aux 3 comptes officiels
       (dreyna, Kamestars LV, Le roi des zems💎).
     """
-    p = session.get(UserProfile, payload.id)
-    is_new = p is None
-    if p is None:
-        creature_id = payload.creature_id
-        if creature_id is not None and get_creature(creature_id) is None:
-            creature_id = None
-        # PR S — dérive un @handle unique depuis le pseudo choisi à
-        # l'inscription. Le handle peut être changé plus tard via
-        # `PATCH /users/{id}/handle` (cooldown 30 j).
-        base_handle = slugify_handle(payload.username)
-        handle = suggest_unique_handle(
-            session, base_handle, user_id=payload.id
-        )
-        p = UserProfile(
-            id=payload.id,
-            username=payload.username,
-            handle=handle,
-            avatar_image_url=payload.avatar_image_url,
-            creature_id=creature_id,
-        )
-        session.add(p)
-        # Flush pour matérialiser la ligne avant d'abonner aux officiels
-        # (sinon Follow référence un profil qui n'existe pas encore).
-        session.flush()
-    else:
-        p.username = payload.username
-        # On ne remplace l'avatar_image_url que s'il n'en avait pas (pour ne
-        # pas écraser un rendu RPM déjà généré par l'utilisateur).
-        if not p.avatar_image_url:
-            p.avatar_image_url = payload.avatar_image_url
-        # Rétro-compat : si l'user n'a pas encore de créature (ancien compte)
-        # et que le front en fournit une, on l'enregistre. Pas d'écrasement
-        # tant qu'il a déjà fait son choix.
-        if not p.creature_id and payload.creature_id:
-            if get_creature(payload.creature_id) is not None:
-                p.creature_id = payload.creature_id
-        _touch(p)
-    if is_new:
-        _auto_follow_officials(session, p.id)
-    session.commit()
-    session.refresh(p)
-    return _to_out(p, session)
+    # PR S — pour l'insertion d'un nouveau profil, on retry jusqu'à 3 fois
+    # en cas d'IntegrityError sur le handle (deux inscriptions simultanées
+    # avec le même pseudo peuvent calculer le même candidat et se
+    # marcher dessus au commit à cause de l'index unique partiel).
+    base_handle = slugify_handle(payload.username)
+    for attempt in range(3):
+        p = session.get(UserProfile, payload.id)
+        is_new = p is None
+        if p is None:
+            creature_id = payload.creature_id
+            if creature_id is not None and get_creature(creature_id) is None:
+                creature_id = None
+            handle = suggest_unique_handle(
+                session, base_handle, user_id=payload.id
+            )
+            p = UserProfile(
+                id=payload.id,
+                username=payload.username,
+                handle=handle,
+                avatar_image_url=payload.avatar_image_url,
+                creature_id=creature_id,
+            )
+            session.add(p)
+            # Flush pour matérialiser la ligne avant d'abonner aux officiels
+            # (sinon Follow référence un profil qui n'existe pas encore).
+            session.flush()
+        else:
+            p.username = payload.username
+            # On ne remplace l'avatar_image_url que s'il n'en avait pas (pour
+            # ne pas écraser un rendu RPM déjà généré par l'utilisateur).
+            if not p.avatar_image_url:
+                p.avatar_image_url = payload.avatar_image_url
+            # Rétro-compat : si l'user n'a pas encore de créature (ancien
+            # compte) et que le front en fournit une, on l'enregistre.
+            # Pas d'écrasement tant qu'il a déjà fait son choix.
+            if not p.creature_id and payload.creature_id:
+                if get_creature(payload.creature_id) is not None:
+                    p.creature_id = payload.creature_id
+            _touch(p)
+        if is_new:
+            _auto_follow_officials(session, p.id)
+        try:
+            session.commit()
+        except IntegrityError:
+            session.rollback()
+            # Une autre requête a grillé le handle : on re-suggère (elle
+            # verra maintenant le handle déjà commité et en prendra un
+            # autre). Au 3e échec on propage un 409 plutôt qu'un 500.
+            if attempt == 2:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=(
+                        "Conflit de handle, réessaie dans un instant."
+                    ),
+                )
+            continue
+        session.refresh(p)
+        return _to_out(p, session)
+    # Ne devrait jamais arriver : la boucle retourne ou raise.
+    raise HTTPException(status_code=500, detail="Upsert profil échoué.")
 
 
 @router.patch("/{user_id}/handle", response_model=UserProfileOut)
