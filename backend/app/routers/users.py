@@ -13,6 +13,7 @@ from ..auth.dependencies import require_auth
 from ..creatures import CREATURES, get_creature
 from ..db import get_session
 from ..grades import (
+    LEGEND_SLUG,
     grade_by_slug,
     grade_for_xp,
     next_grade,
@@ -24,6 +25,11 @@ from ..handles import (
     suggest_unique_handle,
 )
 from ..models import Follow, GiftLedger, UserProfile
+from .messages import (
+    DIRECT_MESSAGE_LEGEND_SACRE,
+    DREYNA_USER_ID,
+    post_system_dm,
+)
 from .streamers import iso_week_start
 from ..schemas import (
     AvatarUpdate,
@@ -120,6 +126,7 @@ def _grade_out(p: UserProfile) -> StreamerGradeOut:
         return StreamerGradeOut(
             slug=override_grade.slug,
             name=override_grade.name,
+            short=override_grade.short,
             emoji=override_grade.emoji,
             motto=override_grade.motto,
             theme=override_grade.theme,
@@ -135,6 +142,7 @@ def _grade_out(p: UserProfile) -> StreamerGradeOut:
     return StreamerGradeOut(
         slug=g.slug,
         name=g.name,
+        short=g.short,
         emoji=g.emoji,
         motto=g.motto,
         theme=g.theme,
@@ -1093,6 +1101,7 @@ def admin_set_grade_override(
     p = session.get(UserProfile, user_id)
     if not p:
         raise HTTPException(status_code=404, detail="Profil introuvable.")
+    previous_override = p.streamer_grade_override
     if payload.grade_slug is not None:
         if grade_by_slug(payload.grade_slug) is None:
             raise HTTPException(
@@ -1105,6 +1114,27 @@ def admin_set_grade_override(
     _touch(p)
     session.commit()
     session.refresh(p)
+
+    # Si on vient d'accorder le sacre Légende (et qu'il n'était pas déjà posé),
+    # on envoie un DM de félicitations de la part de Dreyna au membre sacré.
+    # On ne renvoie PAS le message si l'admin re-sauvegarde le même override
+    # (évite de spammer le membre si on tâtonne dans l'UI). On ne l'envoie pas
+    # non plus si le membre sacré **est** Dreyna (impossible en pratique mais
+    # défensif, `post_system_dm` lèverait sinon).
+    just_awarded_legend = (
+        payload.grade_slug == LEGEND_SLUG and previous_override != LEGEND_SLUG
+    )
+    if just_awarded_legend and p.id != DREYNA_USER_ID:
+        try:
+            post_system_dm(
+                session,
+                sender_id=DREYNA_USER_ID,
+                recipient_id=p.id,
+                content=DIRECT_MESSAGE_LEGEND_SACRE,
+            )
+        except ValueError:
+            # Texte vide/invalide → on ne casse pas le sacre à cause du DM.
+            pass
     return _to_out(p, session)
 
 

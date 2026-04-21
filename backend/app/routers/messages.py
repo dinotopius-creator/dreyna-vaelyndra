@@ -145,6 +145,66 @@ def _publish(user_ids: Tuple[str, ...], event: dict) -> None:
 
 # ---------- Helpers ----------
 
+DREYNA_USER_ID = "user-dreyna"
+
+DIRECT_MESSAGE_LEGEND_SACRE = (
+    "👑 Félicitations ! Tu as été sélectionné pour le **programme Légende de "
+    "Vaelyndra**.\n\n"
+    "Ton contenu et ton énergie ont tapé dans l'œil de la Cour. Continue "
+    "comme ça, tu as désormais ta place parmi les êtres rares qui façonnent "
+    "le royaume. Le badge 👑 Légende s'affichera à côté de ton pseudo "
+    "partout sur Vaelyndra — chat live, profils, La Cour, boutique.\n\n"
+    "Bienvenue dans le cercle. ✨"
+)
+
+
+def post_system_dm(
+    session: Session,
+    *,
+    sender_id: str,
+    recipient_id: str,
+    content: str,
+) -> DirectMessage:
+    """Envoie un DM déclenché par le système (ex. sacre Légende).
+
+    Contrairement à `send_message` (endpoint HTTP public), ce helper
+    bypass les cooldowns anti-spam et la limite horaire — c'est le
+    backend lui-même qui écrit, pas un user. Utilisé par les endpoints
+    admin qui doivent notifier un membre d'une décision (ex.
+    `admin_set_grade_override` quand on accorde Légende).
+
+    Pousse aussi l'événement SSE aux deux parties pour un rendu
+    instantané si l'un d'eux a un onglet ouvert.
+    """
+    if sender_id == recipient_id:
+        raise ValueError("system DM cannot be sent to the same user")
+    trimmed = content.strip()
+    if not trimmed:
+        raise ValueError("system DM content is empty")
+    if len(trimmed) > MAX_CONTENT_LEN:
+        trimmed = trimmed[:MAX_CONTENT_LEN]
+    conv_key = _conversation_key(sender_id, recipient_id)
+    msg = DirectMessage(
+        conversation_key=conv_key,
+        sender_id=sender_id,
+        recipient_id=recipient_id,
+        content=trimmed,
+    )
+    session.add(msg)
+    session.commit()
+    session.refresh(msg)
+    out = _serialize(msg)
+    _publish(
+        (sender_id, recipient_id),
+        {
+            "type": "message",
+            "conversation_key": conv_key,
+            "message": out.model_dump(),
+        },
+    )
+    return msg
+
+
 def _serialize(m: DirectMessage) -> MessageOut:
     assert m.id is not None
     return MessageOut(

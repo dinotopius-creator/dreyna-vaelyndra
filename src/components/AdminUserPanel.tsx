@@ -15,7 +15,7 @@
  * consultable depuis `/admin → Utilisateurs → Journal`.
  */
 import { useEffect, useState } from "react";
-import { ShieldCheck, ShieldAlert, Coins, UserCog, Ban, RotateCcw, KeyRound, ShieldOff, Trash2 } from "lucide-react";
+import { ShieldCheck, ShieldAlert, Coins, UserCog, Ban, RotateCcw, KeyRound, ShieldOff, Trash2, Crown } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
 import {
@@ -25,12 +25,15 @@ import {
   adminGetUser,
   adminHardDeleteUser,
   adminResetPassword,
+  adminSetGradeOverride,
   adminSetRole,
   adminUnbanUser,
   WALLET_POT_LABELS,
   type AdminUser,
   type WalletPot,
 } from "../lib/adminApi";
+import { GRADES, gradeBySlug, type GradeSlug } from "../data/grades";
+import { apiGetProfile } from "../lib/api";
 import { formatDate } from "../lib/helpers";
 
 interface Props {
@@ -73,6 +76,16 @@ export function AdminUserPanel({ targetUserId, targetUsername, onChange }: Props
   const [deleteConfirm, setDeleteConfirm] = useState<string>("");
   const [deleteReason, setDeleteReason] = useState<string>("");
   const [deleted, setDeleted] = useState<boolean>(false);
+  /**
+   * Slug du grade actuellement affiché pour la cible (source : `UserProfile.grade.slug`).
+   * null tant que le profil n'est pas encore chargé. Permet de détecter si la
+   * cible est déjà Légende (dans ce cas on propose "Révoquer" au lieu de "Sacrer").
+   */
+  const [currentGradeSlug, setCurrentGradeSlug] = useState<string | null>(null);
+  /** Override admin actuel (null = progression XP naturelle). */
+  const [currentOverride, setCurrentOverride] = useState<string | null>(null);
+  /** Slug sélectionné dans le select « grade manuel » (hors bouton Légende). */
+  const [overrideDraft, setOverrideDraft] = useState<string>("");
 
   const isAdmin = backendMe?.role === "admin";
   const isSelf = backendMe?.id === targetUserId;
@@ -93,6 +106,29 @@ export function AdminUserPanel({ targetUserId, targetUsername, onChange }: Props
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin, targetUserId]);
+
+  // Charge le grade + override courant (endpoints publics, pas admin).
+  // Permet au bouton "Sacrer Légende" de savoir s'il doit afficher
+  // "Sacrer" ou "Révoquer" et de grîner le <select> si déjà Légende.
+  useEffect(() => {
+    if (!isAdmin) return;
+    let cancelled = false;
+    apiGetProfile(targetUserId)
+      .then((p) => {
+        if (cancelled) return;
+        const slug = p.grade?.slug ?? null;
+        const isOverride = Boolean(p.grade?.override);
+        setCurrentGradeSlug(slug);
+        setCurrentOverride(isOverride ? slug : null);
+        setOverrideDraft(isOverride ? (slug ?? "") : "");
+      })
+      .catch(() => {
+        /* silencieux */
       });
     return () => {
       cancelled = true;
@@ -285,6 +321,82 @@ export function AdminUserPanel({ targetUserId, targetUsername, onChange }: Props
     }
   }
 
+  async function applyGradeOverride(nextSlug: GradeSlug | null, successMsg: string) {
+    setLoading(true);
+    try {
+      const updated = await adminSetGradeOverride(targetUserId, nextSlug);
+      const slug = updated.grade?.slug ?? null;
+      const isOverride = Boolean(updated.grade?.override);
+      setCurrentGradeSlug(slug);
+      setCurrentOverride(isOverride ? slug : null);
+      setOverrideDraft(isOverride ? (slug ?? "") : "");
+      notify(successMsg, "success");
+      onChange?.();
+    } catch (err) {
+      notify(
+        err instanceof Error ? err.message : "Échec de la mise à jour du grade.",
+        "error",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleGrantLegend() {
+    if (
+      !window.confirm(
+        `Sacrer ${targetUsername} Légende de Vaelyndra ?\n\n` +
+          "Son badge 👑 Légende sera affiché partout (chat, profil, Cour, boutique). " +
+          "Un DM de félicitations officiel sera envoyé automatiquement de la part de Dreyna.",
+      )
+    ) {
+      return;
+    }
+    await applyGradeOverride(
+      "legende-vaelyndra",
+      `${targetUsername} sacré·e Légende de Vaelyndra. DM envoyé.`,
+    );
+  }
+
+  async function handleRevokeLegend() {
+    if (
+      !window.confirm(
+        `Retirer le statut Légende à ${targetUsername} ?\n\n` +
+          "Sa progression XP reprendra automatiquement et il/elle retournera au grade " +
+          "correspondant à son XP actuel.",
+      )
+    ) {
+      return;
+    }
+    await applyGradeOverride(
+      null,
+      `Statut Légende retiré à ${targetUsername}. Progression XP rétablie.`,
+    );
+  }
+
+  async function handleApplyManualGrade() {
+    const slug = overrideDraft || null;
+    if (slug === currentOverride) return;
+    if (slug && slug !== "legende-vaelyndra") {
+      // Pour les grades non-Légende, simple confirm textuel.
+      const g = gradeBySlug(slug);
+      if (
+        !window.confirm(
+          `Forcer ${targetUsername} au grade ${g?.emoji ?? ""} ${g?.name ?? slug} ?\n\n` +
+            "Sa progression XP sera figée sur ce grade tant que l'override est actif.",
+        )
+      ) {
+        return;
+      }
+    }
+    await applyGradeOverride(
+      slug as GradeSlug | null,
+      slug
+        ? `Grade de ${targetUsername} forcé : ${gradeBySlug(slug)?.name ?? slug}.`
+        : `Override de grade retiré pour ${targetUsername}. Progression XP rétablie.`,
+    );
+  }
+
   async function handleUnban() {
     setLoading(true);
     try {
@@ -424,6 +536,88 @@ export function AdminUserPanel({ targetUserId, targetUsername, onChange }: Props
           Appliquer le delta
         </button>
       </form>
+
+      {/* --- Sacre Légende + override de grade manuel ------------------- */}
+      <div className="mt-6 space-y-3 rounded-lg border border-gold-400/30 bg-royal-800/30 p-4">
+        <h3 className="flex items-center gap-2 font-display text-sm text-gold-200">
+          <Crown className="h-4 w-4 text-gold-300" /> Grade spirituel
+        </h3>
+        <p className="text-[11px] leading-relaxed text-ivory/60">
+          Le grade <strong>👑 Légende de Vaelyndra</strong> n'est
+          <em> jamais</em> obtenu via XP : c'est un sacre que tu accordes
+          manuellement à un·e créateur·rice qui t'a marqué. Un DM
+          automatique de félicitations sera envoyé de la part de Dreyna.
+          Les autres grades sont listés ci-dessous au cas où tu veuilles
+          forcer un palier temporairement (modération, test, correction).
+        </p>
+
+        {currentGradeSlug && (
+          <p className="text-[11px] text-ivory/70">
+            Grade actuel :{" "}
+            <span className="font-semibold text-gold-200">
+              {gradeBySlug(currentGradeSlug)?.emoji}{" "}
+              {gradeBySlug(currentGradeSlug)?.name ?? currentGradeSlug}
+            </span>
+            {currentOverride && (
+              <span className="ml-1 rounded-full border border-gold-400/50 bg-gold-500/15 px-1.5 py-0.5 font-regal text-[9px] uppercase tracking-[0.22em] text-gold-200">
+                override admin
+              </span>
+            )}
+          </p>
+        )}
+
+        <div className="flex flex-wrap items-center gap-2">
+          {currentOverride === "legende-vaelyndra" ? (
+            <button
+              type="button"
+              className="rounded-full border border-rose-400/60 bg-rose-500/15 px-4 py-2 font-regal text-[11px] font-semibold tracking-[0.22em] text-rose-100 hover:bg-rose-500/30 disabled:opacity-40"
+              onClick={handleRevokeLegend}
+              disabled={loading}
+            >
+              <Crown className="mr-1 inline h-4 w-4" /> Retirer le statut Légende
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="rounded-full border border-gold-400/60 bg-gold-500/20 px-4 py-2 font-regal text-[11px] font-semibold tracking-[0.22em] text-gold-100 hover:bg-gold-500/40 disabled:opacity-40"
+              onClick={handleGrantLegend}
+              disabled={loading}
+            >
+              <Crown className="mr-1 inline h-4 w-4" /> Sacrer Légende de Vaelyndra
+            </button>
+          )}
+        </div>
+
+        <details className="text-[11px] text-ivory/60">
+          <summary className="cursor-pointer text-ivory/70 hover:text-ivory">
+            Forcer un autre grade (avancé)
+          </summary>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <select
+              className="glass-input"
+              value={overrideDraft}
+              onChange={(e) => setOverrideDraft(e.target.value)}
+              disabled={loading}
+            >
+              <option value="">Aucun (progression XP normale)</option>
+              {GRADES.map((g) => (
+                <option key={g.slug} value={g.slug}>
+                  {g.emoji} {g.name} [{g.short}]
+                  {g.adminOnly ? " — sacre manuel" : ""}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="btn-royal"
+              onClick={handleApplyManualGrade}
+              disabled={loading || overrideDraft === (currentOverride ?? "")}
+            >
+              Appliquer
+            </button>
+          </div>
+        </details>
+      </div>
 
       {/* --- Rôle -------------------------------------------------------- */}
       <div className="mt-6 space-y-3 rounded-lg border border-gold-400/20 bg-royal-800/30 p-4">

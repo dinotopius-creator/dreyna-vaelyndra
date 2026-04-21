@@ -619,6 +619,15 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       if (!id || !authorId || !authorName || !authorAvatar || !content) {
         return null;
       }
+      // Diminutif de grade fourni par l'émetteur (ex. "BRM", "LEG"). Le
+      // host le re-dérivera côté réception si besoin — ici on ne le
+      // laisse passer que s'il matche une chaîne courte et alphanumérique
+      // pour éviter qu'un viewer injecte du texte arbitraire via le chat.
+      let gradeShort: string | null = null;
+      if (typeof p.gradeShort === "string") {
+        const raw = p.gradeShort.trim().toUpperCase();
+        if (/^[A-Z]{1,4}$/.test(raw)) gradeShort = raw;
+      }
       return {
         id,
         authorId,
@@ -627,6 +636,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         content: content.slice(0, 500), // anti-flood / anti-troll-wall-of-text
         createdAt,
         highlight: trustHighlight ? p.highlight === true : false,
+        gradeShort,
       };
     },
     [],

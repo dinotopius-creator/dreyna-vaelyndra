@@ -7,7 +7,7 @@
  * planquer l'UI si l'utilisateur connecté n'est pas admin (défense en
  * profondeur : même si le bouton est caché, le backend refusera 403).
  */
-import { API_BASE, ApiError } from "./api";
+import { API_BASE, ApiError, type UserProfileDto } from "./api";
 
 async function authRequest<T>(
   path: string,
@@ -296,4 +296,27 @@ export async function adminSetReportStatus(
     `/admin/reports/${reportId}`,
     { method: "PATCH", body: JSON.stringify({ status }) },
   )) as ReportEntry;
+}
+
+// --- Admin : grades spirituels ---------------------------------------------
+
+/**
+ * Force le grade d'un streamer (override manuel). Passer `null` pour
+ * révoquer l'override et laisser la progression XP reprendre normalement.
+ *
+ * Cas particulier : accorder le grade `legende-vaelyndra` déclenche
+ * côté backend l'envoi automatique d'un DM de félicitations (de la part
+ * de Dreyna). Cf. `admin_set_grade_override` dans `backend/app/routers/users.py`.
+ */
+export async function adminSetGradeOverride(
+  userId: string,
+  gradeSlug: string | null,
+): Promise<UserProfileDto> {
+  return (await authRequest<UserProfileDto>(
+    `/admin/users/${userId}/grade-override`,
+    {
+      method: "POST",
+      body: JSON.stringify({ grade_slug: gradeSlug }),
+    },
+  )) as UserProfileDto;
 }

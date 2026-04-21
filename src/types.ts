@@ -117,6 +117,13 @@ export interface ChatMessage {
   content: string;
   createdAt: string;
   highlight?: boolean;
+  /**
+   * Diminutif 3 lettres du grade de l'auteur au moment où il a parlé (ex.
+   * "BRM", "LEG"). Affiché entre crochets devant le pseudo dans le chat.
+   * `null`/absent = auteur sans grade connu (message système, bot, auteur
+   * pré-PR grades, etc.) → on n'affiche rien plutôt que d'afficher `[?]`.
+   */
+  gradeShort?: string | null;
 }
 
 export interface LiveSession {

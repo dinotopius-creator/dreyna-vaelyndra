@@ -53,6 +53,7 @@ def _grade_out_for(p: UserProfile | None) -> StreamerGradeOut | None:
         return StreamerGradeOut(
             slug=override_grade.slug,
             name=override_grade.name,
+            short=override_grade.short,
             emoji=override_grade.emoji,
             motto=override_grade.motto,
             theme=override_grade.theme,
@@ -68,6 +69,7 @@ def _grade_out_for(p: UserProfile | None) -> StreamerGradeOut | None:
     return StreamerGradeOut(
         slug=g.slug,
         name=g.name,
+        short=g.short,
         emoji=g.emoji,
         motto=g.motto,
         theme=g.theme,

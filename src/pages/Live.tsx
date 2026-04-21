@@ -60,6 +60,15 @@ import {
   apiMyModerationState,
   type LiveModerationAction,
 } from "../lib/liveApi";
+import { apiGetProfile } from "../lib/api";
+import { gradeBySlug } from "../data/grades";
+import {
+  getBotCadence,
+  getViewerScale,
+  nextViewerValue,
+  pickInitialViewers,
+  pickNextBotDelay,
+} from "../lib/liveScaling";
 
 const BOT_AUTHORS = [
   { id: "user-lyria", name: "Lyria", avatar: "https://i.pravatar.cc/150?u=lyria" },
@@ -327,19 +336,12 @@ function BroadcasterControls() {
     if (lastError) notify(lastError, "info");
   }, [lastError, notify]);
 
-  // Les non-queen n'ont pas accès au mode "twitch" (gatekeeping officiels).
-  // Si leur config pointe dessus (bascule dev/admin puis retour user), on
-  // réoriente vers le partage d'écran par défaut. On NE bascule PAS
-  // automatiquement vers "camera" sur mobile : Android Chrome supporte
-  // getDisplayMedia pour streamer ses jeux, et les users iOS préfèrent
-  // utiliser l'app Twitch mobile (documentée plus bas) plutôt que la
-  // caméra frontale. L'utilisateur choisit explicitement.
-  useEffect(() => {
-    if (!user) return;
-    if (!isQueen && config.mode === "twitch") {
-      updateConfig({ mode: "screen" });
-    }
-  }, [user, isQueen, config.mode, updateConfig]);
+  // Le mode "twitch" est désormais accessible à tous les streamers (pas
+  // seulement aux reines). Un utilisateur mobile qui streame via OBS sur
+  // sa Switch/PC ou via l'app Twitch mobile a aussi besoin de ce mode —
+  // il embed le player Twitch sur la page Vaelyndra au lieu de tenter un
+  // WebRTC impossible. On NE force donc plus de rétrogradation vers
+  // "screen" pour les non-reines.
 
   if (!user) return null;
 
@@ -486,9 +488,7 @@ function BroadcasterControls() {
           Mode de diffusion
         </legend>
         <div
-          className={`grid gap-3 ${
-            isQueen ? "md:grid-cols-3" : "md:grid-cols-2"
-          }`}
+          className="grid gap-3 md:grid-cols-3"
         >
           <button
             type="button"
@@ -549,29 +549,31 @@ function BroadcasterControls() {
               </p>
             </div>
           </button>
-          {isQueen && (
-            <button
-              type="button"
-              onClick={() => !isLive && updateConfig({ mode: "twitch" })}
-              disabled={isLive}
-              className={`card-royal flex items-start gap-3 p-4 text-left transition ${
-                config.mode === "twitch"
-                  ? "ring-1 ring-gold-400/60"
-                  : "opacity-80 hover:opacity-100"
-              } disabled:cursor-not-allowed`}
-            >
-              <Gamepad2 className="mt-0.5 h-5 w-5 text-gold-300" />
-              <div>
-                <p className="font-display text-base text-gold-200">
-                  OBS + Twitch
-                </p>
-                <p className="mt-1 text-xs text-ivory/60">
-                  Tu streames depuis OBS vers Twitch. Le site embed le lecteur
-                  officiel. Qualité pro.
-                </p>
-              </div>
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => !isLive && updateConfig({ mode: "twitch" })}
+            disabled={isLive}
+            className={`card-royal flex items-start gap-3 p-4 text-left transition ${
+              config.mode === "twitch"
+                ? "ring-1 ring-gold-400/60"
+                : "opacity-80 hover:opacity-100"
+            } disabled:cursor-not-allowed`}
+          >
+            <Gamepad2 className="mt-0.5 h-5 w-5 text-gold-300" />
+            <div>
+              <p className="font-display text-base text-gold-200">
+                OBS + Twitch
+                <span className="ml-2 rounded-full border border-fuchsia-300/40 bg-fuchsia-500/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.2em] text-fuchsia-200">
+                  mobile + pc
+                </span>
+              </p>
+              <p className="mt-1 text-xs text-ivory/60">
+                Tu streames depuis OBS (PC) ou l'app Twitch mobile. Le site
+                embed le lecteur officiel Twitch. Marche sur iPhone et
+                Android.
+              </p>
+            </div>
+          </button>
         </div>
       </fieldset>
 
@@ -580,7 +582,7 @@ function BroadcasterControls() {
         isQueen={isQueen}
       />
 
-      {isQueen && config.mode === "twitch" && (
+      {config.mode === "twitch" && (
         <div className="mt-5 grid gap-4 md:grid-cols-2">
           <label className="block">
             <span className="mb-1 block font-regal text-[11px] uppercase tracking-[0.22em] text-ivory/60">
@@ -809,7 +811,20 @@ export function Live() {
       (activeMode === "twitch" && !!twitchChannel));
 
   const [messages, setMessages] = useState<ChatMessage[]>(SEED_CHAT);
-  const [viewers, setViewers] = useState(1284);
+  // Grade du broadcaster — utilisé pour scaler le compteur de viewers
+  // fake et la cadence du chat bot. `null` tant qu'on n'a pas récupéré le
+  // profil → on part sur le défaut (novice). Idem `myGradeShort` pour le
+  // préfixe `[SHORT]` devant mon pseudo dans les messages que je publie.
+  const [broadcasterGradeSlug, setBroadcasterGradeSlug] = useState<
+    string | null
+  >(null);
+  const [myGradeShort, setMyGradeShort] = useState<string | null>(null);
+  // Compteur viewers fake — initialisé au tiers bas de la fourchette
+  // correspondant au grade du broadcaster, puis mis à jour toutes les
+  // ~N secondes avec un léger biais positif pour mimer l'arrivée des gens.
+  const [viewers, setViewers] = useState(() =>
+    pickInitialViewers(getViewerScale(null)),
+  );
   // Modération (PR Q) : sanctions actives reçues depuis le backend pour le
   // user courant, sur *ce* live. Polled ~30 s depuis `apiMyModerationState`
   // pour détecter un mute/kick posé pendant qu'on regarde.
@@ -1018,41 +1033,113 @@ export function Live() {
     navigate(`/live/${nextLiveEntry.userId}`);
   }
 
-  // Simulate viewers pulse
+  // Résout le grade du broadcaster pour scaler viewers fake + cadence bots.
+  // On refetch quand le broadcaster change (navigation entre lives). L'appel
+  // est silencieux : si on n'a pas le grade on reste sur la courbe "novice".
   useEffect(() => {
-    const t = setInterval(
-      () =>
-        setViewers((v) =>
-          Math.max(800, v + Math.round((Math.random() - 0.4) * 30)),
-        ),
-      2500,
-    );
-    return () => clearInterval(t);
-  }, []);
+    if (!broadcasterId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setBroadcasterGradeSlug(null);
+      return;
+    }
+    let cancelled = false;
+    apiGetProfile(broadcasterId)
+      .then((p) => {
+        if (!cancelled) setBroadcasterGradeSlug(p.grade?.slug ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setBroadcasterGradeSlug(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [broadcasterId]);
 
-  // Auto chat lines
+  // Résout mon propre diminutif de grade pour l'afficher en préfixe
+  // `[SHORT]` devant mon pseudo dans les messages que j'envoie. Refetch
+  // quand l'utilisateur courant change (login/logout).
+  useEffect(() => {
+    if (!user?.id) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setMyGradeShort(null);
+      return;
+    }
+    const userId = user.id;
+    let cancelled = false;
+    apiGetProfile(userId)
+      .then((p) => {
+        if (!cancelled) setMyGradeShort(p.grade?.short ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setMyGradeShort(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
+  // Reseed le compteur viewers quand le grade du broadcaster est résolu
+  // (évite de garder l'ancienne valeur 1284 quand on arrive sur un live
+  // de Novice). On garde la valeur si elle est déjà dans la fourchette.
+  const viewerScale = useMemo(
+    () => getViewerScale(broadcasterGradeSlug),
+    [broadcasterGradeSlug],
+  );
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setViewers((v) => {
+      if (v >= viewerScale.min && v <= viewerScale.max) return v;
+      return pickInitialViewers(viewerScale);
+    });
+  }, [viewerScale]);
+
+  // Simulate viewers pulse — scalé par grade du broadcaster :
+  // Novice = petits mouvements rares, Légende = grosses variations rapides.
+  useEffect(() => {
+    const t = setInterval(() => {
+      setViewers((v) => nextViewerValue(v, viewerScale));
+    }, viewerScale.intervalMs);
+    return () => clearInterval(t);
+  }, [viewerScale]);
+
+  // Auto chat lines — cadence scalée par grade du broadcaster. On utilise
+  // setTimeout récursif (plutôt qu'un setInterval fixe) pour que chaque
+  // attente soit tirée au hasard dans [minMs, maxMs] du grade courant,
+  // ce qui sonne plus naturel qu'un tick mécanique.
   useEffect(() => {
     if (!isActiveLive) return;
-    const t = setInterval(() => {
-      const line =
-        AUTO_CHAT_LINES[Math.floor(Math.random() * AUTO_CHAT_LINES.length)];
-      const bot = BOT_AUTHORS[Math.floor(Math.random() * BOT_AUTHORS.length)];
-      setMessages((m) =>
-        [
-          ...m,
-          {
-            id: generateId("msg"),
-            authorId: bot.id,
-            authorName: bot.name,
-            authorAvatar: bot.avatar,
-            content: line,
-            createdAt: new Date().toISOString(),
-          },
-        ].slice(-CHAT_BUFFER_MAX),
-      );
-    }, 4200);
-    return () => clearInterval(t);
-  }, [isActiveLive]);
+    const cadence = getBotCadence(broadcasterGradeSlug);
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleNext = () => {
+      timer = setTimeout(() => {
+        const line =
+          AUTO_CHAT_LINES[Math.floor(Math.random() * AUTO_CHAT_LINES.length)];
+        const bot = BOT_AUTHORS[Math.floor(Math.random() * BOT_AUTHORS.length)];
+        setMessages((m) =>
+          [
+            ...m,
+            {
+              id: generateId("msg"),
+              authorId: bot.id,
+              authorName: bot.name,
+              authorAvatar: bot.avatar,
+              content: line,
+              createdAt: new Date().toISOString(),
+              // Les bots adoptent le diminutif du broadcaster (ils
+              // "ressemblent" au public du live). Pas d'appel API : on
+              // dérive via le slug déjà en main.
+              gradeShort: gradeBySlug(broadcasterGradeSlug ?? "")?.short ?? null,
+            },
+          ].slice(-CHAT_BUFFER_MAX),
+        );
+        scheduleNext();
+      }, pickNextBotDelay(cadence));
+    };
+    scheduleNext();
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [isActiveLive, broadcasterGradeSlug]);
 
   const replays = useMemo(() => lives, [lives]);
 
@@ -1097,6 +1184,7 @@ export function Live() {
       content: content.trim(),
       createdAt: new Date().toISOString(),
       highlight: user.role === "queen",
+      gradeShort: myGradeShort,
     });
   }
 
