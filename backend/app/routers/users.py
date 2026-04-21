@@ -2,12 +2,15 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
+
+logger = logging.getLogger(__name__)
 
 from ..auth.dependencies import require_auth
 from ..creatures import CREATURES, get_creature
@@ -1132,9 +1135,19 @@ def admin_set_grade_override(
                 recipient_id=p.id,
                 content=DIRECT_MESSAGE_LEGEND_SACRE,
             )
-        except ValueError:
-            # Texte vide/invalide → on ne casse pas le sacre à cause du DM.
-            pass
+        except Exception:  # noqa: BLE001 — DM best-effort, le sacre est déjà committé
+            # On catche large volontairement : le sacre (grade_override) est
+            # déjà committé ligne ~1115. Si le DM échoue pour n'importe
+            # quelle raison (DB error transitoire, race sur la table
+            # `direct_messages`, texte mal formé…), on ne veut pas renvoyer
+            # un 500 à l'admin — il croirait que le sacre n'a pas marché et
+            # retenterait, mais l'idempotency check (`previous_override !=
+            # LEGEND_SLUG`) serait maintenant False donc le DM serait
+            # perdu. Mieux vaut un sacre sans DM qu'un admin confus.
+            logger.exception(
+                "DM de sacre Légende impossible (user %s) ; sacre maintenu",
+                p.id,
+            )
     return _to_out(p, session)
 
 

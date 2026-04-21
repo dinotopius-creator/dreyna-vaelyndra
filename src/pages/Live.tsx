@@ -1042,6 +1042,12 @@ export function Live() {
       setBroadcasterGradeSlug(null);
       return;
     }
+    // Reset immédiatement pour éviter qu'en passant d'un live "Légende"
+    // à un live "Novice", on garde brièvement le scale Légende (1500-3500
+    // viewers, bots toutes les 4-8 s) pendant que l'API renvoie le vrai
+    // grade. On retombe sur la courbe Novice par défaut en attendant.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setBroadcasterGradeSlug(null);
     let cancelled = false;
     apiGetProfile(broadcasterId)
       .then((p) => {
