@@ -8,7 +8,7 @@ primary_region = "cdg"
   wait_timeout = "10m"
 
 [env]
-  VAELYNDRA_CORS_ORIGINS = "https://vaelyndra.com,https://www.vaelyndra.com,https://dist-tsbfgcct.devinapps.com"
+  VAELYNDRA_CORS_ORIGINS = "https://vaelyndra.com,https://www.vaelyndra.com,https://dist-tsbfgcct.devinapps.com,capacitor://localhost,http://localhost,https://localhost,ionic://localhost"
 
 [http_service]
   internal_port = 8080

@@ -82,6 +82,10 @@ _default_cors = ",".join([
     "https://dist-tsbfgcct.devinapps.com",
     "https://vaelyndra.com",
     "https://www.vaelyndra.com",
+    "capacitor://localhost",
+    "http://localhost",
+    "https://localhost",
+    "ionic://localhost",
 ])
 _cors_origins = os.environ.get("VAELYNDRA_CORS_ORIGINS", _default_cors).split(",")
 
