@@ -26,6 +26,12 @@ import clsx from "clsx";
 import { AdminUsersTab } from "../components/AdminUsersTab";
 import { AdminReportsTab } from "../components/AdminReportsTab";
 import { adminReportsStats } from "../lib/adminApi";
+import {
+  createArticleRemote,
+  createProductRemote,
+  deleteArticleRemote,
+  deleteProductRemote,
+} from "../lib/catalogApi";
 
 const TABS = [
   { id: "dashboard", label: "Dashboard" },
@@ -204,39 +210,41 @@ function ArticlesAdmin() {
     tags: "",
   });
 
-  function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.title.trim()) return;
-    const article: Article = {
-      id: generateId("art"),
-      slug: slugify(form.title),
-      title: form.title.trim(),
-      excerpt: form.excerpt.trim() || form.content.slice(0, 160),
-      content: form.content.trim(),
-      category: form.category,
-      cover:
-        form.cover.trim() ||
-        "https://images.unsplash.com/photo-1470813740244-df37b8c1edcb?w=1600&auto=format&fit=crop&q=80",
-      author: "Dreyna",
-      createdAt: new Date().toISOString(),
-      readingTime: readingTime(form.content || form.excerpt),
-      tags: form.tags
-        .split(",")
-        .map((t) => t.trim())
-        .filter(Boolean),
-      likes: [],
-      comments: [],
-    };
-    dispatch({ type: "addArticle", article });
-    notify("Chronique publiée ✨");
-    setForm({
-      title: "",
-      excerpt: "",
-      content: "",
-      category: "Lore",
-      cover: "",
-      tags: "",
-    });
+    try {
+      const article = await createArticleRemote({
+        slug: slugify(form.title),
+        title: form.title.trim(),
+        excerpt: form.excerpt.trim() || form.content.slice(0, 160),
+        content: form.content.trim(),
+        category: form.category,
+        cover:
+          form.cover.trim() ||
+          "https://images.unsplash.com/photo-1470813740244-df37b8c1edcb?w=1600&auto=format&fit=crop&q=80",
+        author: "Dreyna",
+        readingTime: readingTime(form.content || form.excerpt),
+        tags: form.tags
+          .split(",")
+          .map((t) => t.trim())
+          .filter(Boolean),
+      });
+      dispatch({ type: "addArticle", article });
+      notify("Chronique publiée ✨");
+      setForm({
+        title: "",
+        excerpt: "",
+        content: "",
+        category: "Lore",
+        cover: "",
+        tags: "",
+      });
+    } catch (err) {
+      notify(
+        `Impossible de publier : ${(err as Error).message ?? "erreur réseau"}`,
+      );
+    }
   }
 
   return (
@@ -322,9 +330,16 @@ function ArticlesAdmin() {
               </p>
             </div>
             <button
-              onClick={() => {
-                dispatch({ type: "deleteArticle", id: a.id });
-                notify("Chronique supprimée");
+              onClick={async () => {
+                try {
+                  await deleteArticleRemote(a.id);
+                  dispatch({ type: "deleteArticle", id: a.id });
+                  notify("Chronique supprimée");
+                } catch (err) {
+                  notify(
+                    `Suppression impossible : ${(err as Error).message ?? "erreur"}`,
+                  );
+                }
               }}
               className="text-ivory/40 hover:text-rose-300"
             >
@@ -358,34 +373,38 @@ function ProductsAdmin() {
     stock: 100,
   });
 
-  function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
-    const product: Product = {
-      id: generateId("prod"),
-      name: form.name.trim(),
-      tagline: form.tagline.trim() || "Nouvelle relique",
-      description: form.description.trim(),
-      price: Number(form.price),
-      currency: "€",
-      image:
-        form.image.trim() ||
-        "https://images.unsplash.com/photo-1470813740244-df37b8c1edcb?w=900&auto=format&fit=crop&q=80",
-      category: form.category,
-      rating: 5,
-      stock: Number(form.stock),
-      tags: [],
-    };
-    dispatch({ type: "addProduct", product });
-    notify("Produit ajouté à la boutique royale 🛍️");
-    setForm({
-      name: "",
-      tagline: "",
-      description: "",
-      price: 0,
-      category: "Merch",
-      image: "",
-      stock: 100,
-    });
+    try {
+      const product = await createProductRemote({
+        name: form.name.trim(),
+        tagline: form.tagline.trim() || "Nouvelle relique",
+        description: form.description.trim(),
+        price: Number(form.price),
+        image:
+          form.image.trim() ||
+          "https://images.unsplash.com/photo-1470813740244-df37b8c1edcb?w=900&auto=format&fit=crop&q=80",
+        category: form.category,
+        rating: 5,
+        stock: Number(form.stock),
+        tags: [],
+      });
+      dispatch({ type: "addProduct", product });
+      notify("Produit ajouté à la boutique royale 🛍️");
+      setForm({
+        name: "",
+        tagline: "",
+        description: "",
+        price: 0,
+        category: "Merch",
+        image: "",
+        stock: 100,
+      });
+    } catch (err) {
+      notify(
+        `Impossible d'ajouter : ${(err as Error).message ?? "erreur réseau"}`,
+      );
+    }
   }
 
   return (
@@ -486,9 +505,16 @@ function ProductsAdmin() {
               </p>
             </div>
             <button
-              onClick={() => {
-                dispatch({ type: "deleteProduct", id: p.id });
-                notify("Produit retiré de la boutique");
+              onClick={async () => {
+                try {
+                  await deleteProductRemote(p.id);
+                  dispatch({ type: "deleteProduct", id: p.id });
+                  notify("Produit retiré de la boutique");
+                } catch (err) {
+                  notify(
+                    `Suppression impossible : ${(err as Error).message ?? "erreur"}`,
+                  );
+                }
               }}
               className="text-ivory/40 hover:text-rose-300"
             >
