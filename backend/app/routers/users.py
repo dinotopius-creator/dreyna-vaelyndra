@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
+from ..auth.dependencies import require_auth
 from ..creatures import CREATURES, get_creature
 from ..db import get_session
 from ..grades import (
@@ -380,10 +381,16 @@ def set_handle(
     user_id: str,
     payload: HandleUpdate,
     session: Session = Depends(_session_dep),
+    auth_user: UserProfile = Depends(require_auth),
 ) -> UserProfileOut:
     """PR S — Change le `@handle` d'un utilisateur.
 
     Règles :
+    - **Authentification requise** : seul le propriétaire du profil (ou un
+      admin) peut changer le handle. Sans ce check, n'importe qui pourrait
+      changer le handle d'autrui et déclencher le cooldown 30 j, ce qui
+      serait une attaque de déni de service (signalé par Devin Review sur
+      PR #64).
     - Format validé via `is_valid_handle` (3-20 chars `[a-z0-9_]+`, lower).
     - Cooldown 30 jours entre deux changements (anti-impersonation). Les
       anciens profils avec `handle_updated_at = None` peuvent poser leur
@@ -394,6 +401,14 @@ def set_handle(
     - Si l'utilisateur renvoie exactement son handle actuel, on renvoie
       le profil inchangé (idempotent, aucun effet cooldown).
     """
+    # Autorisation : le user authentifié doit être soit le propriétaire,
+    # soit un admin (pour dépannage / modération).
+    if auth_user.id != user_id and auth_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Tu ne peux changer que ton propre handle.",
+        )
+
     p = session.get(UserProfile, user_id)
     if not p:
         raise HTTPException(status_code=404, detail="Profil introuvable.")
