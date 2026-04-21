@@ -173,7 +173,15 @@ function LiveVideoStage({
         autoPlay
         playsInline
         // Le host se voit sans son (sinon larsen). Les viewers entendent.
-        muted={isHost}
+        //
+        // `needsUnmute` participe à la prop pour que la reconciliation
+        // React n'écrase pas le `el.muted = true` imposé par le fallback
+        // autoplay : sans ça, juste après `setNeedsUnmute(true)`, React
+        // ré-applique `muted={false}` sur l'élément vidéo → le flux
+        // repart en tentative d'autoplay avec son alors que l'overlay
+        // "Activer le son" est affiché par-dessus (incohérent, et sur
+        // iOS le navigateur met la vidéo en pause).
+        muted={isHost || needsUnmute}
         controls={!isHost}
         className="absolute inset-0 h-full w-full bg-night-900 object-contain"
       />
