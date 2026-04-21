@@ -415,6 +415,11 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   const hostPeerRef = useRef<Peer | null>(null);
   const viewerPeerRef = useRef<Peer | null>(null);
   const hostConnectionsRef = useRef<Set<MediaConnection>>(new Set());
+  // Host : une MediaConnection sortante par viewer peer-id. Le flux est
+  // initié par le host dès que la DataConnection du viewer s'ouvre, ce qui
+  // évite l'offre SDP "vide" côté viewer qui bloquait certains navigateurs
+  // sur "Connexion au flux..." sans jamais livrer de remote stream.
+  const hostViewerCallsRef = useRef<Map<string, MediaConnection>>(new Map());
   // Host : ensemble des DataConnection avec les viewers. Sert à la fois
   // au push "live-meta" initial (titre/description) et à la diffusion
   // des messages de chat en temps réel.
@@ -422,6 +427,8 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   // Viewer : sa DataConnection vers le host courant. Utilisée pour
   // envoyer ses propres messages de chat au host (qui les rediffuse).
   const viewerDataConnRef = useRef<DataConnection | null>(null);
+  // Viewer : MediaConnection entrante ouverte par le host courant.
+  const viewerMediaCallRef = useRef<MediaConnection | null>(null);
   // Dédoublonnage des messages de chat reçus (un message peut arriver
   // plusieurs fois côté viewer si la connexion est renégociée).
   const chatSeenIdsRef = useRef<Set<string>>(new Set());
@@ -716,6 +723,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       }
     });
     hostConnectionsRef.current.clear();
+    hostViewerCallsRef.current.clear();
     hostDataConnectionsRef.current.forEach((dc) => {
       try {
         dc.close();
@@ -745,6 +753,14 @@ export function LiveProvider({ children }: { children: ReactNode }) {
 
   /** Ferme UNIQUEMENT les ressources côté viewer (peer + remoteStream). */
   const stopViewing = useCallback(() => {
+    if (viewerMediaCallRef.current) {
+      try {
+        viewerMediaCallRef.current.close();
+      } catch {
+        // ignore
+      }
+      viewerMediaCallRef.current = null;
+    }
     if (viewerDataConnRef.current) {
       try {
         viewerDataConnRef.current.close();
@@ -966,6 +982,33 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         });
 
         peer.on("connection", (dataConn) => {
+          const startCallForViewer = (viewerPeerId: string) => {
+            const active = localStreamRef.current;
+            if (!active) return;
+            const previous = hostViewerCallsRef.current.get(viewerPeerId);
+            if (previous) {
+              try {
+                previous.close();
+              } catch {
+                // ignore
+              }
+              hostViewerCallsRef.current.delete(viewerPeerId);
+              hostConnectionsRef.current.delete(previous);
+            }
+            const outbound = peer.call(viewerPeerId, active);
+            if (!outbound) return;
+            hostViewerCallsRef.current.set(viewerPeerId, outbound);
+            hostConnectionsRef.current.add(outbound);
+            const release = () => {
+              if (hostViewerCallsRef.current.get(viewerPeerId) === outbound) {
+                hostViewerCallsRef.current.delete(viewerPeerId);
+              }
+              hostConnectionsRef.current.delete(outbound);
+            };
+            outbound.on("close", release);
+            outbound.on("error", release);
+          };
+
           // Chaque viewer ouvre une DataConnection vers le host.
           //
           // Deux usages :
@@ -986,6 +1029,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             } catch {
               // ignore
             }
+            startCallForViewer(dataConn.peer);
           });
           dataConn.on("data", (payload) => {
             // Réception d'un message de chat venant d'un viewer : on le
@@ -1006,6 +1050,16 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             }
           });
           dataConn.on("close", () => {
+            const outbound = hostViewerCallsRef.current.get(dataConn.peer);
+            if (outbound) {
+              try {
+                outbound.close();
+              } catch {
+                // ignore
+              }
+              hostViewerCallsRef.current.delete(dataConn.peer);
+              hostConnectionsRef.current.delete(outbound);
+            }
             hostDataConnectionsRef.current.delete(dataConn);
           });
         });
@@ -1310,29 +1364,58 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         })(getPeerOptions());
         viewerPeerRef.current = viewerPeer;
 
-        viewerPeer.on("open", () => {
-          if (cancelled) return;
-          const targetPeerId = getLivePeerId(broadcasterId);
-          const call = viewerPeer.call(targetPeerId, new MediaStream());
-          if (!call) {
-            setIsConnecting(false);
+        viewerPeer.on("call", (call) => {
+          if (cancelled) {
+            try {
+              call.close();
+            } catch {
+              // ignore
+            }
             return;
           }
+          if (viewerMediaCallRef.current && viewerMediaCallRef.current !== call) {
+            try {
+              viewerMediaCallRef.current.close();
+            } catch {
+              // ignore
+            }
+          }
+          viewerMediaCallRef.current = call;
           call.on("stream", (stream) => {
             if (cancelled) return;
             setRemoteStream(stream);
             setIsConnecting(false);
           });
           call.on("close", () => {
+            if (viewerMediaCallRef.current === call) {
+              viewerMediaCallRef.current = null;
+            }
             if (cancelled) return;
             setRemoteStream(null);
           });
           call.on("error", () => {
+            if (viewerMediaCallRef.current === call) {
+              viewerMediaCallRef.current = null;
+            }
             if (cancelled) return;
             setRemoteStream(null);
             setIsConnecting(false);
           });
+          try {
+            // Réponse receive-only : l'offre provient désormais du host, qui
+            // porte déjà les m-lines audio/vidéo réelles. Répondre avec un
+            // stream local vide reste valide sans forcer le viewer à partager
+            // micro/caméra, et évite l'offre initiale vide qui cassait la
+            // négociation sur certains browsers.
+            call.answer(new MediaStream());
+          } catch {
+            setIsConnecting(false);
+          }
+        });
 
+        viewerPeer.on("open", () => {
+          if (cancelled) return;
+          const targetPeerId = getLivePeerId(broadcasterId);
           // DataConnection bidirectionnelle avec le host :
           //  - réception : métadonnées du live + messages de chat
           //    redistribués par le host.
@@ -1428,6 +1511,14 @@ export function LiveProvider({ children }: { children: ReactNode }) {
           // ignore
         }
         viewerDataConnRef.current = null;
+      }
+      if (viewerMediaCallRef.current) {
+        try {
+          viewerMediaCallRef.current.close();
+        } catch {
+          // ignore
+        }
+        viewerMediaCallRef.current = null;
       }
       if (viewerPeerRef.current) {
         try {
