@@ -29,6 +29,10 @@ import {
 } from "../data/mock";
 import { generateId } from "../lib/helpers";
 import { apiListPosts } from "../lib/api";
+import {
+  fetchCatalogArticles,
+  fetchCatalogProducts,
+} from "../lib/catalogApi";
 import { useAuth } from "./AuthContext";
 
 interface StoreState {
@@ -59,6 +63,8 @@ interface StoreState {
 
 type Action =
   | { type: "load"; state: StoreState }
+  | { type: "setProducts"; products: Product[] }
+  | { type: "setArticles"; articles: Article[] }
   | { type: "addArticle"; article: Article }
   | { type: "updateArticle"; article: Article }
   | { type: "deleteArticle"; id: string }
@@ -102,6 +108,10 @@ function reducer(state: StoreState, action: Action): StoreState {
   switch (action.type) {
     case "load":
       return action.state;
+    case "setProducts":
+      return { ...state, products: action.products };
+    case "setArticles":
+      return { ...state, articles: action.articles };
     case "addArticle":
       return { ...state, articles: [action.article, ...state.articles] };
     case "updateArticle":
@@ -563,6 +573,35 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
     refresh();
     const id = setInterval(refresh, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, []);
+
+  // Boutique + chroniques : la source de vérité est le backend (PR #76). On
+  // remplace complètement les listes locales au premier succès. Tant que le
+  // backend répond pas, on affiche le cache localStorage (fallback offline).
+  // Refresh toutes les 60 s pour propager les changements admin.
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const [products, articles] = await Promise.all([
+          fetchCatalogProducts(),
+          fetchCatalogArticles(),
+        ]);
+        if (!cancelled) {
+          dispatch({ type: "setProducts", products });
+          dispatch({ type: "setArticles", articles });
+        }
+      } catch (err) {
+        if (!cancelled)
+          console.warn("Impossible de rafraîchir le catalogue :", err);
+      }
+    };
+    refresh();
+    const id = setInterval(refresh, 60_000);
     return () => {
       cancelled = true;
       clearInterval(id);

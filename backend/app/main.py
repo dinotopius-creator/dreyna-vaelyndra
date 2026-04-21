@@ -19,7 +19,7 @@ from .auth.routes import router as auth_router
 from .db import get_session, init_db
 from .handles import slugify_handle, suggest_unique_handle
 from .models import UserProfile
-from .routers import admin, live, posts, reports, streamers, users
+from .routers import admin, catalog, live, posts, reports, streamers, users
 
 app = FastAPI(title="Vaelyndra API", version="0.1.0")
 
@@ -258,6 +258,9 @@ def _startup() -> None:
     _seed_official_accounts()
     _seed_official_credentials()
     _backfill_handles()
+    from .catalog_seed import seed_catalog
+
+    seed_catalog()
 
 
 @app.get("/healthz")
@@ -274,3 +277,5 @@ app.include_router(auth_router)
 app.include_router(admin.router)
 app.include_router(reports.router)
 app.include_router(live.router)
+app.include_router(catalog.router_public)
+app.include_router(catalog.router_admin)

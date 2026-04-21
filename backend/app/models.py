@@ -284,6 +284,72 @@ class LiveJoinRequest(SQLModel, table=True):
     decided_at: Optional[str] = None
 
 
+class CatalogProduct(SQLModel, table=True):
+    """Produit vendu dans la boutique (PR #76 — migration localStorage → DB).
+
+    Avant cette table, les produits étaient stockés dans le `localStorage`
+    de chaque navigateur, avec un seed `INITIAL_PRODUCTS` côté frontend.
+    Conséquence : une suppression ou ajout faite par l'admin n'était
+    visible que sur SON device. Un visiteur voyait un catalogue
+    potentiellement différent.
+
+    Maintenant le backend est la source de vérité. Le frontend fetch
+    depuis `GET /catalog/products` et affiche ce qu'il reçoit. Les
+    mutations (add/update/delete) passent par `/admin/catalog/products/*`.
+
+    Les champs suivent à l'identique le type `Product` du frontend
+    (`src/types.ts`) pour ne pas avoir de mapping côté client.
+    `tags_json` stocke la liste `tags: string[]` en JSON (SQLite).
+    """
+
+    id: str = Field(primary_key=True)
+    name: str
+    tagline: str = ""
+    description: str = ""
+    price: float = 0
+    # Toujours "€" en v1 ; on garde la colonne pour compat future.
+    currency: str = Field(default="€")
+    image: str = ""
+    # "Merch" | "Digital" | "VIP" | "Exclusif" | "Sylvins"
+    category: str = Field(default="Merch", index=True)
+    # Null sauf pour les packs Sylvins (montant crédité à l'achat).
+    sylvins: Optional[int] = None
+    rating: float = Field(default=5.0)
+    stock: int = Field(default=0)
+    featured: bool = Field(default=False, index=True)
+    tags_json: str = Field(default="[]")
+    created_at: str = Field(default_factory=_now_iso)
+    updated_at: str = Field(default_factory=_now_iso, index=True)
+
+
+class CatalogArticle(SQLModel, table=True):
+    """Chronique / article de blog (PR #76).
+
+    Migration identique à `CatalogProduct` : avant, les articles étaient
+    en localStorage, maintenant en DB. `likes_json` est la liste des
+    `user_id` qui ont liké. Les commentaires restent pour l'instant en
+    JSON (liste de dict) dans `comments_json` — moins normalisé qu'une
+    vraie table `ArticleComment` mais suffisant pour v1 où on veut juste
+    persister les actions admin. Pourra être normalisé plus tard.
+    """
+
+    id: str = Field(primary_key=True)
+    slug: str = Field(index=True)
+    title: str
+    excerpt: str = ""
+    content: str = ""
+    # "Lore" | "Lifestyle" | "Annonces" | "Communauté"
+    category: str = Field(default="Lore", index=True)
+    cover: str = ""
+    author: str = ""
+    reading_time: int = Field(default=3)
+    tags_json: str = Field(default="[]")
+    likes_json: str = Field(default="[]")
+    comments_json: str = Field(default="[]")
+    created_at: str = Field(default_factory=_now_iso, index=True)
+    updated_at: str = Field(default_factory=_now_iso, index=True)
+
+
 class GiftLedger(SQLModel, table=True):
     """Journal append-only de chaque cadeau Sylvins envoyé.
 

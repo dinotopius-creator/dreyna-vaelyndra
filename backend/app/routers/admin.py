@@ -23,7 +23,13 @@ from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
 from ..auth.dependencies import require_admin
-from ..auth.models import AuthSession, Credential, LoginAttempt
+from ..auth.models import (
+    AuthSession,
+    Credential,
+    EmailVerificationToken,
+    LoginAttempt,
+    PasswordResetToken,
+)
 from ..db import get_session
 from ..models import AdminAuditLog, Report, UserProfile
 
@@ -653,6 +659,174 @@ def reports_stats(
         by_status[r.status] = by_status.get(r.status, 0) + 1
         by_type[r.target_type] = by_type.get(r.target_type, 0) + 1
     return {"total": len(rows), "byStatus": by_status, "byType": by_type}
+
+
+# --- Nettoyage comptes non-vérifiés ----------------------------------------
+
+# Ids de comptes qu'on refuse absolument de supprimer, même si leur
+# `email_verified_at` est NULL pour une raison inattendue (avatar seed
+# créé avant une migration de schema, par ex.). Source de vérité :
+# `OFFICIAL_ACCOUNTS` dans `app/main.py`.
+PROTECTED_USER_IDS: set[str] = {
+    "user-dreyna",
+    "user-kamestars",
+    "user-roi-des-zems",
+}
+
+
+class UnverifiedAccountOut(BaseModel):
+    userId: str
+    # Null quand il n'y a plus de UserProfile pour ce user_id (credential
+    # orphelin à purger).
+    username: Optional[str]
+    email: Optional[str]
+    # Null quand il n'y a plus de UserProfile (créé_at inconnu,
+    # on retombe sur `Credential.created_at`).
+    createdAt: str
+    orphan: bool = False
+
+
+class CleanupUnverifiedOut(BaseModel):
+    dryRun: bool
+    count: int
+    deleted: list[UnverifiedAccountOut]
+
+
+def _list_unverified(
+    session: Session,
+) -> list[tuple[Optional[UserProfile], Credential]]:
+    """Retourne les `(UserProfile | None, Credential)` dont l'email n'a
+    jamais été vérifié. Exclut les comptes protégés (officiels seedés) et
+    tout compte avec un rôle admin. Si le `UserProfile` correspondant
+    n'existe plus (credential orphelin), on retourne quand même la ligne
+    pour qu'elle puisse être purgée."""
+    creds = session.exec(
+        select(Credential).where(Credential.email_verified_at.is_(None))  # type: ignore[union-attr]
+    ).all()
+    out: list[tuple[Optional[UserProfile], Credential]] = []
+    for cred in creds:
+        if cred.user_id in PROTECTED_USER_IDS:
+            continue
+        profile = session.get(UserProfile, cred.user_id)
+        if profile is not None and (profile.role or "user") == "admin":
+            # Parachute : jamais de suppression d'un admin, même non vérifié.
+            continue
+        out.append((profile, cred))
+    out.sort(
+        key=lambda pair: (pair[0].created_at if pair[0] else pair[1].created_at)
+        or ""
+    )
+    return out
+
+
+@router.get(
+    "/cleanup/unverified",
+    response_model=CleanupUnverifiedOut,
+)
+def list_unverified_accounts(
+    admin: UserProfile = Depends(require_admin),
+    session: Session = Depends(_session_dep),
+) -> CleanupUnverifiedOut:
+    """Dry-run : liste les comptes qui seraient supprimés par POST
+    `/admin/cleanup/unverified`. Pas d'effet de bord."""
+    rows = _list_unverified(session)
+    return CleanupUnverifiedOut(
+        dryRun=True,
+        count=len(rows),
+        deleted=[
+            UnverifiedAccountOut(
+                userId=cred.user_id,
+                username=profile.username if profile else None,
+                email=cred.email,
+                createdAt=(profile.created_at if profile else cred.created_at)
+                or cred.created_at,
+                orphan=profile is None,
+            )
+            for profile, cred in rows
+        ],
+    )
+
+
+@router.post(
+    "/cleanup/unverified",
+    response_model=CleanupUnverifiedOut,
+)
+def delete_unverified_accounts(
+    admin: UserProfile = Depends(require_admin),
+    session: Session = Depends(_session_dep),
+) -> CleanupUnverifiedOut:
+    """Supprime définitivement les comptes dont l'email n'a jamais été
+    vérifié. Exclut les comptes officiels seedés et tout compte admin.
+
+    Supprime en cascade : `UserProfile`, `Credential`, `AuthSession`,
+    `EmailVerificationToken`, `PasswordResetToken`, `LoginAttempt`
+    (lignes rattachées à l'user par `user_id`).
+    """
+    pairs = _list_unverified(session)
+    deleted_out: list[UnverifiedAccountOut] = []
+    for profile, cred in pairs:
+        uid = cred.user_id
+        username = profile.username if profile else None
+        created_at = (
+            (profile.created_at if profile else cred.created_at) or cred.created_at
+        )
+        for token in session.exec(
+            select(EmailVerificationToken).where(
+                EmailVerificationToken.user_id == uid,
+            )
+        ).all():
+            session.delete(token)
+        for token in session.exec(
+            select(PasswordResetToken).where(
+                PasswordResetToken.user_id == uid,
+            )
+        ).all():
+            session.delete(token)
+        for auth_s in session.exec(
+            select(AuthSession).where(AuthSession.user_id == uid)
+        ).all():
+            session.delete(auth_s)
+        for attempt in session.exec(
+            select(LoginAttempt).where(LoginAttempt.user_id == uid)
+        ).all():
+            session.delete(attempt)
+        session.delete(cred)
+        if profile is not None:
+            session.delete(profile)
+        deleted_out.append(
+            UnverifiedAccountOut(
+                userId=uid,
+                username=username,
+                email=cred.email,
+                createdAt=created_at,
+                orphan=profile is None,
+            )
+        )
+        # _log_action exige un target UserProfile ; pour les orphelins on
+        # forge un objet léger mémoire-only (jamais persisté) avec les
+        # infos qu'on a, pour ne pas perdre la trace dans l'audit log.
+        audit_target = profile or UserProfile(
+            id=uid,
+            username=username or f"(orphelin:{uid})",
+            creature_id=None,
+        )
+        _log_action(
+            session,
+            actor=admin,
+            target=audit_target,
+            action="cleanup_unverified_delete",
+            details={
+                "email": cred.email,
+                "createdAt": created_at,
+                "orphan": profile is None,
+            },
+        )
+    session.commit()
+    return CleanupUnverifiedOut(
+        dryRun=False,
+        count=len(deleted_out),
+        deleted=deleted_out,
+    )
 
 
 @router.patch("/reports/{report_id}", response_model=ReportOut)
