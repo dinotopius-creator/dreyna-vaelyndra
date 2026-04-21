@@ -66,6 +66,11 @@ def _apply_migrations() -> None:
             ("banned_at", "TEXT"),
             ("banned_reason", "TEXT"),
             ("banned_by", "TEXT"),
+            # PR S — @handle public + timestamp du dernier changement
+            # (cooldown 30 j géré côté router). Unicité imposée par
+            # l'index partiel créé plus bas.
+            ("handle", "TEXT"),
+            ("handle_updated_at", "TEXT"),
         ],
     }
     with engine.begin() as conn:
@@ -86,6 +91,13 @@ def _apply_migrations() -> None:
         conn.exec_driver_sql(
             "CREATE UNIQUE INDEX IF NOT EXISTS follow_unique_pair "
             "ON follow (follower_id, following_id)"
+        )
+        # PR S — handle unique modulo NULL. SQLite supporte les index
+        # partiels, ce qui permet de laisser plusieurs profils sans handle
+        # pendant la phase de backfill sans violer la contrainte.
+        conn.exec_driver_sql(
+            "CREATE UNIQUE INDEX IF NOT EXISTS userprofile_handle_unique "
+            "ON userprofile (handle) WHERE handle IS NOT NULL"
         )
         # Index composites pour accélérer le classement hebdo streamers
         # (WHERE week_start_iso = ? GROUP BY receiver_id / sender_id).

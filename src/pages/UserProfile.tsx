@@ -7,6 +7,7 @@ import { useStore } from "../contexts/StoreContext";
 import { SectionHeading } from "../components/SectionHeading";
 import { AvatarViewer } from "../components/AvatarViewer";
 import { UserBadges } from "../components/UserBadges";
+import { Handle } from "../components/Handle";
 import { FollowButton } from "../components/FollowButton";
 import SoulBondsModal from "../components/SoulBondsModal";
 import StreamerGradeBadge from "../components/StreamerGradeBadge";
@@ -129,6 +130,12 @@ export function UserProfile() {
             <h1 className="mt-1 font-display text-3xl text-gold-200 md:text-4xl">
               {profile.username}
             </h1>
+            {/* PR S — `@handle` public juste sous le pseudo. */}
+            <Handle
+              handle={serverProfile?.handle ?? profile.handle}
+              size="base"
+              className="mt-0.5 block"
+            />
             <UserBadges
               creatureId={serverProfile?.creature?.id ?? profile.creatureId}
               role={serverProfile?.role}

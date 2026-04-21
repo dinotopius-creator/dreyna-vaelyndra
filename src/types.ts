@@ -3,6 +3,13 @@ export type Category = "Lore" | "Lifestyle" | "Annonces" | "Communauté";
 export interface User {
   id: string;
   username: string;
+  /**
+   * PR S — identifiant public unique `@handle` (ex. `le_roi_des_zems`).
+   * Dérivé automatiquement du pseudo à l'inscription, modifiable via
+   * `/compte` avec un cooldown de 30 jours. Optionnel tant que les
+   * profils pré-PR S n'ont pas été backfillés au démarrage backend.
+   */
+  handle?: string;
   email: string;
   avatar: string;
   role: "queen" | "knight" | "elf";
@@ -29,6 +36,8 @@ export interface Comment {
   id: string;
   authorId: string;
   authorName: string;
+  /** PR S — `@handle` de l'auteur, résolu côté backend au serialize. */
+  authorHandle?: string | null;
   authorAvatar: string;
   content: string;
   createdAt: string;
@@ -89,6 +98,8 @@ export interface CommunityPost {
   id: string;
   authorId: string;
   authorName: string;
+  /** PR S — `@handle` de l'auteur, résolu côté backend au serialize. */
+  authorHandle?: string | null;
   authorAvatar: string;
   content: string;
   imageUrl?: string;

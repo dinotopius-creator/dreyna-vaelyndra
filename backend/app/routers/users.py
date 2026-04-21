@@ -16,6 +16,11 @@ from ..grades import (
     next_grade,
     progress_in_current_grade,
 )
+from ..handles import (
+    is_valid_handle,
+    slugify_handle,
+    suggest_unique_handle,
+)
 from ..models import Follow, GiftLedger, UserProfile
 from .streamers import iso_week_start
 from ..schemas import (
@@ -30,10 +35,12 @@ from ..schemas import (
     GiftTransfer,
     GiftTransferOut,
     GradeOverridePayload,
+    HandleUpdate,
     InventoryUpdate,
     StreamerGradeOut,
     UserProfileOut,
     UserProfileUpsert,
+    UserSearchHitOut,
     WalletDelta,
     XPAdjustPayload,
 )
@@ -152,6 +159,8 @@ def _to_out(p: UserProfile, session: Session | None = None) -> UserProfileOut:
     return UserProfileOut(
         id=p.id,
         username=p.username,
+        handle=p.handle,
+        handleUpdatedAt=p.handle_updated_at,
         avatarImageUrl=p.avatar_image_url,
         avatarUrl=p.avatar_url,
         inventory=json.loads(p.inventory_json or "[]"),
@@ -183,6 +192,67 @@ def _touch(p: UserProfile) -> None:
 def list_users(session: Session = Depends(_session_dep)) -> List[UserProfileOut]:
     rows = session.exec(select(UserProfile)).all()
     return [_to_out(p, session) for p in rows]
+
+
+@router.get("/search", response_model=List[UserSearchHitOut])
+def search_users(
+    q: str = "",
+    limit: int = 10,
+    session: Session = Depends(_session_dep),
+) -> List[UserSearchHitOut]:
+    """PR S — Recherche de membres par `@handle` ou pseudo.
+
+    - `q` : terme saisi par l'utilisateur. Peut commencer par `@` (strippé).
+      Case-insensitive. Si vide / trop court, renvoie `[]` pour éviter
+      d'exposer l'annuaire complet aux bots (privacy-friendly).
+    - Match : prefix match sur `handle`, puis LIKE `%q%` sur `username` /
+      `handle` pour repêcher les variantes (accents, emojis dans le
+      pseudo). Les users bannis sont exclus.
+    - Tri : on privilégie les matchs qui commencent par `q` (prefix),
+      puis le reste, par ordre alphabétique.
+    - `limit` bloqué entre 1 et 20 côté serveur pour ne pas laisser un
+      client exfiltrer trop en une seule requête.
+    """
+    raw = (q or "").strip().lstrip("@").lower()
+    if len(raw) < 1:
+        return []
+    # Protection : on exige au moins 1 char, et on plafonne la longueur
+    # du terme pour limiter l'empreinte SQL.
+    term = raw[:40]
+    safe_limit = max(1, min(int(limit or 10), 20))
+
+    # On rappelle un peu plus que le limit pour pouvoir re-trier en
+    # Python par type de match (prefix > contains) avant de couper.
+    raw_rows = session.exec(
+        select(UserProfile)
+        .where(UserProfile.banned_at.is_(None))  # type: ignore[attr-defined]
+    ).all()
+
+    prefix_matches: list[UserProfile] = []
+    contains_matches: list[UserProfile] = []
+    for p in raw_rows:
+        handle_l = (p.handle or "").lower()
+        username_l = (p.username or "").lower()
+        if handle_l.startswith(term) or username_l.startswith(term):
+            prefix_matches.append(p)
+        elif term in handle_l or term in username_l:
+            contains_matches.append(p)
+
+    prefix_matches.sort(key=lambda p: (p.handle or p.username or "").lower())
+    contains_matches.sort(key=lambda p: (p.handle or p.username or "").lower())
+    combined = (prefix_matches + contains_matches)[:safe_limit]
+
+    return [
+        UserSearchHitOut(
+            id=p.id,
+            username=p.username,
+            handle=p.handle,
+            avatarImageUrl=p.avatar_image_url,
+            creature=_creature_out(p.creature_id),
+            role=p.role or "user",
+        )
+        for p in combined
+    ]
 
 
 @router.get("/{user_id}", response_model=UserProfileOut)
@@ -240,13 +310,24 @@ def upsert_user(
         creature_id = payload.creature_id
         if creature_id is not None and get_creature(creature_id) is None:
             creature_id = None
+        # PR S — dérive un @handle unique depuis le pseudo choisi à
+        # l'inscription. Le handle peut être changé plus tard via
+        # `PATCH /users/{id}/handle` (cooldown 30 j).
+        base_handle = slugify_handle(payload.username)
+        handle = suggest_unique_handle(
+            session, base_handle, user_id=payload.id
+        )
         p = UserProfile(
             id=payload.id,
             username=payload.username,
+            handle=handle,
             avatar_image_url=payload.avatar_image_url,
             creature_id=creature_id,
         )
         session.add(p)
+        # Flush pour matérialiser la ligne avant d'abonner aux officiels
+        # (sinon Follow référence un profil qui n'existe pas encore).
+        session.flush()
     else:
         p.username = payload.username
         # On ne remplace l'avatar_image_url que s'il n'en avait pas (pour ne
@@ -262,6 +343,87 @@ def upsert_user(
         _touch(p)
     if is_new:
         _auto_follow_officials(session, p.id)
+    session.commit()
+    session.refresh(p)
+    return _to_out(p, session)
+
+
+@router.patch("/{user_id}/handle", response_model=UserProfileOut)
+def set_handle(
+    user_id: str,
+    payload: HandleUpdate,
+    session: Session = Depends(_session_dep),
+) -> UserProfileOut:
+    """PR S — Change le `@handle` d'un utilisateur.
+
+    Règles :
+    - Format validé via `is_valid_handle` (3-20 chars `[a-z0-9_]+`, lower).
+    - Cooldown 30 jours entre deux changements (anti-impersonation). Les
+      anciens profils avec `handle_updated_at = None` peuvent poser leur
+      premier handle custom sans cooldown.
+    - Unicité contrôlée via `suggest_unique_handle(exclude_id=user_id)`.
+      Si le handle demandé est déjà pris par quelqu'un d'autre, on
+      rejette 409 plutôt que d'inventer un suffixe sans consentement.
+    - Si l'utilisateur renvoie exactement son handle actuel, on renvoie
+      le profil inchangé (idempotent, aucun effet cooldown).
+    """
+    p = session.get(UserProfile, user_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Profil introuvable.")
+
+    desired = payload.handle.strip().lstrip("@").lower()
+    if not is_valid_handle(desired):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Handle invalide : 3-20 caractères, lettres (a-z), "
+                "chiffres et underscores uniquement."
+            ),
+        )
+
+    if desired == (p.handle or ""):
+        return _to_out(p, session)
+
+    # Cooldown : 30 j depuis le dernier changement explicite. On ne
+    # l'applique pas tant que `handle_updated_at` est None (premier
+    # changement après le backfill de démarrage).
+    if p.handle_updated_at:
+        try:
+            last = datetime.fromisoformat(p.handle_updated_at)
+        except ValueError:
+            last = None
+        if last is not None:
+            # Force l'aware si la string sérialisée est naïve.
+            if last.tzinfo is None:
+                last = last.replace(tzinfo=timezone.utc)
+            elapsed = _now() - last
+            if elapsed < timedelta(days=30):
+                remaining = timedelta(days=30) - elapsed
+                days_left = max(1, remaining.days)
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=(
+                        f"Tu pourras changer ton handle dans {days_left} jour"
+                        f"{'s' if days_left > 1 else ''}."
+                    ),
+                )
+
+    # Refuse si un autre profil possède déjà ce handle. On exclut p.id
+    # pour qu'un user puisse "reprendre" son handle actuel sans erreur.
+    existing = session.exec(
+        select(UserProfile)
+        .where(UserProfile.handle == desired)
+        .where(UserProfile.id != user_id)
+    ).first()
+    if existing is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Ce handle est déjà pris.",
+        )
+
+    p.handle = desired
+    p.handle_updated_at = _now().isoformat()
+    _touch(p)
     session.commit()
     session.refresh(p)
     return _to_out(p, session)
@@ -705,6 +867,7 @@ def _follower_out(p: UserProfile) -> FollowerOut:
     return FollowerOut(
         id=p.id,
         username=p.username,
+        handle=p.handle,
         avatarImageUrl=p.avatar_image_url,
         creature=_creature_out(p.creature_id),
         role=p.role or "user",

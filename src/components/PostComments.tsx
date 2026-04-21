@@ -7,6 +7,7 @@ import { useToast } from "../contexts/ToastContext";
 import { formatRelative } from "../lib/helpers";
 import { apiAddComment, apiDeleteComment } from "../lib/api";
 import type { Comment } from "../types";
+import { Handle } from "./Handle";
 import { ReportButton } from "./ReportButton";
 
 interface Props {
@@ -77,12 +78,19 @@ export function PostComments({ postId, comments, postAuthorId }: Props) {
                 />
               </Link>
               <div className="flex-1 rounded-2xl bg-night-900/40 px-3 py-2">
-                <p className="flex items-center gap-2 text-xs">
+                <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
                   <Link
                     to={profileHref(c.authorId)}
                     className="font-display text-gold-200 transition hover:text-gold-300"
                   >
                     {c.authorName}
+                  </Link>
+                  {/* PR S — @handle sous le pseudo du commentateur. */}
+                  <Link
+                    to={profileHref(c.authorId)}
+                    className="transition hover:opacity-80"
+                  >
+                    <Handle handle={c.authorHandle} size="xs" />
                   </Link>
                   <span className="text-[10px] text-ivory/40">
                     {formatRelative(c.createdAt)}

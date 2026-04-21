@@ -38,6 +38,10 @@ async function authRequest<T>(
 export interface AuthMe {
   id: string;
   username: string;
+  /** PR S — `@handle` public, `null` tant que le backfill startup n'a pas passé. */
+  handle: string | null;
+  /** PR S — ISO du dernier changement de handle (cooldown 30 j). */
+  handle_updated_at: string | null;
   avatar_image_url: string;
   avatar_url: string | null;
   creature_id: string | null;

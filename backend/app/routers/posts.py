@@ -88,15 +88,37 @@ def _sanitize_avatar(raw: str) -> str:
     return raw
 
 
+def _resolve_handles(
+    session: Session, author_ids: List[str]
+) -> Dict[str, str]:
+    """PR S — Résout les `@handle` pour une liste d'author_id en 1 requête.
+
+    On ne snapshot pas le handle sur Post/Comment (contrairement au pseudo/
+    avatar) pour qu'un renommage côté user se propage à tous ses anciens
+    posts. Le cache local frontend revient de toute façon à 0 tous les
+    refresh, donc l'impact perf d'une jointure par liste est négligeable.
+    """
+    unique_ids = [uid for uid in {aid for aid in author_ids if aid} if uid]
+    if not unique_ids:
+        return {}
+    rows = session.exec(
+        select(UserProfile).where(UserProfile.id.in_(unique_ids))
+    ).all()
+    return {p.id: p.handle for p in rows if p.handle}
+
+
 def _serialize_post(
     post: Post,
     reactions: Dict[str, List[str]],
     comments: List[Comment],
+    handles: Dict[str, str] | None = None,
 ) -> PostOut:
+    handles = handles or {}
     return PostOut(
         id=post.id,
         authorId=post.author_id,
         authorName=post.author_name,
+        authorHandle=handles.get(post.author_id),
         authorAvatar=post.author_avatar,
         content=post.content,
         imageUrl=post.image_url,
@@ -108,6 +130,7 @@ def _serialize_post(
                 id=c.id,
                 authorId=c.author_id,
                 authorName=c.author_name,
+                authorHandle=handles.get(c.author_id),
                 authorAvatar=c.author_avatar,
                 content=c.content,
                 createdAt=c.created_at,
@@ -144,11 +167,18 @@ def list_posts(session: Session = Depends(_session_dep)) -> List[PostOut]:
     for c in comments:
         comments_by_post[c.post_id].append(c)
 
+    # PR S — on résout les handles en 1 requête pour tout l'affichage.
+    all_author_ids: List[str] = [p.author_id for p in posts]
+    for comment_list in comments_by_post.values():
+        all_author_ids.extend(c.author_id for c in comment_list)
+    handles = _resolve_handles(session, all_author_ids)
+
     return [
         _serialize_post(
             p,
             {emoji: users for emoji, users in reactions_by_post[p.id].items()},
             comments_by_post[p.id],
+            handles,
         )
         for p in posts
     ]
@@ -177,7 +207,8 @@ def create_post(
         author.streamer_xp = (author.streamer_xp or 0) + XP_PER_POST
     session.commit()
     session.refresh(post)
-    return _serialize_post(post, {}, [])
+    handles = _resolve_handles(session, [post.author_id])
+    return _serialize_post(post, {}, [], handles)
 
 
 @router.delete("/{post_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -243,7 +274,10 @@ def toggle_reaction(
         .where(Comment.post_id == post_id)
         .order_by(Comment.created_at.asc())
     ).all()
-    return _serialize_post(post, dict(by_emoji), comments)
+    handles = _resolve_handles(
+        session, [post.author_id, *[c.author_id for c in comments]]
+    )
+    return _serialize_post(post, dict(by_emoji), comments, handles)
 
 
 @router.post(
@@ -270,10 +304,12 @@ def add_comment(
     session.add(comment)
     session.commit()
     session.refresh(comment)
+    handles = _resolve_handles(session, [comment.author_id])
     return CommentOut(
         id=comment.id,
         authorId=comment.author_id,
         authorName=comment.author_name,
+        authorHandle=handles.get(comment.author_id),
         authorAvatar=comment.author_avatar,
         content=comment.content,
         createdAt=comment.created_at,

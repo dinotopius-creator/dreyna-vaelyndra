@@ -18,6 +18,8 @@ import { SectionHeading } from "../components/SectionHeading";
 import { PostComments } from "../components/PostComments";
 import { ReportButton } from "../components/ReportButton";
 import { UserBadges } from "../components/UserBadges";
+import { Handle } from "../components/Handle";
+import { MemberSearch } from "../components/MemberSearch";
 import { StreamerLeaderboard } from "../components/StreamerLeaderboard";
 import { BFFModule } from "../components/BFFModule";
 import {
@@ -172,6 +174,11 @@ export function Community() {
         title={<>Le <span className="text-mystic">fil</span> de Vaelyndra</>}
         subtitle="Poste tes créations, pensées et annonces. Tous les membres se croisent ici."
       />
+
+      {/* PR S — barre de recherche des membres par @handle ou pseudo. */}
+      <div className="mt-8 mx-auto max-w-2xl">
+        <MemberSearch />
+      </div>
 
       {allLives.length > 0 && (
         <section className="mt-10 card-royal p-5">
@@ -367,6 +374,13 @@ export function Community() {
                         {formatRelative(p.createdAt)}
                       </span>
                     </p>
+                    {/* PR S — @handle sous le pseudo de l'auteur. */}
+                    <Link
+                      to={profileHref(p.authorId)}
+                      className="transition hover:opacity-80"
+                    >
+                      <Handle handle={p.authorHandle} />
+                    </Link>
                     <p className="mt-1 whitespace-pre-wrap text-sm text-ivory/85">
                       {p.content}
                     </p>
