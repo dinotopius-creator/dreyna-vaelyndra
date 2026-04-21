@@ -1,14 +1,17 @@
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useStore } from "../contexts/StoreContext";
+import { useMessages } from "../contexts/MessagesContext";
 import {
   Crown,
   Menu,
+  MessageCircle,
   ShoppingBag,
   Radio,
   LogOut,
   UserCircle2,
   ShieldCheck,
+  ShieldAlert,
   X,
 } from "lucide-react";
 import { useState } from "react";
@@ -20,12 +23,12 @@ const NAV = [
   { to: "/boutique", label: "Boutique" },
   { to: "/live", label: "Lives" },
   { to: "/communaute", label: "Communauté" },
-  { to: "/dreyna", label: "La Reine" },
 ];
 
 export function Navbar() {
-  const { user, isQueen, logout } = useAuth();
+  const { user, isQueen, logout, backendMe } = useAuth();
   const { cartCount, isLiveOn } = useStore();
+  const { unreadCount } = useMessages();
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
 
@@ -77,6 +80,21 @@ export function Navbar() {
               <Radio className="h-4 w-4" />
               Lives
             </Link>
+            {user && (
+              <Link
+                to="/messages"
+                className="relative inline-flex items-center gap-1.5 rounded-full border border-royal-500/30 px-3 py-2 text-xs text-ivory/80 transition hover:border-gold-400/60 hover:text-gold-200"
+                aria-label="Messagerie privée"
+              >
+                <MessageCircle className="h-4 w-4" />
+                <span className="hidden sm:inline">Messages</span>
+                {unreadCount > 0 && (
+                  <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-gold-shine px-1 text-[10px] font-bold text-night-900">
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </span>
+                )}
+              </Link>
+            )}
             <Link
               to="/panier"
               className="relative inline-flex items-center gap-1.5 rounded-full border border-royal-500/30 px-3 py-2 text-xs text-ivory/80 transition hover:border-gold-400/60 hover:text-gold-200"
@@ -101,7 +119,14 @@ export function Navbar() {
                 )}
                 <Link
                   to="/moi"
-                  className="flex items-center gap-2 rounded-full border border-royal-500/30 bg-night-800/60 py-1 pl-1 pr-3"
+                  className="relative flex items-center gap-2 rounded-full border border-royal-500/30 bg-night-800/60 py-1 pl-1 pr-3"
+                  title={
+                    backendMe?.totp_enabled
+                      ? "Double authentification activée"
+                      : backendMe
+                        ? "Active la double authentification"
+                        : undefined
+                  }
                 >
                   <img
                     src={user.avatar}
@@ -111,6 +136,16 @@ export function Navbar() {
                   <span className="hidden text-xs font-medium text-ivory/90 sm:inline">
                     {user.username}
                   </span>
+                  {backendMe?.totp_enabled && (
+                    <span className="absolute -bottom-0.5 -right-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/90 ring-2 ring-night-900">
+                      <ShieldCheck className="h-2.5 w-2.5 text-night-900" />
+                    </span>
+                  )}
+                  {backendMe && !backendMe.totp_enabled && (
+                    <span className="absolute -bottom-0.5 -right-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-amber-400/90 ring-2 ring-night-900">
+                      <ShieldAlert className="h-2.5 w-2.5 text-night-900" />
+                    </span>
+                  )}
                 </Link>
                 <button
                   onClick={() => {
@@ -161,6 +196,24 @@ export function Navbar() {
                 {n.label}
               </NavLink>
             ))}
+            {user && (
+              <>
+                <NavLink
+                  to="/compte"
+                  onClick={() => setOpen(false)}
+                  className="rounded-xl border border-royal-500/30 px-4 py-3 font-regal text-xs font-semibold tracking-[0.22em] text-ivory/80"
+                >
+                  Mon compte
+                </NavLink>
+                <NavLink
+                  to="/connexions"
+                  onClick={() => setOpen(false)}
+                  className="rounded-xl border border-royal-500/30 px-4 py-3 font-regal text-xs font-semibold tracking-[0.22em] text-ivory/80"
+                >
+                  Historique & appareils
+                </NavLink>
+              </>
+            )}
             {isQueen && (
               <NavLink
                 to="/admin"

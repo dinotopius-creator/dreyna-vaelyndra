@@ -33,6 +33,8 @@ engine = create_engine(
 def init_db() -> None:
     # Import déclare les modèles auprès de SQLModel.metadata avant create_all.
     from . import models  # noqa: F401
+    # Idem pour les tables d'authentification (PR "Mon compte").
+    from .auth import models as auth_models  # noqa: F401
 
     SQLModel.metadata.create_all(engine)
     _apply_migrations()
@@ -57,6 +59,18 @@ def _apply_migrations() -> None:
             ("role", "TEXT NOT NULL DEFAULT 'user'"),
             # PR G — wishlist (items souhaités, offrables par un autre user).
             ("wishlist_json", "TEXT NOT NULL DEFAULT '[]'"),
+            # PR M — grades spirituels pour streamers.
+            ("streamer_xp", "INTEGER NOT NULL DEFAULT 0"),
+            ("streamer_grade_override", "TEXT"),
+            # PR J — modération (ban/unban).
+            ("banned_at", "TEXT"),
+            ("banned_reason", "TEXT"),
+            ("banned_by", "TEXT"),
+            # PR S — @handle public + timestamp du dernier changement
+            # (cooldown 30 j géré côté router). Unicité imposée par
+            # l'index partiel créé plus bas.
+            ("handle", "TEXT"),
+            ("handle_updated_at", "TEXT"),
         ],
     }
     with engine.begin() as conn:
@@ -78,6 +92,13 @@ def _apply_migrations() -> None:
             "CREATE UNIQUE INDEX IF NOT EXISTS follow_unique_pair "
             "ON follow (follower_id, following_id)"
         )
+        # PR S — handle unique modulo NULL. SQLite supporte les index
+        # partiels, ce qui permet de laisser plusieurs profils sans handle
+        # pendant la phase de backfill sans violer la contrainte.
+        conn.exec_driver_sql(
+            "CREATE UNIQUE INDEX IF NOT EXISTS userprofile_handle_unique "
+            "ON userprofile (handle) WHERE handle IS NOT NULL"
+        )
         # Index composites pour accélérer le classement hebdo streamers
         # (WHERE week_start_iso = ? GROUP BY receiver_id / sender_id).
         conn.exec_driver_sql(
@@ -88,6 +109,27 @@ def _apply_migrations() -> None:
             "CREATE INDEX IF NOT EXISTS giftledger_receiver_sender "
             "ON giftledger (receiver_id, sender_id)"
         )
+
+        # One-shot : reset du wallet de Dreyna (dé-Dreyna-isation du site).
+        # Son compte devient un profil normal d'animatrice ; on purge les
+        # Sylvins/Lueurs qui ont pu être accumulés pendant la phase où elle
+        # avait un traitement spécial. Idempotent via PRAGMA user_version :
+        # tant que la version < 1, on applique et on bump. Les éventuels
+        # Sylvins gagnés après le déploiement sont respectés.
+        user_version = conn.exec_driver_sql(
+            "PRAGMA user_version"
+        ).fetchone()[0]
+        if user_version < 1:
+            conn.exec_driver_sql(
+                "UPDATE userprofile SET "
+                "lueurs = 0, "
+                "sylvins = 0, "
+                "sylvins_paid = 0, "
+                "sylvins_earnings = 0, "
+                "earnings_paid = 0 "
+                "WHERE id = 'user-dreyna'"
+            )
+            conn.exec_driver_sql("PRAGMA user_version = 1")
 
 
 def get_session() -> Session:

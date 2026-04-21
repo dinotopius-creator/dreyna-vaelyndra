@@ -19,8 +19,7 @@ export function MentionsLegales() {
         Le site Vaelyndra (ci-après <em>« le Site »</em> ou{" "}
         <em>« le Royaume »</em>) est édité, à titre{" "}
         <strong>non-professionnel</strong>, par une personne physique connue sur
-        le Site et sur ses réseaux sous le pseudonyme de{" "}
-        <strong>Dreyna</strong> (<em>@dreynakame</em> sur ZEPETO).
+        le Site et sur ses réseaux sous un pseudonyme d'artiste.
       </p>
       <p>
         Conformément à l'article <strong>6-III-2° de la LCEN</strong>, et afin
@@ -33,8 +32,8 @@ export function MentionsLegales() {
       </p>
       <ul>
         <li>
-          <strong>Directrice de la publication :</strong> Dreyna, fondatrice du
-          Royaume
+          <strong>Direction de la publication :</strong> fondation Vaelyndra
+          (équipe éditoriale anonyme)
         </li>
         <li>
           <strong>Nature de la publication :</strong> site personnel de fan,
@@ -92,26 +91,24 @@ export function MentionsLegales() {
       <p>
         L'ensemble des éléments du Site (textes, illustrations, code source,
         identité graphique, univers narratif de Vaelyndra, logos, nom{" "}
-        <em>« Dreyna, reine des elfes »</em>) est la propriété exclusive de la
+        <em>« Vaelyndra »</em>) est la propriété exclusive de la
         directrice de la publication, sauf mentions contraires précisées dans
         le contenu. Toute reproduction, représentation, adaptation ou
         diffusion, totale ou partielle, est interdite sans autorisation écrite
         préalable.
       </p>
       <p>
-        Les captures d'écran de l'avatar de Dreyna proviennent de l'application{" "}
-        <strong>ZEPETO</strong>, éditée par Naver Z Corp. Le Site est un site
-        de fan entièrement indépendant et n'est{" "}
-        <strong>pas affilié à, ni sponsorisé par, Naver Z Corp ou ZEPETO</strong>.
-        Toutes les marques citées restent la propriété de leurs détenteurs
-        respectifs.
+        Toutes les marques et logos tiers éventuellement affichés sur le Site
+        (applications d'avatars, plateformes de streaming, réseaux sociaux) restent
+        la propriété exclusive de leurs détenteurs respectifs. Vaelyndra est un
+        site indépendant et n'est affilié à aucune plateforme tierce.
       </p>
 
       <h2>4. Liens hypertextes</h2>
       <p>
-        Le Site peut contenir des liens vers d'autres sites (ZEPETO, YouTube,
-        Twitch, etc.). Vaelyndra n'exerce aucun contrôle sur ces sites tiers
-        et décline toute responsabilité quant à leur contenu.
+        Le Site peut contenir des liens vers d'autres sites tiers (YouTube,
+        Twitch, réseaux sociaux, etc.). Vaelyndra n'exerce aucun contrôle sur
+        ces sites tiers et décline toute responsabilité quant à leur contenu.
       </p>
 
       <h2>5. Signalement de contenu</h2>

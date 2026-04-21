@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -23,20 +23,44 @@ import {
   slugify,
 } from "../lib/helpers";
 import clsx from "clsx";
+import { AdminUsersTab } from "../components/AdminUsersTab";
+import { AdminReportsTab } from "../components/AdminReportsTab";
+import { adminReportsStats } from "../lib/adminApi";
+import {
+  createArticleRemote,
+  createProductRemote,
+  deleteArticleRemote,
+  deleteProductRemote,
+} from "../lib/catalogApi";
 
 const TABS = [
   { id: "dashboard", label: "Dashboard" },
   { id: "articles", label: "Chroniques" },
   { id: "products", label: "Boutique" },
   { id: "lives", label: "Lives" },
+  { id: "users", label: "Utilisateurs" },
+  { id: "reports", label: "Signalements" },
   { id: "moderation", label: "Modération" },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
 
 export function Admin() {
-  const { user } = useAuth();
+  const { user, backendMe } = useAuth();
   const { articles, products, lives, posts, orders, isLiveOn } = useStore();
   const [tab, setTab] = useState<TabId>("dashboard");
+  const [openReportsCount, setOpenReportsCount] = useState<number>(0);
+
+  // Charge le compteur de reports ouverts pour afficher le badge sur l'onglet.
+  // Rafraîchi à chaque changement d'onglet pour rester à peu près à jour
+  // sans polling lourd.
+  useEffect(() => {
+    if (backendMe?.role !== "admin") return;
+    adminReportsStats()
+      .then((s) => setOpenReportsCount(s.byStatus.open ?? 0))
+      .catch(() => {
+        /* silencieux */
+      });
+  }, [backendMe?.role, tab]);
 
   if (!user) return null;
 
@@ -45,14 +69,14 @@ export function Admin() {
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <span className="tag-gold">
-            <ShieldCheck className="h-3 w-3" /> Salle du Trône
+            <ShieldCheck className="h-3 w-3" /> Espace admin
           </span>
           <h1 className="heading-gold mt-3 text-4xl md:text-5xl">
-            Dashboard de la Reine
+            Dashboard Administrateur
           </h1>
           <p className="mt-2 text-ivory/70">
-            Chroniques, boutique, lives et modération — tout le royaume au bout
-            de la couronne.
+            Publications, boutique, lives et modération — pilote toute la
+            plateforme depuis ici.
           </p>
         </div>
         <Link
@@ -75,13 +99,18 @@ export function Admin() {
             key={t.id}
             onClick={() => setTab(t.id)}
             className={clsx(
-              "rounded-full border px-4 py-2 font-regal text-[11px] font-semibold tracking-[0.22em]",
+              "relative rounded-full border px-4 py-2 font-regal text-[11px] font-semibold tracking-[0.22em]",
               tab === t.id
                 ? "border-gold-400/70 bg-gold-500/15 text-gold-200"
                 : "border-royal-500/30 text-ivory/70 hover:border-gold-400/40 hover:text-gold-200",
             )}
           >
             {t.label}
+            {t.id === "reports" && openReportsCount > 0 && (
+              <span className="ml-2 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-rose-500 px-1.5 text-[10px] font-bold text-white">
+                {openReportsCount}
+              </span>
+            )}
           </button>
         ))}
       </nav>
@@ -105,6 +134,10 @@ export function Admin() {
         {tab === "articles" && <ArticlesAdmin />}
         {tab === "products" && <ProductsAdmin />}
         {tab === "lives" && <LivesAdmin />}
+        {tab === "users" && <AdminUsersTab />}
+        {tab === "reports" && (
+          <AdminReportsTab onCountChange={setOpenReportsCount} />
+        )}
         {tab === "moderation" && <ModerationAdmin />}
       </motion.div>
     </div>
@@ -177,39 +210,41 @@ function ArticlesAdmin() {
     tags: "",
   });
 
-  function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.title.trim()) return;
-    const article: Article = {
-      id: generateId("art"),
-      slug: slugify(form.title),
-      title: form.title.trim(),
-      excerpt: form.excerpt.trim() || form.content.slice(0, 160),
-      content: form.content.trim(),
-      category: form.category,
-      cover:
-        form.cover.trim() ||
-        "https://images.unsplash.com/photo-1470813740244-df37b8c1edcb?w=1600&auto=format&fit=crop&q=80",
-      author: "Dreyna",
-      createdAt: new Date().toISOString(),
-      readingTime: readingTime(form.content || form.excerpt),
-      tags: form.tags
-        .split(",")
-        .map((t) => t.trim())
-        .filter(Boolean),
-      likes: [],
-      comments: [],
-    };
-    dispatch({ type: "addArticle", article });
-    notify("Chronique publiée ✨");
-    setForm({
-      title: "",
-      excerpt: "",
-      content: "",
-      category: "Lore",
-      cover: "",
-      tags: "",
-    });
+    try {
+      const article = await createArticleRemote({
+        slug: slugify(form.title),
+        title: form.title.trim(),
+        excerpt: form.excerpt.trim() || form.content.slice(0, 160),
+        content: form.content.trim(),
+        category: form.category,
+        cover:
+          form.cover.trim() ||
+          "https://images.unsplash.com/photo-1470813740244-df37b8c1edcb?w=1600&auto=format&fit=crop&q=80",
+        author: "Dreyna",
+        readingTime: readingTime(form.content || form.excerpt),
+        tags: form.tags
+          .split(",")
+          .map((t) => t.trim())
+          .filter(Boolean),
+      });
+      dispatch({ type: "addArticle", article });
+      notify("Chronique publiée ✨");
+      setForm({
+        title: "",
+        excerpt: "",
+        content: "",
+        category: "Lore",
+        cover: "",
+        tags: "",
+      });
+    } catch (err) {
+      notify(
+        `Impossible de publier : ${(err as Error).message ?? "erreur réseau"}`,
+      );
+    }
   }
 
   return (
@@ -250,7 +285,7 @@ function ArticlesAdmin() {
             }
           >
             <option>Lore</option>
-            <option>IRL / ZEPETO</option>
+            <option>Lifestyle</option>
             <option>Annonces</option>
             <option>Communauté</option>
           </select>
@@ -295,9 +330,16 @@ function ArticlesAdmin() {
               </p>
             </div>
             <button
-              onClick={() => {
-                dispatch({ type: "deleteArticle", id: a.id });
-                notify("Chronique supprimée");
+              onClick={async () => {
+                try {
+                  await deleteArticleRemote(a.id);
+                  dispatch({ type: "deleteArticle", id: a.id });
+                  notify("Chronique supprimée");
+                } catch (err) {
+                  notify(
+                    `Suppression impossible : ${(err as Error).message ?? "erreur"}`,
+                  );
+                }
               }}
               className="text-ivory/40 hover:text-rose-300"
             >
@@ -331,34 +373,38 @@ function ProductsAdmin() {
     stock: 100,
   });
 
-  function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
-    const product: Product = {
-      id: generateId("prod"),
-      name: form.name.trim(),
-      tagline: form.tagline.trim() || "Nouvelle relique",
-      description: form.description.trim(),
-      price: Number(form.price),
-      currency: "€",
-      image:
-        form.image.trim() ||
-        "https://images.unsplash.com/photo-1470813740244-df37b8c1edcb?w=900&auto=format&fit=crop&q=80",
-      category: form.category,
-      rating: 5,
-      stock: Number(form.stock),
-      tags: [],
-    };
-    dispatch({ type: "addProduct", product });
-    notify("Produit ajouté à la boutique royale 🛍️");
-    setForm({
-      name: "",
-      tagline: "",
-      description: "",
-      price: 0,
-      category: "Merch",
-      image: "",
-      stock: 100,
-    });
+    try {
+      const product = await createProductRemote({
+        name: form.name.trim(),
+        tagline: form.tagline.trim() || "Nouvelle relique",
+        description: form.description.trim(),
+        price: Number(form.price),
+        image:
+          form.image.trim() ||
+          "https://images.unsplash.com/photo-1470813740244-df37b8c1edcb?w=900&auto=format&fit=crop&q=80",
+        category: form.category,
+        rating: 5,
+        stock: Number(form.stock),
+        tags: [],
+      });
+      dispatch({ type: "addProduct", product });
+      notify("Produit ajouté à la boutique royale 🛍️");
+      setForm({
+        name: "",
+        tagline: "",
+        description: "",
+        price: 0,
+        category: "Merch",
+        image: "",
+        stock: 100,
+      });
+    } catch (err) {
+      notify(
+        `Impossible d'ajouter : ${(err as Error).message ?? "erreur réseau"}`,
+      );
+    }
   }
 
   return (
@@ -459,9 +505,16 @@ function ProductsAdmin() {
               </p>
             </div>
             <button
-              onClick={() => {
-                dispatch({ type: "deleteProduct", id: p.id });
-                notify("Produit retiré de la boutique");
+              onClick={async () => {
+                try {
+                  await deleteProductRemote(p.id);
+                  dispatch({ type: "deleteProduct", id: p.id });
+                  notify("Produit retiré de la boutique");
+                } catch (err) {
+                  notify(
+                    `Suppression impossible : ${(err as Error).message ?? "erreur"}`,
+                  );
+                }
               }}
               className="text-ivory/40 hover:text-rose-300"
             >

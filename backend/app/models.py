@@ -86,6 +86,13 @@ class UserProfile(SQLModel, table=True):
 
     id: str = Field(primary_key=True)
     username: str
+    # PR S — identifiant public unique sous forme `@le_roi_des_zems`.
+    # Dérivé automatiquement du pseudo à la création (cf. `app.handles`).
+    # Modifiable par le user depuis `/compte` avec un cooldown de 30 j
+    # (anti-impersonation). `None` est autorisé le temps qu'un profil
+    # pré-PR S soit migré au prochain démarrage du backend.
+    handle: Optional[str] = Field(default=None, index=True, max_length=20)
+    handle_updated_at: Optional[str] = None
     avatar_image_url: str = ""
     avatar_url: Optional[str] = None
     # JSON sérialisé (list[str] et dict[str, str]) — SQLite ne gère pas les
@@ -115,6 +122,19 @@ class UserProfile(SQLModel, table=True):
     # sans droits admin, juste un badge), "admin" (droits complets).
     # Source de vérité unique pour les badges 🎭 et 👑.
     role: str = Field(default="user", index=True)
+    # PR M — système de grades spirituels. `streamer_xp` accumule l'XP gagné
+    # par les activités du membre (cadeaux reçus, abonnés, posts…). Le grade
+    # affiché est dérivé de cet XP à la lecture (cf. `app.grades`). Un admin
+    # peut forcer un grade via `streamer_grade_override` (slug, ex.
+    # "legende-vaelyndra") — utile pour les comptes officiels / events.
+    streamer_xp: int = Field(default=0, index=True)
+    streamer_grade_override: Optional[str] = Field(default=None, max_length=32)
+    # PR J — modération : None = compte actif ; ISO timestamp = date du bannissement.
+    # Un compte banni ne peut plus se connecter (ses sessions actives sont
+    # révoquées à la pose du ban) et apparaît marqué "suspendu" côté admin.
+    banned_at: Optional[str] = Field(default=None, index=True)
+    banned_reason: Optional[str] = None
+    banned_by: Optional[str] = None
     created_at: str = Field(default_factory=_now_iso)
     updated_at: str = Field(default_factory=_now_iso)
 
@@ -130,6 +150,204 @@ class Follow(SQLModel, table=True):
     follower_id: str = Field(index=True)
     following_id: str = Field(index=True)
     created_at: str = Field(default_factory=_now_iso)
+
+
+class AdminAuditLog(SQLModel, table=True):
+    """Journal append-only des actions admin (PR J).
+
+    Trace qui a fait quoi sur qui, quand, combien et pourquoi. Ce journal
+    est consultable depuis `/admin → Utilisateurs → Journal`, et sert à
+    la responsabilisation mutuelle des admins + à un éventuel rollback
+    manuel.
+
+    `action` est un slug parmi :
+      - `wallet_adjust` — détails : currency, delta, pot, reason
+      - `role_change` — détails : old_role, new_role
+      - `ban` / `unban` — détails : reason
+    `details_json` est un JSON libre pour les données spécifiques à
+    l'action (gardé plat pour pouvoir être lu par un script de rollback).
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    actor_id: str = Field(index=True)
+    actor_username: str
+    target_id: str = Field(index=True)
+    target_username: str
+    action: str = Field(index=True)
+    details_json: str = Field(default="{}")
+    created_at: str = Field(default_factory=_now_iso, index=True)
+
+
+class Report(SQLModel, table=True):
+    """Signalement posé par un user contre un profil, un live ou un post (PR K).
+
+    `target_type` ∈ {"user", "live", "post", "comment"} et `target_id` est
+    l'id opaque du contenu. `target_url` est une URL cliquable calculée
+    côté serveur à la création — permet à l'admin de cliquer directement
+    dessus dans l'inbox sans avoir à reconstruire la route.
+
+    `status` ∈ {"open", "resolved", "rejected"}. `resolved_by` et
+    `resolved_at` tracent qui a fermé le signalement.
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    reporter_id: str = Field(index=True)
+    reporter_username: str
+    target_type: str = Field(index=True)
+    target_id: str = Field(index=True)
+    target_label: str = ""
+    target_url: str = ""
+    reason: str = Field(index=True)
+    description: str = ""
+    status: str = Field(default="open", index=True)
+    resolved_by: Optional[str] = None
+    resolved_at: Optional[str] = None
+    created_at: str = Field(default_factory=_now_iso, index=True)
+
+
+class LiveSession(SQLModel, table=True):
+    """Registre serveur des lives en cours (tous streamers confondus).
+
+    Avant cette table, le "liveRegistry" était uniquement stocké en
+    localStorage côté client. Résultat : quand Alexandre lançait un live,
+    Dreyna (qui naviguait dans `/communaute` depuis son propre browser) ne
+    voyait rien. Cette table centralise les lives actifs pour qu'ils
+    apparaissent pour tout le monde, peu importe le device.
+
+    `mode` ∈ {"screen", "camera", "twitch"} — l'UI adapte le rendu
+    (iframe Twitch vs player WebRTC). `category` vient du catalogue
+    `liveCategories.ts`. `last_heartbeat_at` est mis à jour par le host
+    toutes les ~30 s ; un GET /live filtre les entrées obsolètes
+    (> 90 s sans heartbeat → crash, kill, changement d'onglet).
+    """
+
+    broadcaster_id: str = Field(primary_key=True)
+    broadcaster_name: str
+    broadcaster_avatar: str = ""
+    title: str = ""
+    description: str = ""
+    category: str = "autre"
+    mode: str = "screen"
+    twitch_channel: str = ""
+    started_at: str = Field(default_factory=_now_iso, index=True)
+    last_heartbeat_at: str = Field(default_factory=_now_iso, index=True)
+
+
+class LiveModeration(SQLModel, table=True):
+    """Actions de modération du broadcaster sur son propre live.
+
+    Un broadcaster peut :
+      - MUTE un user pendant X secondes → ce user ne peut plus envoyer de
+        message dans le chat de *ce* live jusqu'à `expires_at`.
+      - KICK un user → ce user est déconnecté de *ce* live et ne peut pas
+        le rejoindre jusqu'à `expires_at`.
+
+    Les deux actions sont scopées au `broadcaster_id` : muter quelqu'un sur
+    un live ne le mute pas sur un autre live. Une ligne par (broadcaster,
+    target, action). Les anciennes lignes expirées sont tolérées (pas
+    nettoyées automatiquement) — la lecture compare toujours `expires_at`.
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    broadcaster_id: str = Field(index=True)
+    target_user_id: str = Field(index=True)
+    action: str = Field(index=True)  # "mute" | "kick"
+    expires_at: str = Field(index=True)
+    created_at: str = Field(default_factory=_now_iso)
+
+
+class LiveJoinRequest(SQLModel, table=True):
+    """Demande temps réel d'un viewer pour monter sur scène d'un live.
+
+    Remplace le flux localStorage du PR H par un canal serveur polled,
+    afin que la demande d'un viewer (mobile) arrive au broadcaster (PC)
+    même quand ils ne sont pas sur le même browser.
+
+    Statuts :
+      - "pending" : file d'attente, en haut de la liste côté broadcaster
+      - "accepted" : invité accepté (le broadcaster devra ouvrir l'audio)
+      - "refused" : refusé récemment (purgé après 3 min côté client)
+
+    Clé logique : `(broadcaster_id, user_id)` — un viewer ne peut avoir
+    qu'une demande active par broadcaster. Si elle existe déjà, on
+    met à jour le statut / l'horodatage (upsert idempotent).
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    broadcaster_id: str = Field(index=True)
+    user_id: str = Field(index=True)
+    username: str = ""
+    avatar: str = ""
+    creature_id: str = ""
+    status: str = Field(default="pending", index=True)
+    requested_at: str = Field(default_factory=_now_iso, index=True)
+    decided_at: Optional[str] = None
+
+
+class CatalogProduct(SQLModel, table=True):
+    """Produit vendu dans la boutique (PR #76 — migration localStorage → DB).
+
+    Avant cette table, les produits étaient stockés dans le `localStorage`
+    de chaque navigateur, avec un seed `INITIAL_PRODUCTS` côté frontend.
+    Conséquence : une suppression ou ajout faite par l'admin n'était
+    visible que sur SON device. Un visiteur voyait un catalogue
+    potentiellement différent.
+
+    Maintenant le backend est la source de vérité. Le frontend fetch
+    depuis `GET /catalog/products` et affiche ce qu'il reçoit. Les
+    mutations (add/update/delete) passent par `/admin/catalog/products/*`.
+
+    Les champs suivent à l'identique le type `Product` du frontend
+    (`src/types.ts`) pour ne pas avoir de mapping côté client.
+    `tags_json` stocke la liste `tags: string[]` en JSON (SQLite).
+    """
+
+    id: str = Field(primary_key=True)
+    name: str
+    tagline: str = ""
+    description: str = ""
+    price: float = 0
+    # Toujours "€" en v1 ; on garde la colonne pour compat future.
+    currency: str = Field(default="€")
+    image: str = ""
+    # "Merch" | "Digital" | "VIP" | "Exclusif" | "Sylvins"
+    category: str = Field(default="Merch", index=True)
+    # Null sauf pour les packs Sylvins (montant crédité à l'achat).
+    sylvins: Optional[int] = None
+    rating: float = Field(default=5.0)
+    stock: int = Field(default=0)
+    featured: bool = Field(default=False, index=True)
+    tags_json: str = Field(default="[]")
+    created_at: str = Field(default_factory=_now_iso)
+    updated_at: str = Field(default_factory=_now_iso, index=True)
+
+
+class CatalogArticle(SQLModel, table=True):
+    """Chronique / article de blog (PR #76).
+
+    Migration identique à `CatalogProduct` : avant, les articles étaient
+    en localStorage, maintenant en DB. `likes_json` est la liste des
+    `user_id` qui ont liké. Les commentaires restent pour l'instant en
+    JSON (liste de dict) dans `comments_json` — moins normalisé qu'une
+    vraie table `ArticleComment` mais suffisant pour v1 où on veut juste
+    persister les actions admin. Pourra être normalisé plus tard.
+    """
+
+    id: str = Field(primary_key=True)
+    slug: str = Field(index=True)
+    title: str
+    excerpt: str = ""
+    content: str = ""
+    # "Lore" | "Lifestyle" | "Annonces" | "Communauté"
+    category: str = Field(default="Lore", index=True)
+    cover: str = ""
+    author: str = ""
+    reading_time: int = Field(default=3)
+    tags_json: str = Field(default="[]")
+    likes_json: str = Field(default="[]")
+    comments_json: str = Field(default="[]")
+    created_at: str = Field(default_factory=_now_iso, index=True)
+    updated_at: str = Field(default_factory=_now_iso, index=True)
 
 
 class GiftLedger(SQLModel, table=True):
@@ -160,3 +378,22 @@ class GiftLedger(SQLModel, table=True):
     amount_promo: int = Field(default=0)
     week_start_iso: str = Field(index=True)
     created_at: str = Field(default_factory=_now_iso, index=True)
+
+
+class DirectMessage(SQLModel, table=True):
+    """Message privé entre deux membres (1-to-1, texte).
+
+    - `conversation_key` = `"{min(a,b)}|{max(a,b)}"` (ids triés). Une seule
+      clé par paire de users, ce qui permet d'indexer un fil sans se
+      soucier de savoir qui a envoyé à qui. Renseigné à l'insertion.
+    - `read_at` : ISO timestamp posé quand le destinataire ouvre le fil.
+      `None` = pas encore lu → l'UI affiche "Envoyé". Sinon "Vu à HH:MM".
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    conversation_key: str = Field(index=True)
+    sender_id: str = Field(index=True)
+    recipient_id: str = Field(index=True)
+    content: str
+    created_at: str = Field(default_factory=_now_iso, index=True)
+    read_at: Optional[str] = Field(default=None, index=True)

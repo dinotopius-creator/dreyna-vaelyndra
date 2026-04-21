@@ -18,19 +18,17 @@ export function CGU() {
 
       <h2>1. Objet du Royaume</h2>
       <p>
-        Vaelyndra est une plateforme communautaire animée par{" "}
-        <strong>Dreyna</strong>, créatrice ZEPETO (programme HOT), rassemblant
-        ses fans autour d'un univers fantasy. Le Royaume permet notamment :
+        Vaelyndra est un <strong>mini-réseau social magique</strong> : une
+        plateforme communautaire où chaque membre peut poster, streamer, tisser
+        des liens d'âme et gravir les grades de la cour. Le Royaume permet
+        notamment :
       </p>
       <ul>
-        <li>la lecture de chroniques, la découverte du profil de Dreyna,</li>
+        <li>la lecture de chroniques et la découverte des profils d'autres membres,</li>
         <li>la participation à une communauté (posts, commentaires, réactions),</li>
-        <li>l'accès aux lives de Dreyna (partage d'écran ou flux Twitch),</li>
-        <li>
-          à terme, la réalisation de <strong>lives personnels</strong> par les
-          membres autorisés, avec mise en avant graduelle des plus actifs dans
-          la rubrique « Top lives »,
-        </li>
+        <li>la réalisation de <strong>lives personnels</strong> par les membres
+          autorisés, avec mise en avant graduelle des plus actifs dans la rubrique
+          « Top lives » et progression automatique dans les 6 grades de streamer,</li>
         <li>
           l'achat de <strong>Sylvins de Vaelyndra</strong> (monnaie virtuelle
           interne) permettant d'offrir des cadeaux animés en direct,
@@ -67,8 +65,8 @@ export function CGU() {
         </li>
         <li>le spam, la publicité non sollicitée, les arnaques, le phishing ;</li>
         <li>
-          l'usurpation d'identité (notamment de Dreyna, de l'équipe ou d'un
-          autre membre) ;
+          l'usurpation d'identité (administrateurs, animateurs ou autres
+          membres) ;
         </li>
         <li>la diffusion de contenus protégés par le droit d'auteur sans autorisation ;</li>
         <li>
@@ -81,28 +79,19 @@ export function CGU() {
         </li>
       </ul>
 
-      <h2>4. Lives de Dreyna et lives des membres</h2>
+      <h2>4. Lives des membres</h2>
       <p>
-        Le Royaume propose deux types de lives :
+        Le Royaume permet à chaque membre connecté de diffuser son propre
+        live sur son profil (partage d'écran WebRTC direct ou intégration
+        Twitch via OBS / mobile). L'équipe de modération se réserve le droit
+        d'accorder, de suspendre ou de retirer l'accès à cette fonctionnalité
+        à tout moment en cas de non-respect des présentes règles.
       </p>
-      <ol>
-        <li>
-          <strong>Les lives de Dreyna</strong> : partage d'écran WebRTC direct
-          ou diffusion Twitch via OBS.
-        </li>
-        <li>
-          <strong>Les lives de membres</strong> (progressivement activés) :
-          les membres de confiance peuvent diffuser leurs propres lives sur
-          leur profil, dans le respect des présentes règles. Dreyna se réserve
-          le droit d'accorder, de suspendre ou de retirer l'accès à cette
-          fonctionnalité à tout moment.
-        </li>
-      </ol>
       <p>
         <strong>Mise en avant éditoriale.</strong> Les membres les plus actifs
-        peuvent être épinglés en « Top live » par Dreyna à sa seule discrétion.
-        Cette mise en avant ne confère aucun droit acquis ni aucune garantie de
-        durée.
+        peuvent être épinglés en « Top live » par l'équipe éditoriale à sa
+        seule discrétion. Cette mise en avant ne confère aucun droit acquis
+        ni aucune garantie de durée.
       </p>
 
       <h2>5. Monnaie virtuelle « Sylvins de Vaelyndra »</h2>
@@ -125,8 +114,8 @@ export function CGU() {
 
       <h2>6. Modération, sanctions et bannissement</h2>
       <p>
-        Dreyna et son équipe peuvent, à leur seule appréciation et sans délai,
-        modérer, masquer ou supprimer tout contenu contrevenant aux présentes
+        L'équipe de modération de Vaelyndra peut, à sa seule appréciation et
+        sans délai, modérer, masquer ou supprimer tout contenu contrevenant aux présentes
         CGU, suspendre ou résilier un compte, couper un live, retirer la
         possibilité de diffuser, ou bannir définitivement un membre. Les
         Sylvins non consommés sont perdus en cas de bannissement pour faute

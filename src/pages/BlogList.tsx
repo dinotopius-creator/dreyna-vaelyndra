@@ -11,7 +11,7 @@ import clsx from "clsx";
 const CATEGORIES: ("Toutes" | Category)[] = [
   "Toutes",
   "Lore",
-  "IRL / ZEPETO",
+  "Lifestyle",
   "Annonces",
   "Communauté",
 ];
@@ -38,7 +38,7 @@ export function BlogList() {
       <SectionHeading
         eyebrow="Le Grimoire"
         title={<>Chroniques de <span className="text-mystic">Vaelyndra</span></>}
-        subtitle="Lore, annonces, IRL et moments de cour — tout l'univers de Dreyna, page après page."
+        subtitle="Lore, annonces, lifestyle et voix de la communauté — le royaume vit ici, page après page."
       />
 
       <div className="mt-10 flex flex-wrap items-center justify-between gap-4">

@@ -16,10 +16,12 @@ import { useLive } from "../contexts/LiveContext";
 import { useToast } from "../contexts/ToastContext";
 import { SectionHeading } from "../components/SectionHeading";
 import { PostComments } from "../components/PostComments";
+import { ReportButton } from "../components/ReportButton";
 import { UserBadges } from "../components/UserBadges";
+import { Handle } from "../components/Handle";
+import { MemberSearch } from "../components/MemberSearch";
 import { StreamerLeaderboard } from "../components/StreamerLeaderboard";
 import { BFFModule } from "../components/BFFModule";
-import { DREYNA_PROFILE } from "../data/mock";
 import {
   LIVE_CATEGORIES,
   getLiveCategory,
@@ -94,7 +96,7 @@ export function Community() {
   async function publish(e: React.FormEvent) {
     e.preventDefault();
     if (!user) {
-      notify("Connectez-vous pour publier dans la cour.", "info");
+      notify("Connecte-toi pour publier.", "info");
       return;
     }
     if (!draft.trim()) return;
@@ -124,10 +126,10 @@ export function Community() {
       setDraft("");
       setImageUrl("");
       setVideoUrl("");
-      notify("Votre parole brille dans la cour 🌟");
+      notify("Publication envoyée ✨");
     } catch (err) {
       console.warn(err);
-      notify("Le parchemin n'a pas pu être envoyé. Réessayez.", "error");
+      notify("La publication n'a pas pu être envoyée. Réessaie.", "error");
     }
   }
 
@@ -157,21 +159,26 @@ export function Community() {
       dispatch({ type: "deletePost", id: postId });
     } catch (err) {
       console.warn(err);
-      notify("Suppression refusée par le royaume.", "error");
+      notify("Suppression refusée.", "error");
     }
   }
 
   function profileHref(authorId: string) {
-    return authorId === DREYNA_PROFILE.id ? "/dreyna" : `/u/${authorId}`;
+    return `/u/${authorId}`;
   }
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-14">
       <SectionHeading
-        eyebrow="La Cour"
+        eyebrow="Fil communautaire"
         title={<>Le <span className="text-mystic">fil</span> de Vaelyndra</>}
-        subtitle="Partagez vos serments, créations et pensées. La reine passe ici chaque jour."
+        subtitle="Poste tes créations, pensées et annonces. Tous les membres se croisent ici."
       />
+
+      {/* PR S — barre de recherche des membres par @handle ou pseudo. */}
+      <div className="mt-8 mx-auto max-w-2xl">
+        <MemberSearch />
+      </div>
 
       {allLives.length > 0 && (
         <section className="mt-10 card-royal p-5">
@@ -292,8 +299,8 @@ export function Community() {
                   onChange={(e) => setDraft(e.target.value)}
                   placeholder={
                     user
-                      ? "Dites quelque chose à la cour..."
-                      : "Connectez-vous pour poster..."
+                      ? "Partage quelque chose avec la communauté…"
+                      : "Connecte-toi pour poster…"
                   }
                   rows={3}
                   className="glass-input resize-none"
@@ -367,19 +374,37 @@ export function Community() {
                         {formatRelative(p.createdAt)}
                       </span>
                     </p>
+                    {/* PR S — @handle sous le pseudo de l'auteur. */}
+                    <Link
+                      to={profileHref(p.authorId)}
+                      className="transition hover:opacity-80"
+                    >
+                      <Handle handle={p.authorHandle} />
+                    </Link>
                     <p className="mt-1 whitespace-pre-wrap text-sm text-ivory/85">
                       {p.content}
                     </p>
                   </div>
-                  {(user?.id === p.authorId || isQueen) && (
-                    <button
-                      onClick={() => removePost(p.id)}
-                      className="text-ivory/40 hover:text-rose-300"
-                      title="Supprimer"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  )}
+                  <div className="flex items-center gap-1.5">
+                    {user && user.id !== p.authorId && (
+                      <ReportButton
+                        targetType="post"
+                        targetId={p.id}
+                        targetLabel={`Post de ${p.authorName}`}
+                        targetUrl={`/communaute#post-${p.id}`}
+                        compact
+                      />
+                    )}
+                    {(user?.id === p.authorId || isQueen) && (
+                      <button
+                        onClick={() => removePost(p.id)}
+                        className="text-ivory/40 hover:text-rose-300"
+                        title="Supprimer"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
                 </header>
                 {p.imageUrl && (
                   <img
@@ -450,12 +475,12 @@ export function Community() {
 
           <div className="card-royal p-5">
             <h3 className="font-display text-lg text-gold-200">
-              Règles de la cour
+              Règles du réseau
             </h3>
             <ul className="mt-3 space-y-2 text-sm text-ivory/75">
-              <li>✦ Respect pour chaque elfe du royaume.</li>
-              <li>✦ Aucun sort de haine, ni de spam obscur.</li>
-              <li>✦ Créez, inspirez, illuminez Vaelyndra.</li>
+              <li>✦ Respect pour chaque membre.</li>
+              <li>✦ Pas de haine, pas de spam.</li>
+              <li>✦ Crée, inspire, fais briller Vaelyndra.</li>
             </ul>
           </div>
         </aside>

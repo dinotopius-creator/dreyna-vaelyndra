@@ -20,7 +20,7 @@ _QUEEN_IDS = {
 
 
 from ..db import get_session  # noqa: E402
-from ..models import Comment, Post, Reaction  # noqa: E402
+from ..models import Comment, Post, Reaction, UserProfile  # noqa: E402
 from ..schemas import (  # noqa: E402
     CommentCreate,
     CommentOut,
@@ -30,8 +30,35 @@ from ..schemas import (  # noqa: E402
 )
 
 
+# PR M — XP offert à l'auteur quand son post est publié. Volontairement bas
+# (10 XP = 10 % d'un palier de base) pour éviter qu'un spam de posts vides
+# ne propulse un compte dans les grades supérieurs. Le gros du XP vient des
+# Sylvins reçus (=engagement) et des nouveaux liens d'âme.
+XP_PER_POST = 10
+
+
 def _is_queen(user_id: str) -> bool:
+    """Legacy check : user id listé dans l'env VAELYNDRA_QUEEN_IDS."""
     return user_id in _QUEEN_IDS
+
+
+# Rôles qui peuvent modérer n'importe quel contenu du fil (supprimer les
+# posts/commentaires d'autres utilisateurs). `queen` est conservé pour la
+# rétro-compatibilité avec les comptes seedés avant PR R ; `admin` est le
+# rôle actuel dans le panneau d'administration.
+_MOD_ROLES = {"admin", "queen"}
+
+
+def _is_moderator(session: Session, user_id: str) -> bool:
+    """Autorise la modération si :
+    - l'id est dans la liste legacy VAELYNDRA_QUEEN_IDS, OU
+    - l'utilisateur a `role in {"admin", "queen"}` dans UserProfile.
+    """
+    if _is_queen(user_id):
+        return True
+    user = session.get(UserProfile, user_id)
+    return bool(user and (user.role or "user") in _MOD_ROLES)
+
 
 router = APIRouter(prefix="/posts", tags=["posts"])
 
@@ -45,15 +72,53 @@ def _generate_id(prefix: str) -> str:
     return f"{prefix}-{uuid.uuid4().hex[:12]}"
 
 
+def _sanitize_avatar(raw: str) -> str:
+    """Évite de stocker un data URI (upload base64, jusqu'à ~200 KB) dans
+    chaque row posts/comments. Si l'avatar est une URL classique (http/https),
+    on la garde tronquée à 512 chars ; sinon (data URI, chaîne inconnue trop
+    longue), on stocke une chaîne vide — le frontend résoudra l'avatar via
+    l'auteur grâce à `author_id`.
+    """
+    if not raw:
+        return ""
+    if raw.startswith("data:"):
+        return ""
+    if len(raw) > 512:
+        return ""
+    return raw
+
+
+def _resolve_handles(
+    session: Session, author_ids: List[str]
+) -> Dict[str, str]:
+    """PR S — Résout les `@handle` pour une liste d'author_id en 1 requête.
+
+    On ne snapshot pas le handle sur Post/Comment (contrairement au pseudo/
+    avatar) pour qu'un renommage côté user se propage à tous ses anciens
+    posts. Le cache local frontend revient de toute façon à 0 tous les
+    refresh, donc l'impact perf d'une jointure par liste est négligeable.
+    """
+    unique_ids = [uid for uid in {aid for aid in author_ids if aid} if uid]
+    if not unique_ids:
+        return {}
+    rows = session.exec(
+        select(UserProfile).where(UserProfile.id.in_(unique_ids))
+    ).all()
+    return {p.id: p.handle for p in rows if p.handle}
+
+
 def _serialize_post(
     post: Post,
     reactions: Dict[str, List[str]],
     comments: List[Comment],
+    handles: Dict[str, str] | None = None,
 ) -> PostOut:
+    handles = handles or {}
     return PostOut(
         id=post.id,
         authorId=post.author_id,
         authorName=post.author_name,
+        authorHandle=handles.get(post.author_id),
         authorAvatar=post.author_avatar,
         content=post.content,
         imageUrl=post.image_url,
@@ -65,6 +130,7 @@ def _serialize_post(
                 id=c.id,
                 authorId=c.author_id,
                 authorName=c.author_name,
+                authorHandle=handles.get(c.author_id),
                 authorAvatar=c.author_avatar,
                 content=c.content,
                 createdAt=c.created_at,
@@ -101,11 +167,18 @@ def list_posts(session: Session = Depends(_session_dep)) -> List[PostOut]:
     for c in comments:
         comments_by_post[c.post_id].append(c)
 
+    # PR S — on résout les handles en 1 requête pour tout l'affichage.
+    all_author_ids: List[str] = [p.author_id for p in posts]
+    for comment_list in comments_by_post.values():
+        all_author_ids.extend(c.author_id for c in comment_list)
+    handles = _resolve_handles(session, all_author_ids)
+
     return [
         _serialize_post(
             p,
             {emoji: users for emoji, users in reactions_by_post[p.id].items()},
             comments_by_post[p.id],
+            handles,
         )
         for p in posts
     ]
@@ -119,15 +192,23 @@ def create_post(
         id=_generate_id("post"),
         author_id=payload.author_id,
         author_name=payload.author_name,
-        author_avatar=payload.author_avatar,
+        author_avatar=_sanitize_avatar(payload.author_avatar),
         content=payload.content,
         image_url=payload.image_url,
         video_url=payload.video_url,
     )
     session.add(post)
+    # PR M — crédit XP à l'auteur. On fait un `get` sur la clé primaire
+    # plutôt qu'une requête indexée : la plupart des auteurs ont déjà un
+    # profil en DB (créé lors du premier login). Si le profil n'existe pas
+    # (cas d'un compte externe / historique), on skip silencieusement.
+    author = session.get(UserProfile, payload.author_id)
+    if author is not None:
+        author.streamer_xp = (author.streamer_xp or 0) + XP_PER_POST
     session.commit()
     session.refresh(post)
-    return _serialize_post(post, {}, [])
+    handles = _resolve_handles(session, [post.author_id])
+    return _serialize_post(post, {}, [], handles)
 
 
 @router.delete("/{post_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -139,8 +220,8 @@ def delete_post(
     post = session.get(Post, post_id)
     if not post:
         raise HTTPException(status_code=404, detail="Post introuvable.")
-    # L'auteur du post ou la reine (modération) peut supprimer.
-    if post.author_id != user_id and not _is_queen(user_id):
+    # L'auteur du post ou un·e modérateur·rice (admin/queen) peut supprimer.
+    if post.author_id != user_id and not _is_moderator(session, user_id):
         raise HTTPException(status_code=403, detail="Interdit.")
 
     session.exec(
@@ -193,7 +274,10 @@ def toggle_reaction(
         .where(Comment.post_id == post_id)
         .order_by(Comment.created_at.asc())
     ).all()
-    return _serialize_post(post, dict(by_emoji), comments)
+    handles = _resolve_handles(
+        session, [post.author_id, *[c.author_id for c in comments]]
+    )
+    return _serialize_post(post, dict(by_emoji), comments, handles)
 
 
 @router.post(
@@ -214,16 +298,18 @@ def add_comment(
         post_id=post_id,
         author_id=payload.author_id,
         author_name=payload.author_name,
-        author_avatar=payload.author_avatar,
+        author_avatar=_sanitize_avatar(payload.author_avatar),
         content=payload.content,
     )
     session.add(comment)
     session.commit()
     session.refresh(comment)
+    handles = _resolve_handles(session, [comment.author_id])
     return CommentOut(
         id=comment.id,
         authorId=comment.author_id,
         authorName=comment.author_name,
+        authorHandle=handles.get(comment.author_id),
         authorAvatar=comment.author_avatar,
         content=comment.content,
         createdAt=comment.created_at,
@@ -244,13 +330,14 @@ def delete_comment(
     comment = session.get(Comment, comment_id)
     if not comment or comment.post_id != post_id:
         raise HTTPException(status_code=404, detail="Commentaire introuvable.")
-    # Peuvent supprimer : l'auteur du commentaire, l'auteur du post parent et la reine.
+    # Peuvent supprimer : l'auteur du commentaire, l'auteur du post parent,
+    # et les modérateur·rice·s (admin / queen).
     post = session.get(Post, post_id)
     post_author_id = post.author_id if post else None
     if (
         comment.author_id != user_id
         and post_author_id != user_id
-        and not _is_queen(user_id)
+        and not _is_moderator(session, user_id)
     ):
         raise HTTPException(status_code=403, detail="Interdit.")
     session.delete(comment)

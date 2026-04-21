@@ -7,53 +7,29 @@ import type {
   LiveSession,
   Product,
 } from "../types";
-import dreynaZepetoPhoto from "../assets/dreyna-zepeto.png";
-import zepetoStats from "./zepeto-stats.json";
+import dreynaPhoto from "../assets/dreyna-zepeto.png";
 
-export const ZEPETO_LIVE_STATS = zepetoStats as {
-  source: string;
-  handle: string;
-  followers: number;
-  following: number | null;
-  posts: number;
-  fetchedAt: string;
-};
-
+// Profil de seed de Dreyna : depuis la dé-Dreyna-isation du site, ce profil
+// est traité comme un compte animateur normal (pas de rôle "queen", pas de
+// wallet/followers préseedés). Les vrais soldes viennent du backend.
 export const DREYNA_PROFILE = {
   id: "user-dreyna",
   username: "Dreyna",
   email: "dreyna@vaelyndra.realm",
-  avatar: dreynaZepetoPhoto,
-  role: "queen" as const,
+  avatar: dreynaPhoto,
+  role: "elf" as const,
   joinedAt: "2021-03-21T00:00:00Z",
-  bio:
-    "Reine des elfes du royaume de Vaelyndra. Gardienne de la Lumière d'Elennor, créatrice ZEPETO du programme HOT 🔥, Top 2 de l'événement Magic Academy.",
-  socials: {
-    zepeto: "https://web.zepeto.me/share/user/profile/dreynakame",
-    youtube: "https://www.youtube.com/@Dreynakame",
-    zepetoHandle: "@dreynakame",
-    youtubeHandle: "@Dreynakame",
-  },
-  titles: [
-    "Reine des Elfes de Vaelyndra",
-    "Gardienne de la Lumière d'Elennor",
-    "Porteuse de la Couronne d'Aube",
-  ],
+  bio: "Animatrice de Vaelyndra.",
+  socials: {},
+  titles: [],
   stats: {
-    followers: ZEPETO_LIVE_STATS.followers,
-    likes: 24_800,
-    articles: ZEPETO_LIVE_STATS.posts,
-    lives: 24,
-    communityMembers: 1_240,
+    followers: 0,
+    likes: 0,
+    articles: 0,
+    lives: 0,
+    communityMembers: 0,
   },
-  gallery: [
-    "https://images.unsplash.com/photo-1578632749014-ca77efd052eb?w=1200&auto=format&fit=crop&q=80",
-    "https://images.unsplash.com/photo-1519810755548-39cd217da494?w=1200&auto=format&fit=crop&q=80",
-    "https://images.unsplash.com/photo-1470770841072-f978cf4d019e?w=1200&auto=format&fit=crop&q=80",
-    "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1200&auto=format&fit=crop&q=80",
-    "https://images.unsplash.com/photo-1447433693459-3074a3216296?w=1200&auto=format&fit=crop&q=80",
-    "https://images.unsplash.com/photo-1518709594023-6eab9bab7b23?w=1200&auto=format&fit=crop&q=80",
-  ],
+  gallery: [] as string[],
 };
 
 export const BADGES: Badge[] = [
@@ -79,10 +55,10 @@ export const BADGES: Badge[] = [
     rarity: "rare",
   },
   {
-    id: "zepeto-hot",
-    name: "Programme HOT · ZEPETO",
+    id: "flamme-royale",
+    name: "Flamme Royale",
     description:
-      "Créatrice sélectionnée dans le programme HOT de ZEPETO — flammes de la cour.",
+      "Réservé aux étincelles reconnues par la cour — portent la flamme des anciens.",
     icon: "🔥",
     rarity: "mythique",
   },
@@ -142,19 +118,19 @@ export const INITIAL_ARTICLES: Article[] = [
   },
   {
     id: "art-2",
-    slug: "nouvelle-collection-zepeto-aube",
-    title: "La collection ZEPETO « Aube d'Elennor » est arrivée",
+    slug: "nouvelle-collection-aube",
+    title: "La collection « Aube d'Elennor » est arrivée",
     excerpt:
       "Une collection entière inspirée des robes de lune et des armures de feuillage argenté.",
     content:
       "Cette saison, j'ai imaginé une collection en trois actes : **Aube**, **Crépuscule**, **Nocturne**. Chaque pièce porte la marque d'un sort elfique que j'ai rêvé des semaines durant.\n\nLes items exclusifs sont disponibles dès maintenant dans la Boutique Royale — certains ne reviendront jamais.",
-    category: "IRL / ZEPETO",
+    category: "Lifestyle",
     cover:
       "https://images.unsplash.com/photo-1578632749014-ca77efd052eb?w=1600&auto=format&fit=crop&q=80",
     author: "Dreyna",
     createdAt: "2025-04-02T15:00:00Z",
     readingTime: 3,
-    tags: ["zepeto", "collection", "mode"],
+    tags: ["collection", "mode", "aube"],
     likes: [],
     comments: [],
   },
@@ -231,10 +207,11 @@ export const INITIAL_PRODUCTS: Product[] = [
   },
   {
     id: "prod-pack",
-    name: "Pack ZEPETO · Elennor",
+    name: "Pack Avatar · Elennor",
     tagline: "Tenue numérique exclusive",
     description:
-      "Tenue, coiffe et accessoires animés pour votre avatar ZEPETO, signés Dreyna.",
+      "Tenue, coiffe et accessoires animés pour votre avatar Vaelyndra — signés par la cour.",
+
     price: 19,
     currency: "€",
     image:
@@ -242,7 +219,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     category: "Digital",
     rating: 4.7,
     stock: 500,
-    tags: ["digital", "zepeto"],
+    tags: ["digital", "avatar"],
     featured: true,
   },
   {
@@ -410,7 +387,7 @@ export const INITIAL_LIVES: LiveSession[] = [
   },
   {
     id: "live-2",
-    title: "ZEPETO Runway · Collection Aube",
+    title: "Runway · Collection Aube",
     description: "Défilé numérique, tirages au sort et révélations.",
     cover:
       "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=1600&auto=format&fit=crop&q=80",
@@ -438,7 +415,7 @@ export const SEED_CHAT: ChatMessage[] = [
     authorId: "user-lyria",
     authorName: "Lyria",
     authorAvatar: "https://i.pravatar.cc/150?u=lyria",
-    content: "✨ La reine est entrée, longue vie à Vaelyndra !",
+    content: "Coucou tout le monde 👋",
     createdAt: new Date(Date.now() - 1000 * 60 * 7).toISOString(),
   },
   {
@@ -446,41 +423,59 @@ export const SEED_CHAT: ChatMessage[] = [
     authorId: "user-caelum",
     authorName: "Caelum",
     authorAvatar: "https://i.pravatar.cc/150?u=caelum",
-    content: "Je sens déjà la brume magique d'ici 🌫️",
+    content: "F4F ? je rends les abos 💜",
     createdAt: new Date(Date.now() - 1000 * 60 * 6).toISOString(),
   },
   {
     id: "msg-3",
-    authorId: "user-dreyna",
-    authorName: "Dreyna",
-    authorAvatar: DREYNA_PROFILE.avatar,
-    content: "Bienvenue, peuple elfe 👑 La cour est ouverte.",
+    authorId: "user-mira",
+    authorName: "Mira",
+    authorAvatar: "https://i.pravatar.cc/150?u=mira",
+    content: "salut la compagnie ✨",
     createdAt: new Date(Date.now() - 1000 * 60 * 4).toISOString(),
-    highlight: true,
   },
   {
     id: "msg-4",
     authorId: "user-aeris",
     authorName: "Aëris",
     authorAvatar: "https://i.pravatar.cc/150?u=aeris",
-    content: "🌙 Incroyable de te voir ce soir Dreyna 💜",
+    content: "première fois sur ton live 🔥",
     createdAt: new Date(Date.now() - 1000 * 60 * 3).toISOString(),
   },
 ];
 
+/**
+ * Pool de messages factices utilisés pour simuler une activité de chat
+ * pendant qu'un broadcaster teste son live ou attend ses viewers.
+ *
+ * Gardé volontairement **neutre** : pas de référence à Vaelyndra, Dreyna
+ * ni à l'univers elfique. Ces messages s'affichent sur TOUS les lives
+ * du réseau (chaque membre peut être broadcaster), donc on reste sur du
+ * vocabulaire générique de streameur (F4F, coucou, je rends les abos…)
+ * pour ne pas laisser penser que le live appartient à la reine ou au
+ * lore Vaelyndra.
+ */
 export const AUTO_CHAT_LINES = [
-  "✨ Longue vie à la reine",
-  "👑 On t'aime Dreyna",
-  "🌙 La nuit elfique tombe sur Vaelyndra",
-  "💜 Le royaume brille ce soir",
-  "🧝‍♀️ Coucou de Bretagne",
-  "🌿 Serment du sylvaris prêté",
-  "🎶 Quelle ambiance",
-  "💫 J'attends la prochaine collection",
-  "⚔️ Pour Vaelyndra !",
-  "🌠 Dreyna, tu es magique",
-  "🔮 Les runes scintillent",
-  "🕯️ Bougie allumée pour le rituel",
+  "coucou 👋",
+  "salut tout le monde",
+  "hello 💜",
+  "F4F ?",
+  "je rends les abos",
+  "je follow, follow back ? 🙏",
+  "re",
+  "première fois ici 🔥",
+  "bien ou bien",
+  "ça passe bien chez moi",
+  "soirée tranquille 🌙",
+  "yo la team",
+  "belle ambiance",
+  "t'es trop stylé·e 💫",
+  "on reste jusqu'à la fin",
+  "abonné·e avec la cloche 🔔",
+  "merci pour le live ✨",
+  "trop cool cette commu",
+  "ça déchire",
+  "j'adore ton contenu",
 ];
 
 export const TOP_FANS = [

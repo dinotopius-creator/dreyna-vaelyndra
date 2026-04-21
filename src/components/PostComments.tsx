@@ -6,8 +6,9 @@ import { useStore } from "../contexts/StoreContext";
 import { useToast } from "../contexts/ToastContext";
 import { formatRelative } from "../lib/helpers";
 import { apiAddComment, apiDeleteComment } from "../lib/api";
-import { DREYNA_PROFILE } from "../data/mock";
 import type { Comment } from "../types";
+import { Handle } from "./Handle";
+import { ReportButton } from "./ReportButton";
 
 interface Props {
   postId: string;
@@ -23,7 +24,7 @@ export function PostComments({ postId, comments, postAuthorId }: Props) {
   const [draft, setDraft] = useState("");
 
   function profileHref(authorId: string) {
-    return authorId === DREYNA_PROFILE.id ? "/dreyna" : `/u/${authorId}`;
+    return `/u/${authorId}`;
   }
 
   async function submit(e: React.FormEvent) {
@@ -77,12 +78,19 @@ export function PostComments({ postId, comments, postAuthorId }: Props) {
                 />
               </Link>
               <div className="flex-1 rounded-2xl bg-night-900/40 px-3 py-2">
-                <p className="flex items-center gap-2 text-xs">
+                <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
                   <Link
                     to={profileHref(c.authorId)}
                     className="font-display text-gold-200 transition hover:text-gold-300"
                   >
                     {c.authorName}
+                  </Link>
+                  {/* PR S — @handle sous le pseudo du commentateur. */}
+                  <Link
+                    to={profileHref(c.authorId)}
+                    className="transition hover:opacity-80"
+                  >
+                    <Handle handle={c.authorHandle} size="xs" />
                   </Link>
                   <span className="text-[10px] text-ivory/40">
                     {formatRelative(c.createdAt)}
@@ -92,15 +100,27 @@ export function PostComments({ postId, comments, postAuthorId }: Props) {
                   {c.content}
                 </p>
               </div>
-              {canDelete && (
-                <button
-                  onClick={() => remove(c.id)}
-                  className="text-ivory/30 transition hover:text-rose-300"
-                  title="Supprimer ce commentaire"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              )}
+              <div className="flex items-center gap-1">
+                {user && user.id !== c.authorId && (
+                  <ReportButton
+                    targetType="comment"
+                    targetId={c.id}
+                    targetLabel={`Commentaire de ${c.authorName}`}
+                    targetUrl={`/communaute#post-${postId}`}
+                    compact
+                    className="text-ivory/30 hover:text-rose-300"
+                  />
+                )}
+                {canDelete && (
+                  <button
+                    onClick={() => remove(c.id)}
+                    className="text-ivory/30 transition hover:text-rose-300"
+                    title="Supprimer ce commentaire"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
             </li>
           );
         })}

@@ -22,9 +22,12 @@ import { useProfile } from "../contexts/ProfileContext";
 import { SectionHeading } from "../components/SectionHeading";
 import { AvatarViewer } from "../components/AvatarViewer";
 import { UserBadges } from "../components/UserBadges";
+import StreamerGradeBadge from "../components/StreamerGradeBadge";
 import { CreaturePickerModal } from "../components/CreaturePickerModal";
+import SoulBondsModal from "../components/SoulBondsModal";
 import { WishlistSection } from "../components/WishlistSection";
 import { formatDate, formatPrice, resizeImageToDataUrl } from "../lib/helpers";
+import { roleLabel, roleLabelWithIcon } from "../lib/roleLabel";
 import {
   MIN_PAYOUT_EUR,
   PLATFORM_CUT,
@@ -43,6 +46,9 @@ export function Me() {
   const [avatar, setAvatar] = useState(user?.avatar ?? "");
   const [editingAvatar, setEditingAvatar] = useState(false);
   const [creaturePickerOpen, setCreaturePickerOpen] = useState(false);
+  const [bondsTab, setBondsTab] = useState<"followers" | "following" | null>(
+    null,
+  );
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   if (!user) return null;
@@ -113,11 +119,7 @@ export function Me() {
           </div>
           <div className="flex-1">
             <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
-              {user.role === "queen"
-                ? "Reine de Vaelyndra"
-                : user.role === "knight"
-                  ? "Chevalier·e lunaire"
-                  : "Elfe de la cour"}
+              {roleLabelWithIcon(serverProfile?.role ?? user.role)}
             </p>
             <h1 className="mt-1 font-display text-3xl text-gold-200 md:text-4xl">
               {user.username}
@@ -137,28 +139,37 @@ export function Me() {
               </button>
             </div>
             <p className="mt-2 text-sm text-ivory/60">
-              Entré·e à la cour le {formatDate(user.joinedAt)}
+              Inscrit·e le {formatDate(user.joinedAt)}
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-ivory/70">
-              <span>
+              <button
+                type="button"
+                onClick={() => setBondsTab("followers")}
+                className="rounded-full transition hover:text-gold-100"
+              >
                 <strong className="font-display text-gold-200">
                   {serverProfile?.followersCount ?? 0}
                 </strong>{" "}
-                abonné·e·s
-              </span>
-              <span>
+                âmes liées
+              </button>
+              <button
+                type="button"
+                onClick={() => setBondsTab("following")}
+                className="rounded-full transition hover:text-gold-100"
+              >
                 <strong className="font-display text-gold-200">
                   {serverProfile?.followingCount ?? 0}
                 </strong>{" "}
-                abonnements
-              </span>
+                liens tissés
+              </button>
             </div>
+            {serverProfile?.grade && (
+              <div className="mt-4 max-w-sm">
+                <StreamerGradeBadge grade={serverProfile.grade} size="lg" />
+              </div>
+            )}
           </div>
-          {user.role === "queen" && (
-            <span className="rounded-full border border-gold-400/50 bg-gold-500/15 px-3 py-1 font-regal text-[10px] font-semibold tracking-[0.22em] text-gold-200">
-              <Crown className="mr-1 inline h-3 w-3" /> Trône
-            </span>
-          )}
+
         </div>
         <CreaturePickerModal
           open={creaturePickerOpen}
@@ -166,6 +177,14 @@ export function Me() {
             serverProfile?.creature?.id ?? user.creatureId ?? null
           }
           onClose={() => setCreaturePickerOpen(false)}
+        />
+
+        <SoulBondsModal
+          userId={user.id}
+          username={user.username}
+          open={bondsTab !== null}
+          initialTab={bondsTab ?? "followers"}
+          onClose={() => setBondsTab(null)}
         />
 
         {editingAvatar && (
@@ -216,7 +235,7 @@ export function Me() {
               </div>
             </div>
             <p className="mt-2 text-[11px] text-ivory/50">
-              Astuce : tu peux sauvegarder ta photo ZEPETO sur ton PC, puis cliquer "Importer". Max 5 Mo.
+              Astuce : tu peux sauvegarder ton avatar sur ton PC, puis cliquer "Importer". Max 5 Mo.
             </p>
           </motion.div>
         )}
@@ -224,7 +243,7 @@ export function Me() {
         <form onSubmit={saveProfile} className="mt-6 grid gap-4 md:grid-cols-2">
           <div>
             <label className="font-regal text-[10px] tracking-[0.22em] text-ivory/60">
-              Nom elfique
+              Pseudo
             </label>
             <input
               value={username}
@@ -240,13 +259,7 @@ export function Me() {
             </label>
             <input
               disabled
-              value={
-                user.role === "queen"
-                  ? "Reine de Vaelyndra"
-                  : user.role === "knight"
-                    ? "Chevalier·e lunaire"
-                    : "Elfe de la cour"
-              }
+              value={roleLabel(serverProfile?.role ?? user.role)}
               className="glass-input mt-2 cursor-not-allowed opacity-70"
             />
           </div>
@@ -259,7 +272,7 @@ export function Me() {
               value={bio}
               onChange={(e) => setBio(e.target.value)}
               className="glass-input mt-2 resize-none"
-              placeholder="Parlez de votre place dans Vaelyndra..."
+              placeholder="Parle de toi, de tes lives, de ta passion..."
             />
           </div>
           <div className="md:col-span-2 flex justify-end">
@@ -273,8 +286,8 @@ export function Me() {
       <section className="mt-12">
         <SectionHeading
           align="left"
-          eyebrow="Avatar de Vaelyndra"
-          title={<>Votre double <span className="text-mystic">elfique</span></>}
+          eyebrow="Avatar"
+          title={<>Ton <span className="text-mystic">avatar</span></>}
           subtitle="Composé dans l'atelier paper-doll, visible partout sur le site : header, fil communautaire, chat, lives."
         />
         <div className="mt-6 grid gap-6 md:grid-cols-[260px_1fr]">
@@ -443,7 +456,7 @@ export function Me() {
         <SectionHeading
           align="left"
           eyebrow="Activité"
-          title="Votre place dans la cour"
+          title="Ton activité"
         />
         <div className="mt-6 grid gap-4 md:grid-cols-3">
           <div className="card-royal p-5">

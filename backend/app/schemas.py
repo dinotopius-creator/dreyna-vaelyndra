@@ -12,8 +12,17 @@ from pydantic import BaseModel, Field
 
 class AuthorIn(BaseModel):
     author_id: str = Field(..., min_length=1, max_length=128)
-    author_name: str = Field(..., min_length=1, max_length=64)
-    author_avatar: str = Field(..., min_length=1, max_length=512)
+    # Pseudo : max 64 chars utiles mais on tolère jusqu'à 128 pour absorber
+    # emojis composés (ZWJ sequences, skin tones) qui explosent la taille UTF-8.
+    author_name: str = Field(..., min_length=1, max_length=128)
+    # Avatar peut être :
+    # - vide (compte sans photo)
+    # - URL courte (DiceBear, pravatar, S3…)
+    # - data URI base64 (upload depuis l'app, jusqu'à ~200 KB côté front)
+    # On accepte jusqu'à 300 KB pour couvrir le data URI ; le routeur se charge
+    # ensuite de tronquer vers "" si c'est un data URI pour éviter de polluer
+    # la table posts/comments.
+    author_avatar: str = Field(default="", max_length=300_000)
 
 
 class PostCreate(AuthorIn):
@@ -35,6 +44,9 @@ class CommentOut(BaseModel):
     id: str
     authorId: str
     authorName: str
+    # PR S — `@handle` résolu depuis l'auteur au serialize, pas snapshot.
+    # `None` si l'auteur n'a pas encore de profil ou de handle.
+    authorHandle: Optional[str] = None
     authorAvatar: str
     content: str
     createdAt: str
@@ -45,6 +57,7 @@ class PostOut(BaseModel):
     id: str
     authorId: str
     authorName: str
+    authorHandle: Optional[str] = None
     authorAvatar: str
     content: str
     imageUrl: Optional[str] = None
@@ -73,6 +86,17 @@ class UserProfileUpsert(BaseModel):
     creature_id: Optional[str] = Field(default=None, max_length=32)
 
 
+class HandleUpdate(BaseModel):
+    """Payload pour `PATCH /users/{id}/handle` (PR S).
+
+    Le serveur valide le format (3-20 chars, `[a-z0-9_]+`) et l'unicité
+    avant de renvoyer le profil mis à jour. Un cooldown de 30 jours est
+    imposé entre deux changements pour éviter l'impersonation express.
+    """
+
+    handle: str = Field(..., min_length=3, max_length=20)
+
+
 class CreatureChoice(BaseModel):
     """Choix / changement de créature. Slug du catalogue figé."""
 
@@ -98,6 +122,8 @@ class FollowerOut(BaseModel):
 
     id: str
     username: str
+    # PR S — handle public `@...` (Optional pour les anciens clients).
+    handle: Optional[str] = None
     avatarImageUrl: str
     creature: Optional[CreatureOut] = None
     role: str = "user"
@@ -181,9 +207,38 @@ class GiftTransfer(BaseModel):
     reason: Optional[str] = Field(default=None, max_length=128)
 
 
+class StreamerGradeOut(BaseModel):
+    """Grade spirituel d'un membre (PR M).
+
+    - `slug` identifie le palier (stable, ex. "gardien-flux").
+    - `xp` est le total cumulé ; `progressXp` / `nextXp` sont extraits pour
+      alimenter la barre de progression. `nextXp=None` signifie que le
+      membre est au palier maximum ("Légende de Vaelyndra").
+    - `override=True` quand un admin a forcé le grade (utile pour ne pas
+      afficher la progression dans ce cas).
+    """
+
+    slug: str
+    name: str
+    emoji: str
+    motto: str
+    theme: str
+    color: str
+    minXp: int
+    xp: int
+    progressXp: int
+    nextXp: Optional[int] = None
+    override: bool = False
+
+
 class UserProfileOut(BaseModel):
     id: str
     username: str
+    # PR S — identifiant public `@handle` (dérivé auto du pseudo à la
+    # création, modifiable via `PATCH /users/{id}/handle`). `None` possible
+    # pour les profils pré-PR S avant que le backfill startup ne passe.
+    handle: Optional[str] = None
+    handleUpdatedAt: Optional[str] = None
     avatarImageUrl: str
     avatarUrl: Optional[str] = None
     inventory: List[str] = []
@@ -210,14 +265,45 @@ class UserProfileOut(BaseModel):
     role: str = "user"
     followersCount: int = 0
     followingCount: int = 0
+    # PR M — grade spirituel dérivé de streamer_xp (+ override admin).
+    grade: Optional[StreamerGradeOut] = None
     createdAt: str
     updatedAt: str
+
+
+class GradeOverridePayload(BaseModel):
+    """Admin override du grade d'un streamer (slug figé, ou None pour retirer)."""
+
+    grade_slug: Optional[str] = Field(default=None, max_length=32)
+
+
+class XPAdjustPayload(BaseModel):
+    """Admin adjust XP — delta signé + raison pour l'audit."""
+
+    delta: int
+    reason: Optional[str] = Field(default=None, max_length=128)
 
 
 class DailyClaimOut(BaseModel):
     granted: int
     already_claimed: bool = False
     profile: UserProfileOut
+
+
+class UserSearchHitOut(BaseModel):
+    """Mini-profil renvoyé par `GET /users/search` (PR S).
+
+    Volontairement minimaliste : on ne renvoie que ce qui est nécessaire
+    pour afficher une ligne de résultat (avatar + pseudo + @handle + rôle)
+    + de quoi router vers le profil (`id`).
+    """
+
+    id: str
+    username: str
+    handle: Optional[str] = None
+    avatarImageUrl: str
+    creature: Optional[CreatureOut] = None
+    role: str = "user"
 
 
 class GiftTransferOut(BaseModel):
@@ -249,19 +335,23 @@ class StreamerMiniOut(BaseModel):
 
     id: str
     username: str
+    handle: Optional[str] = None
     avatarImageUrl: str
     creature: Optional[CreatureOut] = None
     role: str = "user"
+    grade: Optional["StreamerGradeOut"] = None
 
 
 class StreamerLeaderboardEntryOut(BaseModel):
     rank: int
     userId: str
     username: str
+    handle: Optional[str] = None
     avatarImageUrl: str
     totalSylvins: int
     creature: Optional[CreatureOut] = None
     role: str = "user"
+    grade: Optional["StreamerGradeOut"] = None
 
 
 class StreamerLeaderboardOut(BaseModel):

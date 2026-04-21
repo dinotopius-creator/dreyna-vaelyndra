@@ -29,6 +29,10 @@ import {
 } from "../data/mock";
 import { generateId } from "../lib/helpers";
 import { apiListPosts } from "../lib/api";
+import {
+  fetchCatalogArticles,
+  fetchCatalogProducts,
+} from "../lib/catalogApi";
 import { useAuth } from "./AuthContext";
 
 interface StoreState {
@@ -39,20 +43,28 @@ interface StoreState {
   cart: CartItem[];
   orders: Order[];
   /**
-   * IDs of mock products (from INITIAL_PRODUCTS) that the admin has explicitly
-   * deleted. We track them so the merge logic doesn't resurrect them on reload.
+   * IDs of products (mock from INITIAL_PRODUCTS ou admin-créés) que l'admin a
+   * explicitement supprimés. On les garde pour que la logique de merge ne les
+   * ressuscite pas au reload (mock) et que d'éventuels seeds futurs les
+   * respectent aussi (custom). Clé localStorage conservée (`deletedMockProductIds`)
+   * pour la rétro-compat avec les stores déjà persistés.
    */
-  deletedMockProductIds: string[];
+  deletedProductIds: string[];
+  /**
+   * IDs d'articles supprimés par l'admin (mock ou custom). Même logique que
+   * `deletedProductIds`.
+   */
+  deletedArticleIds: string[];
   /**
    * Per-user Sylvins wallets (balance, streamer earnings, gift history).
    */
   wallets: Record<string, Wallet>;
 }
 
-const MOCK_PRODUCT_IDS = new Set(INITIAL_PRODUCTS.map((p) => p.id));
-
 type Action =
   | { type: "load"; state: StoreState }
+  | { type: "setProducts"; products: Product[] }
+  | { type: "setArticles"; articles: Article[] }
   | { type: "addArticle"; article: Article }
   | { type: "updateArticle"; article: Article }
   | { type: "deleteArticle"; id: string }
@@ -96,6 +108,10 @@ function reducer(state: StoreState, action: Action): StoreState {
   switch (action.type) {
     case "load":
       return action.state;
+    case "setProducts":
+      return { ...state, products: action.products };
+    case "setArticles":
+      return { ...state, articles: action.articles };
     case "addArticle":
       return { ...state, articles: [action.article, ...state.articles] };
     case "updateArticle":
@@ -109,6 +125,9 @@ function reducer(state: StoreState, action: Action): StoreState {
       return {
         ...state,
         articles: state.articles.filter((a) => a.id !== action.id),
+        deletedArticleIds: state.deletedArticleIds.includes(action.id)
+          ? state.deletedArticleIds
+          : [...state.deletedArticleIds, action.id],
       };
     case "toggleArticleLike":
       return {
@@ -142,17 +161,14 @@ function reducer(state: StoreState, action: Action): StoreState {
           p.id === action.product.id ? action.product : p,
         ),
       };
-    case "deleteProduct": {
-      const isMock = MOCK_PRODUCT_IDS.has(action.id);
+    case "deleteProduct":
       return {
         ...state,
         products: state.products.filter((p) => p.id !== action.id),
-        deletedMockProductIds:
-          isMock && !state.deletedMockProductIds.includes(action.id)
-            ? [...state.deletedMockProductIds, action.id]
-            : state.deletedMockProductIds,
+        deletedProductIds: state.deletedProductIds.includes(action.id)
+          ? state.deletedProductIds
+          : [...state.deletedProductIds, action.id],
       };
-    }
     case "addToCart": {
       const quantity = action.quantity ?? 1;
       const existing = state.cart.find((c) => c.productId === action.productId);
@@ -308,7 +324,8 @@ const INITIAL: StoreState = {
   lives: INITIAL_LIVES,
   cart: [],
   orders: [],
-  deletedMockProductIds: [],
+  deletedProductIds: [],
+  deletedArticleIds: [],
   wallets: {},
 };
 
@@ -366,23 +383,154 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // explicitly deleted are tracked in `deletedMockProductIds` so they are
       // NOT resurrected on reload.
       const storedProducts = parsed.products ?? init.products;
-      const deletedMockProductIds = parsed.deletedMockProductIds ?? [];
+      // Lecture avec rétro-compat : les stores existants utilisent
+      // `deletedMockProductIds` (ancien nom, même sémantique étendue).
+      const parsedAny = parsed as Partial<StoreState> & {
+        deletedMockProductIds?: string[];
+      };
+      const deletedProductIds =
+        parsedAny.deletedProductIds ??
+        parsedAny.deletedMockProductIds ??
+        [];
+      // Pour les articles, pas de champ équivalent avant ce fix. Si le store
+      // n'a pas `deletedArticleIds` (= user antérieur à ce PR), on infère
+      // qu'un mock manquant dans storedArticles a été supprimé volontairement
+      // par l'admin, et on le garde comme "deleted" pour ne pas le ressusciter.
+      const storedArticlesRaw = parsed.articles;
+      const deletedArticleIds =
+        parsedAny.deletedArticleIds ??
+        (storedArticlesRaw
+          ? init.articles
+              .filter(
+                (mock) => !storedArticlesRaw.some((a) => a.id === mock.id),
+              )
+              .map((a) => a.id)
+          : []);
+
+      // --- Migration one-shot PR L (pivot mini-réseau) ----------------------
+      //
+      // Les users déjà connectés ont persisté dans leur localStorage :
+      //  - des mock products avec les anciens noms ZEPETO
+      //  - l'article "art-2" avec slug/title ZEPETO et catégorie "IRL / ZEPETO"
+      //  - le live "live-2" avec titre ZEPETO
+      //
+      // On applique **une seule fois** un patch pour les rattraper, gardé
+      // derrière un flag de version (`vaelyndra_migration_v`). Sans ce flag,
+      // la réécriture serait permanente : les futures customisations admin
+      // via `updateProduct`/`updateArticle` seraient silencieusement écrasées
+      // au prochain reload. Après le passage de cette migration, les données
+      // stockées sont la source de vérité et la boucle ne touche plus à rien.
+      const MIGRATION_KEY = "vaelyndra_migration_v";
+      const MIGRATION_TARGET = 1; // PR L
+      const runMigration = (() => {
+        try {
+          const current = Number(localStorage.getItem(MIGRATION_KEY) ?? "0");
+          return current < MIGRATION_TARGET;
+        } catch {
+          return true;
+        }
+      })();
+
+      // On scope strictement la migration aux produits seed qui portaient
+      // réellement une référence ZEPETO (actuellement uniquement `prod-pack` :
+      // "Pack ZEPETO · Elennor" → "Pack Avatar · Elennor"). Les autres mock
+      // products (prod-crown, prod-vip, prod-sylvins-*, etc.) n'ont pas besoin
+      // de patch — si un admin les avait customisés via `updateProduct`, les
+      // écraser ici reviendrait à annuler silencieusement sa modification.
+      // Pour les prochains rebrands, ajouter l'id dans ce tableau.
+      const MIGRATION_PRODUCT_IDS = new Set(["prod-pack"]);
+
+      const deletedSet = new Set(deletedProductIds);
       const mergedProducts = [
-        ...storedProducts,
+        ...storedProducts
+          .filter((stored) => !deletedSet.has(stored.id))
+          .map((stored) => {
+            if (!runMigration) return stored;
+            if (!MIGRATION_PRODUCT_IDS.has(stored.id)) return stored;
+            const mock = init.products.find((m) => m.id === stored.id);
+            return mock
+              ? {
+                  ...stored,
+                  name: mock.name,
+                  description: mock.description,
+                  tags: mock.tags,
+                }
+              : stored;
+          }),
         ...init.products.filter(
           (mock) =>
             !storedProducts.some((p) => p.id === mock.id) &&
-            !deletedMockProductIds.includes(mock.id),
+            !deletedSet.has(mock.id),
         ),
       ];
+
+      const storedArticles = parsed.articles ?? init.articles;
+      const deletedArticleSet = new Set(deletedArticleIds);
+      const migratedArticles = runMigration
+        ? storedArticles.map((art) => {
+            const mock = init.articles.find((m) => m.id === art.id);
+            const patch: Partial<typeof art> = {};
+            if ((art.category as string) === "IRL / ZEPETO") {
+              patch.category = "Lifestyle";
+            }
+            if (mock && art.id === "art-2") {
+              patch.slug = mock.slug;
+              patch.title = mock.title;
+              patch.category = mock.category;
+            }
+            return Object.keys(patch).length > 0 ? { ...art, ...patch } : art;
+          })
+        : storedArticles;
+      const finalArticles = [
+        ...migratedArticles.filter((a) => !deletedArticleSet.has(a.id)),
+        ...init.articles.filter(
+          (mock) =>
+            !migratedArticles.some((a) => a.id === mock.id) &&
+            !deletedArticleSet.has(mock.id),
+        ),
+      ];
+
+      // Lives : même logique — on ne rafraîchit le titre depuis le mock QUE
+      // pour les lives seed (ids présents dans init.lives). Les lives créés
+      // par la cour (archives, lives admin) ne sont jamais touchés.
+      const storedLives = parsed.lives ?? init.lives;
+      const migratedLives = runMigration
+        ? storedLives.map((live) => {
+            const mock = init.lives.find((m) => m.id === live.id);
+            if (!mock) return live;
+            // On rafraîchit uniquement les champs potentiellement ZEPETO
+            // (title, description) pour live-2 ; pour les autres lives seed
+            // on laisse tel quel afin de ne pas écraser une édition admin.
+            if (live.id === "live-2") {
+              return {
+                ...live,
+                title: mock.title,
+                description: mock.description,
+              };
+            }
+            return live;
+          })
+        : storedLives;
+
+      if (runMigration) {
+        try {
+          localStorage.setItem(MIGRATION_KEY, String(MIGRATION_TARGET));
+        } catch {
+          // Best-effort : si localStorage est plein / désactivé, on tolère
+          // une ré-exécution — l'idempotence de la migration garantit que
+          // ça ne casse rien (les champs sont juste ré-écrits à l'identique).
+        }
+      }
+
       return {
-        articles: parsed.articles ?? init.articles,
+        articles: finalArticles,
         products: mergedProducts,
         posts: parsed.posts ?? init.posts,
-        lives: parsed.lives ?? init.lives,
+        lives: migratedLives,
         cart: parsed.cart ?? [],
         orders: parsed.orders ?? [],
-        deletedMockProductIds,
+        deletedProductIds,
+        deletedArticleIds,
         wallets: parsed.wallets ?? {},
       };
     } catch {
@@ -425,6 +573,35 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
     refresh();
     const id = setInterval(refresh, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, []);
+
+  // Boutique + chroniques : la source de vérité est le backend (PR #76). On
+  // remplace complètement les listes locales au premier succès. Tant que le
+  // backend répond pas, on affiche le cache localStorage (fallback offline).
+  // Refresh toutes les 60 s pour propager les changements admin.
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const [products, articles] = await Promise.all([
+          fetchCatalogProducts(),
+          fetchCatalogArticles(),
+        ]);
+        if (!cancelled) {
+          dispatch({ type: "setProducts", products });
+          dispatch({ type: "setArticles", articles });
+        }
+      } catch (err) {
+        if (!cancelled)
+          console.warn("Impossible de rafraîchir le catalogue :", err);
+      }
+    };
+    refresh();
+    const id = setInterval(refresh, 60_000);
     return () => {
       cancelled = true;
       clearInterval(id);

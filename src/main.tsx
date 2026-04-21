@@ -10,6 +10,7 @@ import { LiveProvider } from "./contexts/LiveContext";
 import { LiveInvitesProvider } from "./contexts/LiveInvitesContext";
 import { LiveMeshAudioProvider } from "./contexts/LiveMeshAudioContext";
 import { ProfileProvider } from "./contexts/ProfileContext";
+import { MessagesProvider } from "./contexts/MessagesContext";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
@@ -21,7 +22,9 @@ createRoot(document.getElementById("root")!).render(
               <LiveProvider>
                 <LiveInvitesProvider>
                   <LiveMeshAudioProvider>
-                    <App />
+                    <MessagesProvider>
+                      <App />
+                    </MessagesProvider>
                   </LiveMeshAudioProvider>
                 </LiveInvitesProvider>
               </LiveProvider>

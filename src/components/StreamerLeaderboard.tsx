@@ -27,6 +27,7 @@ import {
 } from "../lib/api";
 import { formatNumber } from "../lib/helpers";
 import { CreatureBadge, RoleBadge } from "./UserBadges";
+import StreamerGradeBadge from "./StreamerGradeBadge";
 
 type Period = "this" | "last";
 
@@ -259,6 +260,9 @@ export function StreamerLeaderboard({ refreshTick }: Props) {
                       )}
                       {entry.role === "animator" && (
                         <RoleBadge role={entry.role} size="sm" />
+                      )}
+                      {entry.grade && (
+                        <StreamerGradeBadge grade={entry.grade} size="sm" />
                       )}
                     </div>
                   </div>

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Crown, Mail, KeyRound, UserRound } from "lucide-react";
+import { Crown, Mail, KeyRound, UserRound, MailCheck } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
 import { CREATURES } from "../data/creatures";
@@ -10,53 +10,67 @@ export function Register() {
   const { register } = useAuth();
   const { notify } = useToast();
   const navigate = useNavigate();
-  const [step, setStep] = useState<"identity" | "creature">("identity");
+  const [step, setStep] = useState<"identity" | "creature" | "sent">(
+    "identity",
+  );
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [creatureId, setCreatureId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [sentMessage, setSentMessage] = useState<string>("");
 
   function goToCreature(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    // Validation minimale avant d'avancer à l'étape créature ; le register
-    // final refera la vérification côté Auth (cohérent avec l'existant).
     if (username.trim().length < 2) {
-      setError("Votre nom elfique est trop court.");
+      setError("Votre pseudo est trop court.");
       return;
     }
     if (!/^\S+@\S+\.\S+$/.test(email)) {
       setError("Un mail valide est requis.");
       return;
     }
-    if (password.length < 4) {
-      setError("Le sortilège doit faire 4 caractères.");
+    if (password.length < 8) {
+      setError("Le mot de passe doit faire 8 caractères minimum.");
       return;
     }
     setStep("creature");
   }
 
-  function finalize() {
+  async function finalize() {
     if (!creatureId) {
-      setError("Choisis ta créature pour franchir le portail.");
+      setError("Choisis une créature pour finaliser ton compte.");
       return;
     }
-    const res = register(username, email, password, creatureId);
-    if (!res.ok) {
-      setError(res.error ?? "Erreur inconnue");
-      // Si l'erreur vient d'une étape antérieure (mail déjà pris…), on
-      // remonte à l'identité pour ne pas bloquer l'utilisateur.
-      if (res.error && !res.error.toLowerCase().includes("créature")) {
-        setStep("identity");
+    setSubmitting(true);
+    try {
+      const res = await register(username, email, password, creatureId);
+      if (!res.ok) {
+        setError(res.error ?? "Erreur inconnue");
+        if (res.error && !res.error.toLowerCase().includes("créature")) {
+          setStep("identity");
+        }
+        return;
       }
-      return;
+      const creatureLabel = CREATURES.find((c) => c.id === creatureId);
+      if (res.pendingVerification) {
+        setSentMessage(
+          res.message ??
+            `Compte créé ${creatureLabel?.icon ?? "✨"} — regarde ta boîte mail pour activer ton compte (lien valable 24 h).`,
+        );
+        setStep("sent");
+        notify("Email de vérification envoyé.");
+        return;
+      }
+      notify(
+        `Bienvenue sur Vaelyndra, ${username} ${creatureLabel?.icon ?? "✨"}`,
+      );
+      navigate("/moi");
+    } finally {
+      setSubmitting(false);
     }
-    const creatureLabel = CREATURES.find((c) => c.id === creatureId);
-    notify(
-      `Bienvenue dans la cour, ${username} ${creatureLabel?.icon ?? "👑"}`,
-    );
-    navigate("/moi");
   }
 
   return (
@@ -71,14 +85,18 @@ export function Register() {
             <Crown className="h-6 w-6" />
           </span>
         </div>
-        <h1 className="heading-gold mt-5 text-center text-3xl">
-          {step === "identity" ? "Rejoindre la cour" : "Choisis ta créature"}
-        </h1>
-        <p className="mt-2 text-center text-sm text-ivory/70">
-          {step === "identity"
-            ? "Prononce ton nom elfique et scelle ton pacte."
-            : "Ton essence détermine comment le royaume te reconnaît."}
-        </p>
+        {step !== "sent" && (
+          <>
+            <h1 className="heading-gold mt-5 text-center text-3xl">
+              {step === "identity" ? "Créer mon compte" : "Choisis ta créature"}
+            </h1>
+            <p className="mt-2 text-center text-sm text-ivory/70">
+              {step === "identity"
+                ? "Choisis ton pseudo, ton email, ton mot de passe. C'est parti."
+                : "Ta créature, c'est ton badge décoratif — visible partout sur ton profil."}
+            </p>
+          </>
+        )}
 
         {step === "identity" && (
           <form onSubmit={goToCreature} className="mx-auto mt-8 max-w-sm space-y-4">
@@ -88,7 +106,7 @@ export function Register() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
-                placeholder="Ton nom elfique"
+                placeholder="Ton pseudo"
                 className="glass-input pl-9"
               />
             </div>
@@ -99,7 +117,7 @@ export function Register() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                placeholder="Mail elfique"
+                placeholder="Ton email"
                 className="glass-input pl-9"
               />
             </div>
@@ -110,7 +128,7 @@ export function Register() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                placeholder="Sortilège d'entrée (4+ caractères)"
+                placeholder="Mot de passe (8+ caractères)"
                 className="glass-input pl-9"
               />
             </div>
@@ -180,21 +198,40 @@ export function Register() {
               <button
                 type="button"
                 onClick={finalize}
-                disabled={!creatureId}
+                disabled={!creatureId || submitting}
                 className="btn-gold justify-center disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Sceller le pacte
+                {submitting ? "Incantation…" : "Sceller le pacte"}
               </button>
             </div>
           </div>
         )}
 
-        <p className="mt-6 text-center text-sm text-ivory/60">
-          Déjà un pacte ?{" "}
-          <Link to="/connexion" className="text-gold-300 hover:text-gold-200">
-            Se connecter
-          </Link>
-        </p>
+        {step === "sent" && (
+          <div className="mt-8 space-y-4 text-center">
+            <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-gold-500/10 text-gold-300">
+              <MailCheck className="h-7 w-7" />
+            </span>
+            <h2 className="heading-gold text-2xl">Vérifie ta boîte mail</h2>
+            <p className="text-sm text-ivory/70">{sentMessage}</p>
+            <p className="text-xs text-ivory/50">
+              Pas reçu ? Vérifie les spams, ou retente via la page de
+              connexion.
+            </p>
+            <Link to="/connexion" className="btn-gold inline-flex justify-center">
+              Aller à la connexion
+            </Link>
+          </div>
+        )}
+
+        {step !== "sent" && (
+          <p className="mt-6 text-center text-sm text-ivory/60">
+            Déjà un pacte ?{" "}
+            <Link to="/connexion" className="text-gold-300 hover:text-gold-200">
+              Se connecter
+            </Link>
+          </p>
+        )}
       </motion.div>
     </div>
   );

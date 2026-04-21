@@ -9,25 +9,39 @@ import {
   type ReactNode,
 } from "react";
 import type Peer from "peerjs";
-import type { MediaConnection } from "peerjs";
+import type { DataConnection, MediaConnection } from "peerjs";
 import { useStore } from "./StoreContext";
 import { useAuth } from "./AuthContext";
+import { getPeerOptions } from "../lib/peerConfig";
+import type { ChatMessage } from "../types";
 import {
   DEFAULT_LIVE_CATEGORY,
   normalizeLiveCategory,
   type LiveCategoryId,
 } from "../data/liveCategories";
+import {
+  apiListLive,
+  apiLiveHeartbeat,
+  apiStopLive,
+  type LiveSessionOut,
+} from "../lib/liveApi";
 
 /**
  * Contexte dédié aux lives (queen + cour). Multi-utilisateur.
  *
- * Deux modes disponibles :
+ * Trois modes disponibles :
  *  - "twitch" : le broadcaster streame depuis OBS vers Twitch. Le site embed le
  *    lecteur Twitch officiel. La clé de stream OBS est stockée en local chez
  *    le broadcaster uniquement (jamais envoyée nulle part).
  *  - "screen" : partage d'écran direct depuis le navigateur via WebRTC
  *    (peerjs + broker public gratuit). Pas d'OBS nécessaire, le broadcaster
  *    clique "Partager mon écran" et les viewers reçoivent le flux en direct.
+ *    ⚠️ `getDisplayMedia` n'est pas supporté sur iOS Safari ni sur la plupart
+ *    des navigateurs mobiles Android. Pour le mobile, utiliser le mode
+ *    "camera" qui s'appuie sur `getUserMedia` (caméra frontale ou arrière).
+ *  - "camera" : live caméra natif du navigateur via `getUserMedia`. Marche
+ *    sur desktop (webcam) ET sur mobile (caméra frontale/arrière
+ *    sélectionnables). Même pipeline WebRTC que "screen" côté viewers.
  *
  * Chaque broadcaster possède son propre peer-ID déterministe
  * `vaelyndra-live-<userId>`, ce qui permet à plusieurs membres de la cour
@@ -46,7 +60,9 @@ export function getLivePeerId(userId: string): string {
   return `vaelyndra-live-v2-${userId}`;
 }
 
-export type LiveMode = "twitch" | "screen";
+export type LiveMode = "twitch" | "screen" | "camera";
+
+export type CameraFacing = "user" | "environment";
 
 export interface LiveConfig {
   status: "idle" | "live";
@@ -168,6 +184,26 @@ function readRegistry(): Record<string, LiveRegistryEntry> {
   }
 }
 
+/** Convertit une ligne LiveSession du backend en entrée de registre local. */
+function remoteToRegistry(s: LiveSessionOut): LiveRegistryEntry {
+  const mode: LiveMode =
+    s.mode === "twitch" || s.mode === "screen" || s.mode === "camera"
+      ? s.mode
+      : "screen";
+  return {
+    userId: s.broadcaster_id,
+    username: s.broadcaster_name,
+    avatar: s.broadcaster_avatar,
+    title: s.title,
+    description: s.description,
+    mode,
+    category: normalizeLiveCategory(s.category),
+    twitchChannel: s.twitch_channel,
+    startedAt: s.started_at,
+    lastHeartbeat: s.last_heartbeat_at,
+  };
+}
+
 function writeRegistry(registry: Record<string, LiveRegistryEntry>) {
   try {
     localStorage.setItem(REGISTRY_STORAGE_KEY, JSON.stringify(registry));
@@ -191,6 +227,20 @@ interface LiveCtx {
   announceTwitchLive: (channelOverride?: string) => void;
   /** Côté host : démarrer le partage d'écran via WebRTC. */
   startScreenShare: () => Promise<void>;
+  /**
+   * Côté host : démarrer un live caméra (`getUserMedia`). Marche sur
+   * desktop (webcam) et sur mobile (caméra frontale ou arrière selon
+   * `facingMode`). Même pipeline peerjs que `startScreenShare`.
+   */
+  startCameraShare: (facingMode?: CameraFacing) => Promise<void>;
+  /**
+   * Côté host : bascule entre caméra frontale et arrière sans couper le
+   * peer (on replace la vidéo track sur toutes les connexions actives).
+   * No-op hors du mode caméra.
+   */
+  switchCamera: () => Promise<void>;
+  /** Côté host : orientation actuelle de la caméra (user = frontale). */
+  cameraFacing: CameraFacing;
   /** Côté host : arrêter mon live. */
   stopLive: () => void;
   /**
@@ -209,13 +259,37 @@ interface LiveCtx {
   lastError: string | null;
   /** Métadonnées du live actuellement regardé (titre/description/etc). */
   viewingMeta: { title: string; description: string; mode: LiveMode } | null;
+  /**
+   * Publie un message de chat sur le live courant.
+   *
+   *  - Côté host : le message est diffusé à tous les viewers connectés
+   *    via leurs DataConnection respectives, puis livré localement à
+   *    tous les subscribers (pour que le host voie aussi son propre
+   *    message dans son chat).
+   *  - Côté viewer : le message est envoyé au host via la
+   *    DataConnection ouverte par `joinAsViewer`. Le host le re-diffuse
+   *    ensuite à l'ensemble des viewers, y compris l'expéditeur (c'est
+   *    cette rediffusion qui déclenche l'ajout local, pas l'envoi).
+   *
+   * Le transport est pur WebRTC (PeerJS DataChannel). Aucune
+   * persistance serveur : les nouveaux viewers ne voient que les
+   * messages postés *après* leur arrivée, c'est un chat volatile façon
+   * Twitch.
+   */
+  publishChatMessage: (msg: ChatMessage) => void;
+  /**
+   * S'abonne aux messages de chat reçus du live courant. Appelé par la
+   * page Live pour injecter les messages dans son state. Retourne un
+   * cleanup à appeler au démontage.
+   */
+  subscribeChatMessages: (handler: (msg: ChatMessage) => void) => () => void;
 }
 
 const Ctx = createContext<LiveCtx | null>(null);
 
 export function LiveProvider({ children }: { children: ReactNode }) {
   const { isLiveOn, setLiveOn } = useStore();
-  const { user } = useAuth();
+  const { user, users } = useAuth();
   const [config, setConfig] = useState<LiveConfig>(() => readConfig());
   const [liveRegistry, setLiveRegistry] = useState<
     Record<string, LiveRegistryEntry>
@@ -224,6 +298,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
+  const [cameraFacing, setCameraFacing] = useState<CameraFacing>("user");
   const [viewingMeta, setViewingMeta] = useState<
     { title: string; description: string; mode: LiveMode } | null
   >(null);
@@ -231,6 +306,27 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   const hostPeerRef = useRef<Peer | null>(null);
   const viewerPeerRef = useRef<Peer | null>(null);
   const hostConnectionsRef = useRef<Set<MediaConnection>>(new Set());
+  // Host : ensemble des DataConnection avec les viewers. Sert à la fois
+  // au push "live-meta" initial (titre/description) et à la diffusion
+  // des messages de chat en temps réel.
+  const hostDataConnectionsRef = useRef<Set<DataConnection>>(new Set());
+  // Viewer : sa DataConnection vers le host courant. Utilisée pour
+  // envoyer ses propres messages de chat au host (qui les rediffuse).
+  const viewerDataConnRef = useRef<DataConnection | null>(null);
+  // Dédoublonnage des messages de chat reçus (un message peut arriver
+  // plusieurs fois côté viewer si la connexion est renégociée).
+  const chatSeenIdsRef = useRef<Set<string>>(new Set());
+  // Abonnés au flux des messages de chat (un seul dans la pratique,
+  // la page Live, mais un Set permet de ne pas se soucier du nombre).
+  const chatListenersRef = useRef<Set<(msg: ChatMessage) => void>>(new Set());
+  // Rôle courant vis-à-vis de `publishChatMessage` : true si on est
+  // host (on broadcast), false si on est viewer (on transmet au host).
+  const isHostingChatRef = useRef(false);
+  // Garde-fou anti double-clic sur `switchCamera` : `getUserMedia` prend
+  // 100-500 ms sur mobile, sans ce verrou deux clics rapides créent deux
+  // MediaStream concurrents et la première fuite (tracks jamais
+  // `stop()`-ées → caméra/micro restent actifs en tâche de fond).
+  const switchingCameraRef = useRef(false);
   // Ref miroir sur le flux local pour que `cleanup` puisse toujours couper
   // les tracks même quand il est appelé depuis un callback qui a capturé
   // l'ancienne valeur de state (ex. listener "ended" ou erreur peer).
@@ -242,6 +338,14 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   // Ref miroir sur l'utilisateur courant pour les callbacks asynchrones.
   const userRef = useRef(user);
   userRef.current = user;
+  // Ref miroir sur la liste des utilisateurs connus, utilisée par le
+  // host pour recalculer le `highlight` des messages de chat côté
+  // serveur (cf. broadcastChatFromHost). On ne peut pas faire confiance
+  // au `highlight` envoyé par un viewer : n'importe qui pourrait
+  // usurper le badge « reine ». On le re-dérive donc depuis le rôle
+  // réel de l'auteur tel que connu localement.
+  const usersRef = useRef(users);
+  usersRef.current = users;
 
   useEffect(() => {
     try {
@@ -259,7 +363,9 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         try {
           const next = JSON.parse(event.newValue) as Partial<LiveConfig>;
           const nextMode =
-            next.mode === "twitch" || next.mode === "screen"
+            next.mode === "twitch" ||
+            next.mode === "screen" ||
+            next.mode === "camera"
               ? next.mode
               : undefined;
           setConfig((c) => ({
@@ -320,6 +426,105 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  /**
+   * Valide et normalise un message de chat reçu par le canal WebRTC.
+   * Retourne null si la payload est mal formée (pour se protéger d'un
+   * pair malveillant ou d'une version cliente incompatible).
+   *
+   * `trustHighlight` :
+   *  - `false` côté host en réception d'un viewer : on ignore ce que
+   *    l'émetteur a mis dans `highlight` (sinon un viewer malveillant
+   *    pourrait usurper le badge 👑 reine). Le host recalculera la
+   *    bonne valeur dans `broadcastChatFromHost` en résolvant
+   *    `authorId` contre la liste des utilisateurs connus.
+   *  - `true` côté viewer en réception du host : le host a déjà fait
+   *    la validation, son `highlight` est la source de vérité et doit
+   *    être conservé sinon le badge reine ne s'affichera jamais chez
+   *    les autres viewers.
+   */
+  const sanitizeIncomingChat = useCallback(
+    (payload: unknown, trustHighlight: boolean): ChatMessage | null => {
+      if (typeof payload !== "object" || payload === null) return null;
+      const p = payload as Record<string, unknown>;
+      if (p.type !== "chat-message") return null;
+      const id = typeof p.id === "string" ? p.id : null;
+      const authorId = typeof p.authorId === "string" ? p.authorId : null;
+      const authorName = typeof p.authorName === "string" ? p.authorName : null;
+      const authorAvatar =
+        typeof p.authorAvatar === "string" ? p.authorAvatar : null;
+      const content = typeof p.content === "string" ? p.content : null;
+      const createdAt =
+        typeof p.createdAt === "string" ? p.createdAt : new Date().toISOString();
+      if (!id || !authorId || !authorName || !authorAvatar || !content) {
+        return null;
+      }
+      return {
+        id,
+        authorId,
+        authorName,
+        authorAvatar,
+        content: content.slice(0, 500), // anti-flood / anti-troll-wall-of-text
+        createdAt,
+        highlight: trustHighlight ? p.highlight === true : false,
+      };
+    },
+    [],
+  );
+
+  /**
+   * Livre un message de chat aux subscribers locaux (la page Live), en
+   * évitant les doublons (un même `id` peut arriver plusieurs fois si le
+   * DataChannel est renégocié).
+   */
+  const deliverChatLocally = useCallback((msg: ChatMessage) => {
+    if (chatSeenIdsRef.current.has(msg.id)) return;
+    chatSeenIdsRef.current.add(msg.id);
+    // Borne la mémoire : on ne garde que les 500 derniers ids vus pour
+    // le dédoublonnage. Au-delà c'est toujours plus que le buffer UI
+    // (CHAT_BUFFER_MAX = 200 côté Live.tsx).
+    if (chatSeenIdsRef.current.size > 500) {
+      const first = chatSeenIdsRef.current.values().next().value;
+      if (first) chatSeenIdsRef.current.delete(first);
+    }
+    chatListenersRef.current.forEach((h) => {
+      try {
+        h(msg);
+      } catch (err) {
+        console.warn("chat listener threw", err);
+      }
+    });
+  }, []);
+
+  /**
+   * Côté host uniquement : diffuse un message de chat à toutes les
+   * DataConnection viewer ouvertes, ET le livre localement (pour que
+   * le broadcaster voie aussi son propre chat et celui de ses viewers).
+   *
+   * Le flag `highlight` est recalculé ici à partir du rôle réel de
+   * l'auteur (`users[authorId].role === "queen"`). On ignore donc ce
+   * que le viewer a pu mettre dans son payload : sans ça, n'importe
+   * quel viewer pourrait usurper le badge 👑 reine en mettant
+   * `highlight: true` dans son envoi WebRTC.
+   */
+  const broadcastChatFromHost = useCallback(
+    (msg: ChatMessage) => {
+      const author = usersRef.current.find((u) => u.id === msg.authorId);
+      const highlight = author?.role === "queen";
+      const safeMsg: ChatMessage = { ...msg, highlight };
+      hostDataConnectionsRef.current.forEach((dc) => {
+        if (!dc.open) return;
+        try {
+          dc.send({ type: "chat-message", ...safeMsg });
+        } catch {
+          // ignore — la DataConnection a peut-être été fermée entre
+          // le test `open` et le send, pas grave.
+        }
+      });
+      deliverChatLocally(safeMsg);
+    },
+    [deliverChatLocally],
+  );
+
   /** Ferme UNIQUEMENT les ressources côté host (peer hôte + stream local). */
   const stopHosting = useCallback(() => {
     hostConnectionsRef.current.forEach((call) => {
@@ -330,6 +535,15 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       }
     });
     hostConnectionsRef.current.clear();
+    hostDataConnectionsRef.current.forEach((dc) => {
+      try {
+        dc.close();
+      } catch {
+        // ignore
+      }
+    });
+    hostDataConnectionsRef.current.clear();
+    isHostingChatRef.current = false;
 
     if (hostPeerRef.current) {
       try {
@@ -350,6 +564,14 @@ export function LiveProvider({ children }: { children: ReactNode }) {
 
   /** Ferme UNIQUEMENT les ressources côté viewer (peer + remoteStream). */
   const stopViewing = useCallback(() => {
+    if (viewerDataConnRef.current) {
+      try {
+        viewerDataConnRef.current.close();
+      } catch {
+        // ignore
+      }
+      viewerDataConnRef.current = null;
+    }
     if (viewerPeerRef.current) {
       try {
         viewerPeerRef.current.destroy();
@@ -381,6 +603,12 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         const next = { ...r };
         delete next[me.id];
         return next;
+      });
+      // Notifie le backend pour que les autres users voient disparaître
+      // ce live immédiatement (sans attendre le TTL heartbeat 90 s).
+      apiStopLive().catch(() => {
+        // Si l'appel échoue, le serveur finira par supprimer l'entrée
+        // une fois que le heartbeat expirera côté backend (90 s).
       });
     }
   }, [stopHosting, updateRegistry]);
@@ -425,6 +653,163 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     [updateRegistry],
   );
 
+  /**
+   * Attache un `MediaStream` (écran ou caméra) à un peer hôte et démarre
+   * le broadcast. Partagé entre `startScreenShare` et `startCameraShare`
+   * pour éviter la duplication de toute la mécanique peerjs.
+   */
+  const attachStreamToPeer = useCallback(
+    async (
+      stream: MediaStream,
+      mode: Extract<LiveMode, "screen" | "camera">,
+    ) => {
+      const me = userRef.current;
+      if (!me) {
+        stream.getTracks().forEach((t) => t.stop());
+        setLastError("Connecte-toi pour lancer un live.");
+        return;
+      }
+      try {
+        const { default: PeerCtor } = await import("peerjs");
+        // Garde-fou anti race-condition : si le host a stoppé le partage ou
+        // quitté la page pendant l'import dynamique, `stopLive()` a déjà tourné
+        // et `localStreamRef.current` ne pointe plus sur notre stream.
+        if (localStreamRef.current !== stream) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        const peerId = getLivePeerId(me.id);
+        const peer = new PeerCtor(peerId, getPeerOptions());
+        hostPeerRef.current = peer;
+        isHostingChatRef.current = true;
+        let peerOpened = false;
+
+        peer.on("open", () => {
+          peerOpened = true;
+          const startedAt = new Date().toISOString();
+          setConfig((c) => ({
+            ...c,
+            status: "live",
+            mode,
+            startedAt,
+          }));
+          updateRegistry((r) => ({
+            ...r,
+            [me.id]: {
+              userId: me.id,
+              username: me.username,
+              avatar: me.avatar,
+              title:
+                configRef.current.title.trim() || `${me.username} en direct`,
+              description: configRef.current.description.trim(),
+              mode,
+              category: configRef.current.category,
+              twitchChannel: "",
+              startedAt,
+              lastHeartbeat: startedAt,
+            },
+          }));
+        });
+
+        peer.on("error", (err: Error & { type?: string }) => {
+          if (!peerOpened) {
+            const friendly =
+              err.type === "unavailable-id"
+                ? "Un live Vaelyndra est déjà actif à ton nom ailleurs. Ferme l'autre onglet."
+                : `Impossible de démarrer le relais live : ${err.message || err.type || "erreur inconnue"}`;
+            setLastError(friendly);
+            stopLive();
+            return;
+          }
+          console.warn("PeerJS host error after open", err);
+        });
+
+        peer.on("disconnected", () => {
+          if (peerOpened) {
+            setLastError(
+              "La connexion au serveur de relais a été perdue. Relance un live quand tu es prêt.",
+            );
+            stopLive();
+          }
+        });
+
+        peer.on("call", (incoming) => {
+          // Un viewer nous appelle — on lui envoie toujours le flux actif
+          // (`localStreamRef.current`, pas la capture locale `stream`). Ça
+          // garantit qu'un `switchCamera` qui recrée le stream sert la
+          // nouvelle source aux nouveaux viewers (les anciens gardent leur
+          // track remplacée via `RTCRtpSender.replaceTrack`).
+          const active = localStreamRef.current ?? stream;
+          // Le `config.iceServers` est propagé par PeerJS depuis
+          // `new Peer(..., getPeerOptions())` vers chaque
+          // `RTCPeerConnection` créée pour une MediaConnection, donc
+          // pas besoin de le redupliquer ici.
+          incoming.answer(active);
+          hostConnectionsRef.current.add(incoming);
+          incoming.on("close", () => {
+            hostConnectionsRef.current.delete(incoming);
+          });
+        });
+
+        peer.on("connection", (dataConn) => {
+          // Chaque viewer ouvre une DataConnection vers le host.
+          //
+          // Deux usages :
+          //  1. Le host lui pousse les métas du live (titre, description,
+          //     mode) dès l'ouverture.
+          //  2. Le host s'en sert comme canal de chat temps réel : il
+          //     re-diffuse à tous les viewers les messages qu'il reçoit
+          //     (ou qu'il émet lui-même).
+          hostDataConnectionsRef.current.add(dataConn);
+          dataConn.on("open", () => {
+            try {
+              dataConn.send({
+                type: "live-meta",
+                title: configRef.current.title,
+                description: configRef.current.description,
+                mode,
+              });
+            } catch {
+              // ignore
+            }
+          });
+          dataConn.on("data", (payload) => {
+            // Réception d'un message de chat venant d'un viewer : on le
+            // redistribue à l'ensemble des viewers (y compris
+            // l'émetteur, pour qu'il voie son message s'afficher une
+            // fois validé par le host), et on le livre localement au
+            // chat du host.
+            if (
+              typeof payload === "object" &&
+              payload !== null &&
+              (payload as { type?: string }).type === "chat-message"
+            ) {
+              // Côté host : le message vient d'un viewer non fiable,
+              // on IGNORE son `highlight` — c'est `broadcastChatFromHost`
+              // qui recalculera la bonne valeur à partir du vrai rôle.
+              const msg = sanitizeIncomingChat(payload, false);
+              if (msg) broadcastChatFromHost(msg);
+            }
+          });
+          dataConn.on("close", () => {
+            hostDataConnectionsRef.current.delete(dataConn);
+          });
+        });
+      } catch (err) {
+        setLastError(
+          `Impossible de démarrer le relais WebRTC : ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+        stream.getTracks().forEach((t) => t.stop());
+        localStreamRef.current = null;
+        setLocalStream(null);
+        return;
+      }
+    },
+    [stopLive, updateRegistry],
+  );
+
   const startScreenShare = useCallback(async () => {
     const me = userRef.current;
     if (!me) {
@@ -439,8 +824,17 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     // navigateur actif sans moyen de le couper depuis l'app.
     if (hostPeerRef.current || localStreamRef.current) return;
     setLastError(null);
-    if (typeof navigator === "undefined" || !navigator.mediaDevices) {
-      setLastError("Ton navigateur ne supporte pas le partage d'écran.");
+    if (
+      typeof navigator === "undefined" ||
+      !navigator.mediaDevices ||
+      typeof navigator.mediaDevices.getDisplayMedia !== "function"
+    ) {
+      // iOS Safari (<= 18) et la plupart des navigateurs Android n'exposent
+      // pas `getDisplayMedia`. On le signale explicitement pour que l'UI
+      // oriente vers le mode "camera" au lieu d'un échec silencieux.
+      setLastError(
+        "Ton navigateur ne supporte pas le partage d'écran. Utilise le mode caméra (dispo sur mobile).",
+      );
       return;
     }
     let stream: MediaStream;
@@ -465,107 +859,155 @@ export function LiveProvider({ children }: { children: ReactNode }) {
 
     localStreamRef.current = stream;
     setLocalStream(stream);
+    await attachStreamToPeer(stream, "screen");
+  }, [attachStreamToPeer, stopLive]);
 
-    try {
-      const { default: PeerCtor } = await import("peerjs");
-      // Garde-fou anti race-condition : si le host a stoppé le partage ou
-      // quitté la page pendant l'import dynamique, `stopLive()` a déjà tourné
-      // et `localStreamRef.current` ne pointe plus sur notre stream.
-      if (localStreamRef.current !== stream) {
-        stream.getTracks().forEach((t) => t.stop());
+  const startCameraShare = useCallback(
+    async (facingMode: CameraFacing = "user") => {
+      const me = userRef.current;
+      if (!me) {
+        setLastError("Connecte-toi pour lancer un live.");
         return;
       }
-      const peerId = getLivePeerId(me.id);
-      const peer = new PeerCtor(peerId, { debug: 1 });
-      hostPeerRef.current = peer;
-      let peerOpened = false;
-
-      peer.on("open", () => {
-        peerOpened = true;
-        const startedAt = new Date().toISOString();
-        setConfig((c) => ({
-          ...c,
-          status: "live",
-          mode: "screen",
-          startedAt,
-        }));
-        // Enregistre dans le registre public pour que le fil
-        // communautaire et les autres onglets voient le live.
-        updateRegistry((r) => ({
-          ...r,
-          [me.id]: {
-            userId: me.id,
-            username: me.username,
-            avatar: me.avatar,
-            title: configRef.current.title.trim() || `${me.username} en direct`,
-            description: configRef.current.description.trim(),
-            mode: "screen",
-            category: configRef.current.category,
-            twitchChannel: "",
-            startedAt,
-            lastHeartbeat: startedAt,
+      if (hostPeerRef.current || localStreamRef.current) return;
+      setLastError(null);
+      if (
+        typeof navigator === "undefined" ||
+        !navigator.mediaDevices ||
+        typeof navigator.mediaDevices.getUserMedia !== "function"
+      ) {
+        setLastError("Ton navigateur ne supporte pas l'accès caméra.");
+        return;
+      }
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          // `facingMode` est un hint : sur desktop (webcam unique), le
+          // navigateur ignore et prend la seule caméra dispo.
+          video: {
+            facingMode: { ideal: facingMode },
+            frameRate: { ideal: 30 },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
           },
-        }));
-      });
-
-      peer.on("error", (err: Error & { type?: string }) => {
-        if (!peerOpened) {
-          const friendly =
-            err.type === "unavailable-id"
-              ? "Un live Vaelyndra est déjà actif à ton nom ailleurs. Ferme l'autre onglet."
-              : `Impossible de démarrer le relais live : ${err.message || err.type || "erreur inconnue"}`;
-          setLastError(friendly);
-          stopLive();
-          return;
-        }
-        console.warn("PeerJS host error after open", err);
-      });
-
-      peer.on("disconnected", () => {
-        if (peerOpened) {
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+          },
+        });
+      } catch (err) {
+        if (err instanceof Error && err.name !== "NotAllowedError") {
+          setLastError(`Impossible d'accéder à la caméra : ${err.message}`);
+        } else if (err instanceof Error) {
           setLastError(
-            "La connexion au serveur de relais a été perdue. Relance un live quand tu es prêt.",
+            "Autorise l'accès à la caméra et au micro pour lancer ton live.",
           );
-          stopLive();
         }
-      });
-
-      peer.on("call", (incoming) => {
-        // Un viewer nous appelle — on lui envoie notre flux.
-        incoming.answer(stream);
-        hostConnectionsRef.current.add(incoming);
-        incoming.on("close", () => {
-          hostConnectionsRef.current.delete(incoming);
+        return;
+      }
+      setCameraFacing(facingMode);
+      stream.getVideoTracks().forEach((track) => {
+        track.addEventListener("ended", () => {
+          if (localStreamRef.current === stream) stopLive();
         });
       });
+      localStreamRef.current = stream;
+      setLocalStream(stream);
+      await attachStreamToPeer(stream, "camera");
+    },
+    [attachStreamToPeer, stopLive],
+  );
 
-      peer.on("connection", (dataConn) => {
-        // Le viewer ouvre une DataConnection juste pour réclamer les métas.
-        dataConn.on("open", () => {
-          try {
-            dataConn.send({
-              type: "live-meta",
-              title: configRef.current.title,
-              description: configRef.current.description,
-              mode: "screen",
-            });
-          } catch {
-            // ignore
-          }
-        });
-      });
-    } catch (err) {
-      setLastError(
-        `Impossible de démarrer le relais WebRTC : ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      );
-      stream.getTracks().forEach((t) => t.stop());
-      localStreamRef.current = null;
-      setLocalStream(null);
+  /**
+   * Bascule entre caméra frontale et arrière sans couper le peer. On
+   * ouvre un nouveau flux avec l'autre `facingMode`, on remplace la
+   * track vidéo sur tous les `RTCRtpSender` existants (viewers en cours),
+   * et on stoppe l'ancienne track.
+   */
+  const switchCamera = useCallback(async () => {
+    if (configRef.current.mode !== "camera") return;
+    // Verrou re-entrant : tant que le swap précédent n'est pas fini, on
+    // ignore les nouveaux appels. Sans ça un double-tap rapide ouvre deux
+    // MediaStream, le premier n'est jamais stoppé (fuite caméra/micro).
+    if (switchingCameraRef.current) return;
+    const current = localStreamRef.current;
+    if (!current) return;
+    if (
+      typeof navigator === "undefined" ||
+      !navigator.mediaDevices ||
+      typeof navigator.mediaDevices.getUserMedia !== "function"
+    ) {
       return;
     }
-  }, [stopLive, updateRegistry]);
+    switchingCameraRef.current = true;
+    try {
+      const nextFacing: CameraFacing =
+        cameraFacing === "user" ? "environment" : "user";
+      let next: MediaStream;
+      try {
+        next = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: nextFacing },
+            frameRate: { ideal: 30 },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+          },
+        });
+      } catch (err) {
+        if (err instanceof Error) {
+          setLastError(`Impossible de changer de caméra : ${err.message}`);
+        }
+        return;
+      }
+
+      // Si le live a été stoppé pendant le `await` (stopLive l'a nettoyé),
+      // on jette le nouveau stream au lieu de le raccrocher à un peer mort.
+      if (localStreamRef.current !== current) {
+        next.getTracks().forEach((t) => t.stop());
+        return;
+      }
+
+      const newVideoTrack = next.getVideoTracks()[0];
+      const newAudioTrack = next.getAudioTracks()[0];
+      if (!newVideoTrack) {
+        next.getTracks().forEach((t) => t.stop());
+        return;
+      }
+
+      // Remplace les tracks sur toutes les MediaConnection viewers en cours.
+      // `replaceTrack` est préféré à la renégociation complète : pas de
+      // re-offer SDP, pas de coupure visible côté viewers.
+      hostConnectionsRef.current.forEach((call) => {
+        const senders = call.peerConnection?.getSenders() ?? [];
+        for (const sender of senders) {
+          if (sender.track?.kind === "video") {
+            sender.replaceTrack(newVideoTrack).catch(() => {
+              /* ignore — la connexion peut être en cours de fermeture */
+            });
+          } else if (sender.track?.kind === "audio" && newAudioTrack) {
+            sender.replaceTrack(newAudioTrack).catch(() => {
+              /* ignore */
+            });
+          }
+        }
+      });
+
+      // Stoppe l'ancien stream (tracks) puis publie le nouveau côté host.
+      current.getTracks().forEach((t) => t.stop());
+      newVideoTrack.addEventListener("ended", () => {
+        if (localStreamRef.current === next) stopLive();
+      });
+      localStreamRef.current = next;
+      setLocalStream(next);
+      setCameraFacing(nextFacing);
+    } finally {
+      switchingCameraRef.current = false;
+    }
+  }, [cameraFacing, stopLive]);
 
   /**
    * Côté viewer : tente activement de rejoindre le live d'un broadcaster
@@ -588,9 +1030,14 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       try {
         const { default: PeerCtor } = await import("peerjs");
         if (cancelled) return;
+        // Sans id → PeerJS génère un id via son broker. PeerJS expose
+        // deux signatures (`new Peer(options)` et `new Peer(id,
+        // options?)`) ; seule la version nommée est typée publiquement,
+        // donc on passe par un cast léger pour garder la version
+        // anonyme utilisée ici.
         const viewerPeer = new (PeerCtor as unknown as {
-          new (id?: string, options?: { debug?: number }): Peer;
-        })(undefined, { debug: 1 });
+          new (options: ReturnType<typeof getPeerOptions>): Peer;
+        })(getPeerOptions());
         viewerPeerRef.current = viewerPeer;
 
         viewerPeer.on("open", () => {
@@ -616,15 +1063,19 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             setIsConnecting(false);
           });
 
-          // DataConnection pour récupérer titre/description du live.
+          // DataConnection bidirectionnelle avec le host :
+          //  - réception : métadonnées du live + messages de chat
+          //    redistribués par le host.
+          //  - émission : messages de chat tapés par ce viewer (le host
+          //    les re-diffuse à tous les autres viewers).
           const data = viewerPeer.connect(targetPeerId);
+          viewerDataConnRef.current = data;
+          isHostingChatRef.current = false;
           data.on("data", (payload) => {
             if (cancelled) return;
-            if (
-              typeof payload === "object" &&
-              payload !== null &&
-              (payload as { type?: string }).type === "live-meta"
-            ) {
+            if (typeof payload !== "object" || payload === null) return;
+            const type = (payload as { type?: string }).type;
+            if (type === "live-meta") {
               const meta = payload as {
                 title?: string;
                 description?: string;
@@ -637,10 +1088,25 @@ export function LiveProvider({ children }: { children: ReactNode }) {
                     ? meta.description
                     : "",
                 mode:
-                  meta.mode === "twitch" || meta.mode === "screen"
+                  meta.mode === "twitch" ||
+                  meta.mode === "screen" ||
+                  meta.mode === "camera"
                     ? meta.mode
                     : "screen",
               });
+            } else if (type === "chat-message") {
+              // Côté viewer : le message vient du host, qui a déjà
+              // validé et recalculé `highlight` (cf. broadcastChat
+              // FromHost). On fait confiance à sa valeur, sans quoi
+              // le badge 👑 reine ne s'affichera jamais chez les
+              // autres viewers.
+              const msg = sanitizeIncomingChat(payload, true);
+              if (msg) deliverChatLocally(msg);
+            }
+          });
+          data.on("close", () => {
+            if (viewerDataConnRef.current === data) {
+              viewerDataConnRef.current = null;
             }
           });
         });
@@ -675,6 +1141,14 @@ export function LiveProvider({ children }: { children: ReactNode }) {
 
     return () => {
       cancelled = true;
+      if (viewerDataConnRef.current) {
+        try {
+          viewerDataConnRef.current.close();
+        } catch {
+          // ignore
+        }
+        viewerDataConnRef.current = null;
+      }
       if (viewerPeerRef.current) {
         try {
           viewerPeerRef.current.destroy();
@@ -696,46 +1170,30 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Nettoyage de l'entrée registry à la fermeture / au reload de l'onglet.
-  // CRUCIAL : on ne retire QUE si CE tab est celui qui diffuse (status=live
-  // ET hostPeerRef actif). Sans ces deux gardes, fermer n'importe quel
-  // onglet non-broadcaster tuerait le live d'un autre onglet du même user
-  // via le listener `storage`.
-  useEffect(() => {
-    const removeMyEntry = () => {
-      const me = userRef.current;
-      if (!me) return;
-      // Tab non-diffuseur : on ne touche à rien (évite les races cross-tab).
-      if (configRef.current.status !== "live") return;
-      if (!hostPeerRef.current && configRef.current.mode !== "twitch") return;
-      try {
-        const raw = localStorage.getItem(REGISTRY_STORAGE_KEY);
-        if (!raw) return;
-        const parsed = JSON.parse(raw) as Record<string, LiveRegistryEntry>;
-        if (!(me.id in parsed)) return;
-        delete parsed[me.id];
-        localStorage.setItem(REGISTRY_STORAGE_KEY, JSON.stringify(parsed));
-      } catch {
-        // ignore
-      }
-    };
-    window.addEventListener("beforeunload", removeMyEntry);
-    window.addEventListener("pagehide", removeMyEntry);
-    return () => {
-      window.removeEventListener("beforeunload", removeMyEntry);
-      window.removeEventListener("pagehide", removeMyEntry);
-    };
-  }, []);
+  // Volontairement aucun handler `beforeunload` / `pagehide` : un simple
+  // refresh de la page (F5, pull-to-refresh mobile) ne doit PAS tuer le
+  // live du broadcaster, c'était le bug #54 signalé. Le backend purge
+  // automatiquement les entrées orphelines via le TTL heartbeat (90 s
+  // côté serveur), ce qui couvre la fermeture définitive d'onglet sans
+  // pénaliser les refresh volontaires. Le broadcaster peut restaurer
+  // son live en relançant le partage d'écran après refresh — l'entrée
+  // serveur reste vivante entre-temps, donc les viewers voient
+  // "Reconnexion…" au lieu de "Live terminé".
 
   // Heartbeat : l'onglet qui diffuse rafraîchit `lastHeartbeat` toutes les
   // 30s. Combiné au filtrage dans `readRegistry` (seuil 90s), ça élimine
   // les entrées orphelines d'une fermeture brutale/crash en ~1-2 minutes,
   // sans risque de race cross-tab (seul le tab diffuseur écrit).
+  //
+  // Depuis le registre serveur (LiveSession), on POSTe aussi /live/heartbeat
+  // pour que les autres users (sur d'autres browsers/devices) voient
+  // apparaître ce live dans leur `/communaute`. Sans ce POST, le live
+  // reste cantonné au localStorage du broadcaster.
   useEffect(() => {
     if (config.status !== "live") return;
     const me = userRef.current;
     if (!me) return;
-    const tick = () => {
+    const tickLocal = () => {
       try {
         // On passe par readRegistry() pour filtrer au passage les entrées
         // orphelines des autres broadcasters (crash, heartbeat > 90s). Sans
@@ -750,9 +1208,144 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         // ignore
       }
     };
-    const id = setInterval(tick, 30_000);
+    const tickServer = () => {
+      const c = configRef.current;
+      apiLiveHeartbeat({
+        title: c.title,
+        description: c.description,
+        category: c.category,
+        mode: c.mode,
+        twitchChannel: c.twitchChannel,
+      }).catch(() => {
+        // Silencieux : un 401/403 (non connecté) ou un 5xx temporaire ne
+        // doit pas interrompre le live local. Les viewers fallback-eront
+        // sur le peerjs direct si le registre serveur n'est pas dispo.
+      });
+    };
+    // Premier POST immédiat pour que les viewers voient le live tout de
+    // suite (sans attendre 30 s), puis tick régulier.
+    tickServer();
+    const id = setInterval(() => {
+      tickLocal();
+      tickServer();
+    }, 30_000);
     return () => clearInterval(id);
   }, [config.status]);
+
+  // Sync registre serveur → registre local. Toutes les 10 s, on récupère
+  // la liste publique des lives actifs depuis le backend et on la
+  // fusionne dans `liveRegistry`. Résultat : Dreyna (ou n'importe quel
+  // autre user) voit apparaître le live d'Alexandre sans avoir à
+  // refresh la page ni à partager un localStorage.
+  //
+  // Stratégie de fusion :
+  //  - entrées du serveur → on les ajoute / remplace (source de vérité)
+  //  - entrée locale du broadcaster en cours → on la conserve telle
+  //    quelle (le tick local est plus fréquent et garde les champs riches
+  //    comme `lastHeartbeat`)
+  useEffect(() => {
+    let cancelled = false;
+    const sync = async () => {
+      try {
+        const remote = await apiListLive();
+        if (cancelled) return;
+        const me = userRef.current;
+        setLiveRegistry((prev) => {
+          const next: Record<string, LiveRegistryEntry> = {};
+          // 1. Toutes les entrées serveur (tous broadcasters).
+          for (const s of remote) {
+            // On ne touche pas à la sienne — l'entrée locale est la
+            // source de vérité pour son propre live (titre modifié en
+            // direct, heartbeat frais).
+            if (me && s.broadcaster_id === me.id) continue;
+            next[s.broadcaster_id] = remoteToRegistry(s);
+          }
+          // 2. Ma propre entrée conservée uniquement si je suis EFFECTIVEMENT
+          //    en live sur CE tab. Sans cette garde, un rafraîchissement
+          //    de la page broadcaster laissait son ancienne entrée
+          //    persister dans le registre local (status=idle au mount →
+          //    plus de heartbeat → plus de refresh serveur → le serveur
+          //    la purge à 90 s, mais ce bloc la ré-injectait à chaque
+          //    poll depuis `prev`, la figeant pour toujours côté tab).
+          if (
+            me &&
+            prev[me.id] &&
+            configRef.current.status === "live"
+          ) {
+            next[me.id] = prev[me.id];
+          }
+          writeRegistry(next);
+          return next;
+        });
+      } catch {
+        // Backend indispo : on garde ce qu'on a en local, pas de reset.
+      }
+    };
+    sync();
+    const id = setInterval(sync, 10_000);
+    // Re-sync au retour d'onglet (user mobile qui bascule d'app → revient).
+    const onVisible = () => {
+      if (document.visibilityState === "visible") sync();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, []);
+
+  /**
+   * Publie un message de chat sur le live courant.
+   *
+   * Si on est host, on broadcast directement à tous les viewers
+   * connectés via leurs DataConnection, puis on livre localement.
+   *
+   * Si on est viewer, on envoie au host via la DataConnection ouverte
+   * par `joinAsViewer`. Le host le rediffusera à tout le monde (y
+   * compris nous-même), c'est ce retour qui alimente le chat local —
+   * garantit que tout le monde voit les mêmes messages dans le même
+   * ordre (ordre d'arrivée chez le host).
+   */
+  const publishChatMessage = useCallback(
+    (msg: ChatMessage) => {
+      if (isHostingChatRef.current) {
+        broadcastChatFromHost(msg);
+        return;
+      }
+      const dc = viewerDataConnRef.current;
+      if (dc && dc.open) {
+        try {
+          dc.send({ type: "chat-message", ...msg });
+        } catch {
+          // ignore — la connexion a peut-être été coupée.
+        }
+        // Écho optimiste local : on affiche tout de suite au sender
+        // pour qu'il voie son message partir, sans attendre la
+        // rediffusion du host. La dédup par id empêchera le doublon
+        // quand le host renverra le même message.
+        deliverChatLocally(msg);
+      } else {
+        // Pas de connexion host ouverte (Twitch, offline, host
+        // injoignable) : on tombe en mode purement local — l'émetteur
+        // voit son message, les autres non. C'est aussi le
+        // comportement attendu quand le mode est `twitch` (pas de
+        // peer WebRTC à joindre).
+        deliverChatLocally(msg);
+      }
+    },
+    [broadcastChatFromHost, deliverChatLocally],
+  );
+
+  const subscribeChatMessages = useCallback(
+    (handler: (msg: ChatMessage) => void) => {
+      chatListenersRef.current.add(handler);
+      return () => {
+        chatListenersRef.current.delete(handler);
+      };
+    },
+    [],
+  );
 
   const value = useMemo<LiveCtx>(
     () => ({
@@ -761,6 +1354,9 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       liveRegistry,
       announceTwitchLive,
       startScreenShare,
+      startCameraShare,
+      switchCamera,
+      cameraFacing,
       stopLive,
       joinAsViewer,
       remoteStream,
@@ -768,6 +1364,8 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       isConnecting,
       lastError,
       viewingMeta,
+      publishChatMessage,
+      subscribeChatMessages,
     }),
     [
       config,
@@ -775,6 +1373,9 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       liveRegistry,
       announceTwitchLive,
       startScreenShare,
+      startCameraShare,
+      switchCamera,
+      cameraFacing,
       stopLive,
       joinAsViewer,
       remoteStream,
@@ -782,6 +1383,8 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       isConnecting,
       lastError,
       viewingMeta,
+      publishChatMessage,
+      subscribeChatMessages,
     ],
   );
 

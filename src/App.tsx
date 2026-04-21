@@ -1,6 +1,7 @@
 import { Route, Routes, useLocation } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Navbar } from "./components/Navbar";
+import { OfflineBanner } from "./components/OfflineBanner";
 import { Footer } from "./components/Footer";
 import { MagicBackground } from "./components/MagicBackground";
 import { Home } from "./pages/Home";
@@ -10,10 +11,14 @@ import { Shop } from "./pages/Shop";
 import { Cart } from "./pages/Cart";
 import { Live } from "./pages/Live";
 import { Community } from "./pages/Community";
-import { DreynaProfile } from "./pages/DreynaProfile";
 import { Login } from "./pages/Login";
 import { Register } from "./pages/Register";
 import { Me } from "./pages/Me";
+import { Compte } from "./pages/Compte";
+import { Connexions } from "./pages/Connexions";
+import { VerifyEmail } from "./pages/VerifyEmail";
+import { ForgotPassword } from "./pages/ForgotPassword";
+import { ResetPassword } from "./pages/ResetPassword";
 import { Admin } from "./pages/Admin";
 import { NotFound } from "./pages/NotFound";
 import { MentionsLegales } from "./pages/MentionsLegales";
@@ -23,6 +28,8 @@ import { CGV } from "./pages/CGV";
 import { Cookies } from "./pages/Cookies";
 import { UserProfile } from "./pages/UserProfile";
 import { Avatar } from "./pages/Avatar";
+import { Messages } from "./pages/Messages";
+import { MessageThread } from "./pages/MessageThread";
 import { Guarded } from "./components/Guarded";
 import { EasterEggs } from "./components/EasterEggs";
 import { CookieBanner } from "./components/CookieBanner";
@@ -47,12 +54,18 @@ function AnimatedRoutes() {
           <Route path="/live" element={<Live />} />
           <Route path="/live/:broadcasterId" element={<Live />} />
           <Route path="/communaute" element={<Community />} />
-          <Route path="/dreyna" element={<DreynaProfile />} />
           <Route path="/u/:userId" element={<UserProfile />} />
           <Route path="/connexion" element={<Login />} />
           <Route path="/inscription" element={<Register />} />
           <Route path="/moi" element={<Guarded><Me /></Guarded>} />
+          <Route path="/compte" element={<Guarded><Compte /></Guarded>} />
+          <Route path="/connexions" element={<Guarded><Connexions /></Guarded>} />
           <Route path="/avatar" element={<Guarded><Avatar /></Guarded>} />
+          <Route path="/messages" element={<Guarded><Messages /></Guarded>} />
+          <Route path="/messages/:userId" element={<Guarded><MessageThread /></Guarded>} />
+          <Route path="/verifier-email" element={<VerifyEmail />} />
+          <Route path="/mot-de-passe-oublie" element={<ForgotPassword />} />
+          <Route path="/reinitialiser-mot-de-passe" element={<ResetPassword />} />
           <Route path="/admin" element={<Guarded queenOnly><Admin /></Guarded>} />
           <Route path="/mentions-legales" element={<MentionsLegales />} />
           <Route path="/confidentialite" element={<Confidentialite />} />
@@ -72,6 +85,7 @@ function App() {
       <MagicBackground />
       <EasterEggs />
       <Navbar />
+      <OfflineBanner />
       <main className="flex-1">
         <AnimatedRoutes />
       </main>
