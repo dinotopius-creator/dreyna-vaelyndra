@@ -9,10 +9,11 @@ import {
   type ReactNode,
 } from "react";
 import type Peer from "peerjs";
-import type { MediaConnection } from "peerjs";
+import type { DataConnection, MediaConnection } from "peerjs";
 import { useStore } from "./StoreContext";
 import { useAuth } from "./AuthContext";
 import { getPeerOptions } from "../lib/peerConfig";
+import type { ChatMessage } from "../types";
 import {
   DEFAULT_LIVE_CATEGORY,
   normalizeLiveCategory,
@@ -258,6 +259,30 @@ interface LiveCtx {
   lastError: string | null;
   /** Métadonnées du live actuellement regardé (titre/description/etc). */
   viewingMeta: { title: string; description: string; mode: LiveMode } | null;
+  /**
+   * Publie un message de chat sur le live courant.
+   *
+   *  - Côté host : le message est diffusé à tous les viewers connectés
+   *    via leurs DataConnection respectives, puis livré localement à
+   *    tous les subscribers (pour que le host voie aussi son propre
+   *    message dans son chat).
+   *  - Côté viewer : le message est envoyé au host via la
+   *    DataConnection ouverte par `joinAsViewer`. Le host le re-diffuse
+   *    ensuite à l'ensemble des viewers, y compris l'expéditeur (c'est
+   *    cette rediffusion qui déclenche l'ajout local, pas l'envoi).
+   *
+   * Le transport est pur WebRTC (PeerJS DataChannel). Aucune
+   * persistance serveur : les nouveaux viewers ne voient que les
+   * messages postés *après* leur arrivée, c'est un chat volatile façon
+   * Twitch.
+   */
+  publishChatMessage: (msg: ChatMessage) => void;
+  /**
+   * S'abonne aux messages de chat reçus du live courant. Appelé par la
+   * page Live pour injecter les messages dans son state. Retourne un
+   * cleanup à appeler au démontage.
+   */
+  subscribeChatMessages: (handler: (msg: ChatMessage) => void) => () => void;
 }
 
 const Ctx = createContext<LiveCtx | null>(null);
@@ -281,6 +306,22 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   const hostPeerRef = useRef<Peer | null>(null);
   const viewerPeerRef = useRef<Peer | null>(null);
   const hostConnectionsRef = useRef<Set<MediaConnection>>(new Set());
+  // Host : ensemble des DataConnection avec les viewers. Sert à la fois
+  // au push "live-meta" initial (titre/description) et à la diffusion
+  // des messages de chat en temps réel.
+  const hostDataConnectionsRef = useRef<Set<DataConnection>>(new Set());
+  // Viewer : sa DataConnection vers le host courant. Utilisée pour
+  // envoyer ses propres messages de chat au host (qui les rediffuse).
+  const viewerDataConnRef = useRef<DataConnection | null>(null);
+  // Dédoublonnage des messages de chat reçus (un message peut arriver
+  // plusieurs fois côté viewer si la connexion est renégociée).
+  const chatSeenIdsRef = useRef<Set<string>>(new Set());
+  // Abonnés au flux des messages de chat (un seul dans la pratique,
+  // la page Live, mais un Set permet de ne pas se soucier du nombre).
+  const chatListenersRef = useRef<Set<(msg: ChatMessage) => void>>(new Set());
+  // Rôle courant vis-à-vis de `publishChatMessage` : true si on est
+  // host (on broadcast), false si on est viewer (on transmet au host).
+  const isHostingChatRef = useRef(false);
   // Garde-fou anti double-clic sur `switchCamera` : `getUserMedia` prend
   // 100-500 ms sur mobile, sans ce verrou deux clics rapides créent deux
   // MediaStream concurrents et la première fuite (tracks jamais
@@ -377,6 +418,85 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  /**
+   * Valide et normalise un message de chat reçu par le canal WebRTC.
+   * Retourne null si la payload est mal formée (pour se protéger d'un
+   * pair malveillant ou d'une version cliente incompatible).
+   */
+  const sanitizeIncomingChat = useCallback(
+    (payload: unknown): ChatMessage | null => {
+      if (typeof payload !== "object" || payload === null) return null;
+      const p = payload as Record<string, unknown>;
+      if (p.type !== "chat-message") return null;
+      const id = typeof p.id === "string" ? p.id : null;
+      const authorId = typeof p.authorId === "string" ? p.authorId : null;
+      const authorName = typeof p.authorName === "string" ? p.authorName : null;
+      const authorAvatar =
+        typeof p.authorAvatar === "string" ? p.authorAvatar : null;
+      const content = typeof p.content === "string" ? p.content : null;
+      const createdAt =
+        typeof p.createdAt === "string" ? p.createdAt : new Date().toISOString();
+      if (!id || !authorId || !authorName || !authorAvatar || !content) {
+        return null;
+      }
+      return {
+        id,
+        authorId,
+        authorName,
+        authorAvatar,
+        content: content.slice(0, 500), // anti-flood / anti-troll-wall-of-text
+        createdAt,
+        highlight: p.highlight === true,
+      };
+    },
+    [],
+  );
+
+  /**
+   * Livre un message de chat aux subscribers locaux (la page Live), en
+   * évitant les doublons (un même `id` peut arriver plusieurs fois si le
+   * DataChannel est renégocié).
+   */
+  const deliverChatLocally = useCallback((msg: ChatMessage) => {
+    if (chatSeenIdsRef.current.has(msg.id)) return;
+    chatSeenIdsRef.current.add(msg.id);
+    // Borne la mémoire : on ne garde que les 500 derniers ids vus pour
+    // le dédoublonnage. Au-delà c'est toujours plus que le buffer UI
+    // (CHAT_BUFFER_MAX = 200 côté Live.tsx).
+    if (chatSeenIdsRef.current.size > 500) {
+      const first = chatSeenIdsRef.current.values().next().value;
+      if (first) chatSeenIdsRef.current.delete(first);
+    }
+    chatListenersRef.current.forEach((h) => {
+      try {
+        h(msg);
+      } catch (err) {
+        console.warn("chat listener threw", err);
+      }
+    });
+  }, []);
+
+  /**
+   * Côté host uniquement : diffuse un message de chat à toutes les
+   * DataConnection viewer ouvertes, ET le livre localement (pour que
+   * le broadcaster voie aussi son propre chat et celui de ses viewers).
+   */
+  const broadcastChatFromHost = useCallback(
+    (msg: ChatMessage) => {
+      hostDataConnectionsRef.current.forEach((dc) => {
+        if (!dc.open) return;
+        try {
+          dc.send({ type: "chat-message", ...msg });
+        } catch {
+          // ignore — la DataConnection a peut-être été fermée entre
+          // le test `open` et le send, pas grave.
+        }
+      });
+      deliverChatLocally(msg);
+    },
+    [deliverChatLocally],
+  );
+
   /** Ferme UNIQUEMENT les ressources côté host (peer hôte + stream local). */
   const stopHosting = useCallback(() => {
     hostConnectionsRef.current.forEach((call) => {
@@ -387,6 +507,15 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       }
     });
     hostConnectionsRef.current.clear();
+    hostDataConnectionsRef.current.forEach((dc) => {
+      try {
+        dc.close();
+      } catch {
+        // ignore
+      }
+    });
+    hostDataConnectionsRef.current.clear();
+    isHostingChatRef.current = false;
 
     if (hostPeerRef.current) {
       try {
@@ -407,6 +536,14 @@ export function LiveProvider({ children }: { children: ReactNode }) {
 
   /** Ferme UNIQUEMENT les ressources côté viewer (peer + remoteStream). */
   const stopViewing = useCallback(() => {
+    if (viewerDataConnRef.current) {
+      try {
+        viewerDataConnRef.current.close();
+      } catch {
+        // ignore
+      }
+      viewerDataConnRef.current = null;
+    }
     if (viewerPeerRef.current) {
       try {
         viewerPeerRef.current.destroy();
@@ -516,6 +653,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         const peerId = getLivePeerId(me.id);
         const peer = new PeerCtor(peerId, getPeerOptions());
         hostPeerRef.current = peer;
+        isHostingChatRef.current = true;
         let peerOpened = false;
 
         peer.on("open", () => {
@@ -586,7 +724,15 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         });
 
         peer.on("connection", (dataConn) => {
-          // Le viewer ouvre une DataConnection juste pour réclamer les métas.
+          // Chaque viewer ouvre une DataConnection vers le host.
+          //
+          // Deux usages :
+          //  1. Le host lui pousse les métas du live (titre, description,
+          //     mode) dès l'ouverture.
+          //  2. Le host s'en sert comme canal de chat temps réel : il
+          //     re-diffuse à tous les viewers les messages qu'il reçoit
+          //     (ou qu'il émet lui-même).
+          hostDataConnectionsRef.current.add(dataConn);
           dataConn.on("open", () => {
             try {
               dataConn.send({
@@ -598,6 +744,24 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             } catch {
               // ignore
             }
+          });
+          dataConn.on("data", (payload) => {
+            // Réception d'un message de chat venant d'un viewer : on le
+            // redistribue à l'ensemble des viewers (y compris
+            // l'émetteur, pour qu'il voie son message s'afficher une
+            // fois validé par le host), et on le livre localement au
+            // chat du host.
+            if (
+              typeof payload === "object" &&
+              payload !== null &&
+              (payload as { type?: string }).type === "chat-message"
+            ) {
+              const msg = sanitizeIncomingChat(payload);
+              if (msg) broadcastChatFromHost(msg);
+            }
+          });
+          dataConn.on("close", () => {
+            hostDataConnectionsRef.current.delete(dataConn);
           });
         });
       } catch (err) {
@@ -868,15 +1032,19 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             setIsConnecting(false);
           });
 
-          // DataConnection pour récupérer titre/description du live.
+          // DataConnection bidirectionnelle avec le host :
+          //  - réception : métadonnées du live + messages de chat
+          //    redistribués par le host.
+          //  - émission : messages de chat tapés par ce viewer (le host
+          //    les re-diffuse à tous les autres viewers).
           const data = viewerPeer.connect(targetPeerId);
+          viewerDataConnRef.current = data;
+          isHostingChatRef.current = false;
           data.on("data", (payload) => {
             if (cancelled) return;
-            if (
-              typeof payload === "object" &&
-              payload !== null &&
-              (payload as { type?: string }).type === "live-meta"
-            ) {
+            if (typeof payload !== "object" || payload === null) return;
+            const type = (payload as { type?: string }).type;
+            if (type === "live-meta") {
               const meta = payload as {
                 title?: string;
                 description?: string;
@@ -895,6 +1063,14 @@ export function LiveProvider({ children }: { children: ReactNode }) {
                     ? meta.mode
                     : "screen",
               });
+            } else if (type === "chat-message") {
+              const msg = sanitizeIncomingChat(payload);
+              if (msg) deliverChatLocally(msg);
+            }
+          });
+          data.on("close", () => {
+            if (viewerDataConnRef.current === data) {
+              viewerDataConnRef.current = null;
             }
           });
         });
@@ -929,6 +1105,14 @@ export function LiveProvider({ children }: { children: ReactNode }) {
 
     return () => {
       cancelled = true;
+      if (viewerDataConnRef.current) {
+        try {
+          viewerDataConnRef.current.close();
+        } catch {
+          // ignore
+        }
+        viewerDataConnRef.current = null;
+      }
       if (viewerPeerRef.current) {
         try {
           viewerPeerRef.current.destroy();
@@ -1075,6 +1259,58 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  /**
+   * Publie un message de chat sur le live courant.
+   *
+   * Si on est host, on broadcast directement à tous les viewers
+   * connectés via leurs DataConnection, puis on livre localement.
+   *
+   * Si on est viewer, on envoie au host via la DataConnection ouverte
+   * par `joinAsViewer`. Le host le rediffusera à tout le monde (y
+   * compris nous-même), c'est ce retour qui alimente le chat local —
+   * garantit que tout le monde voit les mêmes messages dans le même
+   * ordre (ordre d'arrivée chez le host).
+   */
+  const publishChatMessage = useCallback(
+    (msg: ChatMessage) => {
+      if (isHostingChatRef.current) {
+        broadcastChatFromHost(msg);
+        return;
+      }
+      const dc = viewerDataConnRef.current;
+      if (dc && dc.open) {
+        try {
+          dc.send({ type: "chat-message", ...msg });
+        } catch {
+          // ignore — la connexion a peut-être été coupée.
+        }
+        // Écho optimiste local : on affiche tout de suite au sender
+        // pour qu'il voie son message partir, sans attendre la
+        // rediffusion du host. La dédup par id empêchera le doublon
+        // quand le host renverra le même message.
+        deliverChatLocally(msg);
+      } else {
+        // Pas de connexion host ouverte (Twitch, offline, host
+        // injoignable) : on tombe en mode purement local — l'émetteur
+        // voit son message, les autres non. C'est aussi le
+        // comportement attendu quand le mode est `twitch` (pas de
+        // peer WebRTC à joindre).
+        deliverChatLocally(msg);
+      }
+    },
+    [broadcastChatFromHost, deliverChatLocally],
+  );
+
+  const subscribeChatMessages = useCallback(
+    (handler: (msg: ChatMessage) => void) => {
+      chatListenersRef.current.add(handler);
+      return () => {
+        chatListenersRef.current.delete(handler);
+      };
+    },
+    [],
+  );
+
   const value = useMemo<LiveCtx>(
     () => ({
       config,
@@ -1092,6 +1328,8 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       isConnecting,
       lastError,
       viewingMeta,
+      publishChatMessage,
+      subscribeChatMessages,
     }),
     [
       config,
@@ -1109,6 +1347,8 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       isConnecting,
       lastError,
       viewingMeta,
+      publishChatMessage,
+      subscribeChatMessages,
     ],
   );
 
