@@ -194,6 +194,39 @@ function isCameraSupported(): boolean {
 }
 
 /**
+ * Détection (best-effort) d'un appareil mobile. On combine plusieurs
+ * signaux parce qu'aucun n'est parfait :
+ *  - `userAgent` avec les mots-clés usuels (Android, iPhone, iPad,
+ *    Mobile, Silk…) couvre 99 % des devices, y compris les tablettes
+ *    Samsung.
+ *  - `maxTouchPoints > 1` attrape les iPad récents qui se déclarent
+ *    "Macintosh" dans leur UA par défaut.
+ *
+ * But : savoir si on doit préselectionner le mode "Caméra" (qui marche
+ * partout) plutôt que "Partage d'écran" (qui n'existe pas sur mobile,
+ * ni Android Chrome ni Samsung Internet ni iOS Safari → l'appel à
+ * `getDisplayMedia` plante silencieusement, ce qui fait croire à
+ * l'utilisateur Samsung que son téléphone "ne peut pas streamer").
+ */
+function isLikelyMobile(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent || "";
+  if (/Android|iPhone|iPad|iPod|Mobile|Silk|Opera Mini|SamsungBrowser/i.test(ua)) {
+    return true;
+  }
+  // iPad iOS 13+ se fait passer pour un Mac — on le récupère via le
+  // nombre de points de contact.
+  if (
+    typeof navigator.maxTouchPoints === "number" &&
+    navigator.maxTouchPoints > 1 &&
+    /Macintosh/i.test(ua)
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/**
  * Panneau d'aide pour les users iPhone / iPad : explique le parcours
  * "streamer depuis mon appareil Apple" via Twitch Mobile → embed
  * automatique sur Vaelyndra. Sur iOS/iPadOS, le partage d'écran web n'est
@@ -320,6 +353,13 @@ function BroadcasterControls() {
   const [showKey, setShowKey] = useState(false);
   const screenShareSupported = isScreenShareSupported();
   const cameraSupported = isCameraSupported();
+  const isMobile = useMemo(() => isLikelyMobile(), []);
+  // Le partage d'écran via `getDisplayMedia` n'est pas supporté sur
+  // mobile : même si Chrome Android expose parfois l'API, l'appel
+  // renvoie une `NotAllowedError` / une track morte. On désactive donc
+  // le mode screen sur tous les mobiles, indépendamment du test de
+  // capacité API (qui donne de faux positifs sur Samsung Internet).
+  const screenEffectiveSupported = screenShareSupported && !isMobile;
 
   const isLive = config.status === "live";
 
@@ -329,17 +369,38 @@ function BroadcasterControls() {
 
   // Les non-queen n'ont pas accès au mode "twitch" (gatekeeping officiels).
   // Si leur config pointe dessus (bascule dev/admin puis retour user), on
-  // réoriente vers le partage d'écran par défaut. On NE bascule PAS
-  // automatiquement vers "camera" sur mobile : Android Chrome supporte
-  // getDisplayMedia pour streamer ses jeux, et les users iOS préfèrent
-  // utiliser l'app Twitch mobile (documentée plus bas) plutôt que la
-  // caméra frontale. L'utilisateur choisit explicitement.
+  // les réoriente vers le mode le plus adapté à leur appareil :
+  //  - PC : partage d'écran (mode historique le plus puissant pour
+  //    streamer un jeu ou une app) ;
+  //  - mobile : caméra (seul mode qui marche sur Samsung / Android /
+  //    iOS, parce que `getDisplayMedia` n'existe pas sur mobile ou
+  //    plante silencieusement).
+  // Idem si un user mobile arrive avec `mode = "screen"` en
+  // localStorage (par ex. il avait choisi "Partage d'écran" sur PC
+  // puis a rouvert Vaelyndra depuis son Samsung) — sans cette
+  // redirection, il cliquerait "Passer en direct" et rien ne se
+  // passerait, d'où l'impression que "le téléphone ne peut pas
+  // streamer".
   useEffect(() => {
     if (!user) return;
+    const fallbackMode = isMobile || !screenShareSupported ? "camera" : "screen";
     if (!isQueen && config.mode === "twitch") {
-      updateConfig({ mode: "screen" });
+      updateConfig({ mode: fallbackMode });
+      return;
     }
-  }, [user, isQueen, config.mode, updateConfig]);
+    if (config.mode === "screen" && !screenEffectiveSupported && cameraSupported) {
+      updateConfig({ mode: "camera" });
+    }
+  }, [
+    user,
+    isQueen,
+    config.mode,
+    updateConfig,
+    isMobile,
+    screenShareSupported,
+    screenEffectiveSupported,
+    cameraSupported,
+  ]);
 
   if (!user) return null;
 
@@ -520,18 +581,22 @@ function BroadcasterControls() {
           <button
             type="button"
             onClick={() =>
-              !isLive && screenShareSupported && updateConfig({ mode: "screen" })
+              !isLive &&
+              screenEffectiveSupported &&
+              updateConfig({ mode: "screen" })
             }
-            disabled={isLive || !screenShareSupported}
+            disabled={isLive || !screenEffectiveSupported}
             className={`card-royal flex items-start gap-3 p-4 text-left transition ${
               config.mode === "screen"
                 ? "ring-1 ring-gold-400/60"
                 : "opacity-80 hover:opacity-100"
             } disabled:cursor-not-allowed disabled:opacity-40`}
             title={
-              screenShareSupported
+              screenEffectiveSupported
                 ? undefined
-                : "Le partage d'écran web n'est pas supporté sur iPhone/iPad. Utilise l'app Twitch mobile (pas-à-pas ci-dessous)."
+                : isMobile
+                  ? "Le partage d'écran web n'est pas supporté sur mobile (Android, Samsung, iPhone). Utilise le mode Caméra ci-dessus."
+                  : "Le partage d'écran web n'est pas supporté sur ton navigateur. Utilise le mode Caméra ci-dessus."
             }
           >
             <Monitor className="mt-0.5 h-5 w-5 text-gold-300" />
@@ -539,13 +604,15 @@ function BroadcasterControls() {
               <p className="font-display text-base text-gold-200">
                 Partage d'écran
                 <span className="ml-2 rounded-full border border-sky-300/40 bg-sky-500/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.2em] text-sky-200">
-                  pc + android
+                  pc uniquement
                 </span>
               </p>
               <p className="mt-1 text-xs text-ivory/60">
-                {screenShareSupported
-                  ? "Stream ton écran (jeu, appli, navigateur…) directement. Marche sur PC et sur Android Chrome."
-                  : "Ton navigateur ne permet pas le partage d'écran. Sur iPhone/iPad, utilise l'app Twitch mobile (voir ci-dessous)."}
+                {screenEffectiveSupported
+                  ? "Stream ton écran (jeu, appli, navigateur…) directement depuis ton PC."
+                  : isMobile
+                    ? "Le partage d'écran n'est pas dispo sur téléphone — choisis « Caméra » juste au-dessus (ça marche sur Samsung, iPhone et toutes les tablettes)."
+                    : "Ton navigateur ne permet pas le partage d'écran."}
               </p>
             </div>
           </button>

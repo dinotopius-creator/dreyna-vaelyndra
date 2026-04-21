@@ -33,6 +33,7 @@ import { MessageThread } from "./pages/MessageThread";
 import { Guarded } from "./components/Guarded";
 import { EasterEggs } from "./components/EasterEggs";
 import { CookieBanner } from "./components/CookieBanner";
+import { FloatingLiveChat } from "./components/FloatingLiveChat";
 
 function AnimatedRoutes() {
   const location = useLocation();
@@ -91,6 +92,7 @@ function App() {
       </main>
       <Footer />
       <CookieBanner />
+      <FloatingLiveChat />
     </div>
   );
 }
