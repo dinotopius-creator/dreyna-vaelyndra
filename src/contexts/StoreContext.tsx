@@ -39,17 +39,23 @@ interface StoreState {
   cart: CartItem[];
   orders: Order[];
   /**
-   * IDs of mock products (from INITIAL_PRODUCTS) that the admin has explicitly
-   * deleted. We track them so the merge logic doesn't resurrect them on reload.
+   * IDs of products (mock from INITIAL_PRODUCTS ou admin-créés) que l'admin a
+   * explicitement supprimés. On les garde pour que la logique de merge ne les
+   * ressuscite pas au reload (mock) et que d'éventuels seeds futurs les
+   * respectent aussi (custom). Clé localStorage conservée (`deletedMockProductIds`)
+   * pour la rétro-compat avec les stores déjà persistés.
    */
-  deletedMockProductIds: string[];
+  deletedProductIds: string[];
+  /**
+   * IDs d'articles supprimés par l'admin (mock ou custom). Même logique que
+   * `deletedProductIds`.
+   */
+  deletedArticleIds: string[];
   /**
    * Per-user Sylvins wallets (balance, streamer earnings, gift history).
    */
   wallets: Record<string, Wallet>;
 }
-
-const MOCK_PRODUCT_IDS = new Set(INITIAL_PRODUCTS.map((p) => p.id));
 
 type Action =
   | { type: "load"; state: StoreState }
@@ -109,6 +115,9 @@ function reducer(state: StoreState, action: Action): StoreState {
       return {
         ...state,
         articles: state.articles.filter((a) => a.id !== action.id),
+        deletedArticleIds: state.deletedArticleIds.includes(action.id)
+          ? state.deletedArticleIds
+          : [...state.deletedArticleIds, action.id],
       };
     case "toggleArticleLike":
       return {
@@ -142,17 +151,14 @@ function reducer(state: StoreState, action: Action): StoreState {
           p.id === action.product.id ? action.product : p,
         ),
       };
-    case "deleteProduct": {
-      const isMock = MOCK_PRODUCT_IDS.has(action.id);
+    case "deleteProduct":
       return {
         ...state,
         products: state.products.filter((p) => p.id !== action.id),
-        deletedMockProductIds:
-          isMock && !state.deletedMockProductIds.includes(action.id)
-            ? [...state.deletedMockProductIds, action.id]
-            : state.deletedMockProductIds,
+        deletedProductIds: state.deletedProductIds.includes(action.id)
+          ? state.deletedProductIds
+          : [...state.deletedProductIds, action.id],
       };
-    }
     case "addToCart": {
       const quantity = action.quantity ?? 1;
       const existing = state.cart.find((c) => c.productId === action.productId);
@@ -308,7 +314,8 @@ const INITIAL: StoreState = {
   lives: INITIAL_LIVES,
   cart: [],
   orders: [],
-  deletedMockProductIds: [],
+  deletedProductIds: [],
+  deletedArticleIds: [],
   wallets: {},
 };
 
@@ -366,7 +373,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // explicitly deleted are tracked in `deletedMockProductIds` so they are
       // NOT resurrected on reload.
       const storedProducts = parsed.products ?? init.products;
-      const deletedMockProductIds = parsed.deletedMockProductIds ?? [];
+      // Lecture avec rétro-compat : les stores existants utilisent
+      // `deletedMockProductIds` (ancien nom, même sémantique étendue).
+      const parsedAny = parsed as Partial<StoreState> & {
+        deletedMockProductIds?: string[];
+      };
+      const deletedProductIds =
+        parsedAny.deletedProductIds ??
+        parsedAny.deletedMockProductIds ??
+        [];
+      const deletedArticleIds = parsedAny.deletedArticleIds ?? [];
 
       // --- Migration one-shot PR L (pivot mini-réseau) ----------------------
       //
@@ -401,28 +417,32 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // Pour les prochains rebrands, ajouter l'id dans ce tableau.
       const MIGRATION_PRODUCT_IDS = new Set(["prod-pack"]);
 
+      const deletedSet = new Set(deletedProductIds);
       const mergedProducts = [
-        ...storedProducts.map((stored) => {
-          if (!runMigration) return stored;
-          if (!MIGRATION_PRODUCT_IDS.has(stored.id)) return stored;
-          const mock = init.products.find((m) => m.id === stored.id);
-          return mock
-            ? {
-                ...stored,
-                name: mock.name,
-                description: mock.description,
-                tags: mock.tags,
-              }
-            : stored;
-        }),
+        ...storedProducts
+          .filter((stored) => !deletedSet.has(stored.id))
+          .map((stored) => {
+            if (!runMigration) return stored;
+            if (!MIGRATION_PRODUCT_IDS.has(stored.id)) return stored;
+            const mock = init.products.find((m) => m.id === stored.id);
+            return mock
+              ? {
+                  ...stored,
+                  name: mock.name,
+                  description: mock.description,
+                  tags: mock.tags,
+                }
+              : stored;
+          }),
         ...init.products.filter(
           (mock) =>
             !storedProducts.some((p) => p.id === mock.id) &&
-            !deletedMockProductIds.includes(mock.id),
+            !deletedSet.has(mock.id),
         ),
       ];
 
       const storedArticles = parsed.articles ?? init.articles;
+      const deletedArticleSet = new Set(deletedArticleIds);
       const migratedArticles = runMigration
         ? storedArticles.map((art) => {
             const mock = init.articles.find((m) => m.id === art.id);
@@ -438,6 +458,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             return Object.keys(patch).length > 0 ? { ...art, ...patch } : art;
           })
         : storedArticles;
+      const finalArticles = [
+        ...migratedArticles.filter((a) => !deletedArticleSet.has(a.id)),
+        ...init.articles.filter(
+          (mock) =>
+            !migratedArticles.some((a) => a.id === mock.id) &&
+            !deletedArticleSet.has(mock.id),
+        ),
+      ];
 
       // Lives : même logique — on ne rafraîchit le titre depuis le mock QUE
       // pour les lives seed (ids présents dans init.lives). Les lives créés
@@ -472,13 +500,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
 
       return {
-        articles: migratedArticles,
+        articles: finalArticles,
         products: mergedProducts,
         posts: parsed.posts ?? init.posts,
         lives: migratedLives,
         cart: parsed.cart ?? [],
         orders: parsed.orders ?? [],
-        deletedMockProductIds,
+        deletedProductIds,
+        deletedArticleIds,
         wallets: parsed.wallets ?? {},
       };
     } catch {
