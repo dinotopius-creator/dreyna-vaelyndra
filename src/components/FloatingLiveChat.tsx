@@ -176,29 +176,62 @@ function FloatingLiveChatSession() {
   }, [minimized]);
 
   // ─── Drag (pointer events = souris + tactile unifié) ───
+  // On distingue un tap (clic/tap court sans mouvement) d'un drag (≥ 5 px).
+  // En mode pastille, un tap toggle minimized ; seul le drag déplace. Le
+  // preventDefault() n'est appelé qu'une fois le drag détecté, sinon sur
+  // mobile il suppresserait l'événement click et la pastille deviendrait
+  // intapable au doigt.
+  const TAP_THRESHOLD_PX = 5;
   const dragStateRef = useRef<{
     pointerId: number;
     offsetX: number;
     offsetY: number;
+    startX: number;
+    startY: number;
+    moved: boolean;
+    onTap: (() => void) | null;
   } | null>(null);
 
-  function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
-    // Ne commence un drag que si la cible est le handle : évite de
-    // drager quand on clique dans le champ texte ou sur un bouton.
+  function beginPointerDrag(
+    e: React.PointerEvent<HTMLDivElement>,
+    options?: { onTap?: () => void },
+  ) {
     const target = e.target as HTMLElement;
     if (target.closest("[data-no-drag]")) return;
     dragStateRef.current = {
       pointerId: e.pointerId,
       offsetX: e.clientX - position.x,
       offsetY: e.clientY - position.y,
+      startX: e.clientX,
+      startY: e.clientY,
+      moved: false,
+      onTap: options?.onTap ?? null,
     };
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    e.preventDefault();
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {
+      /* le navigateur peut refuser la capture dans certains cas */
+    }
+  }
+
+  function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    beginPointerDrag(e);
   }
 
   function handlePointerMove(e: React.PointerEvent<HTMLDivElement>) {
     const state = dragStateRef.current;
     if (!state || state.pointerId !== e.pointerId) return;
+    if (!state.moved) {
+      const dx = Math.abs(e.clientX - state.startX);
+      const dy = Math.abs(e.clientY - state.startY);
+      if (dx < TAP_THRESHOLD_PX && dy < TAP_THRESHOLD_PX) return;
+      state.moved = true;
+      // On ne bloque la gesture du navigateur qu'une fois qu'on est sûr
+      // d'être en drag — sinon on casserait le tap/click sur mobile.
+      e.preventDefault();
+    } else {
+      e.preventDefault();
+    }
     const nextWidth = minimized ? MINI_SIZE : PANEL_WIDTH;
     const nextHeight = minimized ? MINI_SIZE : PANEL_HEIGHT;
     setPosition(
@@ -218,6 +251,12 @@ function FloatingLiveChatSession() {
       (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
     } catch {
       /* pas de capture active, pas grave */
+    }
+    // Tap (pas de drag) : on exécute le callback — utilisé par la pastille
+    // minimisée pour rouvrir le chat, y compris au tactile où l'event
+    // "click" peut ne pas se déclencher à cause de la capture pointer.
+    if (!state.moved && state.onTap) {
+      state.onTap();
     }
   }
 
@@ -258,13 +297,15 @@ function FloatingLiveChatSession() {
         role="button"
         tabIndex={0}
         aria-label="Ouvrir le chat du live"
-        onPointerDown={handlePointerDown}
+        onPointerDown={(e) => beginPointerDrag(e, { onTap: toggleMinimized })}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
-        onClick={toggleMinimized}
         onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") toggleMinimized();
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            toggleMinimized();
+          }
         }}
         style={{
           position: "fixed",
