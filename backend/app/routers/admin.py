@@ -23,7 +23,13 @@ from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
 from ..auth.dependencies import require_admin
-from ..auth.models import AuthSession, Credential, LoginAttempt
+from ..auth.models import (
+    AuthSession,
+    Credential,
+    EmailVerificationToken,
+    LoginAttempt,
+    PasswordResetToken,
+)
 from ..db import get_session
 from ..models import AdminAuditLog, Report, UserProfile
 
@@ -653,6 +659,144 @@ def reports_stats(
         by_status[r.status] = by_status.get(r.status, 0) + 1
         by_type[r.target_type] = by_type.get(r.target_type, 0) + 1
     return {"total": len(rows), "byStatus": by_status, "byType": by_type}
+
+
+# --- Nettoyage comptes non-vérifiés ----------------------------------------
+
+# Ids de comptes qu'on refuse absolument de supprimer, même si leur
+# `email_verified_at` est NULL pour une raison inattendue (avatar seed
+# créé avant une migration de schema, par ex.). Source de vérité :
+# `OFFICIAL_ACCOUNTS` dans `app/main.py`.
+PROTECTED_USER_IDS: set[str] = {
+    "user-dreyna",
+    "user-kamestars",
+    "user-roi-des-zems",
+}
+
+
+class UnverifiedAccountOut(BaseModel):
+    userId: str
+    username: str
+    email: Optional[str]
+    createdAt: str
+
+
+class CleanupUnverifiedOut(BaseModel):
+    dryRun: bool
+    count: int
+    deleted: list[UnverifiedAccountOut]
+
+
+def _list_unverified(session: Session) -> list[tuple[UserProfile, Credential]]:
+    """Retourne les (UserProfile, Credential) dont l'email n'a jamais été
+    vérifié. Exclut les comptes protégés (officiels seedés)."""
+    creds = session.exec(
+        select(Credential).where(Credential.email_verified_at.is_(None))  # type: ignore[union-attr]
+    ).all()
+    out: list[tuple[UserProfile, Credential]] = []
+    for cred in creds:
+        if cred.user_id in PROTECTED_USER_IDS:
+            continue
+        profile = session.get(UserProfile, cred.user_id)
+        if profile is None:
+            # Credential orphelin : on le purgera quand même dans le POST.
+            continue
+        if (profile.role or "user") == "admin":
+            # Parachute : jamais de suppression d'un admin, même non vérifié.
+            continue
+        out.append((profile, cred))
+    out.sort(key=lambda pair: pair[0].created_at or "")
+    return out
+
+
+@router.get(
+    "/cleanup/unverified",
+    response_model=CleanupUnverifiedOut,
+)
+def list_unverified_accounts(
+    admin: UserProfile = Depends(require_admin),
+    session: Session = Depends(_session_dep),
+) -> CleanupUnverifiedOut:
+    """Dry-run : liste les comptes qui seraient supprimés par POST
+    `/admin/cleanup/unverified`. Pas d'effet de bord."""
+    rows = _list_unverified(session)
+    return CleanupUnverifiedOut(
+        dryRun=True,
+        count=len(rows),
+        deleted=[
+            UnverifiedAccountOut(
+                userId=profile.id,
+                username=profile.username,
+                email=cred.email,
+                createdAt=profile.created_at,
+            )
+            for profile, cred in rows
+        ],
+    )
+
+
+@router.post(
+    "/cleanup/unverified",
+    response_model=CleanupUnverifiedOut,
+)
+def delete_unverified_accounts(
+    admin: UserProfile = Depends(require_admin),
+    session: Session = Depends(_session_dep),
+) -> CleanupUnverifiedOut:
+    """Supprime définitivement les comptes dont l'email n'a jamais été
+    vérifié. Exclut les comptes officiels seedés et tout compte admin.
+
+    Supprime en cascade : `UserProfile`, `Credential`, `AuthSession`,
+    `EmailVerificationToken`, `PasswordResetToken`, `LoginAttempt`
+    (lignes rattachées à l'user par `user_id`).
+    """
+    pairs = _list_unverified(session)
+    deleted_out: list[UnverifiedAccountOut] = []
+    for profile, cred in pairs:
+        uid = profile.id
+        for token in session.exec(
+            select(EmailVerificationToken).where(
+                EmailVerificationToken.user_id == uid,
+            )
+        ).all():
+            session.delete(token)
+        for token in session.exec(
+            select(PasswordResetToken).where(
+                PasswordResetToken.user_id == uid,
+            )
+        ).all():
+            session.delete(token)
+        for auth_s in session.exec(
+            select(AuthSession).where(AuthSession.user_id == uid)
+        ).all():
+            session.delete(auth_s)
+        for attempt in session.exec(
+            select(LoginAttempt).where(LoginAttempt.user_id == uid)
+        ).all():
+            session.delete(attempt)
+        session.delete(cred)
+        session.delete(profile)
+        deleted_out.append(
+            UnverifiedAccountOut(
+                userId=uid,
+                username=profile.username,
+                email=cred.email,
+                createdAt=profile.created_at,
+            )
+        )
+        _log_action(
+            session,
+            actor=admin,
+            target=profile,
+            action="cleanup_unverified_delete",
+            details={"email": cred.email, "createdAt": profile.created_at},
+        )
+    session.commit()
+    return CleanupUnverifiedOut(
+        dryRun=False,
+        count=len(deleted_out),
+        deleted=deleted_out,
+    )
 
 
 @router.patch("/reports/{report_id}", response_model=ReportOut)
