@@ -145,7 +145,7 @@ def create_sylvins_checkout(
                 }
             ],
             success_url=(
-                f"{frontend}/compte?payment=success"
+                f"{frontend}/moi?payment=success"
                 "&session_id={CHECKOUT_SESSION_ID}"
             ),
             cancel_url=f"{frontend}/panier?payment=cancelled",
