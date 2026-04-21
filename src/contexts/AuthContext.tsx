@@ -603,11 +603,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           ? patch.avatar.trim()
           : undefined;
 
-      try {
-        if (trimmedAvatar !== undefined) {
-          await apiUpdateAvatar(userId, { avatarImageUrl: trimmedAvatar });
-        }
-        if (trimmedUsername !== undefined) {
+      const errorMessage = (err: unknown, fallback: string) =>
+        err instanceof ApiError ? err.message || fallback : fallback;
+
+      // On sépare volontairement username et avatar en deux try/catch :
+      // si le 2e call échoue (réseau, 500…), le 1er est déjà committé
+      // côté serveur. Plutôt que de jeter toute la sauvegarde, on met à
+      // jour le state local pour refléter ce qui a bien été persisté,
+      // puis on remonte une erreur ciblée à l'UI.
+      let savedUsername = false;
+      let savedAvatar = false;
+
+      if (trimmedUsername !== undefined) {
+        try {
           // `upsert_user` met à jour le username même si le profil existe
           // déjà ; il n'écrase pas `avatar_image_url` s'il est non-vide,
           // donc on peut renvoyer la même valeur sans risque d'effacer
@@ -617,13 +625,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             username: trimmedUsername,
             avatarImageUrl: trimmedAvatar ?? "",
           });
+          savedUsername = true;
+        } catch (err) {
+          return {
+            ok: false,
+            error: errorMessage(err, "Pseudo impossible à enregistrer."),
+          };
         }
-      } catch (err) {
-        const msg =
-          err instanceof ApiError
-            ? err.message || "Enregistrement côté serveur impossible."
-            : "Enregistrement côté serveur impossible.";
-        return { ok: false, error: msg };
+      }
+
+      if (trimmedAvatar !== undefined) {
+        try {
+          await apiUpdateAvatar(userId, { avatarImageUrl: trimmedAvatar });
+          savedAvatar = true;
+        } catch (err) {
+          // Le pseudo (s'il a changé) est déjà persisté — on reflète le
+          // succès partiel dans le state local pour que l'UI ne perde
+          // pas la modification qui, elle, est bien en base.
+          if (savedUsername) {
+            setUsers((arr) =>
+              arr.map((u) =>
+                u.id === userId
+                  ? {
+                      ...u,
+                      username: trimmedUsername ?? u.username,
+                      bio: patch.bio !== undefined ? patch.bio : u.bio,
+                    }
+                  : u,
+              ),
+            );
+          }
+          return {
+            ok: false,
+            error: errorMessage(
+              err,
+              "Nouvelle image impossible à enregistrer.",
+            ),
+          };
+        }
       }
 
       setUsers((arr) =>
@@ -632,7 +671,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return {
             ...u,
             username: trimmedUsername ?? u.username,
-            avatar: trimmedAvatar ?? u.avatar,
+            avatar: savedAvatar && trimmedAvatar ? trimmedAvatar : u.avatar,
             bio: patch.bio !== undefined ? patch.bio : u.bio,
           };
         }),
