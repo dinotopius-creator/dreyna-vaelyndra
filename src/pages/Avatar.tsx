@@ -114,7 +114,7 @@ export function Avatar() {
 
       <SectionHeading
         eyebrow="Atelier d'avatar"
-        title="Composez votre double elfique"
+        title="Composez votre double magique"
         subtitle="Choisissez un style d'illustration, lancez les dés pour varier coiffure et tenue, puis scellez. Votre avatar vous suit sur tous vos appareils."
       />
 

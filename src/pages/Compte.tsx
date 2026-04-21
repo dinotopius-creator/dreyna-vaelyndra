@@ -906,7 +906,7 @@ export function Compte() {
             <Field label="Pseudo" value={user.username} />
             <Field label="Rôle" value={user.role} />
             <Field
-              label="Mail elfique"
+              label="Email"
               value={
                 <span className="flex items-center gap-2">
                   {backendMe?.email ?? user.email}

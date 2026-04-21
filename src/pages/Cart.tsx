@@ -170,7 +170,7 @@ export function Cart() {
                 <span>{formatPrice(cartTotal)}</span>
               </div>
               <div className="flex justify-between">
-                <span>Livraison elfique</span>
+                <span>Livraison magique</span>
                 <span className="text-gold-300">Offerte</span>
               </div>
             </div>

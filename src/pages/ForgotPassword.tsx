@@ -58,8 +58,8 @@ export function ForgotPassword() {
               Sortilège oublié ?
             </h1>
             <p className="mt-2 text-center text-sm text-ivory/70">
-              Entre ton mail elfique et nous t'envoyons un parchemin pour forger
-              un nouveau sortilège.
+              Entre ton email et nous t'envoyons un parchemin pour forger un
+              nouveau sortilège.
             </p>
             <form onSubmit={submit} className="mt-6 space-y-4">
               <div className="relative">
@@ -69,7 +69,7 @@ export function ForgotPassword() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  placeholder="mail elfique"
+                  placeholder="ton email"
                   className="glass-input pl-9"
                   autoComplete="email"
                 />
