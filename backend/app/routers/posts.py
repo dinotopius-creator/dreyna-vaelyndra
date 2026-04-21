@@ -274,13 +274,14 @@ def delete_comment(
     comment = session.get(Comment, comment_id)
     if not comment or comment.post_id != post_id:
         raise HTTPException(status_code=404, detail="Commentaire introuvable.")
-    # Peuvent supprimer : l'auteur du commentaire, l'auteur du post parent et la reine.
+    # Peuvent supprimer : l'auteur du commentaire, l'auteur du post parent,
+    # et les modérateur·rice·s (admin / queen).
     post = session.get(Post, post_id)
     post_author_id = post.author_id if post else None
     if (
         comment.author_id != user_id
         and post_author_id != user_id
-        and not _is_queen(user_id)
+        and not _is_moderator(session, user_id)
     ):
         raise HTTPException(status_code=403, detail="Interdit.")
     session.delete(comment)
