@@ -143,17 +143,24 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
       setThreadError(null);
       try {
         const rows = await apiGetThread(otherUserId);
+        // Un switch rapide A → B peut inverser l'ordre d'arrivée des
+        // réponses : si on est déjà passé à un autre fil, on ignore cette
+        // réponse pour ne pas écraser les messages du fil actuel.
+        if (threadOtherRef.current !== otherUserId) return;
         setThread(rows);
         // Les messages reçus viennent d'être marqués lus côté backend →
         // on resynchronise le badge et la liste.
         await Promise.all([refreshUnread(), refreshConversations()]);
       } catch (err) {
+        if (threadOtherRef.current !== otherUserId) return;
         setThread([]);
         setThreadError(
           err instanceof Error ? err.message : "Impossible de charger le fil.",
         );
       } finally {
-        setThreadLoading(false);
+        if (threadOtherRef.current === otherUserId) {
+          setThreadLoading(false);
+        }
       }
     },
     [refreshUnread, refreshConversations],

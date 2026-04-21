@@ -157,7 +157,12 @@ def _serialize(m: DirectMessage) -> MessageOut:
     )
 
 
-def _assert_other(session: Session, other_id: str, me_id: str) -> UserProfile:
+def _assert_other_exists(
+    session: Session, other_id: str, me_id: str
+) -> UserProfile:
+    """Existence + non-self check. Autorise la lecture de l'historique
+    même si l'autre est banni : l'user doit pouvoir relire / marquer lus
+    ses propres messages sans rester bloqué avec un badge non-lu fantome."""
     if other_id == me_id:
         raise HTTPException(
             status_code=400, detail="Impossible de s'envoyer un message à soi-même."
@@ -165,6 +170,13 @@ def _assert_other(session: Session, other_id: str, me_id: str) -> UserProfile:
     other = session.get(UserProfile, other_id)
     if not other:
         raise HTTPException(status_code=404, detail="Utilisateur introuvable.")
+    return other
+
+
+def _assert_other(session: Session, other_id: str, me_id: str) -> UserProfile:
+    """Même vérifs + interdit d'écrire à un user suspendu. Réservé aux
+    endpoints d'écriture (send_message)."""
+    other = _assert_other_exists(session, other_id, me_id)
     if other.banned_at:
         raise HTTPException(status_code=403, detail="Cet utilisateur est suspendu.")
     return other
@@ -264,7 +276,9 @@ def get_thread(
     lus (read_at = now). C'est ce qui déclenche l'accusé de lecture côté
     sender (via un event SSE `read`).
     """
-    _assert_other(session, other_user_id, me.id)
+    # Read-only : on autorise même si l'autre est banni, pour que l'user
+    # puisse relire l'historique et faire baisser son badge non-lu.
+    _assert_other_exists(session, other_user_id, me.id)
     conv_key = _conversation_key(me.id, other_user_id)
     limit = max(1, min(limit, 500))
 
