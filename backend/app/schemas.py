@@ -13,7 +13,11 @@ from pydantic import BaseModel, Field
 class AuthorIn(BaseModel):
     author_id: str = Field(..., min_length=1, max_length=128)
     author_name: str = Field(..., min_length=1, max_length=64)
-    author_avatar: str = Field(..., min_length=1, max_length=512)
+    # Avatar peut être vide : les membres n'ont pas toujours uploadé d'image
+    # (ex. compte admin "Le roi des zems" sans DiceBear). On acceptait déjà une
+    # chaîne vide côté modèle stocké ; c'est le schéma d'entrée qui rejetait
+    # la payload avec 422 "string too short" et bloquait les commentaires.
+    author_avatar: str = Field(default="", max_length=512)
 
 
 class PostCreate(AuthorIn):
