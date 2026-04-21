@@ -619,6 +619,25 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       if (!id || !authorId || !authorName || !authorAvatar || !content) {
         return null;
       }
+      // Diminutif de grade fourni par l'émetteur (ex. "BRM", "LEG").
+      //
+      // Même logique de trust que `highlight` : on ne fait confiance à la
+      // valeur entrante QUE si elle vient du host (qui est notre source
+      // de vérité, il connaît les grades via son propre state et pour
+      // lui-même via `/auth/me`). Un message qui arrive d'un viewer vers
+      // le host (`trustHighlight=false`) a un `gradeShort` potentiellement
+      // trafiqué — un viewer malveillant pourrait envoyer `gradeShort:
+      // "LEG"` pour se faire passer pour Légende chez les autres viewers.
+      // Côté host on strip donc le champ systématiquement pour les
+      // messages non fiables. Si on veut un jour afficher le vrai grade
+      // des viewers sur leurs messages, il faudra que le host maintienne
+      // un cache `viewerId → grade` alimenté par un appel API (out of
+      // scope de ce sanitize).
+      let gradeShort: string | null = null;
+      if (trustHighlight && typeof p.gradeShort === "string") {
+        const raw = p.gradeShort.trim().toUpperCase();
+        if (/^[A-Z]{1,4}$/.test(raw)) gradeShort = raw;
+      }
       return {
         id,
         authorId,
@@ -627,6 +646,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         content: content.slice(0, 500), // anti-flood / anti-troll-wall-of-text
         createdAt,
         highlight: trustHighlight ? p.highlight === true : false,
+        gradeShort,
       };
     },
     [],
@@ -1035,6 +1055,12 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     try {
       stream = await navigator.mediaDevices.getDisplayMedia({
         video: { frameRate: { ideal: 30 } },
+        // `audio: true` tente de capter le son du système/onglet. Dans les
+        // faits, Chrome Windows est le seul navigateur qui le fait vraiment
+        // (et uniquement sur "l'onglet" ou "la fenêtre" pas "tout l'écran").
+        // Safari / Firefox / Chrome mac&linux l'ignorent silencieusement →
+        // la piste système peut manquer, mais on veut au moins le micro,
+        // donc on capture le micro séparément juste après.
         audio: true,
       });
     } catch (err) {
@@ -1044,15 +1070,65 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Quand on arrête le partage depuis le prompt navigateur, on stoppe.
+    // On référence IMMÉDIATEMENT le stream dans `localStreamRef` + on pose
+    // les listeners "ended" avant toute nouvelle `await`. Raison : la
+    // demande de micro ci-dessous ouvre un prompt natif qui peut rester
+    // plusieurs secondes à l'écran. Pendant ce temps, si l'utilisateur
+    // ferme l'onglet ou déclenche `stopLive()` autrement, la cleanup doit
+    // pouvoir retrouver ce stream pour stopper les tracks (sinon l'indicateur
+    // navigateur "en train de partager l'écran" reste bloqué sans bouton
+    // pour arrêter). Ça bloque aussi un double-clic involontaire sur le
+    // bouton "live" via le guard au début de la fonction.
     stream.getVideoTracks().forEach((track) => {
       track.addEventListener("ended", () => {
         if (localStreamRef.current === stream) stopLive();
       });
     });
-
     localStreamRef.current = stream;
     setLocalStream(stream);
+
+    // En partage d'écran, `getDisplayMedia` ne capte quasiment jamais le
+    // micro du streamer — il propose uniquement l'audio système/onglet et
+    // même ça dépend du navigateur. Sans fallback dédié, le flux diffusé
+    // aux viewers n'a aucune piste audio → les spectateurs voient l'image
+    // mais n'entendent ni le streamer ni les invités audio.
+    //
+    // On demande donc explicitement le micro via `getUserMedia` et on
+    // ajoute la piste au stream principal avant de l'envoyer aux peers.
+    // Si l'utilisateur refuse le micro, on laisse le live démarrer sans
+    // voix (c'est un choix de son côté).
+    try {
+      const micStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+        video: false,
+      });
+      // Le stream de référence peut avoir été nettoyé pendant que le prompt
+      // micro était ouvert (stopLive, unmount…). Dans ce cas on range
+      // proprement les tracks micro qu'on vient d'obtenir.
+      if (localStreamRef.current !== stream) {
+        micStream.getTracks().forEach((track) => track.stop());
+      } else {
+        micStream.getAudioTracks().forEach((track) => {
+          stream.addTrack(track);
+        });
+      }
+    } catch (err) {
+      if (err instanceof Error && err.name === "NotAllowedError") {
+        setLastError(
+          "Micro refusé : les spectateurs ne t'entendront pas. Autorise le micro pour être audible.",
+        );
+      } else if (err instanceof Error) {
+        console.warn("mic fallback pour screen share indisponible", err);
+      }
+    }
+
+    // Si le stream a été nettoyé pendant la demande micro, on n'attache
+    // rien aux peers.
+    if (localStreamRef.current !== stream) return;
     await attachStreamToPeer(stream, "screen");
   }, [attachStreamToPeer, stopLive]);
 

@@ -150,6 +150,14 @@ function FloatingChatLine({
       />
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-1 text-[10px] text-ivory/65">
+          {msg.gradeShort && (
+            <span
+              className="rounded-sm bg-gold-500/15 px-1 font-mono text-[9px] font-semibold tracking-wide text-gold-200"
+              aria-label={`grade ${msg.gradeShort}`}
+            >
+              [{msg.gradeShort}]
+            </span>
+          )}
           <span className="font-semibold text-gold-200">{msg.authorName}</span>
           {official?.role === "admin" && (
             <span className="inline-flex items-center rounded-full bg-gold-500/30 px-1 text-[9px] text-gold-100">

@@ -60,6 +60,15 @@ import {
   apiMyModerationState,
   type LiveModerationAction,
 } from "../lib/liveApi";
+import { apiGetProfile } from "../lib/api";
+import { gradeBySlug } from "../data/grades";
+import {
+  getBotCadence,
+  getViewerScale,
+  nextViewerValue,
+  pickInitialViewers,
+  pickNextBotDelay,
+} from "../lib/liveScaling";
 
 const BOT_AUTHORS = [
   { id: "user-lyria", name: "Lyria", avatar: "https://i.pravatar.cc/150?u=lyria" },
@@ -117,30 +126,98 @@ function LiveVideoStage({
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const stream = isHost ? localStream : remoteStream;
+  // iOS Safari et Chrome mobile bloquent `autoplay` avec son tant que
+  // l'user n'a pas cliqué dans la page courante. `<video>.play()` rejette
+  // avec `NotAllowedError`. Pour ne pas laisser le viewer avec un écran
+  // figé + zéro son, on détecte ce cas et on superpose un bouton "Activer
+  // le son" qui lance un `play()` sous gesture utilisateur.
+  const [needsUnmute, setNeedsUnmute] = useState(false);
 
   useEffect(() => {
+    // `cancelled` évite qu'un `.catch()` tardif du play() précédent n'aille
+    // muter un *nouveau* stream : quand le stream change d'une vidéo à une
+    // autre sans repasser par `null`, la promesse de l'effet précédent peut
+    // régler après que le nouvel effet a déjà appelé `play()` sur le même
+    // élément — sans ce flag, le vieux catch mettrait `el.muted = true` et
+    // afficherait "Activer le son" par-dessus un flux qui joue bien.
+    let cancelled = false;
     const el = videoRef.current;
     if (!el) return;
     el.srcObject = stream;
-    if (stream) {
-      el.play().catch(() => {
-        // Navigateur bloque l'autoplay tant qu'il n'y a pas d'interaction.
-      });
+    if (!stream) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setNeedsUnmute(false);
+      return () => {
+        cancelled = true;
+      };
     }
-  }, [stream]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setNeedsUnmute(false);
+    el.play().catch(() => {
+      if (cancelled || isHost) return;
+      // Fallback viewer : on essaie de démarrer en muted (autoplay sans
+      // son, toujours autorisé). Comme ça au moins la vidéo tourne, et
+      // on affiche un bouton "Activer le son" pour récupérer l'audio
+      // après un tap utilisateur.
+      el.muted = true;
+      el.play()
+        .then(() => {
+          if (!cancelled) setNeedsUnmute(true);
+        })
+        .catch(() => {
+          if (!cancelled) setNeedsUnmute(true);
+        });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [stream, isHost]);
+
+  const handleUnmute = () => {
+    const el = videoRef.current;
+    if (!el) return;
+    el.muted = false;
+    el.play()
+      .then(() => setNeedsUnmute(false))
+      .catch(() => {
+        // Rare : l'autoplay échoue même sous gesture. On laisse le bouton
+        // affiché pour que l'user re-tape.
+      });
+  };
 
   if (!stream) return null;
 
   return (
-    <video
-      ref={videoRef}
-      autoPlay
-      playsInline
-      // Le host se voit sans son (sinon larsen). Les viewers entendent.
-      muted={isHost}
-      controls={!isHost}
-      className="absolute inset-0 h-full w-full bg-night-900 object-contain"
-    />
+    <>
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        // Le host se voit sans son (sinon larsen). Les viewers entendent.
+        //
+        // `needsUnmute` participe à la prop pour que la reconciliation
+        // React n'écrase pas le `el.muted = true` imposé par le fallback
+        // autoplay : sans ça, juste après `setNeedsUnmute(true)`, React
+        // ré-applique `muted={false}` sur l'élément vidéo → le flux
+        // repart en tentative d'autoplay avec son alors que l'overlay
+        // "Activer le son" est affiché par-dessus (incohérent, et sur
+        // iOS le navigateur met la vidéo en pause).
+        muted={isHost || needsUnmute}
+        controls={!isHost}
+        className="absolute inset-0 h-full w-full bg-night-900 object-contain"
+      />
+      {needsUnmute ? (
+        <button
+          type="button"
+          onClick={handleUnmute}
+          className="absolute inset-0 z-10 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+        >
+          <span className="rounded-full border border-gold-200/40 bg-night-900/80 px-5 py-3 font-display text-sm text-gold-100 shadow-lg">
+            🔊 Activer le son
+          </span>
+        </button>
+      ) : null}
+    </>
   );
 }
 
@@ -367,37 +444,33 @@ function BroadcasterControls() {
     if (lastError) notify(lastError, "info");
   }, [lastError, notify]);
 
-  // Les non-queen n'ont pas accès au mode "twitch" (gatekeeping officiels).
-  // Si leur config pointe dessus (bascule dev/admin puis retour user), on
-  // les réoriente vers le mode le plus adapté à leur appareil :
-  //  - PC : partage d'écran (mode historique le plus puissant pour
-  //    streamer un jeu ou une app) ;
-  //  - mobile : caméra (seul mode qui marche sur Samsung / Android /
-  //    iOS, parce que `getDisplayMedia` n'existe pas sur mobile ou
-  //    plante silencieusement).
-  // Idem si un user mobile arrive avec `mode = "screen"` en
-  // localStorage (par ex. il avait choisi "Partage d'écran" sur PC
-  // puis a rouvert Vaelyndra depuis son Samsung) — sans cette
-  // redirection, il cliquerait "Passer en direct" et rien ne se
-  // passerait, d'où l'impression que "le téléphone ne peut pas
-  // streamer".
+  // Le mode "twitch" est désormais accessible à tous les streamers (pas
+  // seulement aux reines — cf. PR #81). Un utilisateur mobile qui streame
+  // via OBS sur sa Switch/PC ou via l'app Twitch mobile a aussi besoin de
+  // ce mode — il embed le player Twitch sur la page Vaelyndra au lieu de
+  // tenter un WebRTC impossible. On ne force donc plus de rétrogradation
+  // vers "screen" pour les non-reines.
+  //
+  // En revanche on garde une redirection spécifique mobile : si un user
+  // arrive avec `mode = "screen"` en localStorage (par ex. il avait choisi
+  // "Partage d'écran" sur PC puis a rouvert Vaelyndra depuis son Samsung),
+  // `getDisplayMedia` n'existe pas / plante silencieusement. Sans ce
+  // fallback, il cliquerait "Passer en direct" et rien ne se passerait
+  // (= « mon téléphone ne peut pas streamer »). On bascule alors sur le
+  // mode caméra, seul mode 100 % supporté sur Samsung / Android / iOS.
   useEffect(() => {
     if (!user) return;
-    const fallbackMode = isMobile || !screenShareSupported ? "camera" : "screen";
-    if (!isQueen && config.mode === "twitch") {
-      updateConfig({ mode: fallbackMode });
-      return;
-    }
-    if (config.mode === "screen" && !screenEffectiveSupported && cameraSupported) {
+    if (
+      config.mode === "screen" &&
+      !screenEffectiveSupported &&
+      cameraSupported
+    ) {
       updateConfig({ mode: "camera" });
     }
   }, [
     user,
-    isQueen,
     config.mode,
     updateConfig,
-    isMobile,
-    screenShareSupported,
     screenEffectiveSupported,
     cameraSupported,
   ]);
@@ -547,9 +620,7 @@ function BroadcasterControls() {
           Mode de diffusion
         </legend>
         <div
-          className={`grid gap-3 ${
-            isQueen ? "md:grid-cols-3" : "md:grid-cols-2"
-          }`}
+          className="grid gap-3 md:grid-cols-3"
         >
           <button
             type="button"
@@ -616,29 +687,31 @@ function BroadcasterControls() {
               </p>
             </div>
           </button>
-          {isQueen && (
-            <button
-              type="button"
-              onClick={() => !isLive && updateConfig({ mode: "twitch" })}
-              disabled={isLive}
-              className={`card-royal flex items-start gap-3 p-4 text-left transition ${
-                config.mode === "twitch"
-                  ? "ring-1 ring-gold-400/60"
-                  : "opacity-80 hover:opacity-100"
-              } disabled:cursor-not-allowed`}
-            >
-              <Gamepad2 className="mt-0.5 h-5 w-5 text-gold-300" />
-              <div>
-                <p className="font-display text-base text-gold-200">
-                  OBS + Twitch
-                </p>
-                <p className="mt-1 text-xs text-ivory/60">
-                  Tu streames depuis OBS vers Twitch. Le site embed le lecteur
-                  officiel. Qualité pro.
-                </p>
-              </div>
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => !isLive && updateConfig({ mode: "twitch" })}
+            disabled={isLive}
+            className={`card-royal flex items-start gap-3 p-4 text-left transition ${
+              config.mode === "twitch"
+                ? "ring-1 ring-gold-400/60"
+                : "opacity-80 hover:opacity-100"
+            } disabled:cursor-not-allowed`}
+          >
+            <Gamepad2 className="mt-0.5 h-5 w-5 text-gold-300" />
+            <div>
+              <p className="font-display text-base text-gold-200">
+                OBS + Twitch
+                <span className="ml-2 rounded-full border border-fuchsia-300/40 bg-fuchsia-500/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.2em] text-fuchsia-200">
+                  mobile + pc
+                </span>
+              </p>
+              <p className="mt-1 text-xs text-ivory/60">
+                Tu streames depuis OBS (PC) ou l'app Twitch mobile. Le site
+                embed le lecteur officiel Twitch. Marche sur iPhone et
+                Android.
+              </p>
+            </div>
+          </button>
         </div>
       </fieldset>
 
@@ -647,7 +720,7 @@ function BroadcasterControls() {
         isQueen={isQueen}
       />
 
-      {isQueen && config.mode === "twitch" && (
+      {config.mode === "twitch" && (
         <div className="mt-5 grid gap-4 md:grid-cols-2">
           <label className="block">
             <span className="mb-1 block font-regal text-[11px] uppercase tracking-[0.22em] text-ivory/60">
@@ -876,7 +949,20 @@ export function Live() {
       (activeMode === "twitch" && !!twitchChannel));
 
   const [messages, setMessages] = useState<ChatMessage[]>(SEED_CHAT);
-  const [viewers, setViewers] = useState(1284);
+  // Grade du broadcaster — utilisé pour scaler le compteur de viewers
+  // fake et la cadence du chat bot. `null` tant qu'on n'a pas récupéré le
+  // profil → on part sur le défaut (novice). Idem `myGradeShort` pour le
+  // préfixe `[SHORT]` devant mon pseudo dans les messages que je publie.
+  const [broadcasterGradeSlug, setBroadcasterGradeSlug] = useState<
+    string | null
+  >(null);
+  const [myGradeShort, setMyGradeShort] = useState<string | null>(null);
+  // Compteur viewers fake — initialisé au tiers bas de la fourchette
+  // correspondant au grade du broadcaster, puis mis à jour toutes les
+  // ~N secondes avec un léger biais positif pour mimer l'arrivée des gens.
+  const [viewers, setViewers] = useState(() =>
+    pickInitialViewers(getViewerScale(null)),
+  );
   // Modération (PR Q) : sanctions actives reçues depuis le backend pour le
   // user courant, sur *ce* live. Polled ~30 s depuis `apiMyModerationState`
   // pour détecter un mute/kick posé pendant qu'on regarde.
@@ -1085,41 +1171,119 @@ export function Live() {
     navigate(`/live/${nextLiveEntry.userId}`);
   }
 
-  // Simulate viewers pulse
+  // Résout le grade du broadcaster pour scaler viewers fake + cadence bots.
+  // On refetch quand le broadcaster change (navigation entre lives). L'appel
+  // est silencieux : si on n'a pas le grade on reste sur la courbe "novice".
   useEffect(() => {
-    const t = setInterval(
-      () =>
-        setViewers((v) =>
-          Math.max(800, v + Math.round((Math.random() - 0.4) * 30)),
-        ),
-      2500,
-    );
-    return () => clearInterval(t);
-  }, []);
+    if (!broadcasterId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setBroadcasterGradeSlug(null);
+      return;
+    }
+    // Reset immédiatement pour éviter qu'en passant d'un live "Légende"
+    // à un live "Novice", on garde brièvement le scale Légende (1500-3500
+    // viewers, bots toutes les 4-8 s) pendant que l'API renvoie le vrai
+    // grade. On retombe sur la courbe Novice par défaut en attendant.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setBroadcasterGradeSlug(null);
+    let cancelled = false;
+    apiGetProfile(broadcasterId)
+      .then((p) => {
+        if (!cancelled) setBroadcasterGradeSlug(p.grade?.slug ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setBroadcasterGradeSlug(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [broadcasterId]);
 
-  // Auto chat lines
+  // Résout mon propre diminutif de grade pour l'afficher en préfixe
+  // `[SHORT]` devant mon pseudo dans les messages que j'envoie. Refetch
+  // quand l'utilisateur courant change (login/logout).
+  useEffect(() => {
+    if (!user?.id) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setMyGradeShort(null);
+      return;
+    }
+    const userId = user.id;
+    let cancelled = false;
+    apiGetProfile(userId)
+      .then((p) => {
+        if (!cancelled) setMyGradeShort(p.grade?.short ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setMyGradeShort(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
+  // Reseed le compteur viewers quand le grade du broadcaster est résolu
+  // (évite de garder l'ancienne valeur 1284 quand on arrive sur un live
+  // de Novice). On garde la valeur si elle est déjà dans la fourchette.
+  const viewerScale = useMemo(
+    () => getViewerScale(broadcasterGradeSlug),
+    [broadcasterGradeSlug],
+  );
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setViewers((v) => {
+      if (v >= viewerScale.min && v <= viewerScale.max) return v;
+      return pickInitialViewers(viewerScale);
+    });
+  }, [viewerScale]);
+
+  // Simulate viewers pulse — scalé par grade du broadcaster :
+  // Novice = petits mouvements rares, Légende = grosses variations rapides.
+  useEffect(() => {
+    const t = setInterval(() => {
+      setViewers((v) => nextViewerValue(v, viewerScale));
+    }, viewerScale.intervalMs);
+    return () => clearInterval(t);
+  }, [viewerScale]);
+
+  // Auto chat lines — cadence scalée par grade du broadcaster. On utilise
+  // setTimeout récursif (plutôt qu'un setInterval fixe) pour que chaque
+  // attente soit tirée au hasard dans [minMs, maxMs] du grade courant,
+  // ce qui sonne plus naturel qu'un tick mécanique.
   useEffect(() => {
     if (!isActiveLive) return;
-    const t = setInterval(() => {
-      const line =
-        AUTO_CHAT_LINES[Math.floor(Math.random() * AUTO_CHAT_LINES.length)];
-      const bot = BOT_AUTHORS[Math.floor(Math.random() * BOT_AUTHORS.length)];
-      setMessages((m) =>
-        [
-          ...m,
-          {
-            id: generateId("msg"),
-            authorId: bot.id,
-            authorName: bot.name,
-            authorAvatar: bot.avatar,
-            content: line,
-            createdAt: new Date().toISOString(),
-          },
-        ].slice(-CHAT_BUFFER_MAX),
-      );
-    }, 4200);
-    return () => clearInterval(t);
-  }, [isActiveLive]);
+    const cadence = getBotCadence(broadcasterGradeSlug);
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleNext = () => {
+      timer = setTimeout(() => {
+        const line =
+          AUTO_CHAT_LINES[Math.floor(Math.random() * AUTO_CHAT_LINES.length)];
+        const bot = BOT_AUTHORS[Math.floor(Math.random() * BOT_AUTHORS.length)];
+        setMessages((m) =>
+          [
+            ...m,
+            {
+              id: generateId("msg"),
+              authorId: bot.id,
+              authorName: bot.name,
+              authorAvatar: bot.avatar,
+              content: line,
+              createdAt: new Date().toISOString(),
+              // Les bots adoptent le diminutif du broadcaster (ils
+              // "ressemblent" au public du live). Pas d'appel API : on
+              // dérive via le slug déjà en main.
+              gradeShort: gradeBySlug(broadcasterGradeSlug ?? "")?.short ?? null,
+            },
+          ].slice(-CHAT_BUFFER_MAX),
+        );
+        scheduleNext();
+      }, pickNextBotDelay(cadence));
+    };
+    scheduleNext();
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [isActiveLive, broadcasterGradeSlug]);
 
   const replays = useMemo(() => lives, [lives]);
 
@@ -1164,6 +1328,7 @@ export function Live() {
       content: content.trim(),
       createdAt: new Date().toISOString(),
       highlight: user.role === "queen",
+      gradeShort: myGradeShort,
     });
   }
 

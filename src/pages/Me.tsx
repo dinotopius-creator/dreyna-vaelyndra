@@ -63,9 +63,9 @@ export function Me() {
     .slice(0, 6);
   const myOrders = orders.filter((o) => o.userId === user.id);
 
-  function saveProfile(e: React.FormEvent) {
+  async function saveProfile(e: React.FormEvent) {
     e.preventDefault();
-    const res = updateProfile({ username, avatar, bio });
+    const res = await updateProfile({ username, avatar, bio });
     if (!res.ok) {
       notify(res.error ?? "Impossible d'enregistrer.", "error");
       return;

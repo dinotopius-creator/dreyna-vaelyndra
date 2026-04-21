@@ -234,6 +234,14 @@ function ChatHistoryLine({
       </button>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-1 text-[10px] text-ivory/65">
+          {msg.gradeShort && (
+            <span
+              className="rounded-sm bg-gold-500/15 px-1 font-mono text-[9px] font-semibold tracking-wide text-gold-200"
+              aria-label={`grade ${msg.gradeShort}`}
+            >
+              [{msg.gradeShort}]
+            </span>
+          )}
           <button
             type="button"
             onClick={onOpenMenu}

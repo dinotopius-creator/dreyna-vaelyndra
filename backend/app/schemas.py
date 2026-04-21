@@ -220,6 +220,9 @@ class StreamerGradeOut(BaseModel):
 
     slug: str
     name: str
+    # Diminutif 3-lettres (ex. "BRM", "LEG") affiché entre crochets à
+    # côté du pseudo dans le chat live et sur les badges compacts.
+    short: str
     emoji: str
     motto: str
     theme: str
