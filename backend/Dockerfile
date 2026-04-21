@@ -8,9 +8,8 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 
 COPY pyproject.toml ./
-RUN pip install --upgrade pip && pip install .
-
 COPY app ./app
+RUN pip install --upgrade pip && pip install .
 
 # Volume Fly.io monté sur /data pour la persistance SQLite.
 RUN mkdir -p /data
