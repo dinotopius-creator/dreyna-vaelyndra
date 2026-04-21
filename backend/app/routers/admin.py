@@ -127,6 +127,7 @@ class AdminUserOut(BaseModel):
     bannedReason: Optional[str]
     activeSessions: int
     reportsAgainstCount: int
+    totpEnabled: bool
 
 
 def _admin_user_out(session: Session, user: UserProfile) -> AdminUserOut:
@@ -147,6 +148,8 @@ def _admin_user_out(session: Session, user: UserProfile) -> AdminUserOut:
             )
         ).all()
     )
+    credential = session.get(Credential, user.id)
+    totp_enabled = bool(credential and credential.totp_enabled)
     return AdminUserOut(
         id=user.id,
         username=user.username,
@@ -164,6 +167,7 @@ def _admin_user_out(session: Session, user: UserProfile) -> AdminUserOut:
         bannedReason=user.banned_reason,
         activeSessions=active_sessions,
         reportsAgainstCount=reports_against,
+        totpEnabled=totp_enabled,
     )
 
 
@@ -404,6 +408,62 @@ def admin_reset_password(
             "reason": body.reason,
             "sessions_revoked": revoked,
         },
+    )
+    session.commit()
+    session.refresh(user)
+    return _admin_user_out(session, user)
+
+
+class Disable2FAIn(BaseModel):
+    reason: str = Field(..., min_length=2, max_length=300)
+
+
+@router.delete("/users/{user_id}/totp", response_model=AdminUserOut)
+def admin_disable_totp(
+    user_id: str,
+    body: Disable2FAIn,
+    admin: UserProfile = Depends(require_admin),
+    session: Session = Depends(_session_dep),
+) -> AdminUserOut:
+    """Désactive le 2FA (TOTP) d'un utilisateur.
+
+    Cas d'usage : un user a activé le 2FA puis perdu l'accès à son
+    appli authenticator (ou le seed a été activé sans que le user le
+    sache — ce qui est arrivé avec les comptes officiels seedés). Sans
+    cet endpoint, il faut du SSH sur le serveur pour désactiver le
+    champ manuellement.
+
+    Un admin ne peut PAS désactiver son propre TOTP via cet endpoint
+    (utiliser /auth/disable-totp pour ça).
+    """
+    if user_id == admin.id:
+        raise HTTPException(
+            400,
+            "Utilise /compte pour gérer ton propre 2FA.",
+        )
+    user = _user_or_404(session, user_id)
+    credential = session.get(Credential, user_id)
+    if credential is None:
+        raise HTTPException(
+            404,
+            "Cet utilisateur n'a pas de credential backend (compte legacy).",
+        )
+    if not credential.totp_enabled:
+        # Idempotent — déjà désactivé.
+        return _admin_user_out(session, user)
+
+    credential.totp_enabled = False
+    credential.totp_secret = None
+    credential.totp_recovery_hashes_json = "[]"
+    credential.updated_at = _now_iso()
+    session.add(credential)
+
+    _log_action(
+        session,
+        actor=admin,
+        target=user,
+        action="disable_totp",
+        details={"reason": body.reason},
     )
     session.commit()
     session.refresh(user)

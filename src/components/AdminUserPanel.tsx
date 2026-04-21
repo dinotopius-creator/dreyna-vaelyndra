@@ -15,12 +15,13 @@
  * consultable depuis `/admin → Utilisateurs → Journal`.
  */
 import { useEffect, useState } from "react";
-import { ShieldCheck, ShieldAlert, Coins, UserCog, Ban, RotateCcw, KeyRound } from "lucide-react";
+import { ShieldCheck, ShieldAlert, Coins, UserCog, Ban, RotateCcw, KeyRound, ShieldOff } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
 import {
   adminAdjustWallet,
   adminBanUser,
+  adminDisableTotp,
   adminGetUser,
   adminResetPassword,
   adminSetRole,
@@ -67,6 +68,7 @@ export function AdminUserPanel({ targetUserId, targetUsername, onChange }: Props
   const [banReason, setBanReason] = useState<string>("");
   const [newPassword, setNewPassword] = useState<string>("");
   const [pwReason, setPwReason] = useState<string>("");
+  const [totpReason, setTotpReason] = useState<string>("");
 
   const isAdmin = backendMe?.role === "admin";
   const isSelf = backendMe?.id === targetUserId;
@@ -432,6 +434,64 @@ export function AdminUserPanel({ targetUserId, targetUsername, onChange }: Props
             <KeyRound className="h-4 w-4" /> Appliquer le nouveau mot de passe
           </button>
         </form>
+      )}
+
+      {/* --- Désactiver 2FA ---------------------------------------------- */}
+      {!isSelf && detail?.totpEnabled && (
+        <div className="mt-6 space-y-3 rounded-lg border border-amber-400/20 bg-amber-900/10 p-4">
+          <h3 className="flex items-center gap-2 font-display text-sm text-amber-200">
+            <ShieldOff className="h-4 w-4 text-amber-300" /> Désactiver le 2FA (TOTP)
+          </h3>
+          <p className="text-[11px] text-ivory/60">
+            {targetUsername} a le 2FA activé. Si le user a perdu l'accès à
+            son appli authenticator (ou que le TOTP a été activé par erreur),
+            désactive-le ici pour le débloquer. Les codes de récupération
+            seront aussi effacés.
+          </p>
+          <input
+            className="glass-input w-full"
+            placeholder="Raison (obligatoire, loguée — ex : 'perdu accès authenticator')"
+            value={totpReason}
+            onChange={(e) => setTotpReason(e.target.value)}
+            disabled={loading}
+          />
+          <button
+            type="button"
+            className="btn-gold"
+            disabled={loading || totpReason.trim().length < 2}
+            onClick={async () => {
+              if (
+                !window.confirm(
+                  `Confirmer la désactivation du 2FA de ${targetUsername} ? Il pourra se connecter sans code TOTP.`,
+                )
+              )
+                return;
+              setLoading(true);
+              try {
+                const updated = await adminDisableTotp(
+                  targetUserId,
+                  totpReason.trim(),
+                );
+                setDetail(updated);
+                setTotpReason("");
+                notify(
+                  `2FA de ${targetUsername} désactivé.`,
+                  "success",
+                );
+                onChange?.();
+              } catch (err) {
+                notify(
+                  err instanceof Error ? err.message : "Échec de la désactivation 2FA.",
+                  "error",
+                );
+              } finally {
+                setLoading(false);
+              }
+            }}
+          >
+            <ShieldOff className="h-4 w-4" /> Désactiver le 2FA
+          </button>
+        </div>
       )}
 
       {/* --- Ban / unban ------------------------------------------------- */}
