@@ -382,7 +382,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         parsedAny.deletedProductIds ??
         parsedAny.deletedMockProductIds ??
         [];
-      const deletedArticleIds = parsedAny.deletedArticleIds ?? [];
+      // Pour les articles, pas de champ équivalent avant ce fix. Si le store
+      // n'a pas `deletedArticleIds` (= user antérieur à ce PR), on infère
+      // qu'un mock manquant dans storedArticles a été supprimé volontairement
+      // par l'admin, et on le garde comme "deleted" pour ne pas le ressusciter.
+      const storedArticlesRaw = parsed.articles;
+      const deletedArticleIds =
+        parsedAny.deletedArticleIds ??
+        (storedArticlesRaw
+          ? init.articles
+              .filter(
+                (mock) => !storedArticlesRaw.some((a) => a.id === mock.id),
+              )
+              .map((a) => a.id)
+          : []);
 
       // --- Migration one-shot PR L (pivot mini-réseau) ----------------------
       //
