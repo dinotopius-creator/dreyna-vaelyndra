@@ -72,7 +72,11 @@ export function LiveChatOverlay({
   return (
     <>
       {/* File de messages flottants en bas-gauche du flux. */}
-      <div className="pointer-events-none absolute bottom-24 left-4 right-4 z-10 flex max-h-[55%] flex-col justify-end gap-2 sm:right-auto sm:max-w-[60%]">
+      {/* Sur mobile, on contraint la hauteur à 40% de la carte pour
+          laisser la vidéo respirer ; sur sm+, on autorise 55% comme
+          avant. Le masquage complet du chat reste accessible via le
+          bouton dédié dans la barre d'outils du lecteur. */}
+      <div className="pointer-events-none absolute bottom-20 left-3 right-3 z-10 flex max-h-[40%] flex-col justify-end gap-2 sm:bottom-24 sm:left-4 sm:right-auto sm:max-h-[55%] sm:max-w-[60%]">
         <AnimatePresence initial={false}>
           {visible.map((m) => (
             <FloatingChatLine
