@@ -18,8 +18,9 @@ import {
   Minimize,
   MessageSquare,
   MessageSquareOff,
+  SkipForward,
 } from "lucide-react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useStore } from "../contexts/StoreContext";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
@@ -29,7 +30,6 @@ import {
   useLive,
 } from "../contexts/LiveContext";
 import { useLiveInvites } from "../contexts/LiveInvitesContext";
-import type { LiveRegistryEntry } from "../contexts/LiveContext";
 import { LIVE_CATEGORIES, getLiveCategory } from "../data/liveCategories";
 import { SectionHeading } from "../components/SectionHeading";
 import { GiftPanel } from "../components/GiftPanel";
@@ -42,6 +42,7 @@ import { LiveLeaderboardOverlay } from "../components/LiveLeaderboardOverlay";
 import type { TributeEntry } from "../components/LiveLeaderboardOverlay";
 import { LiveInvitePanel } from "../components/LiveInvitePanel";
 import { LiveGuestsStrip } from "../components/LiveGuestsStrip";
+import { OtherLivesStrip } from "../components/OtherLivesStrip";
 import { ReportButton } from "../components/ReportButton";
 import {
   SortDAppelCaster,
@@ -704,62 +705,11 @@ function BroadcasterControls() {
   );
 }
 
-/** Affiche la liste des lives en cours (autre que celui qu'on regarde). */
-function LiveRoster({
-  entries,
-  activeId,
-}: {
-  entries: LiveRegistryEntry[];
-  activeId: string;
-}) {
-  const filtered = entries.filter((e) => e.userId !== activeId);
-  if (filtered.length === 0) return null;
-  return (
-    <div className="card-royal mt-6 p-5">
-      <p className="mb-3 font-regal text-[11px] uppercase tracking-[0.22em] text-ivory/60">
-        Autres lives en cours
-      </p>
-      <ul className="flex flex-wrap gap-2">
-        {filtered.map((e) => {
-          const category = getLiveCategory(e.category);
-          return (
-            <li key={e.userId}>
-              <Link
-                to={`/live/${e.userId}`}
-                className="inline-flex items-center gap-2 rounded-full border border-royal-500/30 bg-night-900/40 px-3 py-1.5 text-xs text-ivory/80 transition hover:border-gold-400/50"
-              >
-                <img
-                  src={e.avatar}
-                  alt=""
-                  className="h-5 w-5 rounded-full object-cover"
-                />
-                <span className="font-display text-gold-200">
-                  {e.username}
-                </span>
-                <span
-                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] uppercase tracking-[0.18em] ${category.chipClass}`}
-                  title={category.label}
-                >
-                  <span aria-hidden>{category.icon}</span>
-                  {category.label}
-                </span>
-                <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/20 px-2 py-0.5 text-[9px] uppercase tracking-[0.2em] text-rose-200">
-                  <span className="h-1 w-1 animate-pulse rounded-full bg-rose-400" />
-                  Live
-                </span>
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
-  );
-}
-
 export function Live() {
   const { broadcasterId: paramBroadcasterId } = useParams<{
     broadcasterId?: string;
   }>();
+  const navigate = useNavigate();
   const { lives } = useStore();
   const { user, users } = useAuth();
   const { notify } = useToast();
@@ -891,6 +841,15 @@ export function Live() {
     }
   }
 
+  // Mémorise qu'on a vu le live courant apparaître dans le registre
+  // au moins une fois (PR T, utilisé plus bas par l'auto-redirect).
+  // Déclaré ici pour pouvoir être reset dans le même effet que le reste
+  // de l'état spécifique au broadcaster — sinon un viewer qui navigue
+  // de A (live) vers B (pas live) via une URL directe serait
+  // immédiatement catapulté ailleurs sans voir "Le rideau est tiré"
+  // (finding Devin Review sur PR #66).
+  const wasLiveOnceRef = useRef(false);
+
   // Reset du chat + des cœurs + du leaderboard quand on change de
   // broadcaster pour éviter la confusion (tout est spécifique au live).
   useEffect(() => {
@@ -899,6 +858,10 @@ export function Live() {
     setTributes(seedTributes());
     setMyMuteUntil(null);
     setMyKickUntil(null);
+    // Un nouveau broadcaster = nouvelle observation. Si ce nouveau
+    // `broadcasterId` est offline d'emblée, on reste sur la page
+    // vide au lieu d'auto-redirect ailleurs.
+    wasLiveOnceRef.current = false;
   }, [broadcasterId]);
 
   // Polling de mes éventuelles sanctions (mute/kick) sur le live courant.
@@ -939,6 +902,74 @@ export function Live() {
       resetInviteBroadcast(broadcasterId);
     }
   }, [amBroadcaster, isActiveLive, broadcasterId, resetInviteBroadcast]);
+
+  // PR T — Auto-redirect vers un autre live quand celui qu'on regarde
+  // se termine.
+  //
+  // On veut uniquement rediriger si on a *vraiment* vu le live en cours
+  // au moins une fois (sinon, un user qui arrive sur une URL `/live/xxx`
+  // obsolète se verrait catapulté ailleurs sans prévenir). Le ref
+  // `wasLiveOnceRef` mémorise qu'on a vu `registryEntry` apparaître ; si
+  // ensuite il disparaît ET qu'un autre live est dispo, on navigue.
+  //
+  // Le broadcaster lui-même n'est jamais auto-redirigé : quand il stop
+  // son live, il doit rester sur sa propre page pour voir l'état "idle"
+  // et relancer s'il veut.
+  useEffect(() => {
+    if (amBroadcaster) {
+      wasLiveOnceRef.current = false;
+      return;
+    }
+    if (registryEntry) {
+      wasLiveOnceRef.current = true;
+      return;
+    }
+    if (!wasLiveOnceRef.current) return;
+    // Le live qu'on regardait vient de disparaître — on cherche un
+    // remplaçant dans le registre. Le plus récent d'abord.
+    const others = Object.values(liveRegistry)
+      .filter((e) => e.userId !== broadcasterId)
+      .sort(
+        (a, b) =>
+          new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime(),
+      );
+    const next = others[0];
+    if (next) {
+      wasLiveOnceRef.current = false;
+      notify(`Le live vient de finir — on passe chez ${next.username}.`, "info");
+      navigate(`/live/${next.userId}`, { replace: true });
+    }
+  }, [
+    amBroadcaster,
+    registryEntry,
+    broadcasterId,
+    liveRegistry,
+    navigate,
+    notify,
+  ]);
+
+  // PR T — "Live suivant" : un viewer peut explicitement cycler vers
+  // le prochain live en cours via un bouton (flèche sur le player).
+  // Retourne l'id du prochain live à viewer, ou null s'il n'y en a pas.
+  const nextLiveEntry = useMemo(() => {
+    const others = Object.values(liveRegistry).filter(
+      (e) => e.userId !== broadcasterId,
+    );
+    if (others.length === 0) return null;
+    // Ordre "plus récent d'abord" — cohérent avec l'auto-redirect et
+    // avec `OtherLivesStrip` : le bouton "Live suivant" emmène le
+    // viewer sur le même live que celui affiché en tête de strip.
+    others.sort(
+      (a, b) =>
+        new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime(),
+    );
+    return others[0];
+  }, [liveRegistry, broadcasterId]);
+
+  function goToNextLive() {
+    if (!nextLiveEntry) return;
+    navigate(`/live/${nextLiveEntry.userId}`);
+  }
 
   // Simulate viewers pulse
   useEffect(() => {
@@ -1181,11 +1212,6 @@ export function Live() {
       ? `Avec ${broadcasterProfile.username} · depuis l'archipel de Vaelyndra`
       : "Depuis l'archipel de Vaelyndra");
 
-  const registryList = useMemo(
-    () => Object.values(liveRegistry),
-    [liveRegistry],
-  );
-
   return (
     <div className="mx-auto max-w-7xl px-3 py-6 sm:px-6 sm:py-12">
       <SectionHeading
@@ -1384,6 +1410,18 @@ export function Live() {
                 <div className="pointer-events-none flex items-center gap-2 rounded-full bg-night-900/70 px-3 py-1.5 text-xs text-ivory/80 backdrop-blur">
                   <Users className="h-3.5 w-3.5 text-gold-300" /> {viewers}
                 </div>
+                {nextLiveEntry && !amBroadcaster && (
+                  <button
+                    type="button"
+                    onClick={goToNextLive}
+                    className="pointer-events-auto inline-flex h-8 items-center gap-1.5 rounded-full bg-night-900/70 px-3 text-xs text-ivory/80 backdrop-blur transition hover:bg-night-900/90 hover:text-gold-200"
+                    aria-label={`Live suivant : ${nextLiveEntry.username}`}
+                    title={`Live suivant : ${nextLiveEntry.username}`}
+                  >
+                    <SkipForward className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Live suivant</span>
+                  </button>
+                )}
                 {isActiveLive && (
                   <button
                     type="button"
@@ -1493,7 +1531,12 @@ export function Live() {
             isActiveLive={isActiveLive}
           />
 
-          <LiveRoster entries={registryList} activeId={broadcasterId} />
+          {/* PR T — bandeau "autres lives en cours" avec preview
+              thumbnail + badge catégorie + titre, style TikTok-like. */}
+          <OtherLivesStrip
+            currentBroadcasterId={broadcasterId}
+            liveRegistry={liveRegistry}
+          />
 
           <BroadcasterControls />
 
