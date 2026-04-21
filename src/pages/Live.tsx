@@ -841,6 +841,15 @@ export function Live() {
     }
   }
 
+  // Mémorise qu'on a vu le live courant apparaître dans le registre
+  // au moins une fois (PR T, utilisé plus bas par l'auto-redirect).
+  // Déclaré ici pour pouvoir être reset dans le même effet que le reste
+  // de l'état spécifique au broadcaster — sinon un viewer qui navigue
+  // de A (live) vers B (pas live) via une URL directe serait
+  // immédiatement catapulté ailleurs sans voir "Le rideau est tiré"
+  // (finding Devin Review sur PR #66).
+  const wasLiveOnceRef = useRef(false);
+
   // Reset du chat + des cœurs + du leaderboard quand on change de
   // broadcaster pour éviter la confusion (tout est spécifique au live).
   useEffect(() => {
@@ -849,6 +858,10 @@ export function Live() {
     setTributes(seedTributes());
     setMyMuteUntil(null);
     setMyKickUntil(null);
+    // Un nouveau broadcaster = nouvelle observation. Si ce nouveau
+    // `broadcasterId` est offline d'emblée, on reste sur la page
+    // vide au lieu d'auto-redirect ailleurs.
+    wasLiveOnceRef.current = false;
   }, [broadcasterId]);
 
   // Polling de mes éventuelles sanctions (mute/kick) sur le live courant.
@@ -902,7 +915,6 @@ export function Live() {
   // Le broadcaster lui-même n'est jamais auto-redirigé : quand il stop
   // son live, il doit rester sur sa propre page pour voir l'état "idle"
   // et relancer s'il veut.
-  const wasLiveOnceRef = useRef(false);
   useEffect(() => {
     if (amBroadcaster) {
       wasLiveOnceRef.current = false;
