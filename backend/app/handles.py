@@ -115,8 +115,18 @@ def suggest_unique_handle(
         if not _handle_exists(session, attempt, exclude_id):
             return attempt
 
-    # Fallback final : suffixe hex sur l'id. Garanti unique modulo collision
-    # SHA-1 (astronomique).
-    suffix = hashlib.sha1(user_id.encode("utf-8")).hexdigest()[:4]
-    trimmed = candidate[: HANDLE_MAX_LEN - len(suffix) - 1].rstrip("_")
-    return f"{trimmed}_{suffix}"
+    # Fallback final : suffixe hex sur l'id. 4 hex = 65536 possibilités, donc
+    # on vérifie qu'il n'y a pas collision avant de renvoyer — sinon on passe
+    # à 8 hex (4 milliards) pour casser quasi-certainement la collision.
+    # Devin Review (PR #64) : sans ce double-check, une collision hex tombe
+    # silencieusement dans l'IntegrityError au commit et peut faire sauter
+    # tout le batch de backfill au démarrage.
+    short = hashlib.sha1(user_id.encode("utf-8")).hexdigest()[:4]
+    trimmed = candidate[: HANDLE_MAX_LEN - len(short) - 1].rstrip("_")
+    final_short = f"{trimmed}_{short}"
+    if not _handle_exists(session, final_short, exclude_id):
+        return final_short
+
+    long_suffix = hashlib.sha1(user_id.encode("utf-8")).hexdigest()[:8]
+    trimmed = candidate[: HANDLE_MAX_LEN - len(long_suffix) - 1].rstrip("_")
+    return f"{trimmed}_{long_suffix}"

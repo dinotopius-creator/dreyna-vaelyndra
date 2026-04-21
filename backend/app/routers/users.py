@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from ..creatures import CREATURES, get_creature
@@ -424,7 +425,18 @@ def set_handle(
     p.handle = desired
     p.handle_updated_at = _now().isoformat()
     _touch(p)
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError:
+        # Devin Review (PR #64) : le SELECT ci-dessus + le commit ne sont pas
+        # atomiques → deux requêtes concurrentes peuvent passer le check puis
+        # violer l'index unique partiel au flush. On rollback et on renvoie
+        # 409 plutôt qu'un 500 opaque.
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Ce handle est déjà pris.",
+        )
     session.refresh(p)
     return _to_out(p, session)
 
