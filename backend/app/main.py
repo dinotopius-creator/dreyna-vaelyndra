@@ -97,7 +97,7 @@ OFFICIAL_ACCOUNTS: list[dict[str, str]] = [
         "creature_id": "elfe",
         # Credentials seed pour login immédiat (PR "Mon compte").
         # À changer au premier login via /auth/change-password.
-        "email": "dreyna@vaelyndra.realm",
+        "email": "support@vaelyndra.com",
         "password": "reineelfes2024",
     },
     {
@@ -115,7 +115,7 @@ OFFICIAL_ACCOUNTS: list[dict[str, str]] = [
         "role": "admin",
         "avatar_image_url": "https://api.dicebear.com/7.x/personas/svg?seed=RoiDesZems",
         "creature_id": "dragon",
-        "email": "roi@vaelyndra.realm",
+        "email": "dinotopius@gmail.com",
         "password": "zemsdiamant",
     },
 ]
@@ -210,6 +210,30 @@ def _seed_official_credentials() -> None:
                 continue
             existing = session.get(Credential, account["id"])
             if existing is not None:
+                # Migration : remplace les emails legacy `@vaelyndra.realm`
+                # (TLD inventé → bounce garanti) par l'email officiel courant.
+                # On ne touche PAS à un email déjà "réel" changé par l'admin
+                # depuis l'UI, pour ne pas écraser une personnalisation.
+                if (
+                    existing.email.lower().endswith("@vaelyndra.realm")
+                    and email.lower() != existing.email.lower()
+                ):
+                    # Vérifie l'unicité : si un autre user a déjà l'email
+                    # cible (par ex. l'admin l'a pris pour son propre compte),
+                    # on ne fait rien plutôt que de crasher au commit.
+                    clash = session.exec(
+                        select(Credential).where(
+                            Credential.email == email.lower(),
+                            Credential.user_id != account["id"],
+                        )
+                    ).first()
+                    if clash is None:
+                        now_iso = __import__("datetime").datetime.now(
+                            __import__("datetime").timezone.utc
+                        ).isoformat()
+                        existing.email = email.lower()
+                        existing.email_verified_at = now_iso
+                        existing.updated_at = now_iso
                 continue
             session.add(
                 Credential(
