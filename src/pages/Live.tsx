@@ -402,10 +402,12 @@ function IosStreamingHelp({
             )}
           </ol>
           <p className="text-ivory/50">
-            Android (téléphone comme tablette) fonctionne directement via
-            le mode "Partage d'écran" ci-dessus (Chrome supporte
-            nativement le partage d'écran depuis Android 10+). Pas besoin
-            de Twitch sur Android sauf si tu préfères.
+            Sur mobile (Android comme iOS), le mode "Partage d'écran"
+            n'est pas fiable : Chrome Android/Samsung Internet exposent
+            bien l'API mais l'appel échoue ou renvoie une track morte.
+            Utilise donc le mode "Caméra" pour filmer en selfie/arrière,
+            ou passe par OBS + Twitch si tu veux streamer ton écran de
+            jeu mobile.
           </p>
         </div>
       )}
@@ -716,7 +718,7 @@ function BroadcasterControls() {
       </fieldset>
 
       <IosStreamingHelp
-        prominent={!screenShareSupported}
+        prominent={!screenEffectiveSupported}
         isQueen={isQueen}
       />
 
