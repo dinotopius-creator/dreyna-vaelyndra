@@ -313,7 +313,7 @@ export async function adminSetGradeOverride(
   gradeSlug: string | null,
 ): Promise<UserProfileDto> {
   return (await authRequest<UserProfileDto>(
-    `/admin/users/${userId}/grade-override`,
+    `/admin/users/${encodeURIComponent(userId)}/grade-override`,
     {
       method: "POST",
       body: JSON.stringify({ grade_slug: gradeSlug }),

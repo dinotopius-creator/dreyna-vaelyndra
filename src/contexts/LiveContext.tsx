@@ -619,12 +619,22 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       if (!id || !authorId || !authorName || !authorAvatar || !content) {
         return null;
       }
-      // Diminutif de grade fourni par l'émetteur (ex. "BRM", "LEG"). Le
-      // host le re-dérivera côté réception si besoin — ici on ne le
-      // laisse passer que s'il matche une chaîne courte et alphanumérique
-      // pour éviter qu'un viewer injecte du texte arbitraire via le chat.
+      // Diminutif de grade fourni par l'émetteur (ex. "BRM", "LEG").
+      //
+      // Même logique de trust que `highlight` : on ne fait confiance à la
+      // valeur entrante QUE si elle vient du host (qui est notre source
+      // de vérité, il connaît les grades via son propre state et pour
+      // lui-même via `/auth/me`). Un message qui arrive d'un viewer vers
+      // le host (`trustHighlight=false`) a un `gradeShort` potentiellement
+      // trafiqué — un viewer malveillant pourrait envoyer `gradeShort:
+      // "LEG"` pour se faire passer pour Légende chez les autres viewers.
+      // Côté host on strip donc le champ systématiquement pour les
+      // messages non fiables. Si on veut un jour afficher le vrai grade
+      // des viewers sur leurs messages, il faudra que le host maintienne
+      // un cache `viewerId → grade` alimenté par un appel API (out of
+      // scope de ce sanitize).
       let gradeShort: string | null = null;
-      if (typeof p.gradeShort === "string") {
+      if (trustHighlight && typeof p.gradeShort === "string") {
         const raw = p.gradeShort.trim().toUpperCase();
         if (/^[A-Z]{1,4}$/.test(raw)) gradeShort = raw;
       }

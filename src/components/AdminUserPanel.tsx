@@ -377,7 +377,20 @@ export function AdminUserPanel({ targetUserId, targetUsername, onChange }: Props
   async function handleApplyManualGrade() {
     const slug = overrideDraft || null;
     if (slug === currentOverride) return;
-    if (slug && slug !== "legende-vaelyndra") {
+    if (slug === "legende-vaelyndra") {
+      // Même garde-fou que le bouton dédié "Sacrer Légende" — un DM de
+      // félicitations officiel sera envoyé automatiquement, donc on
+      // confirme explicitement pour éviter l'envoi accidentel.
+      if (
+        !window.confirm(
+          `Sacrer ${targetUsername} Légende de Vaelyndra ?\n\n` +
+            "Son badge 👑 Légende sera affiché partout (chat, profil, Cour, boutique). " +
+            "Un DM de félicitations officiel sera envoyé automatiquement de la part de Dreyna.",
+        )
+      ) {
+        return;
+      }
+    } else if (slug) {
       // Pour les grades non-Légende, simple confirm textuel.
       const g = gradeBySlug(slug);
       if (
