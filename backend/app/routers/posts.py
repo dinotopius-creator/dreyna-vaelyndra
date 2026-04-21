@@ -38,7 +38,27 @@ XP_PER_POST = 10
 
 
 def _is_queen(user_id: str) -> bool:
+    """Legacy check : user id listé dans l'env VAELYNDRA_QUEEN_IDS."""
     return user_id in _QUEEN_IDS
+
+
+# Rôles qui peuvent modérer n'importe quel contenu du fil (supprimer les
+# posts/commentaires d'autres utilisateurs). `queen` est conservé pour la
+# rétro-compatibilité avec les comptes seedés avant PR R ; `admin` est le
+# rôle actuel dans le panneau d'administration.
+_MOD_ROLES = {"admin", "queen"}
+
+
+def _is_moderator(session: Session, user_id: str) -> bool:
+    """Autorise la modération si :
+    - l'id est dans la liste legacy VAELYNDRA_QUEEN_IDS, OU
+    - l'utilisateur a `role in {"admin", "queen"}` dans UserProfile.
+    """
+    if _is_queen(user_id):
+        return True
+    user = session.get(UserProfile, user_id)
+    return bool(user and (user.role or "user") in _MOD_ROLES)
+
 
 router = APIRouter(prefix="/posts", tags=["posts"])
 
@@ -169,8 +189,8 @@ def delete_post(
     post = session.get(Post, post_id)
     if not post:
         raise HTTPException(status_code=404, detail="Post introuvable.")
-    # L'auteur du post ou la reine (modération) peut supprimer.
-    if post.author_id != user_id and not _is_queen(user_id):
+    # L'auteur du post ou un·e modérateur·rice (admin/queen) peut supprimer.
+    if post.author_id != user_id and not _is_moderator(session, user_id):
         raise HTTPException(status_code=403, detail="Interdit.")
 
     session.exec(
