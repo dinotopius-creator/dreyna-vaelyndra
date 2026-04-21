@@ -1,13 +1,18 @@
 """Point d'entrée FastAPI pour la cour de Vaelyndra."""
 from __future__ import annotations
 
+import logging
 import os
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 from sqlmodel import select
+
+_validation_log = logging.getLogger("vaelyndra.validation")
+_validation_log.setLevel(logging.INFO)
 
 from .auth.rate_limit import limiter
 from .auth.routes import router as auth_router
@@ -29,6 +34,29 @@ async def _rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONR
             "detail": "Trop de tentatives. Réessaie dans quelques minutes.",
         },
     )
+
+
+@app.exception_handler(RequestValidationError)
+async def _validation_error_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    """Logger les 422 avec le chemin + les champs invalides pour debug.
+
+    On NE logge PAS le body brut (qui peut contenir un upload base64 de 200 KB
+    ou des données personnelles) ; on se limite aux noms de champ en erreur et
+    aux types d'erreur Pydantic.
+    """
+    errors = [
+        {"loc": err.get("loc"), "type": err.get("type"), "msg": err.get("msg")}
+        for err in exc.errors()
+    ]
+    _validation_log.info(
+        "validation_error path=%s method=%s errors=%s",
+        request.url.path,
+        request.method,
+        errors,
+    )
+    return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
 
 # CORS : on autorise Vaelyndra (prod + www), les previews Vercel scopées au

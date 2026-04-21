@@ -52,6 +52,22 @@ def _generate_id(prefix: str) -> str:
     return f"{prefix}-{uuid.uuid4().hex[:12]}"
 
 
+def _sanitize_avatar(raw: str) -> str:
+    """Évite de stocker un data URI (upload base64, jusqu'à ~200 KB) dans
+    chaque row posts/comments. Si l'avatar est une URL classique (http/https),
+    on la garde tronquée à 512 chars ; sinon (data URI, chaîne inconnue trop
+    longue), on stocke une chaîne vide — le frontend résoudra l'avatar via
+    l'auteur grâce à `author_id`.
+    """
+    if not raw:
+        return ""
+    if raw.startswith("data:"):
+        return ""
+    if len(raw) > 512:
+        return ""
+    return raw
+
+
 def _serialize_post(
     post: Post,
     reactions: Dict[str, List[str]],
@@ -126,7 +142,7 @@ def create_post(
         id=_generate_id("post"),
         author_id=payload.author_id,
         author_name=payload.author_name,
-        author_avatar=payload.author_avatar,
+        author_avatar=_sanitize_avatar(payload.author_avatar),
         content=payload.content,
         image_url=payload.image_url,
         video_url=payload.video_url,
@@ -228,7 +244,7 @@ def add_comment(
         post_id=post_id,
         author_id=payload.author_id,
         author_name=payload.author_name,
-        author_avatar=payload.author_avatar,
+        author_avatar=_sanitize_avatar(payload.author_avatar),
         content=payload.content,
     )
     session.add(comment)
