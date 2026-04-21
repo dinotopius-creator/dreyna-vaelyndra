@@ -1340,7 +1340,17 @@ export function LiveProvider({ children }: { children: ReactNode }) {
           //    les re-diffuse à tous les autres viewers).
           const data = viewerPeer.connect(targetPeerId);
           viewerDataConnRef.current = data;
-          isHostingChatRef.current = false;
+          // On ne touche volontairement PAS à `isHostingChatRef` ici :
+          // le flag appartient au cycle de vie "hosting" (set à `true`
+          // dans `attachStreamToPeer` quand on commence à broadcaster,
+          // `false` dans `stopHosting` quand on arrête). Si un broadcaster
+          // actif va regarder un autre live (navigation vers
+          // `/live/@someone`), il RESTE hôte de son propre live — flipper
+          // le ref ici déviait son `publishChatMessage` vers la
+          // DataConnection du host visité (ses viewers ne voyaient plus
+          // ses messages, et au retour sur sa propre page le flag
+          // restait faussement à false → chat silencieusement cassé
+          // pour le reste de la session).
           data.on("data", (payload) => {
             if (cancelled) return;
             if (typeof payload !== "object" || payload === null) return;

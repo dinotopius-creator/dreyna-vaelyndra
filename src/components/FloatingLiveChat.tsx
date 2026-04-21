@@ -32,6 +32,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Crown, MessageSquare, Minus, Send, X } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useLive } from "../contexts/LiveContext";
+import { apiGetProfile } from "../lib/api";
 import { generateId } from "../lib/helpers";
 import type { ChatMessage } from "../types";
 
@@ -126,6 +127,12 @@ function FloatingLiveChatSession() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [unread, setUnread] = useState(0);
+  // Diminutif de grade du user courant (BRM/SEN/FLX/ARC/ELT/LEG) pour
+  // l'afficher entre crochets devant son pseudo. Si on ne le passe pas,
+  // les messages envoyés depuis cet overlay n'afficheraient pas le
+  // badge [XXX] alors que ceux envoyés depuis le chat intégré de la
+  // page Live l'afficheraient — incohérence visible côté viewers.
+  const [myGradeShort, setMyGradeShort] = useState<string | null>(null);
   // Ref miroir sur `minimized` pour que le callback de subscription,
   // stable entre les renders, puisse lire la valeur courante sans
   // déclencher une re-subscription à chaque toggle.
@@ -133,6 +140,24 @@ function FloatingLiveChatSession() {
   useEffect(() => {
     minimizedRef.current = minimized;
   }, [minimized]);
+
+  // Résout le diminutif du user courant via `/users/:id` (même endpoint
+  // que la page Live). Refetch quand l'utilisateur change.
+  useEffect(() => {
+    if (!user?.id) return;
+    const userId = user.id;
+    let cancelled = false;
+    apiGetProfile(userId)
+      .then((p) => {
+        if (!cancelled) setMyGradeShort(p.grade?.short ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setMyGradeShort(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   // Abonnement aux messages du live : mêmes messages que ceux affichés
   // par le composant `LiveChatHistory` sur la page Live.
@@ -278,7 +303,8 @@ function FloatingLiveChatSession() {
       authorAvatar: user.avatar,
       content: value,
       createdAt: new Date().toISOString(),
-      highlight: false,
+      highlight: user.role === "queen",
+      gradeShort: myGradeShort,
     });
     setInput("");
   }
