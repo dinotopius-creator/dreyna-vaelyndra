@@ -430,9 +430,20 @@ export function LiveProvider({ children }: { children: ReactNode }) {
    * Valide et normalise un message de chat reçu par le canal WebRTC.
    * Retourne null si la payload est mal formée (pour se protéger d'un
    * pair malveillant ou d'une version cliente incompatible).
+   *
+   * `trustHighlight` :
+   *  - `false` côté host en réception d'un viewer : on ignore ce que
+   *    l'émetteur a mis dans `highlight` (sinon un viewer malveillant
+   *    pourrait usurper le badge 👑 reine). Le host recalculera la
+   *    bonne valeur dans `broadcastChatFromHost` en résolvant
+   *    `authorId` contre la liste des utilisateurs connus.
+   *  - `true` côté viewer en réception du host : le host a déjà fait
+   *    la validation, son `highlight` est la source de vérité et doit
+   *    être conservé sinon le badge reine ne s'affichera jamais chez
+   *    les autres viewers.
    */
   const sanitizeIncomingChat = useCallback(
-    (payload: unknown): ChatMessage | null => {
+    (payload: unknown, trustHighlight: boolean): ChatMessage | null => {
       if (typeof payload !== "object" || payload === null) return null;
       const p = payload as Record<string, unknown>;
       if (p.type !== "chat-message") return null;
@@ -454,12 +465,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         authorAvatar,
         content: content.slice(0, 500), // anti-flood / anti-troll-wall-of-text
         createdAt,
-        // Le flag `highlight` NE doit JAMAIS être accepté tel quel en
-        // provenance du réseau : un viewer malveillant pourrait sinon
-        // se faire passer pour la reine (badge 👑 + bordure dorée dans
-        // `LiveChatOverlay`). Il sera recalculé côté host à partir du
-        // rôle réel de `authorId` dans `broadcastChatFromHost`.
-        highlight: false,
+        highlight: trustHighlight ? p.highlight === true : false,
       };
     },
     [],
@@ -778,7 +784,10 @@ export function LiveProvider({ children }: { children: ReactNode }) {
               payload !== null &&
               (payload as { type?: string }).type === "chat-message"
             ) {
-              const msg = sanitizeIncomingChat(payload);
+              // Côté host : le message vient d'un viewer non fiable,
+              // on IGNORE son `highlight` — c'est `broadcastChatFromHost`
+              // qui recalculera la bonne valeur à partir du vrai rôle.
+              const msg = sanitizeIncomingChat(payload, false);
               if (msg) broadcastChatFromHost(msg);
             }
           });
@@ -1086,7 +1095,12 @@ export function LiveProvider({ children }: { children: ReactNode }) {
                     : "screen",
               });
             } else if (type === "chat-message") {
-              const msg = sanitizeIncomingChat(payload);
+              // Côté viewer : le message vient du host, qui a déjà
+              // validé et recalculé `highlight` (cf. broadcastChat
+              // FromHost). On fait confiance à sa valeur, sans quoi
+              // le badge 👑 reine ne s'affichera jamais chez les
+              // autres viewers.
+              const msg = sanitizeIncomingChat(payload, true);
               if (msg) deliverChatLocally(msg);
             }
           });
