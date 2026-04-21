@@ -1050,6 +1050,23 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    // On référence IMMÉDIATEMENT le stream dans `localStreamRef` + on pose
+    // les listeners "ended" avant toute nouvelle `await`. Raison : la
+    // demande de micro ci-dessous ouvre un prompt natif qui peut rester
+    // plusieurs secondes à l'écran. Pendant ce temps, si l'utilisateur
+    // ferme l'onglet ou déclenche `stopLive()` autrement, la cleanup doit
+    // pouvoir retrouver ce stream pour stopper les tracks (sinon l'indicateur
+    // navigateur "en train de partager l'écran" reste bloqué sans bouton
+    // pour arrêter). Ça bloque aussi un double-clic involontaire sur le
+    // bouton "live" via le guard au début de la fonction.
+    stream.getVideoTracks().forEach((track) => {
+      track.addEventListener("ended", () => {
+        if (localStreamRef.current === stream) stopLive();
+      });
+    });
+    localStreamRef.current = stream;
+    setLocalStream(stream);
+
     // En partage d'écran, `getDisplayMedia` ne capte quasiment jamais le
     // micro du streamer — il propose uniquement l'audio système/onglet et
     // même ça dépend du navigateur. Sans fallback dédié, le flux diffusé
@@ -1069,9 +1086,16 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         },
         video: false,
       });
-      micStream.getAudioTracks().forEach((track) => {
-        stream.addTrack(track);
-      });
+      // Le stream de référence peut avoir été nettoyé pendant que le prompt
+      // micro était ouvert (stopLive, unmount…). Dans ce cas on range
+      // proprement les tracks micro qu'on vient d'obtenir.
+      if (localStreamRef.current !== stream) {
+        micStream.getTracks().forEach((track) => track.stop());
+      } else {
+        micStream.getAudioTracks().forEach((track) => {
+          stream.addTrack(track);
+        });
+      }
     } catch (err) {
       if (err instanceof Error && err.name === "NotAllowedError") {
         setLastError(
@@ -1082,15 +1106,9 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    // Quand on arrête le partage depuis le prompt navigateur, on stoppe.
-    stream.getVideoTracks().forEach((track) => {
-      track.addEventListener("ended", () => {
-        if (localStreamRef.current === stream) stopLive();
-      });
-    });
-
-    localStreamRef.current = stream;
-    setLocalStream(stream);
+    // Si le stream a été nettoyé pendant la demande micro, on n'attache
+    // rien aux peers.
+    if (localStreamRef.current !== stream) return;
     await attachStreamToPeer(stream, "screen");
   }, [attachStreamToPeer, stopLive]);
 

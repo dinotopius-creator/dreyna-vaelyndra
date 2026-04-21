@@ -125,18 +125,27 @@ function LiveVideoStage({
   const [needsUnmute, setNeedsUnmute] = useState(false);
 
   useEffect(() => {
+    // `cancelled` évite qu'un `.catch()` tardif du play() précédent n'aille
+    // muter un *nouveau* stream : quand le stream change d'une vidéo à une
+    // autre sans repasser par `null`, la promesse de l'effet précédent peut
+    // régler après que le nouvel effet a déjà appelé `play()` sur le même
+    // élément — sans ce flag, le vieux catch mettrait `el.muted = true` et
+    // afficherait "Activer le son" par-dessus un flux qui joue bien.
+    let cancelled = false;
     const el = videoRef.current;
     if (!el) return;
     el.srcObject = stream;
     if (!stream) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setNeedsUnmute(false);
-      return;
+      return () => {
+        cancelled = true;
+      };
     }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setNeedsUnmute(false);
     el.play().catch(() => {
-      if (isHost) return;
+      if (cancelled || isHost) return;
       // Fallback viewer : on essaie de démarrer en muted (autoplay sans
       // son, toujours autorisé). Comme ça au moins la vidéo tourne, et
       // on affiche un bouton "Activer le son" pour récupérer l'audio
@@ -144,12 +153,15 @@ function LiveVideoStage({
       el.muted = true;
       el.play()
         .then(() => {
-          setNeedsUnmute(true);
+          if (!cancelled) setNeedsUnmute(true);
         })
         .catch(() => {
-          setNeedsUnmute(true);
+          if (!cancelled) setNeedsUnmute(true);
         });
     });
+    return () => {
+      cancelled = true;
+    };
   }, [stream, isHost]);
 
   const handleUnmute = () => {
