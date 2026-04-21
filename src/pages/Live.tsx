@@ -723,6 +723,9 @@ export function Live() {
     viewingMeta,
     publishChatMessage,
     subscribeChatMessages,
+    resumableLive,
+    resumeLive,
+    dismissResumableLive,
   } = useLive();
 
   // Quel broadcaster regarde-t-on ?
@@ -741,8 +744,18 @@ export function Live() {
   //     démarrage de live sans URL ni broadcaster actif.
   //  5. Chaîne vide — état "aucun live".
   const firstLiveId = Object.keys(liveRegistry)[0];
+  // `imBroadcastingNow` couvre aussi le cas post-F5 : le user était en
+  // direct il y a < 5 min (marker de reprise encore valide) mais son
+  // `config.status` vient d'être réinitialisé à "idle" par le mount.
+  // Sans cette troisième condition, un broadcaster qui refresh pendant
+  // qu'un autre live tourne (ex: Dreyna) serait catapulté sur CE live
+  // (firstLiveId prioritaire) et ne verrait jamais son bouton
+  // « Reprendre mon live ».
   const imBroadcastingNow =
-    !!user && (user.id in liveRegistry || config.status === "live");
+    !!user &&
+    (user.id in liveRegistry ||
+      config.status === "live" ||
+      (!!resumableLive && resumableLive.userId === user.id));
   const broadcasterId =
     paramBroadcasterId ??
     (imBroadcastingNow && user ? user.id : undefined) ??
@@ -1379,6 +1392,47 @@ export function Live() {
                         ? "La cour se connecte aux portails de Vaelyndra."
                         : `${broadcasterProfile?.username ?? "Le broadcaster"} prépare son sortilège. Rafraîchis dans quelques secondes.`}
                     </p>
+                  </div>
+                </div>
+              ) : amBroadcaster &&
+                resumableLive &&
+                user &&
+                resumableLive.userId === user.id ? (
+                /*
+                 * Post-refresh (F5, pull-to-refresh, crash onglet) d'un
+                 * broadcaster qui était en live il y a < 5 min. Le
+                 * MediaStream est perdu (sécurité navigateur), mais la
+                 * config est connue → on propose la reprise en un clic
+                 * au lieu de faire croire que le live est fermé. Voir
+                 * LiveContext > LiveResumeMarker pour les détails.
+                 */
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-6 text-center">
+                  <Radio className="h-10 w-10 animate-pulse text-rose-300" />
+                  <p className="font-display text-2xl text-gold-200">
+                    Reprendre ton live ?
+                  </p>
+                  <p className="max-w-md text-sm text-ivory/75">
+                    Tu étais en direct juste avant d'actualiser. Ton flux
+                    vidéo a été coupé par le navigateur mais ta config est
+                    sauvegardée — clique pour relancer.
+                  </p>
+                  <div className="flex flex-wrap items-center justify-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void resumeLive();
+                      }}
+                      className="rounded-full border border-rose-300/60 bg-rose-400/20 px-5 py-2 text-sm font-semibold text-rose-100 transition hover:bg-rose-400/30"
+                    >
+                      Reprendre mon live
+                    </button>
+                    <button
+                      type="button"
+                      onClick={dismissResumableLive}
+                      className="rounded-full border border-ivory/20 px-4 py-2 text-xs text-ivory/70 transition hover:bg-ivory/10"
+                    >
+                      Non, c'est fini
+                    </button>
                   </div>
                 </div>
               ) : (
