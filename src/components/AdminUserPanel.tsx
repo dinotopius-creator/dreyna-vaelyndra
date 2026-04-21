@@ -352,9 +352,14 @@ export function AdminUserPanel({ targetUserId, targetUsername, onChange }: Props
     ) {
       return;
     }
+    // On ne claim pas "DM envoyé" : côté backend l'envoi du DM est
+    // best-effort (le sacre est déjà committé avant), donc le 200 reçu
+    // ici n'atteste que du sacre. Laisser sous-entendre que le DM est
+    // arrivé pourrait induire l'admin en erreur et l'empêcher d'envoyer
+    // un message manuel de secours.
     await applyGradeOverride(
       "legende-vaelyndra",
-      `${targetUsername} sacré·e Légende de Vaelyndra. DM envoyé.`,
+      `${targetUsername} sacré·e Légende de Vaelyndra.`,
     );
   }
 
