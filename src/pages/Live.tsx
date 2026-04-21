@@ -956,10 +956,12 @@ export function Live() {
       (e) => e.userId !== broadcasterId,
     );
     if (others.length === 0) return null;
-    // Ordre stable par `startedAt` pour que "suivant" soit déterministe.
+    // Ordre "plus récent d'abord" — cohérent avec l'auto-redirect et
+    // avec `OtherLivesStrip` : le bouton "Live suivant" emmène le
+    // viewer sur le même live que celui affiché en tête de strip.
     others.sort(
       (a, b) =>
-        new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime(),
+        new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime(),
     );
     return others[0];
   }, [liveRegistry, broadcasterId]);
