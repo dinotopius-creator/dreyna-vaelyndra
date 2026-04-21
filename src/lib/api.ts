@@ -150,6 +150,14 @@ export async function apiDeleteComment(
 export interface UserProfileDto {
   id: string;
   username: string;
+  /**
+   * PR S — identifiant public `@handle` unique (ex. `le_roi_des_zems`).
+   * `null` possible pour les profils pré-PR S avant que le backfill
+   * startup du backend ne passe.
+   */
+  handle: string | null;
+  /** ISO du dernier changement de handle (cooldown 30 j côté backend). */
+  handleUpdatedAt: string | null;
   avatarImageUrl: string;
   avatarUrl: string | null;
   inventory: string[];
@@ -198,6 +206,22 @@ export interface StreamerGradeDto {
 export interface FollowerDto {
   id: string;
   username: string;
+  handle: string | null;
+  avatarImageUrl: string;
+  creature: Creature | null;
+  role: string;
+}
+
+/**
+ * PR S — Hit renvoyé par `GET /users/search?q=...`.
+ *
+ * Volontairement plus léger que `UserProfileDto` : juste ce qu'il faut
+ * pour afficher une ligne de résultat et naviguer vers le profil.
+ */
+export interface UserSearchHitDto {
+  id: string;
+  username: string;
+  handle: string | null;
   avatarImageUrl: string;
   creature: Creature | null;
   role: string;
@@ -297,6 +321,42 @@ export async function apiFollowStatus(
 export async function apiGetProfile(userId: string): Promise<UserProfileDto> {
   return (await request<UserProfileDto>(
     `/users/${encodeURIComponent(userId)}`,
+  )) as UserProfileDto;
+}
+
+/**
+ * PR S — Recherche des membres par `@handle` ou pseudo.
+ *
+ * Retourne `[]` si le terme est vide (le backend filtre ; on évite d'exposer
+ * la liste complète par rate-limiting naturel).
+ */
+export async function apiSearchUsers(
+  query: string,
+  limit = 10,
+): Promise<UserSearchHitDto[]> {
+  const q = query.trim();
+  if (!q) return [];
+  const params = new URLSearchParams({ q, limit: String(limit) });
+  return (
+    (await request<UserSearchHitDto[]>(`/users/search?${params.toString()}`)) ??
+    []
+  );
+}
+
+/**
+ * PR S — Change le `@handle` de l'utilisateur courant. Renvoie le profil
+ * mis à jour en cas de succès.
+ *
+ * Le backend impose un cooldown de 30 jours entre deux changements
+ * explicites (réponse 429), et rejette 409 si le handle est déjà pris.
+ */
+export async function apiUpdateHandle(
+  userId: string,
+  handle: string,
+): Promise<UserProfileDto> {
+  return (await request<UserProfileDto>(
+    `/users/${encodeURIComponent(userId)}/handle`,
+    { method: "PATCH", body: JSON.stringify({ handle }) },
   )) as UserProfileDto;
 }
 

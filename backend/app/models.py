@@ -86,6 +86,13 @@ class UserProfile(SQLModel, table=True):
 
     id: str = Field(primary_key=True)
     username: str
+    # PR S — identifiant public unique sous forme `@le_roi_des_zems`.
+    # Dérivé automatiquement du pseudo à la création (cf. `app.handles`).
+    # Modifiable par le user depuis `/compte` avec un cooldown de 30 j
+    # (anti-impersonation). `None` est autorisé le temps qu'un profil
+    # pré-PR S soit migré au prochain démarrage du backend.
+    handle: Optional[str] = Field(default=None, index=True, max_length=20)
+    handle_updated_at: Optional[str] = None
     avatar_image_url: str = ""
     avatar_url: Optional[str] = None
     # JSON sérialisé (list[str] et dict[str, str]) — SQLite ne gère pas les

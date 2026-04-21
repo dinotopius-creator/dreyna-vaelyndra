@@ -181,6 +181,7 @@ def streamer_leaderboard(
                 rank=rank,
                 userId=p.id,
                 username=p.username,
+                handle=p.handle,
                 avatarImageUrl=p.avatar_image_url,
                 totalSylvins=int(total or 0),
                 creature=_creature_dto(p.creature_id),
@@ -266,6 +267,7 @@ def streamers_bff(
             return {
                 "id": user_id,
                 "username": "(compte supprimé)",
+                "handle": None,
                 "avatarImageUrl": "",
                 "creature": None,
                 "role": "user",
@@ -274,6 +276,7 @@ def streamers_bff(
         return {
             "id": p.id,
             "username": p.username,
+            "handle": p.handle,
             "avatarImageUrl": p.avatar_image_url,
             "creature": _creature_dto(p.creature_id),
             "role": p.role or "user",

@@ -44,6 +44,9 @@ class CommentOut(BaseModel):
     id: str
     authorId: str
     authorName: str
+    # PR S — `@handle` résolu depuis l'auteur au serialize, pas snapshot.
+    # `None` si l'auteur n'a pas encore de profil ou de handle.
+    authorHandle: Optional[str] = None
     authorAvatar: str
     content: str
     createdAt: str
@@ -54,6 +57,7 @@ class PostOut(BaseModel):
     id: str
     authorId: str
     authorName: str
+    authorHandle: Optional[str] = None
     authorAvatar: str
     content: str
     imageUrl: Optional[str] = None
@@ -82,6 +86,17 @@ class UserProfileUpsert(BaseModel):
     creature_id: Optional[str] = Field(default=None, max_length=32)
 
 
+class HandleUpdate(BaseModel):
+    """Payload pour `PATCH /users/{id}/handle` (PR S).
+
+    Le serveur valide le format (3-20 chars, `[a-z0-9_]+`) et l'unicité
+    avant de renvoyer le profil mis à jour. Un cooldown de 30 jours est
+    imposé entre deux changements pour éviter l'impersonation express.
+    """
+
+    handle: str = Field(..., min_length=3, max_length=20)
+
+
 class CreatureChoice(BaseModel):
     """Choix / changement de créature. Slug du catalogue figé."""
 
@@ -107,6 +122,8 @@ class FollowerOut(BaseModel):
 
     id: str
     username: str
+    # PR S — handle public `@...` (Optional pour les anciens clients).
+    handle: Optional[str] = None
     avatarImageUrl: str
     creature: Optional[CreatureOut] = None
     role: str = "user"
@@ -217,6 +234,11 @@ class StreamerGradeOut(BaseModel):
 class UserProfileOut(BaseModel):
     id: str
     username: str
+    # PR S — identifiant public `@handle` (dérivé auto du pseudo à la
+    # création, modifiable via `PATCH /users/{id}/handle`). `None` possible
+    # pour les profils pré-PR S avant que le backfill startup ne passe.
+    handle: Optional[str] = None
+    handleUpdatedAt: Optional[str] = None
     avatarImageUrl: str
     avatarUrl: Optional[str] = None
     inventory: List[str] = []
@@ -268,6 +290,22 @@ class DailyClaimOut(BaseModel):
     profile: UserProfileOut
 
 
+class UserSearchHitOut(BaseModel):
+    """Mini-profil renvoyé par `GET /users/search` (PR S).
+
+    Volontairement minimaliste : on ne renvoie que ce qui est nécessaire
+    pour afficher une ligne de résultat (avatar + pseudo + @handle + rôle)
+    + de quoi router vers le profil (`id`).
+    """
+
+    id: str
+    username: str
+    handle: Optional[str] = None
+    avatarImageUrl: str
+    creature: Optional[CreatureOut] = None
+    role: str = "user"
+
+
 class GiftTransferOut(BaseModel):
     sender: UserProfileOut
     receiver: UserProfileOut
@@ -297,6 +335,7 @@ class StreamerMiniOut(BaseModel):
 
     id: str
     username: str
+    handle: Optional[str] = None
     avatarImageUrl: str
     creature: Optional[CreatureOut] = None
     role: str = "user"
@@ -307,6 +346,7 @@ class StreamerLeaderboardEntryOut(BaseModel):
     rank: int
     userId: str
     username: str
+    handle: Optional[str] = None
     avatarImageUrl: str
     totalSylvins: int
     creature: Optional[CreatureOut] = None

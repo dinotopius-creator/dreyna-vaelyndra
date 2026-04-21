@@ -188,6 +188,9 @@ function backendToStored(me: AuthMe): StoredUser {
   return {
     id: me.id,
     username: me.username,
+    // PR S — `@handle` depuis le backend. `null` tant que le backfill
+    // startup n'est pas passé sur les profils pré-PR S.
+    handle: me.handle ?? undefined,
     email: me.email ?? `${me.id}@vaelyndra.realm`,
     avatar: me.avatar_image_url || `https://i.pravatar.cc/150?u=${me.id}`,
     role: normalizeRole(me.role),
@@ -230,6 +233,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             ? {
                 ...u,
                 username: me.username,
+                // PR S — propage le handle fraîchement renvoyé par le backend.
+                handle: me.handle ?? u.handle,
                 email: me.email ?? u.email,
                 avatar: me.avatar_image_url || u.avatar,
                 role: normalizeRole(me.role),
@@ -284,6 +289,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const rest: User = {
       id: u.id,
       username: u.username,
+      handle: u.handle,
       email: u.email,
       avatar: u.avatar,
       role: u.role,
@@ -497,6 +503,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       users: users.map((u) => ({
         id: u.id,
         username: u.username,
+        handle: u.handle,
         email: u.email,
         avatar: u.avatar,
         role: u.role,

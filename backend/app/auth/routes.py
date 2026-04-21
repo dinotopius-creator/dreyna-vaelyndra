@@ -36,10 +36,12 @@ import pyotp
 from email_validator import EmailNotValidError, validate_email
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from ..creatures import CREATURES
 from ..db import get_session
+from ..handles import slugify_handle, suggest_unique_handle
 from ..models import UserProfile
 from . import emailer
 from .crypto import (
@@ -184,6 +186,10 @@ def _user_public_dict(user: UserProfile, credential: Optional[Credential]) -> di
     return {
         "id": user.id,
         "username": user.username,
+        # PR S — `@handle` public unique, optionnel tant que le backfill
+        # startup n'est pas passé sur tous les profils pré-PR S.
+        "handle": user.handle,
+        "handle_updated_at": user.handle_updated_at,
         "avatar_image_url": user.avatar_image_url,
         "avatar_url": user.avatar_url,
         "creature_id": user.creature_id,
@@ -314,17 +320,51 @@ def register(payload: RegisterIn, request: Request) -> dict:
                 user.creature_id = creature_id
             user.updated_at = _now_iso()
             db.add(user)
+            db.commit()
+            db.refresh(user)
         else:
-            user = UserProfile(
-                id=f"user-{uuid.uuid4().hex[:12]}",
-                username=username,
-                avatar_image_url=f"https://api.dicebear.com/7.x/personas/svg?seed={username}",
-                creature_id=creature_id,
-                role="user",
-            )
-            db.add(user)
-        db.commit()
-        db.refresh(user)
+            # PR S — on génère un `@handle` unique dès la création pour que
+            # le user l'ait immédiatement (sinon il reste `None` jusqu'au
+            # prochain restart backend qui fait tourner _backfill_handles).
+            # Retry en cas d'IntegrityError sur le handle (deux inscriptions
+            # simultanées peuvent calculer le même candidat entre le SELECT
+            # et le COMMIT, puis se marcher dessus sur l'index unique
+            # partiel `userprofile_handle_unique`).
+            new_user_id = f"user-{uuid.uuid4().hex[:12]}"
+            base_handle = slugify_handle(username)
+            committed = False
+            for attempt in range(3):
+                handle = suggest_unique_handle(
+                    db, base_handle, user_id=new_user_id
+                )
+                user = UserProfile(
+                    id=new_user_id,
+                    username=username,
+                    handle=handle,
+                    # handle_updated_at reste None (défaut) : le cooldown
+                    # 30 j ne démarre qu'au 1er PATCH explicite.
+                    avatar_image_url=f"https://api.dicebear.com/7.x/personas/svg?seed={username}",
+                    creature_id=creature_id,
+                    role="user",
+                )
+                db.add(user)
+                try:
+                    db.commit()
+                    committed = True
+                    break
+                except IntegrityError:
+                    db.rollback()
+                    # Après rollback, `user` est expunge : la prochaine
+                    # itération reconstruit un UserProfile frais avec un
+                    # nouveau handle (suggest_unique_handle verra le
+                    # candidat grillé par la requête concurrente et en
+                    # proposera un autre).
+            if not committed:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Conflit de handle, réessaie dans un instant.",
+                )
+            db.refresh(user)
 
         # 3. Crée le Credential (non vérifié) + le token d'email verification.
         credential = Credential(

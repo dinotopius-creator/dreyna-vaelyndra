@@ -17,6 +17,7 @@ _validation_log.setLevel(logging.INFO)
 from .auth.rate_limit import limiter
 from .auth.routes import router as auth_router
 from .db import get_session, init_db
+from .handles import slugify_handle, suggest_unique_handle
 from .models import UserProfile
 from .routers import admin, live, posts, reports, streamers, users
 
@@ -167,6 +168,28 @@ def _seed_official_accounts() -> None:
         session.commit()
 
 
+def _backfill_handles() -> None:
+    """PR S — remplit les `handle` manquants pour les profils pré-PR S.
+
+    Idempotent : on ne touche qu'aux profils où `handle IS NULL`. L'unicité
+    est assurée par `suggest_unique_handle` qui incrémente `_2`, `_3`… en
+    cas de collision (rare mais possible si deux users ont le même pseudo
+    après slugification).
+    """
+    with get_session() as session:
+        to_fill = session.exec(
+            select(UserProfile).where(UserProfile.handle.is_(None))  # type: ignore[attr-defined]
+        ).all()
+        if not to_fill:
+            return
+        for profile in to_fill:
+            base = slugify_handle(profile.username)
+            profile.handle = suggest_unique_handle(
+                session, base, user_id=profile.id, exclude_id=profile.id
+            )
+        session.commit()
+
+
 def _seed_official_credentials() -> None:
     """Crée les identifiants pour les comptes officiels (PR "Mon compte").
 
@@ -210,6 +233,7 @@ def _startup() -> None:
     init_db()
     _seed_official_accounts()
     _seed_official_credentials()
+    _backfill_handles()
 
 
 @app.get("/healthz")
