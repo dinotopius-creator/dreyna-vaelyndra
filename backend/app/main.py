@@ -225,12 +225,12 @@ def _seed_official_credentials() -> None:
                         )
                     ).first()
                     if clash is None:
-                        existing.email = email.lower()
-                        existing.email_verified_at = __import__(
-                            "datetime"
-                        ).datetime.now(
+                        now_iso = __import__("datetime").datetime.now(
                             __import__("datetime").timezone.utc
                         ).isoformat()
+                        existing.email = email.lower()
+                        existing.email_verified_at = now_iso
+                        existing.updated_at = now_iso
                 continue
             session.add(
                 Credential(
