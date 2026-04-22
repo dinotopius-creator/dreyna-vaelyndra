@@ -1127,37 +1127,62 @@ export function Live() {
   // l'élément <video>.
   const playerCardRef = useRef<HTMLDivElement | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isPseudoFullscreen, setIsPseudoFullscreen] = useState(false);
   const [isChatVisible, setIsChatVisible] = useState(true);
+  const fullscreenActive = isFullscreen || isPseudoFullscreen;
 
   useEffect(() => {
     function onFsChange() {
-      setIsFullscreen(
+      const ownsNativeFullscreen =
         !!document.fullscreenElement &&
-          document.fullscreenElement === playerCardRef.current,
-      );
+        document.fullscreenElement === playerCardRef.current;
+      setIsFullscreen(ownsNativeFullscreen);
+      if (ownsNativeFullscreen) setIsPseudoFullscreen(false);
     }
     document.addEventListener("fullscreenchange", onFsChange);
     return () => document.removeEventListener("fullscreenchange", onFsChange);
   }, []);
 
+  useEffect(() => {
+    if (!isPseudoFullscreen) return;
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setIsPseudoFullscreen(false);
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousHtmlOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [isPseudoFullscreen]);
+
   async function toggleFullscreen() {
     const el = playerCardRef.current;
     if (!el) return;
+    if (isPseudoFullscreen) {
+      setIsPseudoFullscreen(false);
+      return;
+    }
     try {
-      if (document.fullscreenElement) {
+      if (document.fullscreenElement === el) {
         await document.exitFullscreen();
+        return;
       } else if (el.requestFullscreen) {
         await el.requestFullscreen();
+        return;
       } else {
-        // iOS Safari ne supporte pas requestFullscreen sur un div : on
-        // informe l'utilisateur plutôt que d'échouer silencieusement.
-        notify(
-          "Le plein écran n'est pas supporté par ton navigateur. Essaie en rotation paysage ou masque le chat pour agrandir la vidéo.",
-          "info",
-        );
+        setIsPseudoFullscreen(true);
+        return;
       }
     } catch {
-      notify("Impossible de passer en plein écran sur ce navigateur.", "info");
+      setIsPseudoFullscreen(true);
+      return;
     }
   }
 
@@ -1716,13 +1741,15 @@ export function Live() {
           */}
           <div
             ref={playerCardRef}
-            className={`card-royal relative overflow-hidden ${
-              isFullscreen ? "bg-night-900" : ""
-            }`}
+            className={`relative overflow-hidden ${
+              isPseudoFullscreen
+                ? "fixed inset-0 z-[120] rounded-none border-0 bg-night-900 shadow-none"
+                : "card-royal"
+            } ${fullscreenActive ? "bg-night-900" : ""}`}
           >
             <div
               className={`relative w-full overflow-hidden bg-night-900 ${
-                isFullscreen ? "h-screen" : "aspect-video"
+                fullscreenActive ? "h-[100dvh]" : "aspect-video"
               }`}
             >
               {showViewer ? (
@@ -1968,18 +1995,18 @@ export function Live() {
                   onClick={toggleFullscreen}
                   className="pointer-events-auto inline-flex h-8 w-8 items-center justify-center rounded-full bg-night-900/70 text-ivory/80 backdrop-blur transition hover:bg-night-900/90 hover:text-gold-200"
                   aria-label={
-                    isFullscreen
+                    fullscreenActive
                       ? "Quitter le plein écran"
                       : "Passer en plein écran"
                   }
-                  aria-pressed={isFullscreen}
+                  aria-pressed={fullscreenActive}
                   title={
-                    isFullscreen
+                    fullscreenActive
                       ? "Quitter le plein écran"
                       : "Passer en plein écran"
                   }
                 >
-                  {isFullscreen ? (
+                  {fullscreenActive ? (
                     <Minimize className="h-4 w-4" />
                   ) : (
                     <Maximize className="h-4 w-4" />
@@ -1989,7 +2016,7 @@ export function Live() {
             </div>
             <div
               className={
-                isFullscreen
+                fullscreenActive
                   ? "pointer-events-none absolute bottom-3 left-3 right-3 z-40 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-night-950/75 p-3 shadow-2xl backdrop-blur-md sm:bottom-5 sm:left-5 sm:right-5"
                   : "flex flex-wrap items-center justify-between gap-3 p-4"
               }
@@ -2004,7 +2031,11 @@ export function Live() {
                 </button>
                 <SortDAppelCaster onCast={castSortDAppel} disabled={!user} />
               </div>
-              <p className={isFullscreen ? "hidden" : "text-xs text-ivory/50"}>
+              <p
+                className={
+                  fullscreenActive ? "hidden" : "text-xs text-ivory/50"
+                }
+              >
                 {isActiveLive
                   ? "Chat flottant sur le flux. Les Sorts I/II/III ont chacun leur cooldown (10 / 25 / 60 s)."
                   : broadcasterProfile && amBroadcaster
