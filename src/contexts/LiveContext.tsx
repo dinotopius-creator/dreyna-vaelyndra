@@ -1533,6 +1533,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         const remote = new MediaStream();
         const pendingIce: NativeIceCandidate[] = [];
         const appliedBroadcasterIce = new Set<string>();
+        const remoteTrackIds = new Set<string>();
         let sessionId: string | null = null;
         let lastViewerHeartbeatAt = 0;
 
@@ -1542,11 +1543,23 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         pc.addTransceiver("video", { direction: "recvonly" });
         pc.addTransceiver("audio", { direction: "recvonly" });
         pc.ontrack = (event) => {
-          event.streams[0]
-            ?.getTracks()
-            .forEach((track) => remote.addTrack(track));
+          event.streams[0]?.getTracks().forEach((track) => {
+            if (remoteTrackIds.has(track.id)) return;
+            remoteTrackIds.add(track.id);
+            remote.addTrack(track);
+          });
           if (!cancelled) {
             setRemoteStream(remote);
+            setIsConnecting(false);
+          }
+        };
+        pc.onconnectionstatechange = () => {
+          if (cancelled) return;
+          if (pc.connectionState === "connected") {
+            setIsConnecting(false);
+            return;
+          }
+          if (pc.connectionState === "failed") {
             setIsConnecting(false);
           }
         };
@@ -1580,8 +1593,11 @@ export function LiveProvider({ children }: { children: ReactNode }) {
               if (!sessionId || cancelled) return;
               const now = Date.now();
               if (now - lastViewerHeartbeatAt > 10_000) {
-                lastViewerHeartbeatAt = now;
-                apiHeartbeatNativeViewer(sessionId).catch(() => {});
+                apiHeartbeatNativeViewer(sessionId)
+                  .then(() => {
+                    lastViewerHeartbeatAt = now;
+                  })
+                  .catch(() => {});
               }
               apiGetNativeLiveOffer(sessionId)
                 .then(async (latest) => {

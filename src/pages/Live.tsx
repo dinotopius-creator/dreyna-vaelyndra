@@ -963,18 +963,30 @@ export function Live() {
 
   // Rejoindre le flux du broadcaster cible (sauf si on est host).
   const remoteStreamRef = useRef<MediaStream | null>(null);
+  const isConnectingRef = useRef(false);
+  const joinAttemptStartedAtRef = useRef(0);
   remoteStreamRef.current = remoteStream;
+  isConnectingRef.current = isConnecting;
   useEffect(() => {
     if (amBroadcaster) return;
     // Si c'est un live Twitch (pas WebRTC), pas de joinAsViewer à tenter.
     if (registryEntry?.mode === "twitch") return;
-    let cleanup: (() => void) | null = joinAsViewer(broadcasterId);
+    const startJoinAttempt = () => {
+      joinAttemptStartedAtRef.current = Date.now();
+      return joinAsViewer(broadcasterId);
+    };
+    let cleanup: (() => void) | null = startJoinAttempt();
     const retry = window.setInterval(() => {
-      if (!remoteStreamRef.current) {
+      if (remoteStreamRef.current) return;
+      const mode = registryEntry?.mode;
+      const maxConnectMs = mode === "android-screen" ? 90_000 : 45_000;
+      const attemptAge = Date.now() - joinAttemptStartedAtRef.current;
+      const shouldRetry = !isConnectingRef.current || attemptAge > maxConnectMs;
+      if (shouldRetry) {
         cleanup?.();
-        cleanup = joinAsViewer(broadcasterId);
+        cleanup = startJoinAttempt();
       }
-    }, 20000);
+    }, 15_000);
     return () => {
       window.clearInterval(retry);
       cleanup?.();
