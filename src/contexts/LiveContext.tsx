@@ -13,6 +13,11 @@ import type { DataConnection, MediaConnection } from "peerjs";
 import { useStore } from "./StoreContext";
 import { useAuth } from "./AuthContext";
 import { getPeerOptions } from "../lib/peerConfig";
+import {
+  isNativeAndroidApp,
+  startNativeScreenShare,
+  stopNativeScreenShare,
+} from "../lib/nativeScreenShare";
 import type { ChatMessage } from "../types";
 import {
   DEFAULT_LIVE_CATEGORY,
@@ -735,6 +740,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
 
   /** Ferme UNIQUEMENT les ressources côté host (peer hôte + stream local). */
   const stopHosting = useCallback(() => {
+    stopNativeScreenShare();
     hostConnectionsRef.current.forEach((call) => {
       try {
         call.close();
@@ -1117,6 +1123,19 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       !navigator.mediaDevices ||
       typeof navigator.mediaDevices.getDisplayMedia !== "function"
     ) {
+      if (isNativeAndroidApp()) {
+        try {
+          await startNativeScreenShare();
+          setLastError(
+            "Autorisation de partage d'écran Android accordée. Le relais vidéo natif WebRTC est la prochaine étape avant diffusion aux viewers.",
+          );
+        } catch (err) {
+          if (err instanceof Error && err.message !== "screen_capture_denied") {
+            setLastError(`Partage d'écran Android refusé : ${err.message}`);
+          }
+        }
+        return;
+      }
       // iOS Safari (<= 18) et la plupart des navigateurs Android n'exposent
       // pas `getDisplayMedia`. On le signale explicitement pour que l'UI
       // oriente vers le mode "camera" au lieu d'un échec silencieux.
