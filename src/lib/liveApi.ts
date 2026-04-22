@@ -313,6 +313,17 @@ export async function apiMyJoinRequest(
   return res ?? null;
 }
 
+/** Participant : liste les invités acceptés sur le live courant. */
+export async function apiListAcceptedJoinRequests(
+  broadcasterId: string,
+): Promise<JoinRequestOut[]> {
+  return (
+    (await request<JoinRequestOut[]>(
+      `/live/${encodeURIComponent(broadcasterId)}/join/accepted`,
+    )) ?? []
+  );
+}
+
 /** Broadcaster : liste des demandes sur SON live (polled ~5 s). */
 export async function apiListJoinRequests(): Promise<JoinRequestOut[]> {
   return (await request<JoinRequestOut[]>("/live/join-requests")) ?? [];

@@ -1135,6 +1135,47 @@ def my_join_request(
         return _to_join_out(row)
 
 
+@router.get("/{broadcaster_id}/join/accepted", response_model=list[JoinRequestOut])
+def list_accepted_join_requests(
+    broadcaster_id: str,
+    user: UserProfile = Depends(require_auth),
+) -> list[JoinRequestOut]:
+    """Participant : liste les invités acceptés sur un live.
+
+    Les viewers acceptés en ont besoin pour découvrir les autres invités
+    et ouvrir les connexions audio mesh viewer↔viewer. On limite l'accès
+    au broadcaster ou aux viewers déjà acceptés sur ce live.
+    """
+    with get_session() as session:
+        live = session.get(LiveSession, broadcaster_id)
+        if live is None or not _is_fresh(live.last_heartbeat_at):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"message": "live_not_found"},
+            )
+
+        if user.id != broadcaster_id:
+            mine = session.exec(
+                select(LiveJoinRequest)
+                .where(LiveJoinRequest.broadcaster_id == broadcaster_id)
+                .where(LiveJoinRequest.user_id == user.id)
+                .where(LiveJoinRequest.status == JOIN_STATUS_ACCEPTED)
+            ).first()
+            if mine is None:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail={"message": "not_on_stage"},
+                )
+
+        rows = session.exec(
+            select(LiveJoinRequest)
+            .where(LiveJoinRequest.broadcaster_id == broadcaster_id)
+            .where(LiveJoinRequest.status == JOIN_STATUS_ACCEPTED)
+            .order_by(LiveJoinRequest.decided_at.asc(), LiveJoinRequest.requested_at.asc())
+        ).all()
+        return [_to_join_out(r) for r in rows]
+
+
 @router.patch("/join-requests/{request_id}", response_model=JoinRequestOut)
 def decide_join_request(
     request_id: int,
