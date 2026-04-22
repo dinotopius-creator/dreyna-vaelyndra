@@ -954,7 +954,7 @@ export function Live() {
   const twitchChannel = extractTwitchChannel(
     registryEntry?.twitchChannel ?? (amBroadcaster ? config.twitchChannel : ""),
   );
-  const activeMode: "screen" | "camera" | "twitch" =
+  const activeMode: "screen" | "android-screen" | "camera" | "twitch" =
     registryEntry?.mode ??
     viewingMeta?.mode ??
     (amBroadcaster ? config.mode : "screen");
@@ -1544,6 +1544,7 @@ export function Live() {
               {showViewer ? (
                 <>
                   {(activeMode === "screen" ||
+                    activeMode === "android-screen" ||
                     activeMode === "camera") && (
                     <LiveVideoStage
                       isHost={isHost}
@@ -1620,7 +1621,9 @@ export function Live() {
                   </div>
                 </>
               ) : isActiveLive &&
-                (activeMode === "screen" || activeMode === "camera") ? (
+                (activeMode === "screen" ||
+                  activeMode === "android-screen" ||
+                  activeMode === "camera") ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-center">
                   {broadcasterProfile?.avatar && (
                     <img
