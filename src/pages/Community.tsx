@@ -8,6 +8,7 @@ import {
   Radio,
   Send,
   Trash2,
+  UserRoundCheck,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useStore } from "../contexts/StoreContext";
@@ -29,13 +30,35 @@ import {
 } from "../data/liveCategories";
 import { getOfficial } from "../data/officials";
 import { formatRelative, parseVideoUrl } from "../lib/helpers";
-import {
-  apiCreatePost,
-  apiDeletePost,
-  apiToggleReaction,
-} from "../lib/api";
+import { apiCreatePost, apiDeletePost, apiToggleReaction } from "../lib/api";
+
+const MOCK_COMMUNITY_USER_IDS = new Set([
+  "user-lyria",
+  "user-caelum",
+  "user-mira",
+  "user-aeris",
+  "user-sylas",
+  "user-thalia",
+]);
 
 const QUICK_EMOJIS = ["✨", "👑", "🌿", "⚔️", "🌙", "🔮"];
+
+function recommendationWeekKey(date = new Date()) {
+  const start = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const today = new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
+  );
+  const day = Math.floor((today.getTime() - start.getTime()) / 86400000);
+  return `${date.getUTCFullYear()}-${Math.floor((day + start.getUTCDay()) / 7)}`;
+}
+
+function weeklyRecommendationHash(input: string) {
+  let hash = 0;
+  for (let i = 0; i < input.length; i += 1) {
+    hash = (hash * 31 + input.charCodeAt(i)) >>> 0;
+  }
+  return hash;
+}
 
 export function Community() {
   const { posts, dispatch } = useStore();
@@ -80,9 +103,7 @@ export function Community() {
   const [draft, setDraft] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
-  const [openComments, setOpenComments] = useState<Record<string, boolean>>(
-    {},
-  );
+  const [openComments, setOpenComments] = useState<Record<string, boolean>>({});
 
   const sorted = useMemo(
     () =>
@@ -92,6 +113,77 @@ export function Community() {
       ),
     [posts],
   );
+  const recommendedMembers = useMemo(() => {
+    const weekKey = recommendationWeekKey();
+    const byUser = new Map<
+      string,
+      {
+        id: string;
+        username: string;
+        avatar: string;
+        postCount: number;
+        liveCount: number;
+        latestActivity: number;
+        weeklyRank: number;
+      }
+    >();
+
+    function isRealCandidate(userId: string) {
+      return Boolean(userId) && !MOCK_COMMUNITY_USER_IDS.has(userId);
+    }
+
+    for (const live of allLives) {
+      if (!isRealCandidate(live.userId) || live.userId === user?.id) continue;
+      const current = byUser.get(live.userId);
+      byUser.set(live.userId, {
+        id: live.userId,
+        username: live.username,
+        avatar: live.avatar,
+        postCount: current?.postCount ?? 0,
+        liveCount: (current?.liveCount ?? 0) + 1,
+        weeklyRank:
+          current?.weeklyRank ??
+          weeklyRecommendationHash(`${weekKey}:${live.userId}`),
+        latestActivity: Math.max(
+          current?.latestActivity ?? 0,
+          new Date(live.startedAt).getTime(),
+        ),
+      });
+    }
+
+    for (const post of posts) {
+      if (!isRealCandidate(post.authorId) || post.authorId === user?.id)
+        continue;
+      const current = byUser.get(post.authorId);
+      byUser.set(post.authorId, {
+        id: post.authorId,
+        username: current?.username || post.authorName,
+        avatar: current?.avatar || post.authorAvatar,
+        liveCount: current?.liveCount ?? 0,
+        postCount: (current?.postCount ?? 0) + 1,
+        weeklyRank:
+          current?.weeklyRank ??
+          weeklyRecommendationHash(`${weekKey}:${post.authorId}`),
+        latestActivity: Math.max(
+          current?.latestActivity ?? 0,
+          new Date(post.createdAt).getTime(),
+        ),
+      });
+    }
+
+    return [...byUser.values()]
+      .filter((member) => member.liveCount >= 1 || member.postCount >= 2)
+      .sort((a, b) => {
+        const scoreA = a.liveCount * 4 + a.postCount;
+        const scoreB = b.liveCount * 4 + b.postCount;
+        return (
+          b.weeklyRank - a.weeklyRank ||
+          scoreB - scoreA ||
+          b.latestActivity - a.latestActivity
+        );
+      })
+      .slice(0, 6);
+  }, [allLives, posts, user?.id]);
 
   async function publish(e: React.FormEvent) {
     e.preventDefault();
@@ -171,7 +263,11 @@ export function Community() {
     <div className="mx-auto max-w-6xl px-6 py-14">
       <SectionHeading
         eyebrow="Fil communautaire"
-        title={<>Le <span className="text-mystic">fil</span> de Vaelyndra</>}
+        title={
+          <>
+            Le <span className="text-mystic">fil</span> de Vaelyndra
+          </>
+        }
         subtitle="Poste tes créations, pensées et annonces. Tous les membres se croisent ici."
       />
 
@@ -280,16 +376,10 @@ export function Community() {
 
       <div className="mt-10 grid gap-8 lg:grid-cols-[1fr,320px]">
         <div>
-          <form
-            onSubmit={publish}
-            className="card-royal p-5"
-          >
+          <form onSubmit={publish} className="card-royal p-5">
             <div className="flex gap-3">
               <img
-                src={
-                  user?.avatar ??
-                  "https://i.pravatar.cc/150?u=anon"
-                }
+                src={user?.avatar ?? "https://i.pravatar.cc/150?u=anon"}
                 alt="Vous"
                 className="h-10 w-10 rounded-full object-cover ring-2 ring-royal-500/40"
               />
@@ -470,6 +560,49 @@ export function Community() {
         </div>
 
         <aside className="space-y-6">
+          {recommendedMembers.length > 0 && (
+            <section className="card-royal p-5">
+              <div className="flex items-center gap-2">
+                <UserRoundCheck className="h-4 w-4 text-gold-300" />
+                <h3 className="font-display text-lg text-gold-200">
+                  Recommandés par Vaelyndra
+                </h3>
+              </div>
+              <p className="mt-1 text-xs text-ivory/55">
+                Cette semaine, la plateforme met en avant des vrais membres
+                actifs en live ou dans le fil.
+              </p>
+              <ul className="mt-4 space-y-3">
+                {recommendedMembers.map((member) => (
+                  <li key={member.id}>
+                    <Link
+                      to={profileHref(member.id)}
+                      className="group flex items-center gap-3 rounded-2xl border border-royal-500/25 bg-night-900/45 p-3 transition hover:border-gold-400/50"
+                    >
+                      <img
+                        src={
+                          member.avatar ||
+                          `https://i.pravatar.cc/150?u=${member.id}`
+                        }
+                        alt={member.username}
+                        className="h-10 w-10 rounded-full object-cover ring-2 ring-gold-400/35"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-display text-sm text-gold-200 group-hover:text-gold-100">
+                          {member.username}
+                        </p>
+                        <p className="text-[11px] text-ivory/55">
+                          {member.liveCount > 0
+                            ? "A lancé un live récemment"
+                            : `${member.postCount} publications récentes`}
+                        </p>
+                      </div>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
           <StreamerLeaderboard />
           <BFFModule />
 
