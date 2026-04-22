@@ -30,6 +30,8 @@ public class NativeScreenShareService extends Service {
     private NativeWebRtcScreenStreamer screenStreamer;
     private NativeLiveChatOverlay chatOverlay;
     private PowerManager.WakeLock wakeLock;
+    private Thread startupThread;
+    private final Object sessionLock = new Object();
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -71,39 +73,96 @@ public class NativeScreenShareService extends Service {
         if (broadcastToken == null) broadcastToken = "";
         acquireWakeLock();
         stopCurrentSession();
-        screenStreamer = new NativeWebRtcScreenStreamer(
-            this,
-            resultData,
-            apiBase,
-            broadcastToken
-        );
-        screenStreamer.start();
-        try {
-            chatOverlay = new NativeLiveChatOverlay(this, apiBase, broadcastToken);
-            chatOverlay.start();
-        } catch (Exception ignored) {
-            chatOverlay = null;
-        }
+        startNativeSession(resultData, apiBase, broadcastToken);
         Log.i(TAG, "Native screen share foreground service running");
         return START_REDELIVER_INTENT;
     }
 
     @Override
     public void onDestroy() {
-        stopCurrentSession();
-        releaseWakeLock();
+        try {
+            stopCurrentSession();
+            releaseWakeLock();
+        } catch (Throwable t) {
+            Log.e(TAG, "Native live service cleanup failed", t);
+        }
         super.onDestroy();
     }
 
     private void stopCurrentSession() {
-        if (screenStreamer != null) {
-            screenStreamer.stop();
-            screenStreamer = null;
+        synchronized (sessionLock) {
+            if (startupThread != null) {
+                startupThread.interrupt();
+                startupThread = null;
+            }
+            if (screenStreamer != null) {
+                try {
+                    screenStreamer.stop();
+                } catch (Throwable t) {
+                    Log.e(TAG, "Unable to stop native WebRTC streamer", t);
+                }
+                screenStreamer = null;
+            }
+            if (chatOverlay != null) {
+                try {
+                    chatOverlay.stop();
+                } catch (Throwable t) {
+                    Log.e(TAG, "Unable to stop native chat overlay", t);
+                }
+                chatOverlay = null;
+            }
         }
-        if (chatOverlay != null) {
-            chatOverlay.stop();
-            chatOverlay = null;
-        }
+    }
+
+    private void startNativeSession(Intent resultData, String apiBase, String broadcastToken) {
+        startupThread = new Thread(
+            () -> {
+                try {
+                    NativeWebRtcScreenStreamer streamer = new NativeWebRtcScreenStreamer(
+                        this,
+                        resultData,
+                        apiBase,
+                        broadcastToken
+                    );
+                    streamer.start();
+                    if (Thread.currentThread().isInterrupted()) {
+                        streamer.stop();
+                        return;
+                    }
+                    synchronized (sessionLock) {
+                        screenStreamer = streamer;
+                    }
+                    try {
+                        NativeLiveChatOverlay overlay = new NativeLiveChatOverlay(
+                            this,
+                            apiBase,
+                            broadcastToken
+                        );
+                        overlay.start();
+                        synchronized (sessionLock) {
+                            chatOverlay = overlay;
+                        }
+                    } catch (Throwable t) {
+                        Log.w(TAG, "Native live chat overlay disabled", t);
+                    }
+                } catch (Throwable t) {
+                    Log.e(TAG, "Native screen share startup failed without crashing app", t);
+                    stopSelf();
+                } finally {
+                    synchronized (sessionLock) {
+                        if (Thread.currentThread() == startupThread) {
+                            startupThread = null;
+                        }
+                    }
+                }
+            },
+            "VaelyndraNativeLiveStart"
+        );
+        startupThread.setUncaughtExceptionHandler((thread, throwable) -> {
+            Log.e(TAG, "Uncaught native live startup error", throwable);
+            stopSelf();
+        });
+        startupThread.start();
     }
 
     private void acquireWakeLock() {
