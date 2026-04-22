@@ -16,8 +16,10 @@ import { getIceServers, getPeerOptions } from "../lib/peerConfig";
 import {
   cacheNativeBroadcastToken,
   getCachedNativeBroadcastToken,
+  getNativeScreenShareStatus,
   isNativeAndroidApp,
   markNativeScreenShareAuthGrace,
+  requestNativeLiveBatteryBypass,
   startNativeScreenShare,
   stopNativeScreenShare,
 } from "../lib/nativeScreenShare";
@@ -1240,12 +1242,20 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             // Si Android vient de basculer hors WebView et que le cookie web
             // saute, le service natif maintient le live via son bearer token.
           });
-          await startNativeScreenShare(broadcastToken);
+          requestNativeLiveBatteryBypass().catch(() => {
+            // Best effort: sur certains Samsung l'intent est ignore.
+          });
+          await startNativeScreenShare({
+            broadcastToken,
+            title,
+            category,
+          });
+          const nativeStatus = await getNativeScreenShareStatus();
           setConfig((c) => ({
             ...c,
             status: "live",
             mode: "android-screen",
-            startedAt,
+            startedAt: nativeStatus.startedAt ?? startedAt,
           }));
           updateRegistry((r) => ({
             ...r,
@@ -1258,8 +1268,8 @@ export function LiveProvider({ children }: { children: ReactNode }) {
               mode: "android-screen",
               category,
               twitchChannel: "",
-              startedAt,
-              lastHeartbeat: startedAt,
+              startedAt: nativeStatus.startedAt ?? startedAt,
+              lastHeartbeat: new Date().toISOString(),
             },
           }));
           const marker: LiveResumeMarker = {
