@@ -1,7 +1,9 @@
 package com.vaelyndra.app;
 
+import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.media.projection.MediaProjection;
 import android.util.Log;
 import android.webkit.CookieManager;
@@ -135,12 +137,16 @@ public class NativeWebRtcScreenStreamer {
 
         // Micro Android natif. Le son interne du jeu demandera une étape
         // séparée AudioPlaybackCapture (Android 10+) et des contraintes par app.
-        audioSource = peerConnectionFactory.createAudioSource(new MediaConstraints());
-        audioTrack = peerConnectionFactory.createAudioTrack(
-            "vaelyndra-mic-audio",
-            audioSource
-        );
-        audioTrack.setEnabled(true);
+            if (hasRecordAudioPermission()) {
+                audioSource = peerConnectionFactory.createAudioSource(new MediaConstraints());
+                audioTrack = peerConnectionFactory.createAudioTrack(
+                    "vaelyndra-mic-audio",
+                    audioSource
+                );
+                audioTrack.setEnabled(true);
+            } else {
+                Log.w(TAG, "RECORD_AUDIO not granted; native screen live starts without mic");
+            }
         } catch (Exception e) {
             Log.e(TAG, "Unable to start Android screen capture", e);
             stop();
@@ -265,12 +271,14 @@ public class NativeWebRtcScreenStreamer {
 
         PeerConnection pc = peerConnections.get(sessionId);
         if (pc == null) {
-            if (videoTrack == null || audioTrack == null) return;
+            if (videoTrack == null) return;
             pc = createPeerConnection(sessionId);
             if (pc == null) return;
             peerConnections.put(sessionId, pc);
             pc.addTrack(videoTrack, Collections.singletonList("vaelyndra-native"));
-            pc.addTrack(audioTrack, Collections.singletonList("vaelyndra-native"));
+            if (audioTrack != null) {
+                pc.addTrack(audioTrack, Collections.singletonList("vaelyndra-native"));
+            }
             PeerConnection finalPc = pc;
             pc.setRemoteDescription(
                 new SimpleSdpObserver() {
@@ -402,6 +410,12 @@ public class NativeWebRtcScreenStreamer {
                 @Override public void onAddTrack(org.webrtc.RtpReceiver receiver, org.webrtc.MediaStream[] streams) {}
             }
         );
+    }
+
+    private boolean hasRecordAudioPermission() {
+        if (android.os.Build.VERSION.SDK_INT < 23) return true;
+        return context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED;
     }
 
     private JSONObject httpJson(String method, String path, JSONObject body)
