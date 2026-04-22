@@ -4,6 +4,10 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.media.projection.MediaProjectionManager;
+import android.net.Uri;
+import android.os.Build;
+import android.os.PowerManager;
+import android.provider.Settings;
 import android.util.Log;
 
 import androidx.activity.result.ActivityResult;
@@ -24,6 +28,64 @@ public class NativeScreenSharePlugin extends Plugin {
         JSObject ret = new JSObject();
         ret.put("available", android.os.Build.VERSION.SDK_INT >= 21);
         call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void status(PluginCall call) {
+        JSObject ret = new JSObject();
+        ret.put("active", NativeScreenShareService.isRunning());
+        ret.put("title", NativeScreenShareService.getLiveTitle());
+        ret.put("category", NativeScreenShareService.getLiveCategory());
+        ret.put("startedAtMs", NativeScreenShareService.getStartedAtMs());
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void requestBatteryOptimizationBypass(PluginCall call) {
+        if (Build.VERSION.SDK_INT < 23) {
+            JSObject ret = new JSObject();
+            ret.put("requested", false);
+            ret.put("alreadyAllowed", true);
+            call.resolve(ret);
+            return;
+        }
+        Context context = getContext();
+        PowerManager powerManager = (PowerManager) context.getSystemService(
+            Context.POWER_SERVICE
+        );
+        String packageName = context.getPackageName();
+        if (
+            powerManager != null &&
+            powerManager.isIgnoringBatteryOptimizations(packageName)
+        ) {
+            JSObject ret = new JSObject();
+            ret.put("requested", false);
+            ret.put("alreadyAllowed", true);
+            call.resolve(ret);
+            return;
+        }
+        try {
+            Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+            intent.setData(Uri.parse("package:" + packageName));
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            context.startActivity(intent);
+            JSObject ret = new JSObject();
+            ret.put("requested", true);
+            ret.put("alreadyAllowed", false);
+            call.resolve(ret);
+        } catch (Exception e) {
+            try {
+                Intent intent = new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                context.startActivity(intent);
+            } catch (Exception ignored) {
+                // Best effort only.
+            }
+            JSObject ret = new JSObject();
+            ret.put("requested", false);
+            ret.put("alreadyAllowed", false);
+            call.resolve(ret);
+        }
     }
 
     @PluginMethod
@@ -72,6 +134,14 @@ public class NativeScreenSharePlugin extends Plugin {
         serviceIntent.putExtra(
             NativeScreenShareService.EXTRA_BROADCAST_TOKEN,
             call.getString("broadcastToken", "")
+        );
+        serviceIntent.putExtra(
+            NativeScreenShareService.EXTRA_TITLE,
+            call.getString("title", "")
+        );
+        serviceIntent.putExtra(
+            NativeScreenShareService.EXTRA_CATEGORY,
+            call.getString("category", "")
         );
         serviceIntent.putExtra(
             NativeScreenShareService.EXTRA_RESULT_CODE,

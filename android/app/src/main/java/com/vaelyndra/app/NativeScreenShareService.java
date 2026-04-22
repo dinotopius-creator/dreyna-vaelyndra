@@ -23,10 +23,16 @@ public class NativeScreenShareService extends Service {
     public static final String EXTRA_BROADCAST_TOKEN = "broadcastToken";
     public static final String EXTRA_RESULT_CODE = "resultCode";
     public static final String EXTRA_RESULT_DATA = "resultData";
+    public static final String EXTRA_TITLE = "title";
+    public static final String EXTRA_CATEGORY = "category";
 
     private static final String CHANNEL_ID = "vaelyndra_screen_share";
     private static final int NOTIFICATION_ID = 4217;
     private static final String TAG = "VaelyndraNativeLive";
+    private static volatile boolean running = false;
+    private static volatile String liveTitle = "";
+    private static volatile String liveCategory = "";
+    private static volatile long startedAtMs = 0;
 
     private NativeWebRtcScreenStreamer screenStreamer;
     private NativeLiveChatOverlay chatOverlay;
@@ -73,6 +79,12 @@ public class NativeScreenShareService extends Service {
         }
         String broadcastToken = intent.getStringExtra(EXTRA_BROADCAST_TOKEN);
         if (broadcastToken == null) broadcastToken = "";
+        String title = intent.getStringExtra(EXTRA_TITLE);
+        String category = intent.getStringExtra(EXTRA_CATEGORY);
+        liveTitle = title == null ? "" : title;
+        liveCategory = category == null ? "" : category;
+        startedAtMs = System.currentTimeMillis();
+        running = true;
         acquireWakeLock();
         acquireWifiLock();
         stopCurrentSession();
@@ -90,7 +102,24 @@ public class NativeScreenShareService extends Service {
         } catch (Throwable t) {
             Log.e(TAG, "Native live service cleanup failed", t);
         }
+        running = false;
         super.onDestroy();
+    }
+
+    public static boolean isRunning() {
+        return running;
+    }
+
+    public static String getLiveTitle() {
+        return liveTitle;
+    }
+
+    public static String getLiveCategory() {
+        return liveCategory;
+    }
+
+    public static long getStartedAtMs() {
+        return startedAtMs;
     }
 
     private void stopCurrentSession() {
