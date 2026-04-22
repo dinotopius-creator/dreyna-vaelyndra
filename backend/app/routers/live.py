@@ -350,6 +350,19 @@ class NativeSignalListOut(BaseModel):
     offers: list[NativeSignalOut]
 
 
+class NativeViewerOut(BaseModel):
+    viewer_id: str
+    username: str
+    avatar: str = ""
+    connected_at: str
+    last_seen_at: str
+    anonymous: bool = False
+
+
+class NativeViewerListOut(BaseModel):
+    viewers: list[NativeViewerOut]
+
+
 class NativeBroadcastTokenOut(BaseModel):
     token: str
     expires_at: str
@@ -402,6 +415,17 @@ def _purge_stale_native_signals(session: Session) -> None:
     ).all()
     for row in stale:
         session.delete(row)
+
+
+def _is_recent_native_signal(updated_at: str) -> bool:
+    try:
+        ts = datetime.fromisoformat(updated_at)
+    except ValueError:
+        return False
+    now = datetime.now(timezone.utc)
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    return now - ts < timedelta(seconds=45)
 
 
 def _native_token_user_id(request: Request, session: Session) -> Optional[str]:
@@ -473,6 +497,67 @@ def list_native_broadcast_chat(
     """Lit le chat du broadcaster authentifié par jeton natif Android."""
     broadcaster_id = _require_native_broadcaster(request)
     return list_live_chat(broadcaster_id=broadcaster_id, after=after, limit=limit)
+
+
+@router.get("/native/viewers", response_model=NativeViewerListOut)
+def list_native_broadcast_viewers(request: Request) -> NativeViewerListOut:
+    """Liste les viewers actifs du live Android du broadcaster natif."""
+    broadcaster_id = _require_native_broadcaster(request)
+    with get_session() as session:
+        _purge_stale_native_signals(session)
+        rows = session.exec(
+            select(NativeLiveSignal)
+            .where(NativeLiveSignal.broadcaster_id == broadcaster_id)
+            .order_by(NativeLiveSignal.updated_at.desc())
+        ).all()
+        user_ids = [
+            row.viewer_id
+            for row in rows
+            if not row.viewer_id.startswith("anon:")
+            and _is_recent_native_signal(row.updated_at)
+        ]
+        profiles = {
+            p.id: p
+            for p in session.exec(
+                select(UserProfile).where(UserProfile.id.in_(user_ids))
+            ).all()
+        } if user_ids else {}
+        viewers: list[NativeViewerOut] = []
+        seen: set[str] = set()
+        anon_index = 1
+        for row in rows:
+            if not _is_recent_native_signal(row.updated_at):
+                continue
+            if row.viewer_id in seen:
+                continue
+            seen.add(row.viewer_id)
+            if row.viewer_id.startswith("anon:"):
+                viewers.append(
+                    NativeViewerOut(
+                        viewer_id=row.viewer_id,
+                        username=f"Invite {anon_index}",
+                        avatar="",
+                        connected_at=row.created_at,
+                        last_seen_at=row.updated_at,
+                        anonymous=True,
+                    )
+                )
+                anon_index += 1
+                continue
+            profile = profiles.get(row.viewer_id)
+            viewers.append(
+                NativeViewerOut(
+                    viewer_id=row.viewer_id,
+                    username=profile.username if profile else "Membre",
+                    avatar=profile.avatar_image_url if profile else "",
+                    connected_at=row.created_at,
+                    last_seen_at=row.updated_at,
+                    anonymous=False,
+                )
+            )
+        if rows:
+            session.commit()
+        return NativeViewerListOut(viewers=viewers)
 
 
 @router.post("/native/heartbeat", response_model=LiveSessionOut)
@@ -580,6 +665,25 @@ def get_native_offer(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail={"message": "native_signal_not_found"},
             )
+        return _signal_out(row)
+
+
+@router.post("/native/offers/{session_id}/viewer-heartbeat", response_model=NativeSignalOut)
+def heartbeat_native_viewer(
+    session_id: str,
+) -> NativeSignalOut:
+    now = datetime.now(timezone.utc).isoformat()
+    with get_session() as session:
+        row = session.get(NativeLiveSignal, session_id)
+        if row is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"message": "native_signal_not_found"},
+            )
+        row.updated_at = now
+        session.add(row)
+        session.commit()
+        session.refresh(row)
         return _signal_out(row)
 
 

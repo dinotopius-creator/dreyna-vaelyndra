@@ -187,6 +187,15 @@ export async function apiGetNativeLiveOffer(
   )) as NativeLiveSignalOut;
 }
 
+export async function apiHeartbeatNativeViewer(
+  sessionId: string,
+): Promise<void> {
+  await request<NativeLiveSignalOut>(
+    `/live/native/offers/${encodeURIComponent(sessionId)}/viewer-heartbeat`,
+    { method: "POST" },
+  );
+}
+
 export async function apiAddNativeViewerIce(input: {
   sessionId: string;
   candidate: NativeIceCandidate;
@@ -314,11 +323,8 @@ export async function apiDecideJoinRequest(
   requestId: number,
   decision: "accepted" | "refused",
 ): Promise<JoinRequestOut> {
-  return (await request<JoinRequestOut>(
-    `/live/join-requests/${requestId}`,
-    {
-      method: "PATCH",
-      body: JSON.stringify({ status: decision }),
-    },
-  )) as JoinRequestOut;
+  return (await request<JoinRequestOut>(`/live/join-requests/${requestId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status: decision }),
+  })) as JoinRequestOut;
 }

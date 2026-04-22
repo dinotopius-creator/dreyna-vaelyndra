@@ -30,6 +30,7 @@ import {
   apiCreateNativeBroadcastToken,
   apiCreateNativeLiveOffer,
   apiGetNativeLiveOffer,
+  apiHeartbeatNativeViewer,
   apiLiveHeartbeat,
   apiStopLive,
   type LiveSessionOut,
@@ -448,9 +449,11 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   const [isConnecting, setIsConnecting] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
   const [cameraFacing, setCameraFacing] = useState<CameraFacing>("user");
-  const [viewingMeta, setViewingMeta] = useState<
-    { title: string; description: string; mode: LiveMode } | null
-  >(null);
+  const [viewingMeta, setViewingMeta] = useState<{
+    title: string;
+    description: string;
+    mode: LiveMode;
+  } | null>(null);
   // Marker de reprise de live (post-refresh). Initialisé à partir de
   // localStorage : si un user a broadcasté il y a < 5 min et refreshé,
   // on récupère l'info pour lui proposer `resumeLive()`.
@@ -670,7 +673,9 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         typeof p.authorAvatar === "string" ? p.authorAvatar : null;
       const content = typeof p.content === "string" ? p.content : null;
       const createdAt =
-        typeof p.createdAt === "string" ? p.createdAt : new Date().toISOString();
+        typeof p.createdAt === "string"
+          ? p.createdAt
+          : new Date().toISOString();
       if (!id || !authorId || !authorName || !authorAvatar || !content) {
         return null;
       }
@@ -1440,87 +1445,269 @@ export function LiveProvider({ children }: { children: ReactNode }) {
    * donné. Idempotent : si un viewerPeer existe déjà ou si on est le host
    * du broadcasterId ciblé, on ne refait rien.
    */
-  const joinAsViewer = useCallback((broadcasterId: string) => {
-    if (!broadcasterId) return () => {};
-    // Déjà hôte de ce broadcast : on regarde notre propre flux.
-    if (hostPeerRef.current && userRef.current?.id === broadcasterId)
-      return () => {};
-    // Déjà en train de se connecter / connecté.
-    if (viewerPeerRef.current) return () => {};
+  const joinAsViewer = useCallback(
+    (broadcasterId: string) => {
+      if (!broadcasterId) return () => {};
+      // Déjà hôte de ce broadcast : on regarde notre propre flux.
+      if (hostPeerRef.current && userRef.current?.id === broadcasterId)
+        return () => {};
+      // Déjà en train de se connecter / connecté.
+      if (viewerPeerRef.current) return () => {};
 
-    if (liveRegistryRef.current[broadcasterId]?.mode === "android-screen") {
+      if (liveRegistryRef.current[broadcasterId]?.mode === "android-screen") {
+        let cancelled = false;
+        let pollId: number | null = null;
+        const pc = new RTCPeerConnection({
+          iceServers: getIceServers(),
+          iceTransportPolicy: "all",
+        });
+        const remote = new MediaStream();
+        const pendingIce: NativeIceCandidate[] = [];
+        const appliedBroadcasterIce = new Set<string>();
+        let sessionId: string | null = null;
+        let lastViewerHeartbeatAt = 0;
+
+        setIsConnecting(true);
+        setLastError(null);
+
+        pc.addTransceiver("video", { direction: "recvonly" });
+        pc.addTransceiver("audio", { direction: "recvonly" });
+        pc.ontrack = (event) => {
+          event.streams[0]
+            ?.getTracks()
+            .forEach((track) => remote.addTrack(track));
+          if (!cancelled) {
+            setRemoteStream(remote);
+            setIsConnecting(false);
+          }
+        };
+        pc.onicecandidate = (event) => {
+          if (!event.candidate) return;
+          const candidate = toNativeIceCandidate(event.candidate);
+          if (!candidate.candidate) return;
+          if (!sessionId) {
+            pendingIce.push(candidate);
+            return;
+          }
+          apiAddNativeViewerIce({ sessionId, candidate }).catch(() => {});
+        };
+
+        (async () => {
+          try {
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            if (!offer.sdp || cancelled) return;
+            const signal = await apiCreateNativeLiveOffer({
+              broadcasterId,
+              offerSdp: offer.sdp,
+            });
+            sessionId = signal.session_id;
+            for (const candidate of pendingIce.splice(0)) {
+              await apiAddNativeViewerIce({ sessionId, candidate }).catch(
+                () => {},
+              );
+            }
+            pollId = window.setInterval(() => {
+              if (!sessionId || cancelled) return;
+              const now = Date.now();
+              if (now - lastViewerHeartbeatAt > 10_000) {
+                lastViewerHeartbeatAt = now;
+                apiHeartbeatNativeViewer(sessionId).catch(() => {});
+              }
+              apiGetNativeLiveOffer(sessionId)
+                .then(async (latest) => {
+                  if (latest.answer_sdp && !pc.currentRemoteDescription) {
+                    await pc.setRemoteDescription({
+                      type: "answer",
+                      sdp: latest.answer_sdp,
+                    });
+                  }
+                  for (const candidate of latest.broadcaster_ice) {
+                    if (!candidate.candidate) continue;
+                    const key = `${candidate.sdpMid ?? ""}:${candidate.sdpMLineIndex ?? ""}:${candidate.candidate}`;
+                    if (appliedBroadcasterIce.has(key)) continue;
+                    appliedBroadcasterIce.add(key);
+                    await pc.addIceCandidate(candidate).catch(() => {});
+                  }
+                })
+                .catch(() => {});
+            }, 1500);
+          } catch (err) {
+            if (!cancelled) {
+              setIsConnecting(false);
+              setLastError(
+                `Impossible de rejoindre le live Android : ${
+                  err instanceof Error ? err.message : String(err)
+                }`,
+              );
+            }
+          }
+        })();
+
+        return () => {
+          cancelled = true;
+          if (pollId !== null) window.clearInterval(pollId);
+          pc.close();
+          remote.getTracks().forEach((track) => track.stop());
+          setRemoteStream(null);
+          setIsConnecting(false);
+          setViewingMeta(null);
+        };
+      }
+
       let cancelled = false;
-      let pollId: number | null = null;
-      const pc = new RTCPeerConnection({
-        iceServers: getIceServers(),
-        iceTransportPolicy: "all",
-      });
-      const remote = new MediaStream();
-      const pendingIce: NativeIceCandidate[] = [];
-      const appliedBroadcasterIce = new Set<string>();
-      let sessionId: string | null = null;
-
       setIsConnecting(true);
       setLastError(null);
 
-      pc.addTransceiver("video", { direction: "recvonly" });
-      pc.addTransceiver("audio", { direction: "recvonly" });
-      pc.ontrack = (event) => {
-        event.streams[0]?.getTracks().forEach((track) => remote.addTrack(track));
-        if (!cancelled) {
-          setRemoteStream(remote);
-          setIsConnecting(false);
-        }
-      };
-      pc.onicecandidate = (event) => {
-        if (!event.candidate) return;
-        const candidate = toNativeIceCandidate(event.candidate);
-        if (!candidate.candidate) return;
-        if (!sessionId) {
-          pendingIce.push(candidate);
-          return;
-        }
-        apiAddNativeViewerIce({ sessionId, candidate }).catch(() => {});
-      };
-
       (async () => {
         try {
-          const offer = await pc.createOffer();
-          await pc.setLocalDescription(offer);
-          if (!offer.sdp || cancelled) return;
-          const signal = await apiCreateNativeLiveOffer({
-            broadcasterId,
-            offerSdp: offer.sdp,
+          const { default: PeerCtor } = await import("peerjs");
+          if (cancelled) return;
+          // Sans id → PeerJS génère un id via son broker. PeerJS expose
+          // deux signatures (`new Peer(options)` et `new Peer(id,
+          // options?)`) ; seule la version nommée est typée publiquement,
+          // donc on passe par un cast léger pour garder la version
+          // anonyme utilisée ici.
+          const viewerPeer = new (PeerCtor as unknown as {
+            new (options: ReturnType<typeof getPeerOptions>): Peer;
+          })(getPeerOptions());
+          viewerPeerRef.current = viewerPeer;
+
+          viewerPeer.on("call", (call) => {
+            if (cancelled) {
+              try {
+                call.close();
+              } catch {
+                // ignore
+              }
+              return;
+            }
+            if (
+              viewerMediaCallRef.current &&
+              viewerMediaCallRef.current !== call
+            ) {
+              try {
+                viewerMediaCallRef.current.close();
+              } catch {
+                // ignore
+              }
+            }
+            viewerMediaCallRef.current = call;
+            call.on("stream", (stream) => {
+              if (cancelled) return;
+              setRemoteStream(stream);
+              setIsConnecting(false);
+            });
+            call.on("close", () => {
+              if (viewerMediaCallRef.current === call) {
+                viewerMediaCallRef.current = null;
+              }
+              if (cancelled) return;
+              setRemoteStream(null);
+            });
+            call.on("error", () => {
+              if (viewerMediaCallRef.current === call) {
+                viewerMediaCallRef.current = null;
+              }
+              if (cancelled) return;
+              setRemoteStream(null);
+              setIsConnecting(false);
+            });
+            try {
+              // Réponse receive-only : l'offre provient désormais du host, qui
+              // porte déjà les m-lines audio/vidéo réelles. Répondre avec un
+              // stream local vide reste valide sans forcer le viewer à partager
+              // micro/caméra, et évite l'offre initiale vide qui cassait la
+              // négociation sur certains browsers.
+              call.answer(new MediaStream());
+            } catch {
+              setIsConnecting(false);
+            }
           });
-          sessionId = signal.session_id;
-          for (const candidate of pendingIce.splice(0)) {
-            await apiAddNativeViewerIce({ sessionId, candidate }).catch(() => {});
-          }
-          pollId = window.setInterval(() => {
-            if (!sessionId || cancelled) return;
-            apiGetNativeLiveOffer(sessionId)
-              .then(async (latest) => {
-                if (latest.answer_sdp && !pc.currentRemoteDescription) {
-                  await pc.setRemoteDescription({
-                    type: "answer",
-                    sdp: latest.answer_sdp,
-                  });
+
+          viewerPeer.on("open", () => {
+            if (cancelled) return;
+            const targetPeerId = getLivePeerId(broadcasterId);
+            // DataConnection bidirectionnelle avec le host :
+            //  - réception : métadonnées du live + messages de chat
+            //    redistribués par le host.
+            //  - émission : messages de chat tapés par ce viewer (le host
+            //    les re-diffuse à tous les autres viewers).
+            const data = viewerPeer.connect(targetPeerId);
+            viewerDataConnRef.current = data;
+            // On ne touche volontairement PAS à `isHostingChatRef` ici :
+            // le flag appartient au cycle de vie "hosting" (set à `true`
+            // dans `attachStreamToPeer` quand on commence à broadcaster,
+            // `false` dans `stopHosting` quand on arrête). Si un broadcaster
+            // actif va regarder un autre live (navigation vers
+            // `/live/@someone`), il RESTE hôte de son propre live — flipper
+            // le ref ici déviait son `publishChatMessage` vers la
+            // DataConnection du host visité (ses viewers ne voyaient plus
+            // ses messages, et au retour sur sa propre page le flag
+            // restait faussement à false → chat silencieusement cassé
+            // pour le reste de la session).
+            data.on("data", (payload) => {
+              if (cancelled) return;
+              if (typeof payload !== "object" || payload === null) return;
+              const type = (payload as { type?: string }).type;
+              if (type === "live-meta") {
+                const meta = payload as {
+                  title?: string;
+                  description?: string;
+                  mode?: LiveMode;
+                };
+                setViewingMeta({
+                  title: typeof meta.title === "string" ? meta.title : "",
+                  description:
+                    typeof meta.description === "string"
+                      ? meta.description
+                      : "",
+                  mode:
+                    meta.mode === "twitch" ||
+                    meta.mode === "screen" ||
+                    meta.mode === "camera" ||
+                    meta.mode === "android-screen"
+                      ? meta.mode
+                      : "screen",
+                });
+              } else if (type === "chat-message") {
+                // Côté viewer : le message vient du host, qui a déjà
+                // validé et recalculé `highlight` (cf. broadcastChat
+                // FromHost). On fait confiance à sa valeur, sans quoi
+                // le badge 👑 reine ne s'affichera jamais chez les
+                // autres viewers.
+                const msg = sanitizeIncomingChat(payload, true);
+                if (msg) deliverChatLocally(msg);
+              }
+            });
+            data.on("close", () => {
+              if (viewerDataConnRef.current === data) {
+                viewerDataConnRef.current = null;
+              }
+            });
+          });
+
+          viewerPeer.on("error", (err: Error & { type?: string }) => {
+            if (err.type === "peer-unavailable") {
+              setIsConnecting(false);
+              if (viewerPeerRef.current === viewerPeer) {
+                try {
+                  viewerPeer.destroy();
+                } catch {
+                  // ignore
                 }
-                for (const candidate of latest.broadcaster_ice) {
-                  if (!candidate.candidate) continue;
-                  const key = `${candidate.sdpMid ?? ""}:${candidate.sdpMLineIndex ?? ""}:${candidate.candidate}`;
-                  if (appliedBroadcasterIce.has(key)) continue;
-                  appliedBroadcasterIce.add(key);
-                  await pc.addIceCandidate(candidate).catch(() => {});
-                }
-              })
-              .catch(() => {});
-          }, 1500);
+                viewerPeerRef.current = null;
+              }
+              return;
+            }
+            console.warn("PeerJS viewer error", err);
+            setIsConnecting(false);
+          });
         } catch (err) {
           if (!cancelled) {
             setIsConnecting(false);
             setLastError(
-              `Impossible de rejoindre le live Android : ${
+              `Impossible de rejoindre le live : ${
                 err instanceof Error ? err.message : String(err)
               }`,
             );
@@ -1530,203 +1717,37 @@ export function LiveProvider({ children }: { children: ReactNode }) {
 
       return () => {
         cancelled = true;
-        if (pollId !== null) window.clearInterval(pollId);
-        pc.close();
-        remote.getTracks().forEach((track) => track.stop());
+        if (viewerDataConnRef.current) {
+          try {
+            viewerDataConnRef.current.close();
+          } catch {
+            // ignore
+          }
+          viewerDataConnRef.current = null;
+        }
+        if (viewerMediaCallRef.current) {
+          try {
+            viewerMediaCallRef.current.close();
+          } catch {
+            // ignore
+          }
+          viewerMediaCallRef.current = null;
+        }
+        if (viewerPeerRef.current) {
+          try {
+            viewerPeerRef.current.destroy();
+          } catch {
+            // ignore
+          }
+          viewerPeerRef.current = null;
+        }
         setRemoteStream(null);
         setIsConnecting(false);
         setViewingMeta(null);
       };
-    }
-
-    let cancelled = false;
-    setIsConnecting(true);
-    setLastError(null);
-
-    (async () => {
-      try {
-        const { default: PeerCtor } = await import("peerjs");
-        if (cancelled) return;
-        // Sans id → PeerJS génère un id via son broker. PeerJS expose
-        // deux signatures (`new Peer(options)` et `new Peer(id,
-        // options?)`) ; seule la version nommée est typée publiquement,
-        // donc on passe par un cast léger pour garder la version
-        // anonyme utilisée ici.
-        const viewerPeer = new (PeerCtor as unknown as {
-          new (options: ReturnType<typeof getPeerOptions>): Peer;
-        })(getPeerOptions());
-        viewerPeerRef.current = viewerPeer;
-
-        viewerPeer.on("call", (call) => {
-          if (cancelled) {
-            try {
-              call.close();
-            } catch {
-              // ignore
-            }
-            return;
-          }
-          if (viewerMediaCallRef.current && viewerMediaCallRef.current !== call) {
-            try {
-              viewerMediaCallRef.current.close();
-            } catch {
-              // ignore
-            }
-          }
-          viewerMediaCallRef.current = call;
-          call.on("stream", (stream) => {
-            if (cancelled) return;
-            setRemoteStream(stream);
-            setIsConnecting(false);
-          });
-          call.on("close", () => {
-            if (viewerMediaCallRef.current === call) {
-              viewerMediaCallRef.current = null;
-            }
-            if (cancelled) return;
-            setRemoteStream(null);
-          });
-          call.on("error", () => {
-            if (viewerMediaCallRef.current === call) {
-              viewerMediaCallRef.current = null;
-            }
-            if (cancelled) return;
-            setRemoteStream(null);
-            setIsConnecting(false);
-          });
-          try {
-            // Réponse receive-only : l'offre provient désormais du host, qui
-            // porte déjà les m-lines audio/vidéo réelles. Répondre avec un
-            // stream local vide reste valide sans forcer le viewer à partager
-            // micro/caméra, et évite l'offre initiale vide qui cassait la
-            // négociation sur certains browsers.
-            call.answer(new MediaStream());
-          } catch {
-            setIsConnecting(false);
-          }
-        });
-
-        viewerPeer.on("open", () => {
-          if (cancelled) return;
-          const targetPeerId = getLivePeerId(broadcasterId);
-          // DataConnection bidirectionnelle avec le host :
-          //  - réception : métadonnées du live + messages de chat
-          //    redistribués par le host.
-          //  - émission : messages de chat tapés par ce viewer (le host
-          //    les re-diffuse à tous les autres viewers).
-          const data = viewerPeer.connect(targetPeerId);
-          viewerDataConnRef.current = data;
-          // On ne touche volontairement PAS à `isHostingChatRef` ici :
-          // le flag appartient au cycle de vie "hosting" (set à `true`
-          // dans `attachStreamToPeer` quand on commence à broadcaster,
-          // `false` dans `stopHosting` quand on arrête). Si un broadcaster
-          // actif va regarder un autre live (navigation vers
-          // `/live/@someone`), il RESTE hôte de son propre live — flipper
-          // le ref ici déviait son `publishChatMessage` vers la
-          // DataConnection du host visité (ses viewers ne voyaient plus
-          // ses messages, et au retour sur sa propre page le flag
-          // restait faussement à false → chat silencieusement cassé
-          // pour le reste de la session).
-          data.on("data", (payload) => {
-            if (cancelled) return;
-            if (typeof payload !== "object" || payload === null) return;
-            const type = (payload as { type?: string }).type;
-            if (type === "live-meta") {
-              const meta = payload as {
-                title?: string;
-                description?: string;
-                mode?: LiveMode;
-              };
-              setViewingMeta({
-                title: typeof meta.title === "string" ? meta.title : "",
-                description:
-                  typeof meta.description === "string"
-                    ? meta.description
-                    : "",
-                mode:
-                  meta.mode === "twitch" ||
-                  meta.mode === "screen" ||
-                  meta.mode === "camera" ||
-                  meta.mode === "android-screen"
-                    ? meta.mode
-                    : "screen",
-              });
-            } else if (type === "chat-message") {
-              // Côté viewer : le message vient du host, qui a déjà
-              // validé et recalculé `highlight` (cf. broadcastChat
-              // FromHost). On fait confiance à sa valeur, sans quoi
-              // le badge 👑 reine ne s'affichera jamais chez les
-              // autres viewers.
-              const msg = sanitizeIncomingChat(payload, true);
-              if (msg) deliverChatLocally(msg);
-            }
-          });
-          data.on("close", () => {
-            if (viewerDataConnRef.current === data) {
-              viewerDataConnRef.current = null;
-            }
-          });
-        });
-
-        viewerPeer.on("error", (err: Error & { type?: string }) => {
-          if (err.type === "peer-unavailable") {
-            setIsConnecting(false);
-            if (viewerPeerRef.current === viewerPeer) {
-              try {
-                viewerPeer.destroy();
-              } catch {
-                // ignore
-              }
-              viewerPeerRef.current = null;
-            }
-            return;
-          }
-          console.warn("PeerJS viewer error", err);
-          setIsConnecting(false);
-        });
-      } catch (err) {
-        if (!cancelled) {
-          setIsConnecting(false);
-          setLastError(
-            `Impossible de rejoindre le live : ${
-              err instanceof Error ? err.message : String(err)
-            }`,
-          );
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      if (viewerDataConnRef.current) {
-        try {
-          viewerDataConnRef.current.close();
-        } catch {
-          // ignore
-        }
-        viewerDataConnRef.current = null;
-      }
-      if (viewerMediaCallRef.current) {
-        try {
-          viewerMediaCallRef.current.close();
-        } catch {
-          // ignore
-        }
-        viewerMediaCallRef.current = null;
-      }
-      if (viewerPeerRef.current) {
-        try {
-          viewerPeerRef.current.destroy();
-        } catch {
-          // ignore
-        }
-        viewerPeerRef.current = null;
-      }
-      setRemoteStream(null);
-      setIsConnecting(false);
-      setViewingMeta(null);
-    };
-  }, [deliverChatLocally, sanitizeIncomingChat]);
+    },
+    [deliverChatLocally, sanitizeIncomingChat],
+  );
 
   useEffect(() => {
     return () => {
@@ -1837,11 +1858,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
           //    plus de heartbeat → plus de refresh serveur → le serveur
           //    la purge à 90 s, mais ce bloc la ré-injectait à chaque
           //    poll depuis `prev`, la figeant pour toujours côté tab).
-          if (
-            localHostIsLive &&
-            me &&
-            prev[me.id]
-          ) {
+          if (localHostIsLive && me && prev[me.id]) {
             next[me.id] = prev[me.id];
           }
           writeRegistry(next);
