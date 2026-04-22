@@ -8,6 +8,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ServiceInfo;
 import android.media.projection.MediaProjectionManager;
+import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.IBinder;
 import android.os.PowerManager;
@@ -30,6 +31,7 @@ public class NativeScreenShareService extends Service {
     private NativeWebRtcScreenStreamer screenStreamer;
     private NativeLiveChatOverlay chatOverlay;
     private PowerManager.WakeLock wakeLock;
+    private WifiManager.WifiLock wifiLock;
     private Thread startupThread;
     private final Object sessionLock = new Object();
 
@@ -72,6 +74,7 @@ public class NativeScreenShareService extends Service {
         String broadcastToken = intent.getStringExtra(EXTRA_BROADCAST_TOKEN);
         if (broadcastToken == null) broadcastToken = "";
         acquireWakeLock();
+        acquireWifiLock();
         stopCurrentSession();
         startNativeSession(resultData, apiBase, broadcastToken);
         Log.i(TAG, "Native screen share foreground service running");
@@ -83,6 +86,7 @@ public class NativeScreenShareService extends Service {
         try {
             stopCurrentSession();
             releaseWakeLock();
+            releaseWifiLock();
         } catch (Throwable t) {
             Log.e(TAG, "Native live service cleanup failed", t);
         }
@@ -132,19 +136,7 @@ public class NativeScreenShareService extends Service {
                     synchronized (sessionLock) {
                         screenStreamer = streamer;
                     }
-                    try {
-                        NativeLiveChatOverlay overlay = new NativeLiveChatOverlay(
-                            this,
-                            apiBase,
-                            broadcastToken
-                        );
-                        overlay.start();
-                        synchronized (sessionLock) {
-                            chatOverlay = overlay;
-                        }
-                    } catch (Throwable t) {
-                        Log.w(TAG, "Native live chat overlay disabled", t);
-                    }
+                    Log.i(TAG, "Native chat overlay deferred; screen live stability first");
                 } catch (Throwable t) {
                     Log.e(TAG, "Native screen share startup failed without crashing app", t);
                     stopSelf();
@@ -184,6 +176,40 @@ public class NativeScreenShareService extends Service {
         wakeLock = null;
     }
 
+    private void acquireWifiLock() {
+        if (wifiLock != null && wifiLock.isHeld()) return;
+        WifiManager wifiManager = (WifiManager) getApplicationContext()
+            .getSystemService(Context.WIFI_SERVICE);
+        if (wifiManager == null) return;
+        wifiLock = wifiManager.createWifiLock(
+            WifiManager.WIFI_MODE_FULL_HIGH_PERF,
+            "Vaelyndra::NativeScreenShareWifi"
+        );
+        wifiLock.setReferenceCounted(false);
+        try {
+            wifiLock.acquire();
+        } catch (Throwable t) {
+            Log.w(TAG, "Unable to acquire native live WiFi lock", t);
+        }
+    }
+
+    private void releaseWifiLock() {
+        if (wifiLock != null && wifiLock.isHeld()) {
+            try {
+                wifiLock.release();
+            } catch (Throwable t) {
+                Log.w(TAG, "Unable to release native live WiFi lock", t);
+            }
+        }
+        wifiLock = null;
+    }
+
+    @Override
+    public void onTaskRemoved(Intent rootIntent) {
+        Log.w(TAG, "Vaelyndra task removed while native live is active; keeping service alive");
+        super.onTaskRemoved(rootIntent);
+    }
+
     private void startAsForegroundService() {
         Notification notification = buildNotification();
         if (Build.VERSION.SDK_INT >= 29) {
@@ -220,6 +246,8 @@ public class NativeScreenShareService extends Service {
             .setSmallIcon(getApplicationInfo().icon)
             .setContentTitle("Vaelyndra Live")
             .setContentText("Partage d'ecran Android actif")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setOngoing(true)
             .build();
     }
