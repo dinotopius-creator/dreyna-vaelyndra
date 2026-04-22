@@ -21,7 +21,7 @@ const NAV = [
   { to: "/", label: "Royaume" },
   { to: "/blog", label: "Chroniques" },
   { to: "/boutique", label: "Boutique" },
-  { to: "/live", label: "Lives" },
+  { to: "/live", label: "Live" },
   { to: "/communaute", label: "Communauté" },
 ];
 
@@ -59,7 +59,6 @@ export function Navbar() {
               <NavLink
                 key={n.to}
                 to={n.to}
-                end={n.to === "/"}
                 className={({ isActive }) =>
                   clsx(
                     "rounded-full px-4 py-2 font-regal text-[11px] font-semibold tracking-[0.22em] transition",
@@ -68,6 +67,7 @@ export function Navbar() {
                       : "text-ivory/70 hover:text-gold-200",
                   )
                 }
+                end={n.to === "/" || n.to === "/live"}
               >
                 {n.label}
               </NavLink>
@@ -76,12 +76,12 @@ export function Navbar() {
 
           <div className="flex items-center gap-2">
             <Link
-              to="/live"
+              to={user ? "/live/studio" : "/connexion"}
               className="hidden items-center gap-1.5 rounded-full border border-royal-500/30 px-3 py-2 text-xs text-ivory/80 transition hover:border-gold-400/60 hover:text-gold-200 md:inline-flex"
-              aria-label="Lives"
+              aria-label="Espace live streamer"
             >
               <Radio className="h-4 w-4" />
-              Lives
+              Mon live
             </Link>
             {user && (
               <Link
@@ -185,7 +185,7 @@ export function Navbar() {
               <NavLink
                 key={n.to}
                 to={n.to}
-                end={n.to === "/"}
+                end={n.to === "/" || n.to === "/live"}
                 onClick={() => setOpen(false)}
                 className={({ isActive }) =>
                   clsx(
@@ -201,6 +201,13 @@ export function Navbar() {
             ))}
             {user && (
               <>
+                <NavLink
+                  to="/live/studio"
+                  onClick={() => setOpen(false)}
+                  className="rounded-xl border border-royal-500/30 px-4 py-3 font-regal text-xs font-semibold tracking-[0.22em] text-ivory/80"
+                >
+                  Mon live
+                </NavLink>
                 <NavLink
                   to="/compte"
                   onClick={() => setOpen(false)}

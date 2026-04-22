@@ -9,6 +9,7 @@ import { BlogList } from "./pages/BlogList";
 import { BlogArticle } from "./pages/BlogArticle";
 import { Shop } from "./pages/Shop";
 import { Cart } from "./pages/Cart";
+import { LiveHub } from "./pages/LiveHub";
 import { Live } from "./pages/Live";
 import { Community } from "./pages/Community";
 import { Login } from "./pages/Login";
@@ -52,7 +53,8 @@ function AnimatedRoutes() {
           <Route path="/blog/:slug" element={<BlogArticle />} />
           <Route path="/boutique" element={<Shop />} />
           <Route path="/panier" element={<Cart />} />
-          <Route path="/live" element={<Live />} />
+          <Route path="/live" element={<LiveHub />} />
+          <Route path="/live/studio" element={<Guarded><Live /></Guarded>} />
           <Route path="/live/:broadcasterId" element={<Live />} />
           <Route path="/communaute" element={<Community />} />
           <Route path="/u/:userId" element={<UserProfile />} />
