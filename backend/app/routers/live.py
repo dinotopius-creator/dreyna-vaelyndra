@@ -30,6 +30,7 @@ from ..auth.dependencies import optional_user, require_auth
 from ..db import get_session
 from ..models import (
     LiveJoinRequest,
+    LiveChatMessage,
     LiveModeration,
     NativeLiveBroadcastToken,
     LiveSession,
@@ -87,6 +88,28 @@ class LiveSessionOut(BaseModel):
     twitch_channel: str = ""
     started_at: str
     last_heartbeat_at: str
+
+
+class LiveChatMessageIn(BaseModel):
+    content: str = Field(min_length=1, max_length=500)
+    client_id: str = Field(default="", max_length=80)
+    grade_short: Optional[str] = Field(default=None, max_length=4)
+
+
+class LiveChatMessageOut(BaseModel):
+    id: str
+    broadcaster_id: str
+    author_id: str
+    author_name: str
+    author_avatar: str
+    content: str
+    created_at: str
+    highlight: bool = False
+    grade_short: Optional[str] = None
+
+
+class LiveChatListOut(BaseModel):
+    messages: list[LiveChatMessageOut]
 
 
 def _to_out(entry: LiveSession) -> LiveSessionOut:
@@ -200,6 +223,91 @@ def list_live() -> list[LiveSessionOut]:
         return [_to_out(e) for e in fresh]
 
 
+@router.get("/chat/{broadcaster_id}", response_model=LiveChatListOut)
+def list_live_chat(
+    broadcaster_id: str,
+    after: Optional[str] = None,
+    limit: int = 120,
+) -> LiveChatListOut:
+    """Lit le chat d'un live, pour le web et l'overlay Android natif."""
+    safe_limit = max(1, min(limit, 200))
+    with get_session() as session:
+        live = session.get(LiveSession, broadcaster_id)
+        if live is None or not _is_fresh(live.last_heartbeat_at):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"message": "live_not_found"},
+            )
+        stmt = select(LiveChatMessage).where(
+            LiveChatMessage.broadcaster_id == broadcaster_id
+        )
+        if after:
+            stmt = stmt.where(LiveChatMessage.created_at > after)
+        rows = session.exec(
+            stmt.order_by(LiveChatMessage.created_at.desc()).limit(safe_limit)
+        ).all()
+        rows = list(reversed(rows))
+        return LiveChatListOut(messages=[_chat_out(r) for r in rows])
+
+
+@router.post("/chat/{broadcaster_id}", response_model=LiveChatMessageOut)
+def post_live_chat(
+    broadcaster_id: str,
+    payload: LiveChatMessageIn,
+    user: UserProfile = Depends(require_auth),
+) -> LiveChatMessageOut:
+    """Poste un message dans le chat live serveur.
+
+    Ce canal complète le DataChannel WebRTC existant : il donne une source
+    fiable à l'overlay Android quand l'app est en arrière-plan.
+    """
+    content = payload.content.strip()
+    if not content:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"message": "empty_message"},
+        )
+    with get_session() as session:
+        live = session.get(LiveSession, broadcaster_id)
+        if live is None or not _is_fresh(live.last_heartbeat_at):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"message": "live_not_found"},
+            )
+        state = _state_for(session, broadcaster_id=broadcaster_id, target_id=user.id)
+        if state.kicked_until and _is_active(state.kicked_until):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"message": "kicked"},
+            )
+        if state.muted_until and _is_active(state.muted_until):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"message": "muted"},
+            )
+        grade = None
+        if payload.grade_short:
+            raw = payload.grade_short.strip().upper()
+            if raw.isalpha() and len(raw) <= 4:
+                grade = raw
+        now = datetime.now(timezone.utc).isoformat()
+        row = LiveChatMessage(
+            id=payload.client_id.strip() or str(uuid.uuid4()),
+            broadcaster_id=broadcaster_id,
+            author_id=user.id,
+            author_name=user.username,
+            author_avatar=user.avatar_image_url,
+            content=content,
+            created_at=now,
+            highlight=user.role == "queen",
+            grade_short=grade,
+        )
+        session.add(row)
+        session.commit()
+        session.refresh(row)
+        return _chat_out(row)
+
+
 # ---------------------------------------------------------------------------
 # Signalisation WebRTC native Android
 # ---------------------------------------------------------------------------
@@ -268,6 +376,20 @@ def _signal_out(row: NativeLiveSignal) -> NativeSignalOut:
         broadcaster_ice=_json_list(row.broadcaster_ice_json),
         created_at=row.created_at,
         updated_at=row.updated_at,
+    )
+
+
+def _chat_out(row: LiveChatMessage) -> LiveChatMessageOut:
+    return LiveChatMessageOut(
+        id=row.id,
+        broadcaster_id=row.broadcaster_id,
+        author_id=row.author_id,
+        author_name=row.author_name,
+        author_avatar=row.author_avatar,
+        content=row.content,
+        created_at=row.created_at,
+        highlight=row.highlight,
+        grade_short=row.grade_short,
     )
 
 
@@ -340,6 +462,17 @@ def create_native_broadcast_token(
         )
         session.commit()
     return NativeBroadcastTokenOut(token=token, expires_at=expires_at)
+
+
+@router.get("/native/chat", response_model=LiveChatListOut)
+def list_native_broadcast_chat(
+    request: Request,
+    after: Optional[str] = None,
+    limit: int = 120,
+) -> LiveChatListOut:
+    """Lit le chat du broadcaster authentifié par jeton natif Android."""
+    broadcaster_id = _require_native_broadcaster(request)
+    return list_live_chat(broadcaster_id=broadcaster_id, after=after, limit=limit)
 
 
 @router.post("/native/offers", response_model=NativeSignalOut)

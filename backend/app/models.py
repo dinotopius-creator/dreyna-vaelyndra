@@ -263,6 +263,20 @@ class NativeLiveBroadcastToken(SQLModel, table=True):
     expires_at: str = Field(index=True)
 
 
+class LiveChatMessage(SQLModel, table=True):
+    """Message de chat live persistant court, lu par le web et l'overlay natif."""
+
+    id: str = Field(primary_key=True)
+    broadcaster_id: str = Field(index=True)
+    author_id: str = Field(index=True)
+    author_name: str = ""
+    author_avatar: str = ""
+    content: str
+    created_at: str = Field(default_factory=_now_iso, index=True)
+    highlight: bool = False
+    grade_short: Optional[str] = None
+
+
 class LiveModeration(SQLModel, table=True):
     """Actions de modération du broadcaster sur son propre live.
 

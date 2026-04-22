@@ -23,6 +23,7 @@ public class NativeScreenShareService extends Service {
     private static final int NOTIFICATION_ID = 4217;
 
     private NativeWebRtcScreenStreamer screenStreamer;
+    private NativeLiveChatOverlay chatOverlay;
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -61,6 +62,8 @@ public class NativeScreenShareService extends Service {
             broadcastToken
         );
         screenStreamer.start();
+        chatOverlay = new NativeLiveChatOverlay(this, apiBase, broadcastToken);
+        chatOverlay.start();
         return START_STICKY;
     }
 
@@ -69,6 +72,10 @@ public class NativeScreenShareService extends Service {
         if (screenStreamer != null) {
             screenStreamer.stop();
             screenStreamer = null;
+        }
+        if (chatOverlay != null) {
+            chatOverlay.stop();
+            chatOverlay = null;
         }
         super.onDestroy();
     }
