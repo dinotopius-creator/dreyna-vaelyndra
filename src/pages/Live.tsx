@@ -934,7 +934,7 @@ export function Live() {
   const remoteStreamRef = useRef<MediaStream | null>(null);
   remoteStreamRef.current = remoteStream;
   useEffect(() => {
-    if (amBroadcaster) return;
+    if (amBroadcaster && config.status === "live") return;
     // Si c'est un live Twitch (pas WebRTC), pas de joinAsViewer à tenter.
     if (registryEntry?.mode === "twitch") return;
     let cleanup: (() => void) | null = joinAsViewer(broadcasterId);
@@ -948,7 +948,13 @@ export function Live() {
       window.clearInterval(retry);
       cleanup?.();
     };
-  }, [amBroadcaster, broadcasterId, joinAsViewer, registryEntry?.mode]);
+  }, [
+    amBroadcaster,
+    broadcasterId,
+    config.status,
+    joinAsViewer,
+    registryEntry?.mode,
+  ]);
 
   const hasRemote = !!remoteStream;
   const twitchChannel = extractTwitchChannel(

@@ -1822,7 +1822,13 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             // On ne touche pas à la sienne — l'entrée locale est la
             // source de vérité pour son propre live (titre modifié en
             // direct, heartbeat frais).
-            if (me && s.broadcaster_id === me.id) continue;
+            if (
+              me &&
+              s.broadcaster_id === me.id &&
+              configRef.current.status === "live"
+            ) {
+              continue;
+            }
             next[s.broadcaster_id] = remoteToRegistry(s);
           }
           // 2. Ma propre entrée conservée uniquement si je suis EFFECTIVEMENT
