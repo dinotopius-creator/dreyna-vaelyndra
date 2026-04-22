@@ -42,6 +42,9 @@ export interface Comment {
   content: string;
   createdAt: string;
   likes: string[]; // userIds
+  parentId?: string | null;
+  replyToAuthorId?: string | null;
+  replyToAuthorName?: string | null;
 }
 
 export interface Article {

@@ -105,6 +105,9 @@ interface BackendArticle {
     content: string;
     createdAt: string;
     likes?: string[];
+    parentId?: string | null;
+    replyToAuthorId?: string | null;
+    replyToAuthorName?: string | null;
   }>;
   createdAt: string;
 }
@@ -118,6 +121,9 @@ function toArticle(a: BackendArticle): Article {
     content: c.content,
     createdAt: c.createdAt,
     likes: c.likes ?? [],
+    parentId: c.parentId ?? null,
+    replyToAuthorId: c.replyToAuthorId ?? null,
+    replyToAuthorName: c.replyToAuthorName ?? null,
   }));
   return {
     id: a.id,
@@ -161,10 +167,37 @@ export async function toggleArticleLikeRemote(
 export async function addArticleCommentRemote(
   articleId: string,
   content: string,
+  parentId?: string | null,
 ): Promise<Article> {
   const a = (await authRequest<BackendArticle>(
     `/catalog/articles/${encodeURIComponent(articleId)}/comments`,
-    { method: "POST", body: JSON.stringify({ content }) },
+    { method: "POST", body: JSON.stringify({ content, parentId }) },
+  ))!;
+  return toArticle(a);
+}
+
+export async function toggleArticleCommentLikeRemote(
+  articleId: string,
+  commentId: string,
+): Promise<Article> {
+  const a = (await authRequest<BackendArticle>(
+    `/catalog/articles/${encodeURIComponent(articleId)}/comments/${encodeURIComponent(
+      commentId,
+    )}/like`,
+    { method: "POST" },
+  ))!;
+  return toArticle(a);
+}
+
+export async function deleteArticleCommentRemote(
+  articleId: string,
+  commentId: string,
+): Promise<Article> {
+  const a = (await authRequest<BackendArticle>(
+    `/catalog/articles/${encodeURIComponent(articleId)}/comments/${encodeURIComponent(
+      commentId,
+    )}`,
+    { method: "DELETE" },
   ))!;
   return toArticle(a);
 }
