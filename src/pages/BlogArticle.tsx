@@ -7,14 +7,16 @@ import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
 import { formatDate, formatRelative, generateId, renderMarkdown } from "../lib/helpers";
 import { SectionHeading } from "../components/SectionHeading";
+import { toggleArticleLikeRemote } from "../lib/catalogApi";
 
 export function BlogArticle() {
   const { slug } = useParams();
   const { articles, dispatch } = useStore();
-  const { user } = useAuth();
+  const { user, users } = useAuth();
   const { notify } = useToast();
   const navigate = useNavigate();
   const [draft, setDraft] = useState("");
+  const [liking, setLiking] = useState(false);
 
   const article = useMemo(
     () => articles.find((a) => a.slug === slug),
@@ -33,6 +35,7 @@ export function BlogArticle() {
   }
 
   const liked = user ? article.likes.includes(user.id) : false;
+  const likers = users.filter((u) => article.likes.includes(u.id));
   const related = articles
     .filter((a) => a.id !== article.id && a.category === article.category)
     .slice(0, 3);
@@ -62,18 +65,33 @@ export function BlogArticle() {
     notify("Votre parole est inscrite sur le grimoire ✨");
   }
 
-  function toggleLike() {
+  async function toggleLike() {
     if (!user) {
       notify("Connectez-vous pour offrir votre cœur à Dreyna.", "info");
       navigate("/connexion");
       return;
     }
-    if (!article) return;
+    if (!article || liking) return;
+    setLiking(true);
     dispatch({
       type: "toggleArticleLike",
       articleId: article.id,
       userId: user.id,
     });
+    try {
+      const fresh = await toggleArticleLikeRemote(article.id);
+      dispatch({ type: "updateArticle", article: fresh });
+    } catch (err) {
+      console.warn(err);
+      dispatch({
+        type: "toggleArticleLike",
+        articleId: article.id,
+        userId: user.id,
+      });
+      notify("Le cœur n'a pas pu être sauvegardé. Réessaie.", "error");
+    } finally {
+      setLiking(false);
+    }
   }
 
   return (
@@ -121,6 +139,7 @@ export function BlogArticle() {
         <div className="mt-10 flex items-center justify-between rounded-2xl border border-royal-500/30 bg-night-800/60 p-4">
           <button
             onClick={toggleLike}
+            disabled={liking}
             className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm transition ${
               liked
                 ? "bg-gold-500/20 text-gold-200 shadow-glow-gold"
@@ -132,6 +151,42 @@ export function BlogArticle() {
             />
             {article.likes.length} cœurs offerts
           </button>
+          {article.likes.length > 0 && (
+            <div className="flex min-w-0 flex-1 items-center gap-2 px-2">
+              <div className="flex -space-x-2">
+                {likers.slice(0, 6).map((liker) => (
+                  <Link
+                    key={liker.id}
+                    to={`/u/${liker.id}`}
+                    title={liker.username}
+                    className="rounded-full ring-2 ring-night-800 transition hover:z-10 hover:ring-gold-300"
+                  >
+                    <img
+                      src={liker.avatar}
+                      alt={liker.username}
+                      className="h-7 w-7 rounded-full object-cover"
+                    />
+                  </Link>
+                ))}
+              </div>
+              <p className="truncate text-xs text-ivory/60">
+                Aimé par{" "}
+                {likers.length > 0
+                  ? likers
+                      .slice(0, 3)
+                      .map((liker) => liker.username)
+                      .join(", ")
+                  : `${article.likes.length} membre${
+                      article.likes.length > 1 ? "s" : ""
+                    }`}
+                {likers.length > 3
+                  ? ` et ${likers.length - 3} autre${
+                      likers.length - 3 > 1 ? "s" : ""
+                    }`
+                  : ""}
+              </p>
+            </div>
+          )}
           <div className="flex flex-wrap gap-2">
             {article.tags.map((t) => (
               <span key={t} className="tag">
