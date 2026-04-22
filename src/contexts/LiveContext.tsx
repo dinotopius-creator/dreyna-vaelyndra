@@ -760,8 +760,10 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   );
 
   /** Ferme UNIQUEMENT les ressources côté host (peer hôte + stream local). */
-  const stopHosting = useCallback(() => {
-    stopNativeScreenShare();
+  const stopHosting = useCallback((options?: { stopNative?: boolean }) => {
+    if (options?.stopNative) {
+      stopNativeScreenShare();
+    }
     hostConnectionsRef.current.forEach((call) => {
       try {
         call.close();
@@ -831,7 +833,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
 
   /** Ferme tout (utilisé au démontage du provider). */
   const cleanup = useCallback(() => {
-    stopHosting();
+    stopHosting({ stopNative: false });
     stopViewing();
   }, [stopHosting, stopViewing]);
 
@@ -839,7 +841,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     const me = userRef.current;
     // IMPORTANT : ne ferme QUE le côté host, pour ne pas casser le stream
     // qu'on est en train de regarder sur un autre user (viewerPeerRef).
-    stopHosting();
+    stopHosting({ stopNative: true });
     setConfig((c) => ({ ...c, status: "idle", startedAt: null }));
     // Clic volontaire sur "stopper le live" → plus de reprise possible.
     clearResumeMarker();
