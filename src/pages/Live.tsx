@@ -62,6 +62,7 @@ import {
 } from "../lib/liveApi";
 import { apiGetProfile } from "../lib/api";
 import { gradeBySlug } from "../data/grades";
+import { isNativeScreenShareAvailable } from "../lib/nativeScreenShare";
 import {
   getBotCadence,
   getViewerScale,
@@ -433,12 +434,24 @@ function BroadcasterControls() {
   const screenShareSupported = isScreenShareSupported();
   const cameraSupported = isCameraSupported();
   const isMobile = useMemo(() => isLikelyMobile(), []);
+  const [nativeScreenShareSupported, setNativeScreenShareSupported] =
+    useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    isNativeScreenShareAvailable().then((available) => {
+      if (!cancelled) setNativeScreenShareSupported(available);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   // Le partage d'écran via `getDisplayMedia` n'est pas supporté sur
   // mobile : même si Chrome Android expose parfois l'API, l'appel
   // renvoie une `NotAllowedError` / une track morte. On désactive donc
   // le mode screen sur tous les mobiles, indépendamment du test de
   // capacité API (qui donne de faux positifs sur Samsung Internet).
-  const screenEffectiveSupported = screenShareSupported && !isMobile;
+  const screenEffectiveSupported =
+    (screenShareSupported && !isMobile) || nativeScreenShareSupported;
 
   const isLive = config.status === "live";
 
@@ -677,12 +690,14 @@ function BroadcasterControls() {
               <p className="font-display text-base text-gold-200">
                 Partage d'écran
                 <span className="ml-2 rounded-full border border-sky-300/40 bg-sky-500/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.2em] text-sky-200">
-                  pc uniquement
+                  {nativeScreenShareSupported ? "android beta" : "pc uniquement"}
                 </span>
               </p>
               <p className="mt-1 text-xs text-ivory/60">
                 {screenEffectiveSupported
-                  ? "Stream ton écran (jeu, appli, navigateur…) directement depuis ton PC."
+                  ? nativeScreenShareSupported
+                    ? "Autorise Android à capturer ton écran. Le relais vidéo natif est en cours de raccordement à Vaelyndra Live."
+                    : "Stream ton écran (jeu, appli, navigateur…) directement depuis ton PC."
                   : isMobile
                     ? "Le partage d'écran n'est pas dispo sur téléphone — choisis « Caméra » juste au-dessus (ça marche sur Samsung, iPhone et toutes les tablettes)."
                     : "Ton navigateur ne permet pas le partage d'écran."}
