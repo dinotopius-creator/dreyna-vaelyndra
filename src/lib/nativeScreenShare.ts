@@ -3,7 +3,10 @@ import { API_BASE } from "./api";
 
 type NativeScreenSharePlugin = {
   isAvailable(): Promise<{ available: boolean }>;
-  start(options: { apiBase: string }): Promise<{ granted: boolean; status: string }>;
+  start(options: {
+    apiBase: string;
+    broadcastToken: string;
+  }): Promise<{ granted: boolean; status: string }>;
   stop(): Promise<{ stopped: boolean }>;
 };
 
@@ -25,11 +28,11 @@ export async function isNativeScreenShareAvailable(): Promise<boolean> {
   }
 }
 
-export async function startNativeScreenShare(): Promise<void> {
+export async function startNativeScreenShare(broadcastToken: string): Promise<void> {
   if (!isNativeAndroidApp()) {
     throw new Error("native_screen_share_unavailable");
   }
-  await NativeScreenShare.start({ apiBase: API_BASE });
+  await NativeScreenShare.start({ apiBase: API_BASE, broadcastToken });
 }
 
 export async function stopNativeScreenShare(): Promise<void> {

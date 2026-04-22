@@ -27,6 +27,7 @@ import {
 import {
   apiListLive,
   apiAddNativeViewerIce,
+  apiCreateNativeBroadcastToken,
   apiCreateNativeLiveOffer,
   apiGetNativeLiveOffer,
   apiLiveHeartbeat,
@@ -1145,8 +1146,20 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     ) {
       if (isNativeAndroidApp()) {
         try {
-          await startNativeScreenShare();
           const startedAt = new Date().toISOString();
+          const title =
+            configRef.current.title.trim() || `${me.username} en direct`;
+          const description = configRef.current.description.trim();
+          const category = configRef.current.category;
+          const nativeToken = await apiCreateNativeBroadcastToken();
+          await apiLiveHeartbeat({
+            title,
+            description,
+            category,
+            mode: "android-screen",
+            twitchChannel: "",
+          });
+          await startNativeScreenShare(nativeToken.token);
           setConfig((c) => ({
             ...c,
             status: "live",
@@ -1159,11 +1172,10 @@ export function LiveProvider({ children }: { children: ReactNode }) {
               userId: me.id,
               username: me.username,
               avatar: me.avatar,
-              title:
-                configRef.current.title.trim() || `${me.username} en direct`,
-              description: configRef.current.description.trim(),
+              title,
+              description,
               mode: "android-screen",
-              category: configRef.current.category,
+              category,
               twitchChannel: "",
               startedAt,
               lastHeartbeat: startedAt,
@@ -1175,7 +1187,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             facing: cameraFacing,
             title: configRef.current.title,
             description: configRef.current.description,
-            category: configRef.current.category,
+            category,
             twitchChannel: "",
             savedAt: startedAt,
           };

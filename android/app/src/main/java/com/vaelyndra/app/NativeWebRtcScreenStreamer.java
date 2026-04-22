@@ -47,6 +47,7 @@ public class NativeWebRtcScreenStreamer {
     private final Context context;
     private final Intent mediaProjectionData;
     private final String apiBase;
+    private final String broadcastToken;
     private final EglBase eglBase;
     private final PeerConnectionFactory peerConnectionFactory;
     private final Map<String, PeerConnection> peerConnections = new HashMap<>();
@@ -64,11 +65,13 @@ public class NativeWebRtcScreenStreamer {
     public NativeWebRtcScreenStreamer(
         Context context,
         Intent mediaProjectionData,
-        String apiBase
+        String apiBase,
+        String broadcastToken
     ) {
         this.context = context.getApplicationContext();
         this.mediaProjectionData = mediaProjectionData;
         this.apiBase = apiBase.replaceAll("/+$", "");
+        this.broadcastToken = broadcastToken;
 
         if (!factoryInitialized) {
             PeerConnectionFactory.initialize(
@@ -352,6 +355,9 @@ public class NativeWebRtcScreenStreamer {
         String cookie = CookieManager.getInstance().getCookie(apiBase);
         if (cookie != null && !cookie.isEmpty()) {
             conn.setRequestProperty("Cookie", cookie);
+        }
+        if (broadcastToken != null && !broadcastToken.isEmpty()) {
+            conn.setRequestProperty("Authorization", "Bearer " + broadcastToken);
         }
         if (body != null) {
             conn.setDoOutput(true);
