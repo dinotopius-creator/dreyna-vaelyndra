@@ -11,6 +11,7 @@ import {
 import {
   apiCancelJoin,
   apiDecideJoinRequest,
+  apiListAcceptedJoinRequests,
   apiListJoinRequests,
   apiMyJoinRequest,
   apiRequestJoin,
@@ -573,11 +574,11 @@ export function LiveInvitesProvider({ children }: { children: ReactNode }) {
             requestedAt: r.requested_at,
             acceptedAt:
               r.status === "accepted"
-                ? r.decided_at ?? existing?.acceptedAt
+                ? (r.decided_at ?? existing?.acceptedAt)
                 : undefined,
             refusedAt:
               r.status === "refused"
-                ? r.decided_at ?? existing?.refusedAt
+                ? (r.decided_at ?? existing?.refusedAt)
                 : undefined,
             status: r.status,
             serverId: r.id,
@@ -612,6 +613,56 @@ export function LiveInvitesProvider({ children }: { children: ReactNode }) {
       });
     },
     [commit, notify],
+  );
+
+  const joinRowToInviteRequest = useCallback(
+    (row: JoinRequestOut, existing?: InviteRequest): InviteRequest => ({
+      userId: row.user_id,
+      username: row.username,
+      avatar: row.avatar,
+      creatureId: row.creature_id || null,
+      requestedAt: row.requested_at,
+      acceptedAt:
+        row.status === "accepted"
+          ? (row.decided_at ?? existing?.acceptedAt)
+          : undefined,
+      refusedAt:
+        row.status === "refused"
+          ? (row.decided_at ?? existing?.refusedAt)
+          : undefined,
+      status: row.status,
+      serverId: row.id,
+    }),
+    [],
+  );
+
+  const mergeAcceptedGuestsForViewer = useCallback(
+    (rows: JoinRequestOut[], broadcasterId: string, myId: string) => {
+      commit((prev) => {
+        const current = prev[broadcasterId] || {};
+        const acceptedIds = new Set(rows.map((r) => r.user_id));
+        const next: Record<string, InviteRequest> = {};
+
+        for (const [uId, req] of Object.entries(current)) {
+          if (
+            req.status === "accepted" &&
+            uId !== myId &&
+            !acceptedIds.has(uId)
+          ) {
+            continue;
+          }
+          next[uId] = req;
+        }
+
+        for (const row of rows) {
+          if (row.status !== "accepted") continue;
+          next[row.user_id] = joinRowToInviteRequest(row, current[row.user_id]);
+        }
+
+        return { ...prev, [broadcasterId]: next };
+      });
+    },
+    [commit, joinRowToInviteRequest],
   );
 
   // Polling broadcaster : uniquement quand l'utilisateur est EFFECTIVEMENT
@@ -678,10 +729,7 @@ export function LiveInvitesProvider({ children }: { children: ReactNode }) {
               return { ...prev, [bId]: copy };
             }
             const current = reqs[myId];
-            if (
-              current.status === row.status &&
-              current.serverId === row.id
-            ) {
+            if (current.status === row.status && current.serverId === row.id) {
               return prev;
             }
             return {
@@ -694,16 +742,22 @@ export function LiveInvitesProvider({ children }: { children: ReactNode }) {
                   serverId: row.id,
                   acceptedAt:
                     row.status === "accepted"
-                      ? row.decided_at ?? current.acceptedAt
+                      ? (row.decided_at ?? current.acceptedAt)
                       : undefined,
                   refusedAt:
                     row.status === "refused"
-                      ? row.decided_at ?? current.refusedAt
+                      ? (row.decided_at ?? current.refusedAt)
                       : undefined,
                 },
               },
             };
           });
+          if (row?.status === "accepted") {
+            const acceptedRows = await apiListAcceptedJoinRequests(bId);
+            if (!cancelled) {
+              mergeAcceptedGuestsForViewer(acceptedRows, bId, myId);
+            }
+          }
         } catch {
           // ignore
         }
@@ -715,7 +769,7 @@ export function LiveInvitesProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       clearInterval(id);
     };
-  }, [user, commit]);
+  }, [user, commit, mergeAcceptedGuestsForViewer]);
 
   const value = useMemo<InvitesCtx>(
     () => ({
