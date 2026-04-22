@@ -4,8 +4,6 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.media.projection.MediaProjectionManager;
-import android.net.Uri;
-import android.provider.Settings;
 
 import androidx.activity.result.ActivityResult;
 
@@ -32,17 +30,6 @@ public class NativeScreenSharePlugin extends Plugin {
         if (manager == null) {
             call.reject("media_projection_unavailable");
             return;
-        }
-        if (
-            android.os.Build.VERSION.SDK_INT >= 23 &&
-            !Settings.canDrawOverlays(getContext())
-        ) {
-            Intent overlayIntent = new Intent(
-                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                Uri.parse("package:" + getContext().getPackageName())
-            );
-            overlayIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            getContext().startActivity(overlayIntent);
         }
         startActivityForResult(
             call,
