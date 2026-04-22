@@ -15,7 +15,8 @@ Convention :
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -23,6 +24,8 @@ from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
 from ..auth.dependencies import require_admin
+from ..auth import emailer
+from ..auth.crypto import generate_opaque_token, hash_opaque_token
 from ..auth.models import (
     AuthSession,
     Credential,
@@ -435,6 +438,101 @@ def admin_reset_password(
 
 class Disable2FAIn(BaseModel):
     reason: str = Field(..., min_length=2, max_length=300)
+
+
+class AdminEmailChangeIn(BaseModel):
+    email: str = Field(..., min_length=3, max_length=254)
+    reason: str = Field(..., min_length=2, max_length=300)
+    send_verification: bool = True
+
+
+def _normalize_admin_email(email: str) -> str:
+    from email_validator import EmailNotValidError, validate_email
+
+    try:
+        info = validate_email(email, check_deliverability=False)
+    except EmailNotValidError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return info.normalized.lower()
+
+
+@router.post("/users/{user_id}/email", response_model=AdminUserOut)
+def admin_change_email(
+    user_id: str,
+    body: AdminEmailChangeIn,
+    admin: UserProfile = Depends(require_admin),
+    session: Session = Depends(_session_dep),
+) -> AdminUserOut:
+    """Change l'email backend d'un user et renvoie une vérification.
+
+    Réservé admin : cas d'un compte officiel/animateur seedé avec une
+    adresse technique ou d'un user qui a perdu accès à son ancien email.
+    Le mot de passe n'est jamais exposé ni modifié ici.
+    """
+    user = _user_or_404(session, user_id)
+    credential = session.get(Credential, user_id)
+    if credential is None:
+        raise HTTPException(
+            404,
+            "Cet utilisateur n'a pas de credential backend (compte legacy).",
+        )
+
+    new_email = _normalize_admin_email(body.email)
+    old_email = credential.email
+    if old_email == new_email:
+        return _admin_user_out(session, user)
+
+    existing = session.exec(
+        select(Credential).where(
+            Credential.email == new_email,
+            Credential.user_id != user_id,
+        )
+    ).first()
+    if existing is not None:
+        raise HTTPException(409, "Cet email est déjà utilisé.")
+
+    now = _now_iso()
+    credential.email = new_email
+    credential.email_verified_at = None
+    credential.updated_at = now
+    session.add(credential)
+
+    token_sent = False
+    if body.send_verification:
+        token_plain = generate_opaque_token()
+        session.add(
+            EmailVerificationToken(
+                id=str(uuid.uuid4()),
+                user_id=user.id,
+                email=new_email,
+                token_hash=hash_opaque_token(token_plain),
+                expires_at=(datetime.now(timezone.utc) + timedelta(hours=24)).isoformat(),
+            )
+        )
+        token_sent = emailer.send_verification_email(
+            new_email,
+            user.username,
+            token_plain,
+        )
+
+    revoked = _revoke_all_sessions(session, user_id)
+    _log_action(
+        session,
+        actor=admin,
+        target=user,
+        action="email_change",
+        details={
+            "old_email": old_email,
+            "new_email": new_email,
+            "reason": body.reason,
+            "verification_requested": body.send_verification,
+            "verification_sent": token_sent,
+            "sessions_revoked": revoked,
+        },
+    )
+    session.commit()
+    session.refresh(user)
+    return _admin_user_out(session, user)
 
 
 @router.delete("/users/{user_id}/totp", response_model=AdminUserOut)
