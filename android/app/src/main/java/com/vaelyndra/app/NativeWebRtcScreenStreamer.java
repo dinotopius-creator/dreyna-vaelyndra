@@ -43,6 +43,7 @@ import java.util.Set;
 
 public class NativeWebRtcScreenStreamer {
     private static boolean factoryInitialized = false;
+    private static final long HEARTBEAT_INTERVAL_MS = 15_000;
 
     private final Context context;
     private final Intent mediaProjectionData;
@@ -218,10 +219,10 @@ public class NativeWebRtcScreenStreamer {
 
     private void sendHeartbeatIfNeeded() {
         long now = System.currentTimeMillis();
-        if (now - lastHeartbeatAtMs < 25_000) return;
-        lastHeartbeatAtMs = now;
+        if (now - lastHeartbeatAtMs < HEARTBEAT_INTERVAL_MS) return;
         try {
             httpJson("POST", "/live/native/heartbeat", new JSONObject());
+            lastHeartbeatAtMs = now;
         } catch (Exception ignored) {
             // Le prochain tour réessaiera ; ne coupe jamais la capture pour un ping raté.
         }

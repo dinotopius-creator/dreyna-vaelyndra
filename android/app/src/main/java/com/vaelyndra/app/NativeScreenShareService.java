@@ -8,6 +8,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.media.projection.MediaProjectionManager;
 import android.os.IBinder;
+import android.os.PowerManager;
 
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
@@ -24,14 +25,14 @@ public class NativeScreenShareService extends Service {
 
     private NativeWebRtcScreenStreamer screenStreamer;
     private NativeLiveChatOverlay chatOverlay;
+    private PowerManager.WakeLock wakeLock;
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         startForeground(NOTIFICATION_ID, buildNotification());
 
         if (intent == null || !ACTION_START.equals(intent.getAction())) {
-            stopSelf();
-            return START_NOT_STICKY;
+            return START_REDELIVER_INTENT;
         }
 
         int resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, 0);
@@ -55,6 +56,8 @@ public class NativeScreenShareService extends Service {
         }
         String broadcastToken = intent.getStringExtra(EXTRA_BROADCAST_TOKEN);
         if (broadcastToken == null) broadcastToken = "";
+        acquireWakeLock();
+        stopCurrentSession();
         screenStreamer = new NativeWebRtcScreenStreamer(
             this,
             resultData,
@@ -64,11 +67,17 @@ public class NativeScreenShareService extends Service {
         screenStreamer.start();
         chatOverlay = new NativeLiveChatOverlay(this, apiBase, broadcastToken);
         chatOverlay.start();
-        return START_STICKY;
+        return START_REDELIVER_INTENT;
     }
 
     @Override
     public void onDestroy() {
+        stopCurrentSession();
+        releaseWakeLock();
+        super.onDestroy();
+    }
+
+    private void stopCurrentSession() {
         if (screenStreamer != null) {
             screenStreamer.stop();
             screenStreamer = null;
@@ -77,7 +86,25 @@ public class NativeScreenShareService extends Service {
             chatOverlay.stop();
             chatOverlay = null;
         }
-        super.onDestroy();
+    }
+
+    private void acquireWakeLock() {
+        if (wakeLock != null && wakeLock.isHeld()) return;
+        PowerManager powerManager = (PowerManager) getSystemService(Context.POWER_SERVICE);
+        if (powerManager == null) return;
+        wakeLock = powerManager.newWakeLock(
+            PowerManager.PARTIAL_WAKE_LOCK,
+            "Vaelyndra::NativeScreenShare"
+        );
+        wakeLock.setReferenceCounted(false);
+        wakeLock.acquire();
+    }
+
+    private void releaseWakeLock() {
+        if (wakeLock != null && wakeLock.isHeld()) {
+            wakeLock.release();
+        }
+        wakeLock = null;
     }
 
     @Nullable
