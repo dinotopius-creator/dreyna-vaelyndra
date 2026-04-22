@@ -1819,14 +1819,15 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         const remote = await apiListLive();
         if (cancelled) return;
         const me = userRef.current;
+        const localHostIsLive = !!me && configRef.current.status === "live";
         setLiveRegistry((prev) => {
           const next: Record<string, LiveRegistryEntry> = {};
           // 1. Toutes les entrées serveur (tous broadcasters).
           for (const s of remote) {
-            // On ne touche pas à la sienne — l'entrée locale est la
-            // source de vérité pour son propre live (titre modifié en
-            // direct, heartbeat frais).
-            if (me && s.broadcaster_id === me.id) continue;
+            // Si CE tab diffuse vraiment, son entrée locale reste prioritaire.
+            // Sinon, on garde aussi mon entrée serveur pour le hub public et
+            // les retours post-refresh.
+            if (localHostIsLive && me && s.broadcaster_id === me.id) continue;
             next[s.broadcaster_id] = remoteToRegistry(s);
           }
           // 2. Ma propre entrée conservée uniquement si je suis EFFECTIVEMENT
@@ -1837,9 +1838,9 @@ export function LiveProvider({ children }: { children: ReactNode }) {
           //    la purge à 90 s, mais ce bloc la ré-injectait à chaque
           //    poll depuis `prev`, la figeant pour toujours côté tab).
           if (
+            localHostIsLive &&
             me &&
-            prev[me.id] &&
-            configRef.current.status === "live"
+            prev[me.id]
           ) {
             next[me.id] = prev[me.id];
           }
@@ -1851,7 +1852,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       }
     };
     sync();
-    const id = setInterval(sync, 10_000);
+    const id = setInterval(sync, 5_000);
     // Re-sync au retour d'onglet (user mobile qui bascule d'app → revient).
     const onVisible = () => {
       if (document.visibilityState === "visible") sync();
