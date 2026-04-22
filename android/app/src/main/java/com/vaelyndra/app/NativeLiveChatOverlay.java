@@ -33,9 +33,12 @@ public class NativeLiveChatOverlay {
     private WindowManager windowManager;
     private WindowManager.LayoutParams params;
     private LinearLayout messageList;
+    private LinearLayout viewerPanel;
     private ScrollView scrollView;
+    private TextView viewerToggle;
     private Thread pollThread;
     private volatile boolean running = false;
+    private boolean viewersOpen = false;
     private String lastCreatedAt = "";
 
     public NativeLiveChatOverlay(Context context, String apiBase, String broadcastToken) {
@@ -82,12 +85,41 @@ public class NativeLiveChatOverlay {
         messageList.setOrientation(LinearLayout.VERTICAL);
         messageList.setPadding(18, 14, 18, 14);
 
+        LinearLayout titleRow = new LinearLayout(context);
+        titleRow.setOrientation(LinearLayout.HORIZONTAL);
+        titleRow.setGravity(Gravity.CENTER_VERTICAL);
+
         TextView title = new TextView(context);
         title.setText("Vaelyndra chat");
         title.setTextColor(Color.rgb(255, 226, 160));
         title.setTextSize(12);
-        title.setGravity(Gravity.CENTER);
-        messageList.addView(title);
+        title.setGravity(Gravity.CENTER_VERTICAL);
+        titleRow.addView(
+            title,
+            new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        );
+
+        viewerToggle = new TextView(context);
+        viewerToggle.setText("👁 0");
+        viewerToggle.setTextColor(Color.WHITE);
+        viewerToggle.setTextSize(12);
+        viewerToggle.setGravity(Gravity.CENTER);
+        viewerToggle.setPadding(dp(10), dp(5), dp(10), dp(5));
+        viewerToggle.setBackgroundColor(Color.argb(92, 255, 226, 160));
+        viewerToggle.setOnClickListener(v -> {
+            viewersOpen = !viewersOpen;
+            if (viewerPanel != null) {
+                viewerPanel.setVisibility(viewersOpen ? View.VISIBLE : View.GONE);
+            }
+        });
+        titleRow.addView(viewerToggle);
+        messageList.addView(titleRow);
+
+        viewerPanel = new LinearLayout(context);
+        viewerPanel.setOrientation(LinearLayout.VERTICAL);
+        viewerPanel.setPadding(0, dp(10), 0, dp(8));
+        viewerPanel.setVisibility(View.GONE);
+        messageList.addView(viewerPanel);
 
         scrollView = new ScrollView(context);
         scrollView.setBackgroundColor(Color.argb(176, 15, 10, 30));
@@ -123,6 +155,11 @@ public class NativeLiveChatOverlay {
                     if (last != null) lastCreatedAt = last.optString("created_at", lastCreatedAt);
                     mainHandler.post(() -> appendMessages(messages));
                 }
+                JSONObject viewerPayload = httpJson("/live/native/viewers");
+                JSONArray viewers = viewerPayload.optJSONArray("viewers");
+                if (viewers != null) {
+                    mainHandler.post(() -> updateViewers(viewers));
+                }
                 Thread.sleep(2200);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -153,9 +190,40 @@ public class NativeLiveChatOverlay {
             messageList.addView(line);
         }
         while (messageList.getChildCount() > 90) {
-            messageList.removeViewAt(1);
+            messageList.removeViewAt(2);
         }
         scrollView.post(() -> scrollView.fullScroll(View.FOCUS_DOWN));
+    }
+
+    private void updateViewers(JSONArray viewers) {
+        if (viewerToggle == null || viewerPanel == null) return;
+        viewerToggle.setText("👁 " + viewers.length());
+        viewerPanel.removeAllViews();
+        TextView heading = new TextView(context);
+        heading.setText("Spectateurs en direct");
+        heading.setTextColor(Color.rgb(255, 226, 160));
+        heading.setTextSize(11);
+        heading.setPadding(0, 0, 0, dp(6));
+        viewerPanel.addView(heading);
+        if (viewers.length() == 0) {
+            TextView empty = new TextView(context);
+            empty.setText("Aucun spectateur connecte.");
+            empty.setTextColor(Color.argb(190, 255, 255, 255));
+            empty.setTextSize(11);
+            viewerPanel.addView(empty);
+            return;
+        }
+        for (int i = 0; i < viewers.length(); i++) {
+            JSONObject viewer = viewers.optJSONObject(i);
+            if (viewer == null) continue;
+            String name = viewer.optString("username", "Membre");
+            TextView line = new TextView(context);
+            line.setText("• " + name);
+            line.setTextColor(Color.WHITE);
+            line.setTextSize(12);
+            line.setPadding(0, dp(3), 0, dp(3));
+            viewerPanel.addView(line);
+        }
     }
 
     private JSONObject httpJson(String path) throws Exception {
