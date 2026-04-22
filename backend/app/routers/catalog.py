@@ -265,7 +265,8 @@ class ArticleIn(BaseModel):
     excerpt: str = Field(default="", max_length=1000)
     content: str = Field(default="", max_length=100_000)
     category: str = Field(default="Lore", max_length=40)
-    cover: str = Field(default="", max_length=1000)
+    # Peut contenir une URL courte ou une data URI générée depuis un import image.
+    cover: str = Field(default="", max_length=300_000)
     author: str = Field(default="", max_length=120)
     readingTime: int = Field(default=3, ge=0, le=600)
     tags: list[str] = Field(default_factory=list)
@@ -277,7 +278,7 @@ class ArticlePatch(BaseModel):
     excerpt: Optional[str] = Field(default=None, max_length=1000)
     content: Optional[str] = Field(default=None, max_length=100_000)
     category: Optional[str] = Field(default=None, max_length=40)
-    cover: Optional[str] = Field(default=None, max_length=1000)
+    cover: Optional[str] = Field(default=None, max_length=300_000)
     author: Optional[str] = Field(default=None, max_length=120)
     readingTime: Optional[int] = Field(default=None, ge=0, le=600)
     tags: Optional[list[str]] = None
