@@ -14,7 +14,10 @@ import { useStore } from "./StoreContext";
 import { useAuth } from "./AuthContext";
 import { getIceServers, getPeerOptions } from "../lib/peerConfig";
 import {
+  cacheNativeBroadcastToken,
+  getCachedNativeBroadcastToken,
   isNativeAndroidApp,
+  markNativeScreenShareAuthGrace,
   startNativeScreenShare,
   stopNativeScreenShare,
 } from "../lib/nativeScreenShare";
@@ -1210,20 +1213,34 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     ) {
       if (isNativeAndroidApp()) {
         try {
+          markNativeScreenShareAuthGrace();
           const startedAt = new Date().toISOString();
           const title =
             configRef.current.title.trim() || `${me.username} en direct`;
           const description = configRef.current.description.trim();
           const category = configRef.current.category;
-          const nativeToken = await apiCreateNativeBroadcastToken();
-          await apiLiveHeartbeat({
+          let broadcastToken = getCachedNativeBroadcastToken();
+          try {
+            const nativeToken = await apiCreateNativeBroadcastToken();
+            broadcastToken = nativeToken.token;
+            cacheNativeBroadcastToken({
+              token: nativeToken.token,
+              expiresAt: nativeToken.expires_at,
+            });
+          } catch (tokenError) {
+            if (!broadcastToken) throw tokenError;
+          }
+          apiLiveHeartbeat({
             title,
             description,
             category,
             mode: "android-screen",
             twitchChannel: "",
+          }).catch(() => {
+            // Si Android vient de basculer hors WebView et que le cookie web
+            // saute, le service natif maintient le live via son bearer token.
           });
-          await startNativeScreenShare(nativeToken.token);
+          await startNativeScreenShare(broadcastToken);
           setConfig((c) => ({
             ...c,
             status: "live",
@@ -1262,7 +1279,10 @@ export function LiveProvider({ children }: { children: ReactNode }) {
           );
         } catch (err) {
           if (err instanceof Error && err.message !== "screen_capture_denied") {
-            setLastError(`Partage d'écran Android refusé : ${err.message}`);
+            const message = err.message.includes("Authentification requise")
+              ? "Vaelyndra a perdu l'auth web pendant le basculement Android. Reste connecte et relance le partage."
+              : `Partage d'ecran Android interrompu : ${err.message}`;
+            setLastError(message);
           }
         }
         return;
