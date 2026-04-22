@@ -11,6 +11,7 @@ import { Shop } from "./pages/Shop";
 import { Cart } from "./pages/Cart";
 import { LiveHub } from "./pages/LiveHub";
 import { Live } from "./pages/Live";
+import { LiveObsChatOverlay } from "./pages/LiveObsChatOverlay";
 import { Community } from "./pages/Community";
 import { Login } from "./pages/Login";
 import { Register } from "./pages/Register";
@@ -54,21 +55,73 @@ function AnimatedRoutes() {
           <Route path="/boutique" element={<Shop />} />
           <Route path="/panier" element={<Cart />} />
           <Route path="/live" element={<LiveHub />} />
-          <Route path="/live/studio" element={<Guarded><Live /></Guarded>} />
+          <Route
+            path="/live/studio"
+            element={
+              <Guarded>
+                <Live />
+              </Guarded>
+            }
+          />
           <Route path="/live/:broadcasterId" element={<Live />} />
           <Route path="/communaute" element={<Community />} />
           <Route path="/u/:userId" element={<UserProfile />} />
           <Route path="/connexion" element={<Login />} />
           <Route path="/inscription" element={<Register />} />
-          <Route path="/moi" element={<Guarded><Me /></Guarded>} />
-          <Route path="/compte" element={<Guarded><Compte /></Guarded>} />
-          <Route path="/connexions" element={<Guarded><Connexions /></Guarded>} />
-          <Route path="/avatar" element={<Guarded><Avatar /></Guarded>} />
-          <Route path="/messages" element={<Guarded><Messages /></Guarded>} />
-          <Route path="/messages/:userId" element={<Guarded><MessageThread /></Guarded>} />
+          <Route
+            path="/moi"
+            element={
+              <Guarded>
+                <Me />
+              </Guarded>
+            }
+          />
+          <Route
+            path="/compte"
+            element={
+              <Guarded>
+                <Compte />
+              </Guarded>
+            }
+          />
+          <Route
+            path="/connexions"
+            element={
+              <Guarded>
+                <Connexions />
+              </Guarded>
+            }
+          />
+          <Route
+            path="/avatar"
+            element={
+              <Guarded>
+                <Avatar />
+              </Guarded>
+            }
+          />
+          <Route
+            path="/messages"
+            element={
+              <Guarded>
+                <Messages />
+              </Guarded>
+            }
+          />
+          <Route
+            path="/messages/:userId"
+            element={
+              <Guarded>
+                <MessageThread />
+              </Guarded>
+            }
+          />
           <Route path="/verifier-email" element={<VerifyEmail />} />
           <Route path="/mot-de-passe-oublie" element={<ForgotPassword />} />
-          <Route path="/reinitialiser-mot-de-passe" element={<ResetPassword />} />
+          <Route
+            path="/reinitialiser-mot-de-passe"
+            element={<ResetPassword />}
+          />
           <Route
             path="/admin"
             element={
@@ -90,6 +143,19 @@ function AnimatedRoutes() {
 }
 
 function App() {
+  const location = useLocation();
+  if (location.pathname.startsWith("/live/overlay/chat/")) {
+    return (
+      <Routes>
+        <Route
+          path="/live/overlay/chat/:broadcasterId"
+          element={<LiveObsChatOverlay />}
+        />
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    );
+  }
+
   return (
     <div className="relative flex min-h-screen flex-col">
       <MagicBackground />

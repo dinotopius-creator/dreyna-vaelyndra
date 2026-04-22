@@ -11,6 +11,7 @@ import {
   Copy,
   Eye,
   EyeOff,
+  ExternalLink,
   Video,
   Camera,
   RefreshCw,
@@ -523,6 +524,7 @@ function BroadcasterControls() {
   ]);
 
   if (!user) return null;
+  const broadcasterOverlayUserId = user.id;
 
   async function copyKey() {
     try {
@@ -531,6 +533,27 @@ function BroadcasterControls() {
     } catch {
       notify("Impossible de copier la clé.", "info");
     }
+  }
+
+  function overlayUrl() {
+    return `${window.location.origin}/live/overlay/chat/${encodeURIComponent(broadcasterOverlayUserId)}`;
+  }
+
+  async function copyOverlayUrl() {
+    try {
+      await navigator.clipboard.writeText(overlayUrl());
+      notify("URL overlay OBS copiÃ©e.", "success");
+    } catch {
+      notify("Impossible de copier l'URL overlay.", "info");
+    }
+  }
+
+  function openOverlayPopout() {
+    window.open(
+      overlayUrl(),
+      "vaelyndra-live-chat-overlay",
+      "popup=yes,width=420,height=720,menubar=no,toolbar=no,location=no,status=no",
+    );
   }
 
   async function goLive() {
@@ -884,6 +907,28 @@ function BroadcasterControls() {
           >
             Voir ma page publique
           </Link>
+        )}
+        {isLive && (
+          <>
+            <button
+              type="button"
+              onClick={openOverlayPopout}
+              className="btn-ghost"
+              title="Ouvrir le chat Vaelyndra dans une fenÃªtre sÃ©parÃ©e"
+            >
+              <ExternalLink className="h-4 w-4" />
+              Overlay chat
+            </button>
+            <button
+              type="button"
+              onClick={copyOverlayUrl}
+              className="btn-ghost"
+              title="Copier l'URL Ã  ajouter dans OBS comme source navigateur"
+            >
+              <Copy className="h-4 w-4" />
+              URL OBS
+            </button>
+          </>
         )}
       </div>
     </section>
