@@ -20,7 +20,7 @@ import {
   MessageSquareOff,
   SkipForward,
 } from "lucide-react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useStore } from "../contexts/StoreContext";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
@@ -882,6 +882,7 @@ export function Live() {
   const { broadcasterId: paramBroadcasterId } = useParams<{
     broadcasterId?: string;
   }>();
+  const location = useLocation();
   const navigate = useNavigate();
   const { lives } = useStore();
   const { user, users } = useAuth();
@@ -929,8 +930,10 @@ export function Live() {
     (user.id in liveRegistry ||
       config.status === "live" ||
       (!!resumableLive && resumableLive.userId === user.id));
+  const isStudioRoute = location.pathname === "/live/studio";
   const broadcasterId =
     paramBroadcasterId ??
+    (isStudioRoute && user ? user.id : undefined) ??
     (imBroadcastingNow && user ? user.id : undefined) ??
     firstLiveId ??
     user?.id ??
