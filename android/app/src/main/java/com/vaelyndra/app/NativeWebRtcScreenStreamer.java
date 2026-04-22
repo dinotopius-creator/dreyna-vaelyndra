@@ -147,14 +147,18 @@ public class NativeWebRtcScreenStreamer {
             } else {
                 Log.w(TAG, "RECORD_AUDIO not granted; native screen live starts without mic");
             }
-        } catch (Exception e) {
-            Log.e(TAG, "Unable to start Android screen capture", e);
+        } catch (Throwable t) {
+            Log.e(TAG, "Unable to start Android screen capture", t);
             stop();
             return;
         }
 
         running = true;
         signalingThread = new Thread(this::pollSignalingLoop, "VaelyndraNativeWebRtc");
+        signalingThread.setUncaughtExceptionHandler((thread, throwable) -> {
+            Log.e(TAG, "Native signaling thread crashed", throwable);
+            stop();
+        });
         signalingThread.start();
         Log.i(TAG, "Native WebRTC screen streamer started");
     }
