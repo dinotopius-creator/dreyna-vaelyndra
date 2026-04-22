@@ -107,11 +107,7 @@ public class NativeWebRtcScreenStreamer {
 
     public void stop() {
         if (screenCapturer != null) {
-            try {
-                screenCapturer.stopCapture();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
+            screenCapturer.stopCapture();
             screenCapturer.dispose();
             screenCapturer = null;
         }
