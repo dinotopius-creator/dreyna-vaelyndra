@@ -32,7 +32,7 @@ const NAV = [
 
 export function Navbar() {
   const { user, isQueen, logout, backendMe } = useAuth();
-  const { cartCount, isLiveOn } = useStore();
+  const { cartCount } = useStore();
   const { unreadCount } = useMessages();
   const {
     notifications,
@@ -82,12 +82,6 @@ export function Navbar() {
             <span className="hidden font-display text-lg font-bold text-gold-200 sm:inline">
               Vaelyndra
             </span>
-            {isLiveOn && (
-              <span className="ml-1 hidden items-center gap-1 rounded-full border border-rose-400/50 bg-rose-500/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-rose-300 sm:inline-flex">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-rose-400" />
-                Live
-              </span>
-            )}
           </Link>
 
           <nav className="hidden items-center gap-1 lg:flex">
