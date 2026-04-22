@@ -508,6 +508,8 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   // réel de l'auteur tel que connu localement.
   const usersRef = useRef(users);
   usersRef.current = users;
+  const liveRegistryRef = useRef(liveRegistry);
+  liveRegistryRef.current = liveRegistry;
 
   useEffect(() => {
     try {
@@ -1446,7 +1448,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     // Déjà en train de se connecter / connecté.
     if (viewerPeerRef.current) return () => {};
 
-    if (liveRegistry[broadcasterId]?.mode === "android-screen") {
+    if (liveRegistryRef.current[broadcasterId]?.mode === "android-screen") {
       let cancelled = false;
       let pollId: number | null = null;
       const pc = new RTCPeerConnection({
@@ -1724,7 +1726,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       setIsConnecting(false);
       setViewingMeta(null);
     };
-  }, [liveRegistry]);
+  }, [deliverChatLocally, sanitizeIncomingChat]);
 
   useEffect(() => {
     return () => {
