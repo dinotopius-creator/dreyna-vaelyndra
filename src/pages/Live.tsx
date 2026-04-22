@@ -1021,17 +1021,21 @@ export function Live() {
       return joinAsViewer(broadcasterId);
     };
     let cleanup: (() => void) | null = startJoinAttempt();
+    const retryMs = registryEntry?.mode === "android-screen" ? 30_000 : 15_000;
     const retry = window.setInterval(() => {
       if (remoteStreamRef.current) return;
       const mode = registryEntry?.mode;
-      const maxConnectMs = mode === "android-screen" ? 90_000 : 45_000;
+      const maxConnectMs = mode === "android-screen" ? 180_000 : 45_000;
       const attemptAge = Date.now() - joinAttemptStartedAtRef.current;
-      const shouldRetry = !isConnectingRef.current || attemptAge > maxConnectMs;
+      const shouldRetry =
+        mode === "android-screen"
+          ? attemptAge > maxConnectMs
+          : !isConnectingRef.current || attemptAge > maxConnectMs;
       if (shouldRetry) {
         cleanup?.();
         cleanup = startJoinAttempt();
       }
-    }, 15_000);
+    }, retryMs);
     return () => {
       window.clearInterval(retry);
       cleanup?.();
@@ -1816,14 +1820,12 @@ export function Live() {
                   <div className="relative z-10 flex flex-col items-center gap-3">
                     <Radio className="h-10 w-10 animate-pulse text-rose-300" />
                     <p className="font-display text-2xl text-gold-200">
-                      {isConnecting
-                        ? "Connexion au flux…"
-                        : "Le live est annoncé"}
+                      {isConnecting ? "Live en cours" : "Le live est annonce"}
                     </p>
                     <p className="max-w-md text-sm text-ivory/65">
                       {isConnecting
-                        ? "La cour se connecte aux portails de Vaelyndra."
-                        : `${broadcasterProfile?.username ?? "Le broadcaster"} prépare son sortilège. Rafraîchis dans quelques secondes.`}
+                        ? "Stabilisation du flux video mobile."
+                        : `${broadcasterProfile?.username ?? "Le broadcaster"} prepare son flux. Reste ici, la reprise est automatique.`}
                     </p>
                   </div>
                 </div>

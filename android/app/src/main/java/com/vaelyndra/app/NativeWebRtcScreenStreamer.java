@@ -3,6 +3,7 @@ package com.vaelyndra.app;
 import android.content.Context;
 import android.content.Intent;
 import android.media.projection.MediaProjection;
+import android.util.Log;
 import android.webkit.CookieManager;
 
 import org.webrtc.AudioSource;
@@ -44,6 +45,7 @@ import java.util.Set;
 public class NativeWebRtcScreenStreamer {
     private static boolean factoryInitialized = false;
     private static final long HEARTBEAT_INTERVAL_MS = 15_000;
+    private static final String TAG = "VaelyndraNativeLive";
 
     private final Context context;
     private final Intent mediaProjectionData;
@@ -107,11 +109,13 @@ public class NativeWebRtcScreenStreamer {
             new MediaProjection.Callback() {
                 @Override
                 public void onStop() {
+                    Log.w(TAG, "Android MediaProjection stopped by system or user");
                     stop();
                 }
             }
         );
 
+        try {
         surfaceTextureHelper = SurfaceTextureHelper.create(
             "VaelyndraScreenCapture",
             eglBase.getEglBaseContext()
@@ -137,10 +141,16 @@ public class NativeWebRtcScreenStreamer {
             audioSource
         );
         audioTrack.setEnabled(true);
+        } catch (Exception e) {
+            Log.e(TAG, "Unable to start Android screen capture", e);
+            stop();
+            return;
+        }
 
         running = true;
         signalingThread = new Thread(this::pollSignalingLoop, "VaelyndraNativeWebRtc");
         signalingThread.start();
+        Log.i(TAG, "Native WebRTC screen streamer started");
     }
 
     public VideoTrack getVideoTrack() {
@@ -225,6 +235,7 @@ public class NativeWebRtcScreenStreamer {
                 Thread.currentThread().interrupt();
                 return;
             } catch (Exception e) {
+                Log.w(TAG, "Native signaling poll failed, retrying", e);
                 try {
                     Thread.sleep(2500);
                 } catch (InterruptedException interrupted) {
@@ -242,6 +253,7 @@ public class NativeWebRtcScreenStreamer {
             httpJson("POST", "/live/native/heartbeat", new JSONObject());
             lastHeartbeatAtMs = now;
         } catch (Exception ignored) {
+            Log.w(TAG, "Native heartbeat failed, keeping capture alive", ignored);
             // Le prochain tour réessaiera ; ne coupe jamais la capture pour un ping raté.
         }
     }
@@ -253,7 +265,9 @@ public class NativeWebRtcScreenStreamer {
 
         PeerConnection pc = peerConnections.get(sessionId);
         if (pc == null) {
+            if (videoTrack == null || audioTrack == null) return;
             pc = createPeerConnection(sessionId);
+            if (pc == null) return;
             peerConnections.put(sessionId, pc);
             pc.addTrack(videoTrack, Collections.singletonList("vaelyndra-native"));
             pc.addTrack(audioTrack, Collections.singletonList("vaelyndra-native"));
@@ -339,6 +353,7 @@ public class NativeWebRtcScreenStreamer {
         );
         PeerConnection.RTCConfiguration config = new PeerConnection.RTCConfiguration(iceServers);
         config.iceTransportsType = PeerConnection.IceTransportsType.ALL;
+        config.sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN;
         return peerConnectionFactory.createPeerConnection(
             config,
             new PeerConnection.Observer() {
@@ -357,12 +372,14 @@ public class NativeWebRtcScreenStreamer {
                             body
                         );
                     } catch (Exception ignored) {
+                        Log.w(TAG, "Unable to publish native broadcaster ICE", ignored);
                         // ICE trickle best-effort ; TURN/STUN réessaient côté stack.
                     }
                 }
 
                 @Override public void onSignalingChange(PeerConnection.SignalingState state) {}
                 @Override public void onIceConnectionChange(PeerConnection.IceConnectionState state) {
+                    Log.i(TAG, "Native viewer " + sessionId + " ICE state: " + state);
                     if (
                         state == PeerConnection.IceConnectionState.FAILED ||
                         state == PeerConnection.IceConnectionState.CLOSED
