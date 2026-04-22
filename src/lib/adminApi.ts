@@ -136,13 +136,9 @@ export interface ReportStats {
 
 // --- Admin : utilisateurs --------------------------------------------------
 
-export async function adminListUsers(
-  search?: string,
-): Promise<AdminUser[]> {
+export async function adminListUsers(search?: string): Promise<AdminUser[]> {
   const qs = search ? `?search=${encodeURIComponent(search)}` : "";
-  return (
-    (await authRequest<AdminUser[]>(`/admin/users${qs}`)) ?? []
-  );
+  return (await authRequest<AdminUser[]>(`/admin/users${qs}`)) ?? [];
 }
 
 export async function adminGetUser(userId: string): Promise<AdminUser> {
@@ -193,6 +189,23 @@ export async function adminResetPassword(
       body: JSON.stringify({
         new_password: body.newPassword,
         reason: body.reason,
+      }),
+    },
+  )) as AdminUser;
+}
+
+export async function adminChangeEmail(
+  userId: string,
+  body: { email: string; reason: string; sendVerification?: boolean },
+): Promise<AdminUser> {
+  return (await authRequest<AdminUser>(
+    `/admin/users/${encodeURIComponent(userId)}/email`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        email: body.email,
+        reason: body.reason,
+        send_verification: body.sendVerification ?? true,
       }),
     },
   )) as AdminUser;
@@ -250,9 +263,7 @@ export async function adminListAuditLog(params?: {
   if (params?.action) search.set("action", params.action);
   if (params?.limit) search.set("limit", String(params.limit));
   const qs = search.toString() ? `?${search.toString()}` : "";
-  return (
-    (await authRequest<AuditLogEntry[]>(`/admin/audit-log${qs}`)) ?? []
-  );
+  return (await authRequest<AuditLogEntry[]>(`/admin/audit-log${qs}`)) ?? [];
 }
 
 // --- Reports ---------------------------------------------------------------
@@ -279,23 +290,23 @@ export async function adminListReports(params?: {
   if (params?.status) search.set("status", params.status);
   if (params?.targetType) search.set("target_type", params.targetType);
   const qs = search.toString() ? `?${search.toString()}` : "";
-  return (
-    (await authRequest<ReportEntry[]>(`/admin/reports${qs}`)) ?? []
-  );
+  return (await authRequest<ReportEntry[]>(`/admin/reports${qs}`)) ?? [];
 }
 
 export async function adminReportsStats(): Promise<ReportStats> {
-  return (await authRequest<ReportStats>(`/admin/reports/stats`)) as ReportStats;
+  return (await authRequest<ReportStats>(
+    `/admin/reports/stats`,
+  )) as ReportStats;
 }
 
 export async function adminSetReportStatus(
   reportId: number,
   status: ReportStatus,
 ): Promise<ReportEntry> {
-  return (await authRequest<ReportEntry>(
-    `/admin/reports/${reportId}`,
-    { method: "PATCH", body: JSON.stringify({ status }) },
-  )) as ReportEntry;
+  return (await authRequest<ReportEntry>(`/admin/reports/${reportId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  })) as ReportEntry;
 }
 
 // --- Admin : grades spirituels ---------------------------------------------

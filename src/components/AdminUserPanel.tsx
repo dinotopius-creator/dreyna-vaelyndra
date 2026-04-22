@@ -15,12 +15,25 @@
  * consultable depuis `/admin → Utilisateurs → Journal`.
  */
 import { useEffect, useState } from "react";
-import { ShieldCheck, ShieldAlert, Coins, UserCog, Ban, RotateCcw, KeyRound, ShieldOff, Trash2, Crown } from "lucide-react";
+import {
+  ShieldCheck,
+  ShieldAlert,
+  Coins,
+  UserCog,
+  Ban,
+  RotateCcw,
+  KeyRound,
+  ShieldOff,
+  Trash2,
+  Crown,
+  Mail,
+} from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
 import {
   adminAdjustWallet,
   adminBanUser,
+  adminChangeEmail,
   adminDisableTotp,
   adminGetUser,
   adminHardDeleteUser,
@@ -59,7 +72,11 @@ const ROLES: { id: string; label: string }[] = [
   { id: "admin", label: "Admin (🛡️ droits complets)" },
 ];
 
-export function AdminUserPanel({ targetUserId, targetUsername, onChange }: Props) {
+export function AdminUserPanel({
+  targetUserId,
+  targetUsername,
+  onChange,
+}: Props) {
   const { backendMe } = useAuth();
   const { notify } = useToast();
 
@@ -72,6 +89,8 @@ export function AdminUserPanel({ targetUserId, targetUsername, onChange }: Props
   const [banReason, setBanReason] = useState<string>("");
   const [newPassword, setNewPassword] = useState<string>("");
   const [pwReason, setPwReason] = useState<string>("");
+  const [emailDraft, setEmailDraft] = useState<string>("");
+  const [emailReason, setEmailReason] = useState<string>("");
   const [totpReason, setTotpReason] = useState<string>("");
   const [deleteConfirm, setDeleteConfirm] = useState<string>("");
   const [deleteReason, setDeleteReason] = useState<string>("");
@@ -99,6 +118,7 @@ export function AdminUserPanel({ targetUserId, targetUsername, onChange }: Props
         if (!cancelled) {
           setDetail(u);
           setRoleDraft(u.role);
+          setEmailDraft(u.email ?? "");
         }
       })
       .catch(() => {
@@ -261,8 +281,39 @@ export function AdminUserPanel({ targetUserId, targetUsername, onChange }: Props
       );
       onChange?.();
     } catch (err) {
+      notify(err instanceof Error ? err.message : "Échec du reset.", "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleEmailChange(e: React.FormEvent) {
+    e.preventDefault();
+    if (!detail) return;
+    const email = emailDraft.trim();
+    if (!email) {
+      notify("Renseigne le nouvel email.", "error");
+      return;
+    }
+    if (!emailReason.trim()) {
+      notify("Renseigne une raison pour le journal admin.", "error");
+      return;
+    }
+    setLoading(true);
+    try {
+      const updated = await adminChangeEmail(targetUserId, {
+        email,
+        reason: emailReason.trim(),
+        sendVerification: true,
+      });
+      setDetail(updated);
+      setEmailDraft(updated.email ?? email);
+      setEmailReason("");
+      notify("Email mis à jour et confirmation envoyée.", "success");
+      onChange?.();
+    } catch (err) {
       notify(
-        err instanceof Error ? err.message : "Échec du reset.",
+        err instanceof Error ? err.message : "Impossible de changer l'email.",
         "error",
       );
     } finally {
@@ -321,7 +372,10 @@ export function AdminUserPanel({ targetUserId, targetUsername, onChange }: Props
     }
   }
 
-  async function applyGradeOverride(nextSlug: GradeSlug | null, successMsg: string) {
+  async function applyGradeOverride(
+    nextSlug: GradeSlug | null,
+    successMsg: string,
+  ) {
     setLoading(true);
     try {
       const updated = await adminSetGradeOverride(targetUserId, nextSlug);
@@ -334,7 +388,9 @@ export function AdminUserPanel({ targetUserId, targetUsername, onChange }: Props
       onChange?.();
     } catch (err) {
       notify(
-        err instanceof Error ? err.message : "Échec de la mise à jour du grade.",
+        err instanceof Error
+          ? err.message
+          : "Échec de la mise à jour du grade.",
         "error",
       );
     } finally {
@@ -423,10 +479,7 @@ export function AdminUserPanel({ targetUserId, targetUsername, onChange }: Props
       notify(`${targetUsername} rétabli·e.`, "success");
       onChange?.();
     } catch (err) {
-      notify(
-        err instanceof Error ? err.message : "Échec du déban.",
-        "error",
-      );
+      notify(err instanceof Error ? err.message : "Échec du déban.", "error");
     } finally {
       setLoading(false);
     }
@@ -516,10 +569,11 @@ export function AdminUserPanel({ targetUserId, targetUsername, onChange }: Props
       </div>
 
       {/* --- Ajuster le wallet ------------------------------------------ */}
-      <form onSubmit={handleWalletAdjust} className="mt-6 space-y-3 rounded-lg border border-gold-400/20 bg-royal-800/30 p-4">
-        <h3 className="font-display text-sm text-gold-200">
-          Ajuster un solde
-        </h3>
+      <form
+        onSubmit={handleWalletAdjust}
+        className="mt-6 space-y-3 rounded-lg border border-gold-400/20 bg-royal-800/30 p-4"
+      >
+        <h3 className="font-display text-sm text-gold-200">Ajuster un solde</h3>
         <div className="grid gap-2 sm:grid-cols-[1fr,auto]">
           <select
             className="glass-input"
@@ -563,10 +617,10 @@ export function AdminUserPanel({ targetUserId, targetUsername, onChange }: Props
         <p className="text-[11px] leading-relaxed text-ivory/60">
           Le grade <strong>👑 Légende de Vaelyndra</strong> n'est
           <em> jamais</em> obtenu via XP : c'est un sacre que tu accordes
-          manuellement à un·e créateur·rice qui t'a marqué. Un DM
-          automatique de félicitations sera envoyé de la part de Dreyna.
-          Les autres grades sont listés ci-dessous au cas où tu veuilles
-          forcer un palier temporairement (modération, test, correction).
+          manuellement à un·e créateur·rice qui t'a marqué. Un DM automatique de
+          félicitations sera envoyé de la part de Dreyna. Les autres grades sont
+          listés ci-dessous au cas où tu veuilles forcer un palier
+          temporairement (modération, test, correction).
         </p>
 
         {currentGradeSlug && (
@@ -592,7 +646,8 @@ export function AdminUserPanel({ targetUserId, targetUsername, onChange }: Props
               onClick={handleRevokeLegend}
               disabled={loading}
             >
-              <Crown className="mr-1 inline h-4 w-4" /> Retirer le statut Légende
+              <Crown className="mr-1 inline h-4 w-4" /> Retirer le statut
+              Légende
             </button>
           ) : (
             <button
@@ -601,7 +656,8 @@ export function AdminUserPanel({ targetUserId, targetUsername, onChange }: Props
               onClick={handleGrantLegend}
               disabled={loading}
             >
-              <Crown className="mr-1 inline h-4 w-4" /> Sacrer Légende de Vaelyndra
+              <Crown className="mr-1 inline h-4 w-4" /> Sacrer Légende de
+              Vaelyndra
             </button>
           )}
         </div>
@@ -666,6 +722,52 @@ export function AdminUserPanel({ targetUserId, targetUsername, onChange }: Props
         </div>
       </div>
 
+      {/* --- Email ------------------------------------------------------- */}
+      {!isSelf && (
+        <form
+          onSubmit={handleEmailChange}
+          className="mt-6 space-y-3 rounded-lg border border-gold-400/20 bg-royal-800/30 p-4"
+        >
+          <h3 className="flex items-center gap-2 font-display text-sm text-gold-200">
+            <Mail className="h-4 w-4 text-gold-300" /> Email de connexion
+          </h3>
+          <p className="text-[11px] text-ivory/60">
+            Change l'email de {targetUsername}, marque le compte comme non
+            vérifié et envoie un nouveau lien de confirmation. Le mot de passe
+            n'est pas modifié.
+          </p>
+          <input
+            className="glass-input w-full"
+            type="email"
+            autoComplete="off"
+            placeholder="Nouvel email"
+            value={emailDraft}
+            onChange={(e) => setEmailDraft(e.target.value)}
+            disabled={loading}
+          />
+          <input
+            className="glass-input w-full"
+            placeholder="Raison (obligatoire, loguée)"
+            value={emailReason}
+            onChange={(e) => setEmailReason(e.target.value)}
+            disabled={loading}
+          />
+          <button
+            type="submit"
+            className="btn-gold"
+            disabled={
+              loading ||
+              !detail ||
+              emailDraft.trim().toLowerCase() ===
+                (detail.email ?? "").toLowerCase()
+            }
+          >
+            <Mail className="h-4 w-4" /> Changer l'email et envoyer la
+            confirmation
+          </button>
+        </form>
+      )}
+
       {/* --- Reset mot de passe ---------------------------------------- */}
       {!isSelf && (
         <form
@@ -673,13 +775,14 @@ export function AdminUserPanel({ targetUserId, targetUsername, onChange }: Props
           className="mt-6 space-y-3 rounded-lg border border-gold-400/20 bg-royal-800/30 p-4"
         >
           <h3 className="flex items-center gap-2 font-display text-sm text-gold-200">
-            <KeyRound className="h-4 w-4 text-gold-300" /> Réinitialiser le mot de passe
+            <KeyRound className="h-4 w-4 text-gold-300" /> Réinitialiser le mot
+            de passe
           </h3>
           <p className="text-[11px] text-ivory/60">
             Définit directement un nouveau mot de passe pour {targetUsername}.
-            Utile tant que l'email transac n'est pas en place, ou pour
-            débloquer un compte coincé en "mode hors-ligne". Toutes ses
-            sessions seront révoquées.
+            Utile tant que l'email transac n'est pas en place, ou pour débloquer
+            un compte coincé en "mode hors-ligne". Toutes ses sessions seront
+            révoquées.
           </p>
           <input
             className="glass-input w-full"
@@ -707,13 +810,14 @@ export function AdminUserPanel({ targetUserId, targetUsername, onChange }: Props
       {!isSelf && detail?.totpEnabled && (
         <div className="mt-6 space-y-3 rounded-lg border border-amber-400/20 bg-amber-900/10 p-4">
           <h3 className="flex items-center gap-2 font-display text-sm text-amber-200">
-            <ShieldOff className="h-4 w-4 text-amber-300" /> Désactiver le 2FA (TOTP)
+            <ShieldOff className="h-4 w-4 text-amber-300" /> Désactiver le 2FA
+            (TOTP)
           </h3>
           <p className="text-[11px] text-ivory/60">
-            {targetUsername} a le 2FA activé. Si le user a perdu l'accès à
-            son appli authenticator (ou que le TOTP a été activé par erreur),
-            désactive-le ici pour le débloquer. Les codes de récupération
-            seront aussi effacés.
+            {targetUsername} a le 2FA activé. Si le user a perdu l'accès à son
+            appli authenticator (ou que le TOTP a été activé par erreur),
+            désactive-le ici pour le débloquer. Les codes de récupération seront
+            aussi effacés.
           </p>
           <input
             className="glass-input w-full"
@@ -741,14 +845,13 @@ export function AdminUserPanel({ targetUserId, targetUsername, onChange }: Props
                 );
                 setDetail(updated);
                 setTotpReason("");
-                notify(
-                  `2FA de ${targetUsername} désactivé.`,
-                  "success",
-                );
+                notify(`2FA de ${targetUsername} désactivé.`, "success");
                 onChange?.();
               } catch (err) {
                 notify(
-                  err instanceof Error ? err.message : "Échec de la désactivation 2FA.",
+                  err instanceof Error
+                    ? err.message
+                    : "Échec de la désactivation 2FA.",
                   "error",
                 );
               } finally {
@@ -794,7 +897,9 @@ export function AdminUserPanel({ targetUserId, targetUsername, onChange }: Props
               type="button"
               className="rounded-full border border-rose-400/60 bg-rose-500/20 px-4 py-2 font-regal text-[11px] font-semibold tracking-[0.22em] text-rose-100 hover:bg-rose-500/40 disabled:opacity-40"
               onClick={handleBan}
-              disabled={loading || !banReason.trim() || detail?.role === "admin"}
+              disabled={
+                loading || !banReason.trim() || detail?.role === "admin"
+              }
             >
               <Ban className="mr-1 inline h-4 w-4" /> Bannir ce compte
             </button>
@@ -815,15 +920,18 @@ export function AdminUserPanel({ targetUserId, targetUsername, onChange }: Props
           </h3>
           {deleted ? (
             <p className="text-xs text-rose-100/90">
-              Compte supprimé. Cette section ne fait plus rien — rafraîchis la liste admin.
+              Compte supprimé. Cette section ne fait plus rien — rafraîchis la
+              liste admin.
             </p>
           ) : (
             <>
               <p className="text-[11px] leading-relaxed text-rose-100/80">
-                Suppression <strong>définitive</strong> du compte. Purge : profil, credentials,
-                sessions, tokens, posts, commentaires, réactions, follows, lives, messages privés,
-                signalements posés par l'user et gifts. Les signalements <em>contre</em> l'user et
-                le journal d'audit sont conservés. Action <strong>irréversible</strong>.
+                Suppression <strong>définitive</strong> du compte. Purge :
+                profil, credentials, sessions, tokens, posts, commentaires,
+                réactions, follows, lives, messages privés, signalements posés
+                par l'user et gifts. Les signalements <em>contre</em> l'user et
+                le journal d'audit sont conservés. Action{" "}
+                <strong>irréversible</strong>.
               </p>
               <input
                 className="glass-input w-full"
@@ -849,7 +957,8 @@ export function AdminUserPanel({ targetUserId, targetUsername, onChange }: Props
                   deleteReason.trim().length < 2
                 }
               >
-                <Trash2 className="mr-1 inline h-4 w-4" /> Supprimer définitivement
+                <Trash2 className="mr-1 inline h-4 w-4" /> Supprimer
+                définitivement
               </button>
             </>
           )}
