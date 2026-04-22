@@ -95,7 +95,7 @@ interface ProfileCtx {
 const Ctx = createContext<ProfileCtx | null>(null);
 
 export function ProfileProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, refreshBackendMe, syncProfileAvatar } = useAuth();
   const [profile, setProfile] = useState<UserProfileDto | null>(null);
   const [loading, setLoading] = useState(false);
   // Évite les races si l'utilisateur change avant la réponse du backend.
@@ -158,13 +158,16 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
           avatarImageUrl: patch.avatarImageUrl,
         });
         setProfile(updated);
+        const nextAvatar = updated.avatarImageUrl || patch.avatarImageUrl;
+        if (nextAvatar) syncProfileAvatar(nextAvatar);
+        void refreshBackendMe();
         return updated;
       } catch (err) {
         console.warn("Échec sauvegarde avatar :", err);
         throw err;
       }
     },
-    [user],
+    [user, refreshBackendMe, syncProfileAvatar],
   );
 
   const setCreature = useCallback(
