@@ -966,7 +966,6 @@ export function Live() {
     };
   }, [amBroadcaster, broadcasterId, joinAsViewer, registryEntry?.mode]);
 
-  const hasRemote = !!remoteStream;
   const twitchChannel = extractTwitchChannel(
     registryEntry?.twitchChannel ?? (amBroadcaster ? config.twitchChannel : ""),
   );
@@ -975,6 +974,28 @@ export function Live() {
     viewingMeta?.mode ??
     (amBroadcaster ? config.mode : "screen");
   const isActiveLive = !!registryEntry || (amBroadcaster && config.status === "live");
+  const [retainedRemoteStream, setRetainedRemoteStream] =
+    useState<MediaStream | null>(null);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setRetainedRemoteStream(null);
+  }, [broadcasterId]);
+
+  useEffect(() => {
+    if (remoteStream) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setRetainedRemoteStream(remoteStream);
+      return;
+    }
+    if (!isActiveLive || amBroadcaster) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setRetainedRemoteStream(null);
+    }
+  }, [amBroadcaster, isActiveLive, remoteStream]);
+
+  const viewerRemoteStream = remoteStream ?? retainedRemoteStream;
+  const hasRemote = !!viewerRemoteStream;
   const showViewer =
     isActiveLive &&
     (isHost ||
@@ -1626,7 +1647,7 @@ export function Live() {
                     <LiveVideoStage
                       isHost={isHost}
                       localStream={localStream}
-                      remoteStream={remoteStream}
+                      remoteStream={viewerRemoteStream}
                     />
                   )}
                   {activeMode === "twitch" && (
