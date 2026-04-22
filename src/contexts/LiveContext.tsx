@@ -12,7 +12,7 @@ import type Peer from "peerjs";
 import type { DataConnection, MediaConnection } from "peerjs";
 import { useStore } from "./StoreContext";
 import { useAuth } from "./AuthContext";
-import { getPeerOptions } from "../lib/peerConfig";
+import { getIceServers, getPeerOptions } from "../lib/peerConfig";
 import {
   isNativeAndroidApp,
   startNativeScreenShare,
@@ -26,9 +26,13 @@ import {
 } from "../data/liveCategories";
 import {
   apiListLive,
+  apiAddNativeViewerIce,
+  apiCreateNativeLiveOffer,
+  apiGetNativeLiveOffer,
   apiLiveHeartbeat,
   apiStopLive,
   type LiveSessionOut,
+  type NativeIceCandidate,
 } from "../lib/liveApi";
 
 /**
@@ -65,7 +69,7 @@ export function getLivePeerId(userId: string): string {
   return `vaelyndra-live-v2-${userId}`;
 }
 
-export type LiveMode = "twitch" | "screen" | "camera";
+export type LiveMode = "twitch" | "screen" | "android-screen" | "camera";
 
 export type CameraFacing = "user" | "environment";
 
@@ -245,7 +249,10 @@ function readRegistry(): Record<string, LiveRegistryEntry> {
 /** Convertit une ligne LiveSession du backend en entrée de registre local. */
 function remoteToRegistry(s: LiveSessionOut): LiveRegistryEntry {
   const mode: LiveMode =
-    s.mode === "twitch" || s.mode === "screen" || s.mode === "camera"
+    s.mode === "twitch" ||
+    s.mode === "screen" ||
+    s.mode === "android-screen" ||
+    s.mode === "camera"
       ? s.mode
       : "screen";
   return {
@@ -289,7 +296,11 @@ function readResumeMarker(): LiveResumeMarker | null {
       return null;
     }
     const mode: LiveMode =
-      parsed.mode === "twitch" || parsed.mode === "camera" ? parsed.mode : "screen";
+      parsed.mode === "twitch" ||
+      parsed.mode === "camera" ||
+      parsed.mode === "android-screen"
+        ? parsed.mode
+        : "screen";
     const facing: CameraFacing =
       parsed.facing === "environment" ? "environment" : "user";
     return {
@@ -323,6 +334,15 @@ function clearResumeMarker() {
   } catch {
     // ignore
   }
+}
+
+function toNativeIceCandidate(candidate: RTCIceCandidate): NativeIceCandidate {
+  const json = candidate.toJSON();
+  return {
+    candidate: json.candidate ?? "",
+    sdpMid: json.sdpMid ?? null,
+    sdpMLineIndex: json.sdpMLineIndex ?? null,
+  };
 }
 
 interface LiveCtx {
@@ -1126,6 +1146,41 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       if (isNativeAndroidApp()) {
         try {
           await startNativeScreenShare();
+          const startedAt = new Date().toISOString();
+          setConfig((c) => ({
+            ...c,
+            status: "live",
+            mode: "android-screen",
+            startedAt,
+          }));
+          updateRegistry((r) => ({
+            ...r,
+            [me.id]: {
+              userId: me.id,
+              username: me.username,
+              avatar: me.avatar,
+              title:
+                configRef.current.title.trim() || `${me.username} en direct`,
+              description: configRef.current.description.trim(),
+              mode: "android-screen",
+              category: configRef.current.category,
+              twitchChannel: "",
+              startedAt,
+              lastHeartbeat: startedAt,
+            },
+          }));
+          const marker: LiveResumeMarker = {
+            userId: me.id,
+            mode: "android-screen",
+            facing: cameraFacing,
+            title: configRef.current.title,
+            description: configRef.current.description,
+            category: configRef.current.category,
+            twitchChannel: "",
+            savedAt: startedAt,
+          };
+          writeResumeMarker(marker);
+          setResumableLive(marker);
           setLastError(
             "Autorisation de partage d'écran Android accordée. Le relais vidéo natif WebRTC est la prochaine étape avant diffusion aux viewers.",
           );
@@ -1215,7 +1270,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     // rien aux peers.
     if (localStreamRef.current !== stream) return;
     await attachStreamToPeer(stream, "screen");
-  }, [attachStreamToPeer, stopLive]);
+  }, [attachStreamToPeer, stopLive, updateRegistry, cameraFacing]);
 
   const startCameraShare = useCallback(
     async (facingMode: CameraFacing = "user") => {
@@ -1377,6 +1432,97 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     // Déjà en train de se connecter / connecté.
     if (viewerPeerRef.current) return () => {};
 
+    if (liveRegistry[broadcasterId]?.mode === "android-screen") {
+      let cancelled = false;
+      let pollId: number | null = null;
+      const pc = new RTCPeerConnection({
+        iceServers: getIceServers(),
+        iceTransportPolicy: "all",
+      });
+      const remote = new MediaStream();
+      const pendingIce: NativeIceCandidate[] = [];
+      const appliedBroadcasterIce = new Set<string>();
+      let sessionId: string | null = null;
+
+      setIsConnecting(true);
+      setLastError(null);
+
+      pc.addTransceiver("video", { direction: "recvonly" });
+      pc.addTransceiver("audio", { direction: "recvonly" });
+      pc.ontrack = (event) => {
+        event.streams[0]?.getTracks().forEach((track) => remote.addTrack(track));
+        if (!cancelled) {
+          setRemoteStream(remote);
+          setIsConnecting(false);
+        }
+      };
+      pc.onicecandidate = (event) => {
+        if (!event.candidate) return;
+        const candidate = toNativeIceCandidate(event.candidate);
+        if (!candidate.candidate) return;
+        if (!sessionId) {
+          pendingIce.push(candidate);
+          return;
+        }
+        apiAddNativeViewerIce({ sessionId, candidate }).catch(() => {});
+      };
+
+      (async () => {
+        try {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          if (!offer.sdp || cancelled) return;
+          const signal = await apiCreateNativeLiveOffer({
+            broadcasterId,
+            offerSdp: offer.sdp,
+          });
+          sessionId = signal.session_id;
+          for (const candidate of pendingIce.splice(0)) {
+            await apiAddNativeViewerIce({ sessionId, candidate }).catch(() => {});
+          }
+          pollId = window.setInterval(() => {
+            if (!sessionId || cancelled) return;
+            apiGetNativeLiveOffer(sessionId)
+              .then(async (latest) => {
+                if (latest.answer_sdp && !pc.currentRemoteDescription) {
+                  await pc.setRemoteDescription({
+                    type: "answer",
+                    sdp: latest.answer_sdp,
+                  });
+                }
+                for (const candidate of latest.broadcaster_ice) {
+                  if (!candidate.candidate) continue;
+                  const key = `${candidate.sdpMid ?? ""}:${candidate.sdpMLineIndex ?? ""}:${candidate.candidate}`;
+                  if (appliedBroadcasterIce.has(key)) continue;
+                  appliedBroadcasterIce.add(key);
+                  await pc.addIceCandidate(candidate).catch(() => {});
+                }
+              })
+              .catch(() => {});
+          }, 1500);
+        } catch (err) {
+          if (!cancelled) {
+            setIsConnecting(false);
+            setLastError(
+              `Impossible de rejoindre le live Android : ${
+                err instanceof Error ? err.message : String(err)
+              }`,
+            );
+          }
+        }
+      })();
+
+      return () => {
+        cancelled = true;
+        if (pollId !== null) window.clearInterval(pollId);
+        pc.close();
+        remote.getTracks().forEach((track) => track.stop());
+        setRemoteStream(null);
+        setIsConnecting(false);
+        setViewingMeta(null);
+      };
+    }
+
     let cancelled = false;
     setIsConnecting(true);
     setLastError(null);
@@ -1484,7 +1630,8 @@ export function LiveProvider({ children }: { children: ReactNode }) {
                 mode:
                   meta.mode === "twitch" ||
                   meta.mode === "screen" ||
-                  meta.mode === "camera"
+                  meta.mode === "camera" ||
+                  meta.mode === "android-screen"
                     ? meta.mode
                     : "screen",
               });
@@ -1563,7 +1710,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       setIsConnecting(false);
       setViewingMeta(null);
     };
-  }, []);
+  }, [liveRegistry]);
 
   useEffect(() => {
     return () => {

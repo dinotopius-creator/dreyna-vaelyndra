@@ -17,8 +17,10 @@ Mécanique :
 """
 from __future__ import annotations
 
+import json
+import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field, field_validator
@@ -26,7 +28,13 @@ from sqlmodel import Session, select
 
 from ..auth.dependencies import require_auth
 from ..db import get_session
-from ..models import LiveJoinRequest, LiveModeration, LiveSession, UserProfile
+from ..models import (
+    LiveJoinRequest,
+    LiveModeration,
+    LiveSession,
+    NativeLiveSignal,
+    UserProfile,
+)
 
 
 router = APIRouter(prefix="/live", tags=["live"])
@@ -60,8 +68,8 @@ class LiveHeartbeatIn(BaseModel):
     @field_validator("mode")
     @classmethod
     def _mode_known(cls, v: str) -> str:
-        if v not in {"screen", "camera", "twitch"}:
-            raise ValueError("mode must be screen, camera or twitch")
+        if v not in {"screen", "android-screen", "camera", "twitch"}:
+            raise ValueError("mode must be screen, android-screen, camera or twitch")
         return v
 
 
@@ -189,6 +197,224 @@ def list_live() -> list[LiveSessionOut]:
         if to_delete:
             session.commit()
         return [_to_out(e) for e in fresh]
+
+
+# ---------------------------------------------------------------------------
+# Signalisation WebRTC native Android
+# ---------------------------------------------------------------------------
+# L'app Android crée une piste MediaProjection native. Cette piste ne peut pas
+# être récupérée comme `MediaStream` JavaScript dans la WebView, donc PeerJS ne
+# peut pas l'envoyer. On ajoute ici une signalisation REST minimale :
+# - le viewer web poste une offre SDP ;
+# - l'app Android poll les offres de son live, crée une réponse SDP ;
+# - les deux côtés échangent les candidats ICE par polling court.
+
+NATIVE_SIGNAL_STALE_SECONDS = 60 * 10
+
+
+class NativeSignalOfferIn(BaseModel):
+    broadcaster_id: str = Field(min_length=1, max_length=80)
+    offer_sdp: str = Field(min_length=1)
+
+
+class NativeSignalAnswerIn(BaseModel):
+    answer_sdp: str = Field(min_length=1)
+
+
+class NativeIceIn(BaseModel):
+    candidate: dict[str, Any]
+
+
+class NativeSignalOut(BaseModel):
+    session_id: str
+    broadcaster_id: str
+    viewer_id: str
+    offer_sdp: str
+    answer_sdp: str = ""
+    viewer_ice: list[dict[str, Any]] = Field(default_factory=list)
+    broadcaster_ice: list[dict[str, Any]] = Field(default_factory=list)
+    created_at: str
+    updated_at: str
+
+
+class NativeSignalListOut(BaseModel):
+    offers: list[NativeSignalOut]
+
+
+def _json_list(raw: str) -> list[dict[str, Any]]:
+    try:
+        parsed = json.loads(raw or "[]")
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(parsed, list):
+        return []
+    return [x for x in parsed if isinstance(x, dict)]
+
+
+def _signal_out(row: NativeLiveSignal) -> NativeSignalOut:
+    return NativeSignalOut(
+        session_id=row.session_id,
+        broadcaster_id=row.broadcaster_id,
+        viewer_id=row.viewer_id,
+        offer_sdp=row.offer_sdp,
+        answer_sdp=row.answer_sdp,
+        viewer_ice=_json_list(row.viewer_ice_json),
+        broadcaster_ice=_json_list(row.broadcaster_ice_json),
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+def _purge_stale_native_signals(session: Session) -> None:
+    cutoff = (
+        datetime.now(timezone.utc) - timedelta(seconds=NATIVE_SIGNAL_STALE_SECONDS)
+    ).isoformat()
+    stale = session.exec(
+        select(NativeLiveSignal).where(NativeLiveSignal.updated_at < cutoff)
+    ).all()
+    for row in stale:
+        session.delete(row)
+
+
+@router.post("/native/offers", response_model=NativeSignalOut)
+def create_native_offer(
+    payload: NativeSignalOfferIn,
+    user: UserProfile = Depends(require_auth),
+) -> NativeSignalOut:
+    if payload.broadcaster_id == user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"message": "cannot_watch_own_native_live"},
+        )
+    now = datetime.now(timezone.utc).isoformat()
+    with get_session() as session:
+        _purge_stale_native_signals(session)
+        live = session.get(LiveSession, payload.broadcaster_id)
+        if live is None or not _is_fresh(live.last_heartbeat_at):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"message": "native_live_not_found"},
+            )
+        if live.mode != "android-screen":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"message": "live_is_not_android_screen"},
+            )
+        row = NativeLiveSignal(
+            session_id=str(uuid.uuid4()),
+            broadcaster_id=payload.broadcaster_id,
+            viewer_id=user.id,
+            offer_sdp=payload.offer_sdp,
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(row)
+        session.commit()
+        session.refresh(row)
+        return _signal_out(row)
+
+
+@router.get("/native/offers", response_model=NativeSignalListOut)
+def list_native_offers(
+    user: UserProfile = Depends(require_auth),
+) -> NativeSignalListOut:
+    with get_session() as session:
+        _purge_stale_native_signals(session)
+        rows = session.exec(
+            select(NativeLiveSignal)
+            .where(NativeLiveSignal.broadcaster_id == user.id)
+            .order_by(NativeLiveSignal.created_at.desc())
+        ).all()
+        if rows:
+            session.commit()
+        return NativeSignalListOut(offers=[_signal_out(r) for r in rows])
+
+
+@router.get("/native/offers/{session_id}", response_model=NativeSignalOut)
+def get_native_offer(
+    session_id: str,
+    user: UserProfile = Depends(require_auth),
+) -> NativeSignalOut:
+    with get_session() as session:
+        row = session.get(NativeLiveSignal, session_id)
+        if row is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"message": "native_signal_not_found"},
+            )
+        if user.id not in {row.viewer_id, row.broadcaster_id}:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"message": "not_your_native_signal"},
+            )
+        return _signal_out(row)
+
+
+@router.post("/native/offers/{session_id}/answer", response_model=NativeSignalOut)
+def answer_native_offer(
+    session_id: str,
+    payload: NativeSignalAnswerIn,
+    user: UserProfile = Depends(require_auth),
+) -> NativeSignalOut:
+    now = datetime.now(timezone.utc).isoformat()
+    with get_session() as session:
+        row = session.get(NativeLiveSignal, session_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail={"message": "native_signal_not_found"})
+        if row.broadcaster_id != user.id:
+            raise HTTPException(status_code=403, detail={"message": "not_your_native_signal"})
+        row.answer_sdp = payload.answer_sdp
+        row.updated_at = now
+        session.add(row)
+        session.commit()
+        session.refresh(row)
+        return _signal_out(row)
+
+
+def _append_native_ice(
+    session_id: str,
+    payload: NativeIceIn,
+    user: UserProfile,
+    *,
+    from_viewer: bool,
+) -> NativeSignalOut:
+    now = datetime.now(timezone.utc).isoformat()
+    with get_session() as session:
+        row = session.get(NativeLiveSignal, session_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail={"message": "native_signal_not_found"})
+        expected = row.viewer_id if from_viewer else row.broadcaster_id
+        if expected != user.id:
+            raise HTTPException(status_code=403, detail={"message": "not_your_native_signal"})
+        attr = "viewer_ice_json" if from_viewer else "broadcaster_ice_json"
+        items = _json_list(getattr(row, attr))
+        items.append(payload.candidate)
+        setattr(row, attr, json.dumps(items))
+        row.updated_at = now
+        session.add(row)
+        session.commit()
+        session.refresh(row)
+        return _signal_out(row)
+
+
+@router.post("/native/offers/{session_id}/viewer-ice", response_model=NativeSignalOut)
+def add_viewer_native_ice(
+    session_id: str,
+    payload: NativeIceIn,
+    user: UserProfile = Depends(require_auth),
+) -> NativeSignalOut:
+    return _append_native_ice(session_id, payload, user, from_viewer=True)
+
+
+@router.post(
+    "/native/offers/{session_id}/broadcaster-ice", response_model=NativeSignalOut
+)
+def add_broadcaster_native_ice(
+    session_id: str,
+    payload: NativeIceIn,
+    user: UserProfile = Depends(require_auth),
+) -> NativeSignalOut:
+    return _append_native_ice(session_id, payload, user, from_viewer=False)
 
 
 # ---------------------------------------------------------------------------

@@ -1,8 +1,9 @@
 import { Capacitor, registerPlugin } from "@capacitor/core";
+import { API_BASE } from "./api";
 
 type NativeScreenSharePlugin = {
   isAvailable(): Promise<{ available: boolean }>;
-  start(): Promise<{ granted: boolean; status: string }>;
+  start(options: { apiBase: string }): Promise<{ granted: boolean; status: string }>;
   stop(): Promise<{ stopped: boolean }>;
 };
 
@@ -28,7 +29,7 @@ export async function startNativeScreenShare(): Promise<void> {
   if (!isNativeAndroidApp()) {
     throw new Error("native_screen_share_unavailable");
   }
-  await NativeScreenShare.start();
+  await NativeScreenShare.start({ apiBase: API_BASE });
 }
 
 export async function stopNativeScreenShare(): Promise<void> {

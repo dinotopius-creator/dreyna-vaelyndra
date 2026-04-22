@@ -59,6 +59,10 @@ public class NativeScreenSharePlugin extends Plugin {
         Intent serviceIntent = new Intent(context, NativeScreenShareService.class);
         serviceIntent.setAction(NativeScreenShareService.ACTION_START);
         serviceIntent.putExtra(
+            NativeScreenShareService.EXTRA_API_BASE,
+            call.getString("apiBase", "https://api.vaelyndra.com")
+        );
+        serviceIntent.putExtra(
             NativeScreenShareService.EXTRA_RESULT_CODE,
             result.getResultCode()
         );

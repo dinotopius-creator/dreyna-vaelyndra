@@ -14,6 +14,7 @@ import androidx.core.app.NotificationCompat;
 
 public class NativeScreenShareService extends Service {
     public static final String ACTION_START = "com.vaelyndra.app.NativeScreenShare.START";
+    public static final String EXTRA_API_BASE = "apiBase";
     public static final String EXTRA_RESULT_CODE = "resultCode";
     public static final String EXTRA_RESULT_DATA = "resultData";
 
@@ -46,7 +47,11 @@ public class NativeScreenShareService extends Service {
             return START_NOT_STICKY;
         }
 
-        screenStreamer = new NativeWebRtcScreenStreamer(this, resultData);
+        String apiBase = intent.getStringExtra(EXTRA_API_BASE);
+        if (apiBase == null || apiBase.trim().isEmpty()) {
+            apiBase = "https://api.vaelyndra.com";
+        }
+        screenStreamer = new NativeWebRtcScreenStreamer(this, resultData, apiBase);
         screenStreamer.start();
         return START_STICKY;
     }
