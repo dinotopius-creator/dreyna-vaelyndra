@@ -1987,8 +1987,14 @@ export function Live() {
                 </button>
               </div>
             </div>
-            <div className="flex flex-wrap items-center justify-between gap-3 p-4">
-              <div className="flex flex-wrap items-center gap-2">
+            <div
+              className={
+                isFullscreen
+                  ? "pointer-events-none absolute bottom-3 left-3 right-3 z-40 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-night-950/75 p-3 shadow-2xl backdrop-blur-md sm:bottom-5 sm:left-5 sm:right-5"
+                  : "flex flex-wrap items-center justify-between gap-3 p-4"
+              }
+            >
+              <div className="pointer-events-auto flex flex-wrap items-center gap-2">
                 <button
                   onClick={shootHeart}
                   className="btn-ghost"
@@ -1998,7 +2004,7 @@ export function Live() {
                 </button>
                 <SortDAppelCaster onCast={castSortDAppel} disabled={!user} />
               </div>
-              <p className="text-xs text-ivory/50">
+              <p className={isFullscreen ? "hidden" : "text-xs text-ivory/50"}>
                 {isActiveLive
                   ? "Chat flottant sur le flux. Les Sorts I/II/III ont chacun leur cooldown (10 / 25 / 60 s)."
                   : broadcasterProfile && amBroadcaster
