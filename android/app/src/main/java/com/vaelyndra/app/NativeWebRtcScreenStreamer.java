@@ -60,6 +60,7 @@ public class NativeWebRtcScreenStreamer {
     private AudioSource audioSource;
     private AudioTrack audioTrack;
     private Thread signalingThread;
+    private long lastHeartbeatAtMs = 0;
     private volatile boolean running = false;
 
     public NativeWebRtcScreenStreamer(
@@ -191,6 +192,7 @@ public class NativeWebRtcScreenStreamer {
     private void pollSignalingLoop() {
         while (running) {
             try {
+                sendHeartbeatIfNeeded();
                 JSONObject payload = httpJson("GET", "/live/native/offers", null);
                 JSONArray offers = payload.optJSONArray("offers");
                 if (offers != null) {
@@ -211,6 +213,17 @@ public class NativeWebRtcScreenStreamer {
                     return;
                 }
             }
+        }
+    }
+
+    private void sendHeartbeatIfNeeded() {
+        long now = System.currentTimeMillis();
+        if (now - lastHeartbeatAtMs < 25_000) return;
+        lastHeartbeatAtMs = now;
+        try {
+            httpJson("POST", "/live/native/heartbeat", new JSONObject());
+        } catch (Exception ignored) {
+            // Le prochain tour réessaiera ; ne coupe jamais la capture pour un ping raté.
         }
     }
 

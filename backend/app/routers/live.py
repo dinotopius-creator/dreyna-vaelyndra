@@ -475,6 +475,45 @@ def list_native_broadcast_chat(
     return list_live_chat(broadcaster_id=broadcaster_id, after=after, limit=limit)
 
 
+@router.post("/native/heartbeat", response_model=LiveSessionOut)
+def native_heartbeat(request: Request) -> LiveSessionOut:
+    """Maintient un live Android actif même quand la WebView est en arrière-plan."""
+    broadcaster_id = _require_native_broadcaster(request)
+    now = datetime.now(timezone.utc).isoformat()
+    with get_session() as session:
+        user = session.get(UserProfile, broadcaster_id)
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"message": "broadcaster_not_found"},
+            )
+        existing = session.get(LiveSession, broadcaster_id)
+        if existing is None:
+            existing = LiveSession(
+                broadcaster_id=user.id,
+                broadcaster_name=user.username,
+                broadcaster_avatar=user.avatar_image_url,
+                title=f"{user.username} en direct",
+                description="",
+                category="autre",
+                mode="android-screen",
+                twitch_channel="",
+                started_at=now,
+                last_heartbeat_at=now,
+            )
+            session.add(existing)
+        else:
+            existing.broadcaster_name = user.username
+            existing.broadcaster_avatar = user.avatar_image_url
+            existing.mode = "android-screen"
+            existing.twitch_channel = ""
+            existing.last_heartbeat_at = now
+            session.add(existing)
+        session.commit()
+        session.refresh(existing)
+        return _to_out(existing)
+
+
 @router.post("/native/offers", response_model=NativeSignalOut)
 def create_native_offer(
     payload: NativeSignalOfferIn,
