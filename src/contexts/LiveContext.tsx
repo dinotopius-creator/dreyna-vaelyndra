@@ -19,7 +19,6 @@ import {
   getNativeScreenShareStatus,
   isNativeAndroidApp,
   markNativeScreenShareAuthGrace,
-  requestNativeLiveBatteryBypass,
   startNativeScreenShare,
   stopNativeScreenShare,
 } from "../lib/nativeScreenShare";
@@ -1241,9 +1240,6 @@ export function LiveProvider({ children }: { children: ReactNode }) {
           }).catch(() => {
             // Si Android vient de basculer hors WebView et que le cookie web
             // saute, le service natif maintient le live via son bearer token.
-          });
-          requestNativeLiveBatteryBypass().catch(() => {
-            // Best effort: sur certains Samsung l'intent est ignore.
           });
           await startNativeScreenShare({
             broadcastToken,

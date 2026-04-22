@@ -53,7 +53,7 @@ public class NativeScreenShareService extends Service {
 
         if (intent == null || !ACTION_START.equals(intent.getAction())) {
             Log.w(TAG, "Native screen share service started without ACTION_START");
-            return START_REDELIVER_INTENT;
+            return START_NOT_STICKY;
         }
 
         int resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, 0);
@@ -90,7 +90,7 @@ public class NativeScreenShareService extends Service {
         stopCurrentSession();
         startNativeSession(resultData, apiBase, broadcastToken);
         Log.i(TAG, "Native screen share foreground service running");
-        return START_REDELIVER_INTENT;
+        return START_NOT_STICKY;
     }
 
     @Override
