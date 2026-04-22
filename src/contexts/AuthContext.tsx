@@ -44,6 +44,10 @@ import {
   authRegister,
   type AuthMe,
 } from "../lib/authApi";
+import {
+  clearNativeScreenShareAuthGrace,
+  isNativeScreenShareAuthGraceActive,
+} from "../lib/nativeScreenShare";
 
 interface StoredUser extends User {
   passwordHash: string;
@@ -359,7 +363,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await new Promise((r) => setTimeout(r, 600));
         }
       }
-      if (confirmedUnauthenticated) {
+      if (confirmedUnauthenticated && !isNativeScreenShareAuthGraceActive()) {
         console.info("authMe: session backend expirée (401 persistant).");
         setBackendMe(null);
       }
@@ -384,7 +388,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setUserId(me.id);
           } else {
             // 401 explicite lors du focus → session révoquée, on clean.
-            setBackendMe(null);
+            if (!isNativeScreenShareAuthGraceActive()) {
+              setBackendMe(null);
+            }
           }
         })
         .catch(() => {
@@ -568,6 +574,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       /* noop */
     }
+    clearNativeScreenShareAuthGrace();
     setUserId(null);
     setBackendMe(null);
   }, []);
