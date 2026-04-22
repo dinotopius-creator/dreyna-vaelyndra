@@ -1534,19 +1534,19 @@ export function Live() {
     }
   }
 
-  // Repère la dernière annonce cœur envoyée par l'utilisateur courant,
-  // pour regrouper les clics rapprochés dans le chat (anti-spam texte).
-  const lastHeartAnnounceRef = useRef<number>(0);
+  // Une seule annonce texte par viewer et par live : les clics suivants
+  // gardent uniquement l'animation cœur, sans remplir le chat.
+  const announcedHeartKeysRef = useRef<Set<string>>(new Set());
   function shootHeart() {
     const emitterId = user?.id ?? "anon";
     // Position horizontale aléatoire mais bornée pour rester centrée.
     const x = 20 + Math.random() * 60;
     setHeartEvents((h) => [...h.slice(-64), { emitterId, x }]);
     if (!user) return;
-    // On n'annonce qu'un cœur par fenêtre de 1,5 s pour ne pas noyer le chat.
-    const now = Date.now();
-    if (now - lastHeartAnnounceRef.current > 1500) {
-      lastHeartAnnounceRef.current = now;
+    const liveKey = registryEntry?.startedAt ?? config.startedAt ?? "pending";
+    const announceKey = `${broadcasterId}:${liveKey}:${user.id}`;
+    if (!announcedHeartKeysRef.current.has(announceKey)) {
+      announcedHeartKeysRef.current.add(announceKey);
       pushSystemAnnouncement(
         `❤️ ${user.username} envoie un cœur à ${broadcasterProfile?.username ?? "la cour"}`,
       );
