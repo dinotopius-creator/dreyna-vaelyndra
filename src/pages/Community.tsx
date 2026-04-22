@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   ExternalLink,
   Film,
   Image,
   MessageCircle,
-  Radio,
   Send,
   Trash2,
   UserRoundCheck,
@@ -13,7 +12,6 @@ import {
 import { Link } from "react-router-dom";
 import { useStore } from "../contexts/StoreContext";
 import { useAuth } from "../contexts/AuthContext";
-import { useLive } from "../contexts/LiveContext";
 import { useToast } from "../contexts/ToastContext";
 import { SectionHeading } from "../components/SectionHeading";
 import { PostComments } from "../components/PostComments";
@@ -21,13 +19,6 @@ import { ReportButton } from "../components/ReportButton";
 import { UserBadges } from "../components/UserBadges";
 import { Handle } from "../components/Handle";
 import { MemberSearch } from "../components/MemberSearch";
-import { StreamerLeaderboard } from "../components/StreamerLeaderboard";
-import { BFFModule } from "../components/BFFModule";
-import {
-  LIVE_CATEGORIES,
-  getLiveCategory,
-  type LiveCategoryId,
-} from "../data/liveCategories";
 import { getOfficial } from "../data/officials";
 import { formatRelative, parseVideoUrl } from "../lib/helpers";
 import { apiCreatePost, apiDeletePost, apiToggleReaction } from "../lib/api";
@@ -63,47 +54,11 @@ function weeklyRecommendationHash(input: string) {
 export function Community() {
   const { posts, dispatch } = useStore();
   const { user, users, isQueen } = useAuth();
-  const { liveRegistry } = useLive();
   const { notify } = useToast();
   const usersById = useMemo(
     () => new Map(users.map((u) => [u.id, u])),
     [users],
   );
-  const allLives = useMemo(
-    () =>
-      Object.values(liveRegistry).sort(
-        (a, b) =>
-          new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime(),
-      ),
-    [liveRegistry],
-  );
-  // Filtre optionnel par catégorie. `null` = aucun filtre (tous les lives).
-  // La liste des catégories proposées se limite à celles effectivement
-  // représentées dans le registre, pour éviter d'afficher un filtre qui
-  // donnerait zéro résultat.
-  const [categoryFilter, setCategoryFilter] = useState<LiveCategoryId | null>(
-    null,
-  );
-  const availableCategories = useMemo(() => {
-    const seen = new Set<LiveCategoryId>();
-    for (const l of allLives) seen.add(getLiveCategory(l.category).id);
-    return LIVE_CATEGORIES.filter((c) => seen.has(c.id));
-  }, [allLives]);
-  // Auto-reset si la catégorie sélectionnée a disparu (dernier streamer
-  // de cette catégorie a quitté son live). Sans ça, l'utilisateur
-  // resterait bloqué sur un filtre qui renvoie 0 résultat.
-  useEffect(() => {
-    if (!categoryFilter) return;
-    if (!availableCategories.some((c) => c.id === categoryFilter)) {
-      setCategoryFilter(null);
-    }
-  }, [availableCategories, categoryFilter]);
-  const activeLives = useMemo(() => {
-    if (!categoryFilter) return allLives;
-    return allLives.filter(
-      (l) => getLiveCategory(l.category).id === categoryFilter,
-    );
-  }, [allLives, categoryFilter]);
   const [draft, setDraft] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
@@ -136,26 +91,6 @@ export function Community() {
       return Boolean(userId) && !MOCK_COMMUNITY_USER_IDS.has(userId);
     }
 
-    for (const live of allLives) {
-      if (!isRealCandidate(live.userId) || live.userId === user?.id) continue;
-      const current = byUser.get(live.userId);
-      const profile = usersById.get(live.userId);
-      byUser.set(live.userId, {
-        id: live.userId,
-        username: live.username,
-        avatar: profile?.avatar || live.avatar,
-        postCount: current?.postCount ?? 0,
-        liveCount: (current?.liveCount ?? 0) + 1,
-        weeklyRank:
-          current?.weeklyRank ??
-          weeklyRecommendationHash(`${weekKey}:${live.userId}`),
-        latestActivity: Math.max(
-          current?.latestActivity ?? 0,
-          new Date(live.startedAt).getTime(),
-        ),
-      });
-    }
-
     for (const post of posts) {
       if (!isRealCandidate(post.authorId) || post.authorId === user?.id)
         continue;
@@ -178,7 +113,7 @@ export function Community() {
     }
 
     return [...byUser.values()]
-      .filter((member) => member.liveCount >= 1 || member.postCount >= 2)
+      .filter((member) => member.postCount >= 2)
       .sort((a, b) => {
         const scoreA = a.liveCount * 4 + a.postCount;
         const scoreB = b.liveCount * 4 + b.postCount;
@@ -189,7 +124,7 @@ export function Community() {
         );
       })
       .slice(0, 6);
-  }, [allLives, posts, user?.id, usersById]);
+  }, [posts, user?.id, usersById]);
 
   async function publish(e: React.FormEvent) {
     e.preventDefault();
@@ -281,104 +216,6 @@ export function Community() {
       <div className="mt-8 mx-auto max-w-2xl">
         <MemberSearch />
       </div>
-
-      {allLives.length > 0 && (
-        <section className="mt-10 card-royal p-5">
-          <header className="mb-3 flex items-center gap-2">
-            <Radio className="h-4 w-4 animate-pulse text-rose-300" />
-            <h3 className="font-display text-lg text-gold-200">
-              Lives en cours
-            </h3>
-            <span className="ml-auto text-[11px] uppercase tracking-[0.22em] text-ivory/50">
-              {activeLives.length} membre
-              {activeLives.length > 1 ? "s" : ""} en direct
-            </span>
-          </header>
-          {availableCategories.length >= 2 && (
-            <div className="mb-3 flex flex-wrap gap-1.5">
-              <button
-                type="button"
-                onClick={() => setCategoryFilter(null)}
-                className={`rounded-full border px-2.5 py-0.5 text-[10px] uppercase tracking-[0.18em] transition ${
-                  categoryFilter === null
-                    ? "border-gold-400/60 bg-gold-400/15 text-gold-100"
-                    : "border-royal-500/30 text-ivory/60 hover:text-ivory"
-                }`}
-              >
-                Toutes
-              </button>
-              {availableCategories.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => setCategoryFilter(c.id)}
-                  className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[10px] uppercase tracking-[0.18em] transition ${
-                    categoryFilter === c.id
-                      ? "border-gold-400/60 bg-gold-400/15 text-gold-100"
-                      : "border-royal-500/30 text-ivory/60 hover:text-ivory"
-                  }`}
-                >
-                  <span aria-hidden>{c.icon}</span>
-                  {c.label}
-                </button>
-              ))}
-            </div>
-          )}
-          <ul className="grid gap-3 md:grid-cols-2">
-            {activeLives.map((l) => (
-              <li key={l.userId}>
-                <Link
-                  to={`/live/${l.userId}`}
-                  className="group flex items-start gap-3 rounded-xl border border-royal-500/30 bg-night-900/40 p-4 transition hover:border-gold-400/50"
-                >
-                  <div className="relative">
-                    <img
-                      src={usersById.get(l.userId)?.avatar || l.avatar}
-                      alt={l.username}
-                      className="h-12 w-12 rounded-full object-cover ring-2 ring-rose-400/60"
-                    />
-                    <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full border border-night-900 bg-rose-500 px-1.5 py-[1px] text-[8px] font-semibold uppercase tracking-[0.14em] text-ivory">
-                      Live
-                    </span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="flex flex-wrap items-center gap-2 text-sm">
-                      <span className="font-display text-gold-200">
-                        {l.username}
-                      </span>
-                      {(() => {
-                        const cat = getLiveCategory(l.category);
-                        return (
-                          <span
-                            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] uppercase tracking-[0.18em] ${cat.chipClass}`}
-                          >
-                            <span aria-hidden>{cat.icon}</span>
-                            {cat.label}
-                          </span>
-                        );
-                      })()}
-                      <span className="text-xs text-ivory/50">
-                        {formatRelative(l.startedAt)}
-                      </span>
-                    </p>
-                    <p className="mt-1 line-clamp-1 font-display text-sm text-ivory/90">
-                      {l.title || `${l.username} est en direct`}
-                    </p>
-                    {l.description && (
-                      <p className="mt-0.5 line-clamp-1 text-xs text-ivory/60">
-                        {l.description}
-                      </p>
-                    )}
-                    <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-gold-300/80 group-hover:text-gold-200">
-                      Rejoindre le live →
-                    </p>
-                  </div>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
 
       <div className="mt-10 grid gap-8 lg:grid-cols-[1fr,320px]">
         <div>
@@ -576,7 +413,7 @@ export function Community() {
               </div>
               <p className="mt-1 text-xs text-ivory/55">
                 Cette semaine, la plateforme met en avant des vrais membres
-                actifs en live ou dans le fil.
+                actifs dans le fil.
               </p>
               <ul className="mt-4 space-y-3">
                 {recommendedMembers.map((member) => (
@@ -609,9 +446,6 @@ export function Community() {
               </ul>
             </section>
           )}
-          <StreamerLeaderboard />
-          <BFFModule />
-
           <div className="card-royal p-5">
             <h3 className="font-display text-lg text-gold-200">
               Règles du réseau

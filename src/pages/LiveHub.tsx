@@ -7,7 +7,7 @@ import { useLive } from "../contexts/LiveContext";
 import { SectionHeading } from "../components/SectionHeading";
 import { StreamerLeaderboard } from "../components/StreamerLeaderboard";
 import { BFFModule } from "../components/BFFModule";
-import { getLiveCategory } from "../data/liveCategories";
+import { LIVE_CATEGORIES, getLiveCategory } from "../data/liveCategories";
 import { formatRelative } from "../lib/helpers";
 
 export function LiveHub() {
@@ -22,6 +22,16 @@ export function LiveHub() {
     [liveRegistry],
   );
   const featured = lives[0] ?? null;
+  const categoriesWithLives = useMemo(
+    () =>
+      LIVE_CATEGORIES.map((category) => ({
+        category,
+        lives: lives.filter(
+          (entry) => getLiveCategory(entry.category).id === category.id,
+        ),
+      })),
+    [lives],
+  );
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-12">
@@ -139,6 +149,72 @@ export function LiveHub() {
           </div>
         </aside>
       </div>
+
+      <section className="mt-10">
+        <div className="mb-4 flex items-center gap-2">
+          <Radio className="h-4 w-4 text-rose-300" />
+          <h2 className="font-display text-2xl text-gold-200">
+            Fil live par catégorie
+          </h2>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {categoriesWithLives.map(({ category, lives: categoryLives }) => {
+            const pinned = categoryLives[0] ?? null;
+            return (
+              <section
+                key={category.id}
+                className="rounded-2xl border border-royal-500/25 bg-night-900/40 p-4"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${category.chipClass}`}
+                    >
+                      <span aria-hidden>{category.icon}</span>
+                      {category.label}
+                    </span>
+                    <p className="mt-2 text-xs text-ivory/55">
+                      {category.description}
+                    </p>
+                  </div>
+                  <span className="text-xs text-ivory/45">
+                    {categoryLives.length}
+                  </span>
+                </div>
+                {pinned ? (
+                  <Link
+                    to={`/live/${pinned.userId}`}
+                    className="group mt-4 block overflow-hidden rounded-xl border border-gold-400/25 bg-night-800/65 transition hover:border-gold-300/60"
+                  >
+                    <div className="relative aspect-video overflow-hidden bg-night-900">
+                      <img
+                        src={pinned.avatar}
+                        alt=""
+                        className="h-full w-full object-cover opacity-60 transition group-hover:scale-105 group-hover:opacity-75"
+                      />
+                      <span className="absolute left-2 top-2 rounded-full border border-rose-400/50 bg-rose-500/25 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-rose-100">
+                        Épinglé
+                      </span>
+                    </div>
+                    <div className="p-3">
+                      <p className="truncate font-display text-sm text-gold-200">
+                        {pinned.title || `${pinned.username} est en direct`}
+                      </p>
+                      <p className="mt-1 truncate text-xs text-ivory/55">
+                        {pinned.username} · {formatRelative(pinned.startedAt)}
+                      </p>
+                    </div>
+                  </Link>
+                ) : (
+                  <div className="mt-4 rounded-xl border border-royal-500/20 bg-night-800/40 p-4 text-xs text-ivory/45">
+                    Aucun live dans cette catégorie.
+                  </div>
+                )}
+              </section>
+            );
+          })}
+        </div>
+      </section>
 
       <section className="mt-10">
         <div className="mb-4 flex items-center gap-2">
