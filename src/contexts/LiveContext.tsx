@@ -209,12 +209,13 @@ function readConfig(): LiveConfig {
 
 /**
  * Heartbeat : l'onglet qui diffuse met à jour `lastHeartbeat` toutes les
- * 30 secondes. Toute entrée sans heartbeat récent (> 90s) est considérée
- * comme orpheline (crash, kill -9, coupure réseau) et éludée.
+ * 15-30 secondes. Sur mobile, Android peut geler le réseau pendant la
+ * capture d'écran ; on garde l'entrée 4 min pour éviter les cycles
+ * "live disparu puis revenu" côté viewers.
  * Les anciennes entrées sans champ heartbeat tombent sur un fallback TTL
  * de 2 minutes depuis `startedAt`.
  */
-const REGISTRY_STALE_MS = 1000 * 90;
+const REGISTRY_STALE_MS = 1000 * 240;
 const REGISTRY_FALLBACK_TTL_MS = 1000 * 60 * 2;
 
 function readRegistry(): Record<string, LiveRegistryEntry> {
@@ -1559,7 +1560,11 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             setIsConnecting(false);
             return;
           }
-          if (pc.connectionState === "failed") {
+          if (
+            pc.connectionState === "failed" ||
+            pc.connectionState === "closed"
+          ) {
+            setRemoteStream(null);
             setIsConnecting(false);
           }
         };
@@ -1935,6 +1940,20 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             // les retours post-refresh.
             if (localHostIsLive && me && s.broadcaster_id === me.id) continue;
             next[s.broadcaster_id] = remoteToRegistry(s);
+          }
+          // 1b. Si un live Android disparaît brièvement de `/live` pendant
+          // un trou réseau mobile, on garde l'entrée locale jusqu'au TTL
+          // heartbeat. Sans cette grâce, les viewers voient "connexion",
+          // puis retour du live, puis re-connexion en boucle.
+          const now = Date.now();
+          for (const [id, entry] of Object.entries(prev)) {
+            if (next[id] || entry.mode !== "android-screen") continue;
+            const heartbeat = entry.lastHeartbeat ?? entry.startedAt;
+            const heartbeatAt = new Date(heartbeat).getTime();
+            if (!Number.isFinite(heartbeatAt)) continue;
+            if (now - heartbeatAt <= REGISTRY_STALE_MS) {
+              next[id] = entry;
+            }
           }
           // 2. Ma propre entrée conservée uniquement si je suis EFFECTIVEMENT
           //    en live sur CE tab. Sans cette garde, un rafraîchissement

@@ -344,7 +344,19 @@ public class NativeWebRtcScreenStreamer {
                 }
 
                 @Override public void onSignalingChange(PeerConnection.SignalingState state) {}
-                @Override public void onIceConnectionChange(PeerConnection.IceConnectionState state) {}
+                @Override public void onIceConnectionChange(PeerConnection.IceConnectionState state) {
+                    if (
+                        state == PeerConnection.IceConnectionState.FAILED ||
+                        state == PeerConnection.IceConnectionState.CLOSED
+                    ) {
+                        PeerConnection stale = peerConnections.remove(sessionId);
+                        appliedViewerIce.remove(sessionId);
+                        if (stale != null) {
+                            stale.close();
+                            stale.dispose();
+                        }
+                    }
+                }
                 @Override public void onIceConnectionReceivingChange(boolean receiving) {}
                 @Override public void onIceGatheringChange(PeerConnection.IceGatheringState state) {}
                 @Override public void onIceCandidatesRemoved(IceCandidate[] candidates) {}

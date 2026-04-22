@@ -42,9 +42,11 @@ from ..models import (
 router = APIRouter(prefix="/live", tags=["live"])
 
 
-# Heartbeat attendu toutes les 30 s côté client ; on tolère 3x avant
-# d'éluder une entrée (couvre un hiccup réseau + une retry).
-HEARTBEAT_STALE_SECONDS = 90
+# Heartbeat attendu toutes les 15-30 s côté client. Sur mobile Android,
+# MediaProjection + changement d'app peuvent geler le réseau quelques
+# dizaines de secondes ; on tolère 4 min pour éviter le cycle live supprimé
+# puis recréé dès que le service reprend.
+HEARTBEAT_STALE_SECONDS = 240
 
 
 def _is_fresh(last_heartbeat_at: str) -> bool:
