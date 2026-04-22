@@ -869,6 +869,54 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     }
   }, [stopHosting, updateRegistry]);
 
+  const pauseLiveForRecovery = useCallback(
+    (
+      mode: Extract<LiveMode, "screen" | "camera">,
+      message = "Le flux a ete interrompu. Ton live reste annonce : relance le partage pour reprendre.",
+    ) => {
+      const me = userRef.current;
+      if (!me) return;
+      const now = new Date().toISOString();
+      const startedAt = configRef.current.startedAt ?? now;
+      stopHosting({ stopNative: false });
+      setConfig((c) => ({
+        ...c,
+        status: "live",
+        mode,
+        startedAt,
+      }));
+      updateRegistry((r) => ({
+        ...r,
+        [me.id]: {
+          userId: me.id,
+          username: me.username,
+          avatar: me.avatar,
+          title: configRef.current.title.trim() || `${me.username} en direct`,
+          description: configRef.current.description.trim(),
+          mode,
+          category: configRef.current.category,
+          twitchChannel: "",
+          startedAt,
+          lastHeartbeat: now,
+        },
+      }));
+      const marker: LiveResumeMarker = {
+        userId: me.id,
+        mode,
+        facing: cameraFacing,
+        title: configRef.current.title,
+        description: configRef.current.description,
+        category: configRef.current.category,
+        twitchChannel: "",
+        savedAt: now,
+      };
+      writeResumeMarker(marker);
+      setResumableLive(marker);
+      setLastError(message);
+    },
+    [cameraFacing, stopHosting, updateRegistry],
+  );
+
   const announceTwitchLive = useCallback(
     (channelOverride?: string) => {
       const me = userRef.current;
@@ -1003,8 +1051,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
               err.type === "unavailable-id"
                 ? "Un live Vaelyndra est déjà actif à ton nom ailleurs. Ferme l'autre onglet."
                 : `Impossible de démarrer le relais live : ${err.message || err.type || "erreur inconnue"}`;
-            setLastError(friendly);
-            stopLive();
+            pauseLiveForRecovery(mode, friendly);
             return;
           }
           console.warn("PeerJS host error after open", err);
@@ -1015,7 +1062,14 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             setLastError(
               "La connexion au serveur de relais a été perdue. Relance un live quand tu es prêt.",
             );
-            stopLive();
+            try {
+              peer.reconnect();
+            } catch {
+              pauseLiveForRecovery(
+                mode,
+                "Le relais live a decroche. Ton live reste annonce : relance le partage pour reprendre.",
+              );
+            }
           }
         });
 
@@ -1131,7 +1185,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         return;
       }
     },
-    [stopLive, updateRegistry, cameraFacing],
+    [pauseLiveForRecovery, updateRegistry, cameraFacing],
   );
 
   const startScreenShare = useCallback(async () => {
@@ -1242,7 +1296,12 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     const stream = displayStream;
     stream.getVideoTracks().forEach((track) => {
       track.addEventListener("ended", () => {
-        if (localStreamRef.current === stream) stopLive();
+        if (localStreamRef.current === stream) {
+          pauseLiveForRecovery(
+            "screen",
+            "Le partage d'ecran a ete interrompu. Ton live reste annonce : relance le partage pour reprendre.",
+          );
+        }
       });
     });
     localStreamRef.current = stream;
@@ -1291,7 +1350,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     // rien aux peers.
     if (localStreamRef.current !== stream) return;
     await attachStreamToPeer(stream, "screen");
-  }, [attachStreamToPeer, stopLive, updateRegistry, cameraFacing]);
+  }, [attachStreamToPeer, pauseLiveForRecovery, updateRegistry, cameraFacing]);
 
   const startCameraShare = useCallback(
     async (facingMode: CameraFacing = "user") => {
@@ -1339,14 +1398,19 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       setCameraFacing(facingMode);
       stream.getVideoTracks().forEach((track) => {
         track.addEventListener("ended", () => {
-          if (localStreamRef.current === stream) stopLive();
+          if (localStreamRef.current === stream) {
+            pauseLiveForRecovery(
+              "camera",
+              "La camera a ete interrompue. Ton live reste annonce : relance la camera pour reprendre.",
+            );
+          }
         });
       });
       localStreamRef.current = stream;
       setLocalStream(stream);
       await attachStreamToPeer(stream, "camera");
     },
-    [attachStreamToPeer, stopLive],
+    [attachStreamToPeer, pauseLiveForRecovery],
   );
 
   /**
@@ -1430,7 +1494,12 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       // Stoppe l'ancien stream (tracks) puis publie le nouveau côté host.
       current.getTracks().forEach((t) => t.stop());
       newVideoTrack.addEventListener("ended", () => {
-        if (localStreamRef.current === next) stopLive();
+        if (localStreamRef.current === next) {
+          pauseLiveForRecovery(
+            "camera",
+            "La camera a ete interrompue. Ton live reste annonce : relance la camera pour reprendre.",
+          );
+        }
       });
       localStreamRef.current = next;
       setLocalStream(next);
@@ -1438,7 +1507,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     } finally {
       switchingCameraRef.current = false;
     }
-  }, [cameraFacing, stopLive]);
+  }, [cameraFacing, pauseLiveForRecovery]);
 
   /**
    * Côté viewer : tente activement de rejoindre le live d'un broadcaster

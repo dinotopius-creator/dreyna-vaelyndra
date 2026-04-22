@@ -49,10 +49,7 @@ import {
   SORT_LEVELS,
   type SortLevel,
 } from "../components/SortDAppelCaster";
-import {
-  AUTO_CHAT_LINES,
-  SEED_CHAT,
-} from "../data/mock";
+import { AUTO_CHAT_LINES, SEED_CHAT } from "../data/mock";
 import type { ChatMessage, Gift, User } from "../types";
 import { generateId } from "../lib/helpers";
 import {
@@ -75,12 +72,32 @@ import {
 } from "../lib/liveScaling";
 
 const BOT_AUTHORS = [
-  { id: "user-lyria", name: "Lyria", avatar: "https://i.pravatar.cc/150?u=lyria" },
-  { id: "user-caelum", name: "Caelum", avatar: "https://i.pravatar.cc/150?u=caelum" },
-  { id: "user-aeris", name: "Aëris", avatar: "https://i.pravatar.cc/150?u=aeris" },
-  { id: "user-sylas", name: "Sylas", avatar: "https://i.pravatar.cc/150?u=sylas" },
+  {
+    id: "user-lyria",
+    name: "Lyria",
+    avatar: "https://i.pravatar.cc/150?u=lyria",
+  },
+  {
+    id: "user-caelum",
+    name: "Caelum",
+    avatar: "https://i.pravatar.cc/150?u=caelum",
+  },
+  {
+    id: "user-aeris",
+    name: "Aëris",
+    avatar: "https://i.pravatar.cc/150?u=aeris",
+  },
+  {
+    id: "user-sylas",
+    name: "Sylas",
+    avatar: "https://i.pravatar.cc/150?u=sylas",
+  },
   { id: "user-mira", name: "Mira", avatar: "https://i.pravatar.cc/150?u=mira" },
-  { id: "user-thalia", name: "Thalia", avatar: "https://i.pravatar.cc/150?u=thalia" },
+  {
+    id: "user-thalia",
+    name: "Thalia",
+    avatar: "https://i.pravatar.cc/150?u=thalia",
+  },
 ];
 
 function serverChatToMessage(row: LiveChatMessageOut): ChatMessage {
@@ -305,7 +322,9 @@ function isCameraSupported(): boolean {
 function isLikelyMobile(): boolean {
   if (typeof navigator === "undefined") return false;
   const ua = navigator.userAgent || "";
-  if (/Android|iPhone|iPad|iPod|Mobile|Silk|Opera Mini|SamsungBrowser/i.test(ua)) {
+  if (
+    /Android|iPhone|iPad|iPod|Mobile|Silk|Opera Mini|SamsungBrowser/i.test(ua)
+  ) {
     return true;
   }
   // iPad iOS 13+ se fait passer pour un Mac — on le récupère via le
@@ -373,17 +392,16 @@ function IosStreamingHelp({
       {open && (
         <div className="space-y-3 border-t border-ivory/10 px-4 py-4 text-xs text-ivory/70">
           <p>
-            Sur iPhone et iPad, le partage d'écran direct via navigateur
-            n'est pas supporté (décision d'Apple, rien à voir avec
-            Vaelyndra — toutes les apps de navigateur sur iPad passent
-            obligatoirement par le moteur WebKit, qui bloque
-            {" "}<code>getDisplayMedia</code>). Le chemin officiel pour
-            streamer tes jeux ou apps&nbsp;:
+            Sur iPhone et iPad, le partage d'écran direct via navigateur n'est
+            pas supporté (décision d'Apple, rien à voir avec Vaelyndra — toutes
+            les apps de navigateur sur iPad passent obligatoirement par le
+            moteur WebKit, qui bloque <code>getDisplayMedia</code>). Le chemin
+            officiel pour streamer tes jeux ou apps&nbsp;:
           </p>
           <ol className="list-decimal space-y-2 pl-5">
             <li>
-              Installe <strong className="text-gold-200">Twitch</strong>{" "}
-              depuis l'App Store (gratuit, dispo iPhone et iPad).
+              Installe <strong className="text-gold-200">Twitch</strong> depuis
+              l'App Store (gratuit, dispo iPhone et iPad).
             </li>
             <li>
               Crée un compte Twitch (si pas déjà fait) et connecte-toi dans
@@ -391,9 +409,9 @@ function IosStreamingHelp({
             </li>
             <li>
               Dans l'app Twitch, appuie sur ton avatar →{" "}
-              <strong>Go Live</strong> → <strong>Partager l'écran</strong>.
-              Tu peux streamer n'importe quel jeu ou application ouverte
-              sur ton appareil (iPhone comme iPad).
+              <strong>Go Live</strong> → <strong>Partager l'écran</strong>. Tu
+              peux streamer n'importe quel jeu ou application ouverte sur ton
+              appareil (iPhone comme iPad).
             </li>
             <li>
               Récupère ton <strong>nom de chaîne Twitch</strong> (ex:{" "}
@@ -404,27 +422,25 @@ function IosStreamingHelp({
             </li>
             {isQueen ? (
               <li>
-                Sur Vaelyndra, choisis le mode{" "}
-                <strong>OBS + Twitch</strong> ci-dessus, colle ton nom de
-                chaîne, clique "Annoncer le live Twitch". Vaelyndra embed
-                automatiquement ton flux Twitch.
+                Sur Vaelyndra, choisis le mode <strong>OBS + Twitch</strong>{" "}
+                ci-dessus, colle ton nom de chaîne, clique "Annoncer le live
+                Twitch". Vaelyndra embed automatiquement ton flux Twitch.
               </li>
             ) : (
               <li>
                 Sur Vaelyndra, demande à un <strong>admin/animateur</strong>{" "}
-                d'activer le mode Twitch pour ton compte (bientôt
-                accessible à tous les streamers certifiés — le mode est
-                pour l'instant en beta réservée).
+                d'activer le mode Twitch pour ton compte (bientôt accessible à
+                tous les streamers certifiés — le mode est pour l'instant en
+                beta réservée).
               </li>
             )}
           </ol>
           <p className="text-ivory/50">
-            Sur mobile (Android comme iOS), le mode "Partage d'écran"
-            n'est pas fiable : Chrome Android/Samsung Internet exposent
-            bien l'API mais l'appel échoue ou renvoie une track morte.
-            Utilise donc le mode "Caméra" pour filmer en selfie/arrière,
-            ou passe par OBS + Twitch si tu veux streamer ton écran de
-            jeu mobile.
+            Sur mobile (Android comme iOS), le mode "Partage d'écran" n'est pas
+            fiable : Chrome Android/Samsung Internet exposent bien l'API mais
+            l'appel échoue ou renvoie une track morte. Utilise donc le mode
+            "Caméra" pour filmer en selfie/arrière, ou passe par OBS + Twitch si
+            tu veux streamer ton écran de jeu mobile.
           </p>
         </div>
       )}
@@ -547,9 +563,7 @@ function BroadcasterControls() {
     <section className="card-royal mt-8 p-5 md:p-6">
       <div className="flex items-center gap-2">
         <Video className="h-4 w-4 text-gold-300" />
-        <h3 className="font-display text-lg text-gold-200">
-          Lancer mon live
-        </h3>
+        <h3 className="font-display text-lg text-gold-200">Lancer mon live</h3>
         {isLive && (
           <span className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-rose-400/50 bg-rose-500/20 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-rose-200">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-rose-400" />
@@ -650,9 +664,7 @@ function BroadcasterControls() {
         <legend className="mb-2 font-regal text-[11px] uppercase tracking-[0.22em] text-ivory/60">
           Mode de diffusion
         </legend>
-        <div
-          className="grid gap-3 md:grid-cols-3"
-        >
+        <div className="grid gap-3 md:grid-cols-3">
           <button
             type="button"
             onClick={() =>
@@ -706,7 +718,9 @@ function BroadcasterControls() {
               <p className="font-display text-base text-gold-200">
                 Partage d'écran
                 <span className="ml-2 rounded-full border border-sky-300/40 bg-sky-500/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.2em] text-sky-200">
-                  {nativeScreenShareSupported ? "android beta" : "pc uniquement"}
+                  {nativeScreenShareSupported
+                    ? "android beta"
+                    : "pc uniquement"}
                 </span>
               </p>
               <p className="mt-1 text-xs text-ivory/60">
@@ -740,8 +754,7 @@ function BroadcasterControls() {
               </p>
               <p className="mt-1 text-xs text-ivory/60">
                 Tu streames depuis OBS (PC) ou l'app Twitch mobile. Le site
-                embed le lecteur officiel Twitch. Marche sur iPhone et
-                Android.
+                embed le lecteur officiel Twitch. Marche sur iPhone et Android.
               </p>
             </div>
           </button>
@@ -762,15 +775,14 @@ function BroadcasterControls() {
             <input
               type="text"
               value={config.twitchChannel}
-              onChange={(e) =>
-                updateConfig({ twitchChannel: e.target.value })
-              }
+              onChange={(e) => updateConfig({ twitchChannel: e.target.value })}
               placeholder="ton_pseudo_twitch"
               className="input-royal"
               disabled={isLive}
             />
             <span className="mt-1 block text-[10px] text-ivory/45">
-              Nom d'utilisateur Twitch ou URL complète. Nécessite un compte Twitch.
+              Nom d'utilisateur Twitch ou URL complète. Nécessite un compte
+              Twitch.
             </span>
           </label>
 
@@ -976,7 +988,14 @@ export function Live() {
     registryEntry?.mode ??
     viewingMeta?.mode ??
     (amBroadcaster ? config.mode : "screen");
-  const isActiveLive = !!registryEntry || (amBroadcaster && config.status === "live");
+  const isActiveLive =
+    !!registryEntry || (amBroadcaster && config.status === "live");
+  const shouldOfferLiveResume =
+    amBroadcaster &&
+    !localStream &&
+    !!resumableLive &&
+    !!user &&
+    resumableLive.userId === user.id;
   const [retainedRemoteStream, setRetainedRemoteStream] =
     useState<MediaStream | null>(null);
 
@@ -1001,9 +1020,7 @@ export function Live() {
   const hasRemote = !!viewerRemoteStream;
   const showViewer =
     isActiveLive &&
-    (isHost ||
-      hasRemote ||
-      (activeMode === "twitch" && !!twitchChannel));
+    (isHost || hasRemote || (activeMode === "twitch" && !!twitchChannel));
 
   const [messages, setMessages] = useState<ChatMessage[]>(SEED_CHAT);
   // Grade du broadcaster — utilisé pour scaler le compteur de viewers
@@ -1037,8 +1054,8 @@ export function Live() {
   // en cours, clé par senderId. Remis à zéro au changement de broadcaster.
   // Pré-seedé avec quelques donations fictives pour ne pas afficher un
   // Top vide en démo.
-  const [tributes, setTributes] = useState<Record<string, TributeEntry>>(
-    () => seedTributes(),
+  const [tributes, setTributes] = useState<Record<string, TributeEntry>>(() =>
+    seedTributes(),
   );
 
   // Optimisation mobile : le cadre vidéo peut passer en plein écran
@@ -1225,7 +1242,10 @@ export function Live() {
     const next = others[0];
     if (next) {
       wasLiveOnceRef.current = false;
-      notify(`Le live vient de finir — on passe chez ${next.username}.`, "info");
+      notify(
+        `Le live vient de finir — on passe chez ${next.username}.`,
+        "info",
+      );
       navigate(`/live/${next.userId}`, { replace: true });
     }
   }, [
@@ -1361,7 +1381,8 @@ export function Live() {
               // Les bots adoptent le diminutif du broadcaster (ils
               // "ressemblent" au public du live). Pas d'appel API : on
               // dérive via le slug déjà en main.
-              gradeShort: gradeBySlug(broadcasterGradeSlug ?? "")?.short ?? null,
+              gradeShort:
+                gradeBySlug(broadcasterGradeSlug ?? "")?.short ?? null,
             },
           ].slice(-CHAT_BUFFER_MAX),
         );
@@ -1562,10 +1583,7 @@ export function Live() {
   function onGiftSent(gift: Gift) {
     const id = generateId("gflight");
     setGiftFlights((f) => [...f, { id, gift, x: 10 + Math.random() * 80 }]);
-    setTimeout(
-      () => setGiftFlights((f) => f.filter((x) => x.id !== id)),
-      2800,
-    );
+    setTimeout(() => setGiftFlights((f) => f.filter((x) => x.id !== id)), 2800);
     if (user) {
       pushSystemAnnouncement(
         `🎁 ${user.username} a offert ${gift.name} à ${broadcasterProfile?.username ?? "la cour"}`,
@@ -1614,7 +1632,11 @@ export function Live() {
     <div className="mx-auto max-w-7xl px-3 py-6 sm:px-6 sm:py-12">
       <SectionHeading
         eyebrow="La Salle des Lives"
-        title={<>La cour <span className="text-mystic">en direct</span></>}
+        title={
+          <>
+            La cour <span className="text-mystic">en direct</span>
+          </>
+        }
         subtitle={
           broadcasterProfile
             ? `Vous regardez ${broadcasterProfile.username}. Chaque membre peut lancer son propre live.`
@@ -1721,7 +1743,8 @@ export function Live() {
                     </div>
                   </div>
                 </>
-              ) : isActiveLive &&
+              ) : !shouldOfferLiveResume &&
+                isActiveLive &&
                 (activeMode === "screen" ||
                   activeMode === "android-screen" ||
                   activeMode === "camera") ? (
@@ -1747,10 +1770,7 @@ export function Live() {
                     </p>
                   </div>
                 </div>
-              ) : amBroadcaster &&
-                resumableLive &&
-                user &&
-                resumableLive.userId === user.id ? (
+              ) : shouldOfferLiveResume ? (
                 /*
                  * Post-refresh (F5, pull-to-refresh, crash onglet) d'un
                  * broadcaster qui était en live il y a < 5 min. Le
@@ -1765,9 +1785,9 @@ export function Live() {
                     Reprendre ton live ?
                   </p>
                   <p className="max-w-md text-sm text-ivory/75">
-                    Tu étais en direct juste avant d'actualiser. Ton flux
-                    vidéo a été coupé par le navigateur mais ta config est
-                    sauvegardée — clique pour relancer.
+                    Tu étais en direct juste avant d'actualiser. Ton flux vidéo
+                    a été coupé par le navigateur mais ta config est sauvegardée
+                    — clique pour relancer.
                   </p>
                   <div className="flex flex-wrap items-center justify-center gap-3">
                     <button
@@ -1962,8 +1982,7 @@ export function Live() {
                             className="inline-flex items-center gap-1 rounded-full border border-gold-400/40 bg-gold-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-gold-200"
                             title={g.name}
                           >
-                            <span aria-hidden>{g.emoji}</span>
-                            [{g.short}]
+                            <span aria-hidden>{g.emoji}</span>[{g.short}]
                           </span>
                         );
                       })()}
@@ -2003,8 +2022,8 @@ export function Live() {
               kick n'empêche pas de voir le flux (on informe simplement). */}
           {isActiveLive && isKicked && (
             <div className="mt-4 rounded-2xl border border-rose-400/40 bg-rose-500/15 p-3 text-sm text-rose-100">
-              🚫 Tu as été expulsé du live. Tu ne peux plus y participer
-              pour l'instant.
+              🚫 Tu as été expulsé du live. Tu ne peux plus y participer pour
+              l'instant.
             </div>
           )}
           {isActiveLive && isMuted && !isKicked && (
@@ -2053,10 +2072,7 @@ export function Live() {
             />
             <div className="mt-6 grid gap-4 md:grid-cols-3">
               {replays.map((l) => (
-                <div
-                  key={l.id}
-                  className="card-royal group overflow-hidden"
-                >
+                <div key={l.id} className="card-royal group overflow-hidden">
                   <div className="relative aspect-video overflow-hidden">
                     <img
                       src={l.cover}
@@ -2088,7 +2104,6 @@ export function Live() {
             </div>
           </section>
         </div>
-
       </div>
     </div>
   );
