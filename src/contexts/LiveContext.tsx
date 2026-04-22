@@ -1258,7 +1258,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
           writeResumeMarker(marker);
           setResumableLive(marker);
           setLastError(
-            "Autorisation de partage d'écran Android accordée. Le relais vidéo natif WebRTC est la prochaine étape avant diffusion aux viewers.",
+            "Partage d'ecran Android lance. Ton live reste actif meme si tu passes sur une autre application.",
           );
         } catch (err) {
           if (err instanceof Error && err.message !== "screen_capture_denied") {

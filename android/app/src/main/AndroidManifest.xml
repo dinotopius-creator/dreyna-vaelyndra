@@ -37,6 +37,7 @@
         <service
             android:name=".NativeScreenShareService"
             android:exported="false"
+            android:stopWithTask="false"
             android:foregroundServiceType="mediaProjection|microphone" />
     </application>
 

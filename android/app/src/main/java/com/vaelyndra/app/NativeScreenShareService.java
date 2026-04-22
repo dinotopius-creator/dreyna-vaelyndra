@@ -6,9 +6,12 @@ import android.app.NotificationManager;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ServiceInfo;
 import android.media.projection.MediaProjectionManager;
+import android.os.Build;
 import android.os.IBinder;
 import android.os.PowerManager;
+import android.util.Log;
 
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
@@ -22,6 +25,7 @@ public class NativeScreenShareService extends Service {
 
     private static final String CHANNEL_ID = "vaelyndra_screen_share";
     private static final int NOTIFICATION_ID = 4217;
+    private static final String TAG = "VaelyndraNativeLive";
 
     private NativeWebRtcScreenStreamer screenStreamer;
     private NativeLiveChatOverlay chatOverlay;
@@ -29,15 +33,23 @@ public class NativeScreenShareService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        startForeground(NOTIFICATION_ID, buildNotification());
+        try {
+            startAsForegroundService();
+        } catch (Exception e) {
+            Log.e(TAG, "Unable to promote native live service to foreground", e);
+            stopSelf();
+            return START_NOT_STICKY;
+        }
 
         if (intent == null || !ACTION_START.equals(intent.getAction())) {
-            return START_NOT_STICKY;
+            Log.w(TAG, "Native screen share service started without ACTION_START");
+            return START_REDELIVER_INTENT;
         }
 
         int resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, 0);
         Intent resultData = intent.getParcelableExtra(EXTRA_RESULT_DATA);
         if (resultData == null) {
+            Log.e(TAG, "Missing MediaProjection result data, stopping native live service");
             stopSelf();
             return START_NOT_STICKY;
         }
@@ -46,6 +58,7 @@ public class NativeScreenShareService extends Service {
             Context.MEDIA_PROJECTION_SERVICE
         );
         if (manager == null) {
+            Log.e(TAG, "MediaProjectionManager unavailable, stopping native live service");
             stopSelf();
             return START_NOT_STICKY;
         }
@@ -71,7 +84,8 @@ public class NativeScreenShareService extends Service {
         } catch (Exception ignored) {
             chatOverlay = null;
         }
-        return START_NOT_STICKY;
+        Log.i(TAG, "Native screen share foreground service running");
+        return START_REDELIVER_INTENT;
     }
 
     @Override
@@ -111,6 +125,20 @@ public class NativeScreenShareService extends Service {
         wakeLock = null;
     }
 
+    private void startAsForegroundService() {
+        Notification notification = buildNotification();
+        if (Build.VERSION.SDK_INT >= 29) {
+            startForeground(
+                NOTIFICATION_ID,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION |
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+            );
+            return;
+        }
+        startForeground(NOTIFICATION_ID, notification);
+    }
+
     @Nullable
     @Override
     public IBinder onBind(Intent intent) {
@@ -124,7 +152,7 @@ public class NativeScreenShareService extends Service {
         if (android.os.Build.VERSION.SDK_INT >= 26 && manager != null) {
             NotificationChannel channel = new NotificationChannel(
                 CHANNEL_ID,
-                "Partage d'écran Vaelyndra",
+                "Partage d'ecran Vaelyndra",
                 NotificationManager.IMPORTANCE_LOW
             );
             manager.createNotificationChannel(channel);
@@ -133,7 +161,7 @@ public class NativeScreenShareService extends Service {
         return new NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(getApplicationInfo().icon)
             .setContentTitle("Vaelyndra Live")
-            .setContentText("Partage d'écran Android actif")
+            .setContentText("Partage d'ecran Android actif")
             .setOngoing(true)
             .build();
     }
