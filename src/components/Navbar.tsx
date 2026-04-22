@@ -127,8 +127,14 @@ export function Navbar() {
                   )}
                 </button>
                 {notificationsOpen && (
-                  <div className="fixed inset-0 z-50 flex items-end bg-night-950/70 p-0 backdrop-blur-sm sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:mt-2 sm:block sm:bg-transparent sm:p-0 sm:backdrop-blur-0">
-                    <div className="flex max-h-[88dvh] w-full flex-col overflow-hidden rounded-t-2xl border border-royal-500/30 bg-night-900/98 shadow-2xl shadow-night-950/60 backdrop-blur-xl sm:max-h-[min(42rem,calc(100vh-6rem))] sm:w-[min(22rem,calc(100vw-2rem))] sm:rounded-2xl">
+                  <div className="fixed inset-0 z-50 flex items-end bg-night-950/80 p-0 sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:mt-2 sm:block sm:bg-transparent sm:p-0">
+                    <button
+                      type="button"
+                      className="absolute inset-0 sm:hidden"
+                      aria-label="Fermer les notifications"
+                      onClick={() => setNotificationsOpen(false)}
+                    />
+                    <div className="flex max-h-[88dvh] w-full flex-col overflow-hidden rounded-t-2xl border border-royal-500/30 bg-night-900 shadow-night-950/60 sm:max-h-[min(42rem,calc(100vh-6rem))] sm:w-[min(22rem,calc(100vw-2rem))] sm:rounded-2xl sm:bg-night-900/95 sm:shadow-2xl sm:backdrop-blur-xl">
                       <div className="flex items-center justify-between gap-3 border-b border-royal-600/25 px-4 py-3">
                         <div className="min-w-0">
                           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gold-200">
