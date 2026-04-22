@@ -22,6 +22,9 @@ dependencies = [
     "qrcode[pil]>=7.4",
     "slowapi>=0.1.9",
     "resend>=2.4",
+    # Stripe : encaissement des achats de Sylvins (Checkout Session + webhook)
+    # et, plus tard, virement des recettes streamer via Stripe Connect.
+    "stripe>=11.0",
 ]
 
 [build-system]

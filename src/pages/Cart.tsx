@@ -5,6 +5,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
 import { SectionHeading } from "../components/SectionHeading";
 import { formatPrice, generateId } from "../lib/helpers";
+import { apiCreateSylvinsCheckout } from "../lib/stripeApi";
 import { useState } from "react";
 
 export function Cart() {
@@ -19,12 +20,63 @@ export function Cart() {
     return { ...c, product };
   });
 
-  function checkout() {
+  /**
+   * Packs de Sylvins dans le panier (paiement réel via Stripe).
+   * Les autres catégories (Merch, Digital, VIP, Exclusif) restent sur le
+   * chemin historique "sceller la commande en simulé" le temps qu'on
+   * bâtisse un flux multi-line-item côté Stripe.
+   */
+  const sylvinsInCart = cart.filter((c) => {
+    const p = products.find((pp) => pp.id === c.productId);
+    return p?.category === "Sylvins" && (p?.sylvins ?? 0) > 0;
+  });
+  const otherInCart = cart.filter((c) => {
+    const p = products.find((pp) => pp.id === c.productId);
+    return !(p?.category === "Sylvins");
+  });
+
+  async function checkoutStripeSylvinsSingle(productId: string) {
+    try {
+      const out = await apiCreateSylvinsCheckout(productId);
+      // Redirection complete vers Stripe Checkout (Stripe-hosted).
+      window.location.href = out.url;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      notify(`Paiement impossible : ${msg}`, "error");
+      setProcessing(false);
+    }
+  }
+
+  async function checkout() {
     if (!user) {
       notify("Connectez-vous pour finaliser votre commande.", "info");
       navigate("/connexion", { state: { from: "/panier" } });
       return;
     }
+
+    // Si le panier contient au moins un pack Sylvins, on passe par Stripe.
+    // MVP : un seul pack Sylvins à la fois (le plus coûteux si plusieurs).
+    // Les autres items restent en panier après le retour du paiement.
+    if (sylvinsInCart.length > 0) {
+      // On redirige sur le pack le plus cher du panier (l'utilisateur
+      // peut virer les autres s'il ne veut pas celui-là).
+      const firstSylvin = [...sylvinsInCart].sort((a, b) => {
+        const pa = products.find((pp) => pp.id === a.productId);
+        const pb = products.find((pp) => pp.id === b.productId);
+        return (pb?.price ?? 0) - (pa?.price ?? 0);
+      })[0];
+      if (otherInCart.length > 0) {
+        notify(
+          "Stripe ne gère pour l'instant qu'un pack Sylvins à la fois. " +
+            "Les autres objets restent dans ton panier.",
+          "info",
+        );
+      }
+      setProcessing(true);
+      await checkoutStripeSylvinsSingle(firstSylvin.productId);
+      return;
+    }
+
     setProcessing(true);
     setTimeout(() => {
       // Total des Sylvins à créditer au wallet du membre pour les packs de
@@ -183,10 +235,16 @@ export function Cart() {
               disabled={processing}
               className="btn-gold mt-6 w-full justify-center disabled:opacity-60"
             >
-              {processing ? "Sortilège en cours..." : "Payer (simulé)"}
+              {processing
+                ? "Sortilège en cours..."
+                : sylvinsInCart.length > 0
+                  ? "Payer par carte (Stripe)"
+                  : "Payer (simulé)"}
             </button>
             <p className="mt-3 text-center text-xs text-ivory/40">
-              Paiement simulé. Prêt à brancher Stripe en production.
+              {sylvinsInCart.length > 0
+                ? "Paiement sécurisé via Stripe. Les Sylvins sont crédités sur ton compte après confirmation."
+                : "Paiement simulé. Prêt à brancher Stripe en production."}
             </p>
           </aside>
         </div>
