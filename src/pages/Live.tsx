@@ -56,9 +56,12 @@ import {
 import type { ChatMessage, Gift, User } from "../types";
 import { generateId } from "../lib/helpers";
 import {
+  apiListLiveChat,
   apiModerateLive,
   apiMyModerationState,
+  apiPostLiveChat,
   type LiveModerationAction,
+  type LiveChatMessageOut,
 } from "../lib/liveApi";
 import { apiGetProfile } from "../lib/api";
 import { gradeBySlug } from "../data/grades";
@@ -79,6 +82,19 @@ const BOT_AUTHORS = [
   { id: "user-mira", name: "Mira", avatar: "https://i.pravatar.cc/150?u=mira" },
   { id: "user-thalia", name: "Thalia", avatar: "https://i.pravatar.cc/150?u=thalia" },
 ];
+
+function serverChatToMessage(row: LiveChatMessageOut): ChatMessage {
+  return {
+    id: row.id,
+    authorId: row.author_id,
+    authorName: row.author_name,
+    authorAvatar: row.author_avatar,
+    content: row.content,
+    createdAt: row.created_at,
+    highlight: row.highlight,
+    gradeShort: row.grade_short,
+  };
+}
 
 /** Pseudo-utilisateur "Sort d'appel" pour les annonces système du chat. */
 const SYSTEM_AUTHOR = {
@@ -1081,6 +1097,38 @@ export function Live() {
     return unsubscribe;
   }, [subscribeChatMessages, broadcasterId]);
 
+  useEffect(() => {
+    if (!isActiveLive || !broadcasterId) return;
+    let cancelled = false;
+    let after: string | null = null;
+    const mergeRows = (rows: LiveChatMessageOut[]) => {
+      if (rows.length > 0) after = rows[rows.length - 1].created_at;
+      setMessages((prev) => {
+        let next = prev;
+        for (const row of rows) {
+          if (next.some((m) => m.id === row.id)) continue;
+          next = [...next, serverChatToMessage(row)].slice(-CHAT_BUFFER_MAX);
+        }
+        return next;
+      });
+    };
+    const poll = () => {
+      apiListLiveChat({ broadcasterId, after, limit: 80 })
+        .then((rows) => {
+          if (!cancelled) mergeRows(rows);
+        })
+        .catch(() => {
+          // Le DataChannel WebRTC reste le canal temps réel principal.
+        });
+    };
+    poll();
+    const id = window.setInterval(poll, 2500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [isActiveLive, broadcasterId]);
+
   // Polling de mes éventuelles sanctions (mute/kick) sur le live courant.
   // On n'appelle pas l'endpoint si :
   //  - je suis le broadcaster (il ne peut pas se modérer lui-même),
@@ -1337,15 +1385,25 @@ export function Live() {
     //  - tous les viewers voient notre message, pas juste nous ;
     //  - on voit les messages des autres viewers (bidirectionnel) ;
     //  - la dédup par id empêche le doublon avec l'écho optimiste.
+    const clientId = generateId("msg");
+    const contentText = content.trim();
     publishChatMessage({
-      id: generateId("msg"),
+      id: clientId,
       authorId: user.id,
       authorName: user.username,
       authorAvatar: user.avatar,
-      content: content.trim(),
+      content: contentText,
       createdAt: new Date().toISOString(),
       highlight: user.role === "queen",
       gradeShort: myGradeShort,
+    });
+    apiPostLiveChat({
+      broadcasterId,
+      content: contentText,
+      clientId,
+      gradeShort: myGradeShort,
+    }).catch(() => {
+      // Le message reste envoyé en WebRTC ; le serveur sert surtout à l'overlay natif.
     });
   }
 

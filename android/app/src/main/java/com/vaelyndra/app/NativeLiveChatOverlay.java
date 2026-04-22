@@ -1,0 +1,222 @@
+package com.vaelyndra.app;
+
+import android.content.Context;
+import android.graphics.Color;
+import android.graphics.PixelFormat;
+import android.os.Handler;
+import android.os.Looper;
+import android.provider.Settings;
+import android.view.Gravity;
+import android.view.MotionEvent;
+import android.view.View;
+import android.view.WindowManager;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.TextView;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+
+public class NativeLiveChatOverlay {
+    private final Context context;
+    private final String apiBase;
+    private final String broadcastToken;
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+
+    private WindowManager windowManager;
+    private WindowManager.LayoutParams params;
+    private LinearLayout messageList;
+    private ScrollView scrollView;
+    private Thread pollThread;
+    private volatile boolean running = false;
+    private String lastCreatedAt = "";
+
+    public NativeLiveChatOverlay(Context context, String apiBase, String broadcastToken) {
+        this.context = context.getApplicationContext();
+        this.apiBase = apiBase.replaceAll("/+$", "");
+        this.broadcastToken = broadcastToken;
+    }
+
+    public void start() {
+        if (android.os.Build.VERSION.SDK_INT >= 23 && !Settings.canDrawOverlays(context)) {
+            return;
+        }
+        mainHandler.post(this::showWindow);
+        running = true;
+        pollThread = new Thread(this::pollLoop, "VaelyndraLiveChatOverlay");
+        pollThread.start();
+    }
+
+    public void stop() {
+        running = false;
+        if (pollThread != null) {
+            pollThread.interrupt();
+            pollThread = null;
+        }
+        mainHandler.post(() -> {
+            if (windowManager != null && scrollView != null) {
+                try {
+                    windowManager.removeView(scrollView);
+                } catch (Exception ignored) {
+                    // already removed
+                }
+            }
+            scrollView = null;
+            messageList = null;
+        });
+    }
+
+    private void showWindow() {
+        if (scrollView != null) return;
+        windowManager = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
+        if (windowManager == null) return;
+
+        messageList = new LinearLayout(context);
+        messageList.setOrientation(LinearLayout.VERTICAL);
+        messageList.setPadding(18, 14, 18, 14);
+
+        TextView title = new TextView(context);
+        title.setText("Vaelyndra chat");
+        title.setTextColor(Color.rgb(255, 226, 160));
+        title.setTextSize(12);
+        title.setGravity(Gravity.CENTER);
+        messageList.addView(title);
+
+        scrollView = new ScrollView(context);
+        scrollView.setBackgroundColor(Color.argb(176, 15, 10, 30));
+        scrollView.addView(messageList);
+        scrollView.setOnTouchListener(new DragListener());
+
+        int type = android.os.Build.VERSION.SDK_INT >= 26
+            ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            : WindowManager.LayoutParams.TYPE_PHONE;
+        params = new WindowManager.LayoutParams(
+            dp(280),
+            dp(360),
+            type,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            PixelFormat.TRANSLUCENT
+        );
+        params.gravity = Gravity.TOP | Gravity.START;
+        params.x = dp(24);
+        params.y = dp(120);
+        windowManager.addView(scrollView, params);
+    }
+
+    private void pollLoop() {
+        while (running) {
+            try {
+                String query = lastCreatedAt.isEmpty()
+                    ? "?limit=80"
+                    : "?limit=80&after=" + java.net.URLEncoder.encode(lastCreatedAt, "UTF-8");
+                JSONObject payload = httpJson("/live/native/chat" + query);
+                JSONArray messages = payload.optJSONArray("messages");
+                if (messages != null && messages.length() > 0) {
+                    JSONObject last = messages.optJSONObject(messages.length() - 1);
+                    if (last != null) lastCreatedAt = last.optString("created_at", lastCreatedAt);
+                    mainHandler.post(() -> appendMessages(messages));
+                }
+                Thread.sleep(2200);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            } catch (Exception e) {
+                try {
+                    Thread.sleep(3500);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
+        }
+    }
+
+    private void appendMessages(JSONArray messages) {
+        if (messageList == null || scrollView == null) return;
+        for (int i = 0; i < messages.length(); i++) {
+            JSONObject msg = messages.optJSONObject(i);
+            if (msg == null) continue;
+            TextView line = new TextView(context);
+            String author = msg.optString("author_name", "Membre");
+            String content = msg.optString("content", "");
+            line.setText(author + " : " + content);
+            line.setTextColor(Color.WHITE);
+            line.setTextSize(12);
+            line.setPadding(0, 8, 0, 0);
+            messageList.addView(line);
+        }
+        while (messageList.getChildCount() > 90) {
+            messageList.removeViewAt(1);
+        }
+        scrollView.post(() -> scrollView.fullScroll(View.FOCUS_DOWN));
+    }
+
+    private JSONObject httpJson(String path) throws Exception {
+        URL url = new URL(apiBase + path);
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        conn.setRequestMethod("GET");
+        conn.setConnectTimeout(8000);
+        conn.setReadTimeout(8000);
+        conn.setRequestProperty("Accept", "application/json");
+        if (broadcastToken != null && !broadcastToken.isEmpty()) {
+            conn.setRequestProperty("Authorization", "Bearer " + broadcastToken);
+        }
+        int code = conn.getResponseCode();
+        InputStream stream = code >= 200 && code < 300
+            ? conn.getInputStream()
+            : conn.getErrorStream();
+        String text = readAll(stream);
+        if (code < 200 || code >= 300) throw new RuntimeException("HTTP " + code);
+        return text.isEmpty() ? new JSONObject() : new JSONObject(text);
+    }
+
+    private String readAll(InputStream stream) throws Exception {
+        if (stream == null) return "";
+        StringBuilder sb = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(
+            new InputStreamReader(stream, StandardCharsets.UTF_8)
+        )) {
+            String line;
+            while ((line = reader.readLine()) != null) sb.append(line);
+        }
+        return sb.toString();
+    }
+
+    private int dp(int value) {
+        return Math.round(value * context.getResources().getDisplayMetrics().density);
+    }
+
+    private class DragListener implements View.OnTouchListener {
+        private int startX;
+        private int startY;
+        private float touchX;
+        private float touchY;
+
+        @Override
+        public boolean onTouch(View view, MotionEvent event) {
+            if (params == null || windowManager == null) return false;
+            switch (event.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                    startX = params.x;
+                    startY = params.y;
+                    touchX = event.getRawX();
+                    touchY = event.getRawY();
+                    return false;
+                case MotionEvent.ACTION_MOVE:
+                    params.x = startX + Math.round(event.getRawX() - touchX);
+                    params.y = startY + Math.round(event.getRawY() - touchY);
+                    windowManager.updateViewLayout(scrollView, params);
+                    return false;
+                default:
+                    return false;
+            }
+        }
+    }
+}

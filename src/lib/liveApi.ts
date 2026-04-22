@@ -92,6 +92,52 @@ export async function apiStopLive(): Promise<void> {
   await request<null>("/live/stop", { method: "DELETE" });
 }
 
+export interface LiveChatMessageOut {
+  id: string;
+  broadcaster_id: string;
+  author_id: string;
+  author_name: string;
+  author_avatar: string;
+  content: string;
+  created_at: string;
+  highlight: boolean;
+  grade_short: string | null;
+}
+
+export async function apiListLiveChat(input: {
+  broadcasterId: string;
+  after?: string | null;
+  limit?: number;
+}): Promise<LiveChatMessageOut[]> {
+  const params = new URLSearchParams({
+    limit: String(input.limit ?? 120),
+  });
+  if (input.after) params.set("after", input.after);
+  const res = await request<{ messages: LiveChatMessageOut[] }>(
+    `/live/chat/${encodeURIComponent(input.broadcasterId)}?${params.toString()}`,
+  );
+  return res?.messages ?? [];
+}
+
+export async function apiPostLiveChat(input: {
+  broadcasterId: string;
+  content: string;
+  clientId?: string;
+  gradeShort?: string | null;
+}): Promise<LiveChatMessageOut> {
+  return (await request<LiveChatMessageOut>(
+    `/live/chat/${encodeURIComponent(input.broadcasterId)}`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        content: input.content,
+        client_id: input.clientId ?? "",
+        grade_short: input.gradeShort ?? null,
+      }),
+    },
+  )) as LiveChatMessageOut;
+}
+
 export async function apiCreateNativeBroadcastToken(): Promise<{
   token: string;
   expires_at: string;
