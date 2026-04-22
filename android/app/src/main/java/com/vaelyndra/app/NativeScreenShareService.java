@@ -6,7 +6,6 @@ import android.app.NotificationManager;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
-import android.media.projection.MediaProjection;
 import android.media.projection.MediaProjectionManager;
 import android.os.IBinder;
 
@@ -21,7 +20,7 @@ public class NativeScreenShareService extends Service {
     private static final String CHANNEL_ID = "vaelyndra_screen_share";
     private static final int NOTIFICATION_ID = 4217;
 
-    private MediaProjection mediaProjection;
+    private NativeWebRtcScreenStreamer screenStreamer;
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -47,22 +46,16 @@ public class NativeScreenShareService extends Service {
             return START_NOT_STICKY;
         }
 
-        mediaProjection = manager.getMediaProjection(resultCode, resultData);
-        if (mediaProjection == null) {
-            stopSelf();
-            return START_NOT_STICKY;
-        }
-
-        // Étape suivante : raccorder cette MediaProjection à une piste vidéo
-        // WebRTC native et publier le flux vers Vaelyndra Live.
+        screenStreamer = new NativeWebRtcScreenStreamer(this, resultData);
+        screenStreamer.start();
         return START_STICKY;
     }
 
     @Override
     public void onDestroy() {
-        if (mediaProjection != null) {
-            mediaProjection.stop();
-            mediaProjection = null;
+        if (screenStreamer != null) {
+            screenStreamer.stop();
+            screenStreamer = null;
         }
         super.onDestroy();
     }
