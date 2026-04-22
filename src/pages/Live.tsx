@@ -1454,21 +1454,39 @@ export function Live() {
     void applyModeration("kick", targetUserId, targetName, durationSeconds);
   }
 
-  function pushSystemAnnouncement(content: string) {
+  function pushSystemAnnouncement(
+    content: string,
+    options?: { persistToOverlay?: boolean },
+  ) {
+    const clientId = generateId("sys");
+    const createdAt = new Date().toISOString();
     setMessages((m) =>
       [
         ...m,
         {
-          id: generateId("msg"),
+          id: clientId,
           authorId: SYSTEM_AUTHOR.id,
           authorName: SYSTEM_AUTHOR.name,
           authorAvatar: SYSTEM_AUTHOR.avatar,
           content,
-          createdAt: new Date().toISOString(),
+          createdAt,
           highlight: true,
         },
       ].slice(-CHAT_BUFFER_MAX),
     );
+    const shouldPersistToOverlay =
+      options?.persistToOverlay ??
+      (content.includes("invoque le Sort") || content.includes("a offert"));
+    if (shouldPersistToOverlay && user) {
+      apiPostLiveChat({
+        broadcasterId,
+        content,
+        clientId,
+        gradeShort: myGradeShort,
+      }).catch(() => {
+        // L'annonce reste visible dans le chat web ; le serveur alimente surtout l'overlay natif.
+      });
+    }
   }
 
   // Repère la dernière annonce cœur envoyée par l'utilisateur courant,
@@ -1512,6 +1530,7 @@ export function Live() {
     );
     pushSystemAnnouncement(
       `${glyph} ${user.username} invoque le Sort ${romanSuffix} sur ${broadcasterProfile?.username ?? "la cour"}`,
+      { persistToOverlay: true },
     );
     return true;
   }
