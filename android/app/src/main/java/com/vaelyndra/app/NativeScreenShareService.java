@@ -32,7 +32,7 @@ public class NativeScreenShareService extends Service {
         startForeground(NOTIFICATION_ID, buildNotification());
 
         if (intent == null || !ACTION_START.equals(intent.getAction())) {
-            return START_REDELIVER_INTENT;
+            return START_NOT_STICKY;
         }
 
         int resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, 0);
@@ -65,9 +65,13 @@ public class NativeScreenShareService extends Service {
             broadcastToken
         );
         screenStreamer.start();
-        chatOverlay = new NativeLiveChatOverlay(this, apiBase, broadcastToken);
-        chatOverlay.start();
-        return START_REDELIVER_INTENT;
+        try {
+            chatOverlay = new NativeLiveChatOverlay(this, apiBase, broadcastToken);
+            chatOverlay.start();
+        } catch (Exception ignored) {
+            chatOverlay = null;
+        }
+        return START_NOT_STICKY;
     }
 
     @Override

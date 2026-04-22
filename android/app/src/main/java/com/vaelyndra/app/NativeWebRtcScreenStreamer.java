@@ -53,6 +53,7 @@ public class NativeWebRtcScreenStreamer {
     private final PeerConnectionFactory peerConnectionFactory;
     private final Map<String, PeerConnection> peerConnections = new HashMap<>();
     private final Map<String, Set<String>> appliedViewerIce = new HashMap<>();
+    private final Object stopLock = new Object();
 
     private ScreenCapturerAndroid screenCapturer;
     private SurfaceTextureHelper surfaceTextureHelper;
@@ -63,6 +64,7 @@ public class NativeWebRtcScreenStreamer {
     private Thread signalingThread;
     private long lastHeartbeatAtMs = 0;
     private volatile boolean running = false;
+    private boolean stopped = false;
 
     public NativeWebRtcScreenStreamer(
         Context context,
@@ -150,44 +152,60 @@ public class NativeWebRtcScreenStreamer {
     }
 
     public void stop() {
-        running = false;
-        if (signalingThread != null) {
-            signalingThread.interrupt();
-            signalingThread = null;
+        synchronized (stopLock) {
+            if (stopped) return;
+            stopped = true;
+            running = false;
+            if (signalingThread != null) {
+                signalingThread.interrupt();
+                signalingThread = null;
+            }
+            for (PeerConnection peerConnection : peerConnections.values()) {
+                try {
+                    peerConnection.close();
+                    peerConnection.dispose();
+                } catch (Exception ignored) {
+                    // Already closed by WebRTC internals.
+                }
+            }
+            peerConnections.clear();
+            appliedViewerIce.clear();
+            if (screenCapturer != null) {
+                try {
+                    screenCapturer.stopCapture();
+                } catch (Exception ignored) {
+                    // Projection may already be stopped by Android.
+                }
+                try {
+                    screenCapturer.dispose();
+                } catch (Exception ignored) {
+                    // Already disposed.
+                }
+                screenCapturer = null;
+            }
+            if (videoTrack != null) {
+                videoTrack.dispose();
+                videoTrack = null;
+            }
+            if (videoSource != null) {
+                videoSource.dispose();
+                videoSource = null;
+            }
+            if (audioTrack != null) {
+                audioTrack.dispose();
+                audioTrack = null;
+            }
+            if (audioSource != null) {
+                audioSource.dispose();
+                audioSource = null;
+            }
+            if (surfaceTextureHelper != null) {
+                surfaceTextureHelper.dispose();
+                surfaceTextureHelper = null;
+            }
+            peerConnectionFactory.dispose();
+            eglBase.release();
         }
-        for (PeerConnection peerConnection : peerConnections.values()) {
-            peerConnection.close();
-            peerConnection.dispose();
-        }
-        peerConnections.clear();
-        appliedViewerIce.clear();
-        if (screenCapturer != null) {
-            screenCapturer.stopCapture();
-            screenCapturer.dispose();
-            screenCapturer = null;
-        }
-        if (videoTrack != null) {
-            videoTrack.dispose();
-            videoTrack = null;
-        }
-        if (videoSource != null) {
-            videoSource.dispose();
-            videoSource = null;
-        }
-        if (audioTrack != null) {
-            audioTrack.dispose();
-            audioTrack = null;
-        }
-        if (audioSource != null) {
-            audioSource.dispose();
-            audioSource = null;
-        }
-        if (surfaceTextureHelper != null) {
-            surfaceTextureHelper.dispose();
-            surfaceTextureHelper = null;
-        }
-        peerConnectionFactory.dispose();
-        eglBase.release();
     }
 
     private void pollSignalingLoop() {
