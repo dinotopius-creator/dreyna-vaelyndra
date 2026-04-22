@@ -62,9 +62,13 @@ function weeklyRecommendationHash(input: string) {
 
 export function Community() {
   const { posts, dispatch } = useStore();
-  const { user, isQueen } = useAuth();
+  const { user, users, isQueen } = useAuth();
   const { liveRegistry } = useLive();
   const { notify } = useToast();
+  const usersById = useMemo(
+    () => new Map(users.map((u) => [u.id, u])),
+    [users],
+  );
   const allLives = useMemo(
     () =>
       Object.values(liveRegistry).sort(
@@ -135,10 +139,11 @@ export function Community() {
     for (const live of allLives) {
       if (!isRealCandidate(live.userId) || live.userId === user?.id) continue;
       const current = byUser.get(live.userId);
+      const profile = usersById.get(live.userId);
       byUser.set(live.userId, {
         id: live.userId,
         username: live.username,
-        avatar: live.avatar,
+        avatar: profile?.avatar || live.avatar,
         postCount: current?.postCount ?? 0,
         liveCount: (current?.liveCount ?? 0) + 1,
         weeklyRank:
@@ -155,10 +160,11 @@ export function Community() {
       if (!isRealCandidate(post.authorId) || post.authorId === user?.id)
         continue;
       const current = byUser.get(post.authorId);
+      const profile = usersById.get(post.authorId);
       byUser.set(post.authorId, {
         id: post.authorId,
         username: current?.username || post.authorName,
-        avatar: current?.avatar || post.authorAvatar,
+        avatar: current?.avatar || profile?.avatar || post.authorAvatar,
         liveCount: current?.liveCount ?? 0,
         postCount: (current?.postCount ?? 0) + 1,
         weeklyRank:
@@ -183,7 +189,7 @@ export function Community() {
         );
       })
       .slice(0, 6);
-  }, [allLives, posts, user?.id]);
+  }, [allLives, posts, user?.id, usersById]);
 
   async function publish(e: React.FormEvent) {
     e.preventDefault();
@@ -327,7 +333,7 @@ export function Community() {
                 >
                   <div className="relative">
                     <img
-                      src={l.avatar}
+                      src={usersById.get(l.userId)?.avatar || l.avatar}
                       alt={l.username}
                       className="h-12 w-12 rounded-full object-cover ring-2 ring-rose-400/60"
                     />
@@ -438,7 +444,7 @@ export function Community() {
                     title={`Voir le profil de ${p.authorName}`}
                   >
                     <img
-                      src={p.authorAvatar}
+                      src={usersById.get(p.authorId)?.avatar || p.authorAvatar}
                       alt={p.authorName}
                       className="h-10 w-10 rounded-full object-cover ring-2 ring-royal-500/40 transition hover:ring-gold-400/70"
                     />
