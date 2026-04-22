@@ -1,4 +1,4 @@
-import { Link, NavLink, useNavigate } from "react-router-dom";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useStore } from "../contexts/StoreContext";
 import { useMessages } from "../contexts/MessagesContext";
@@ -11,6 +11,7 @@ import {
   MessageCircle,
   ShoppingBag,
   Radio,
+  Settings,
   LogOut,
   UserCircle2,
   ShieldCheck,
@@ -45,7 +46,10 @@ export function Navbar() {
   } = useNotifications();
   const [open, setOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notificationSettingsOpen, setNotificationSettingsOpen] =
+    useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
   const canAccessAdmin =
     isQueen || backendMe?.role === "admin" || backendMe?.role === "animator";
   const adminLabel =
@@ -59,6 +63,12 @@ export function Navbar() {
       document.body.style.overflow = previous;
     };
   }, [notificationsOpen]);
+
+  useEffect(() => {
+    setNotificationsOpen(false);
+    setNotificationSettingsOpen(false);
+    setOpen(false);
+  }, [location.pathname]);
 
   return (
     <header className="sticky top-0 z-40">
@@ -111,7 +121,12 @@ export function Navbar() {
             {user && (
               <div className="relative">
                 <button
-                  onClick={() => setNotificationsOpen((value) => !value)}
+                  onClick={() => {
+                    setNotificationsOpen((value) => {
+                      if (value) setNotificationSettingsOpen(false);
+                      return !value;
+                    });
+                  }}
                   className="relative inline-flex h-10 w-10 items-center justify-center gap-1.5 rounded-full border border-royal-500/30 p-0 text-xs text-ivory/80 transition hover:border-gold-400/60 hover:text-gold-200 sm:w-auto sm:px-3"
                   aria-label="Notifications"
                   aria-expanded={notificationsOpen}
@@ -132,7 +147,10 @@ export function Navbar() {
                       type="button"
                       className="absolute inset-0 sm:hidden"
                       aria-label="Fermer les notifications"
-                      onClick={() => setNotificationsOpen(false)}
+                      onClick={() => {
+                        setNotificationsOpen(false);
+                        setNotificationSettingsOpen(false);
+                      }}
                     />
                     <div className="flex max-h-[88dvh] w-full flex-col overflow-hidden rounded-t-2xl border border-royal-500/30 bg-night-900 shadow-night-950/60 sm:max-h-[min(42rem,calc(100vh-6rem))] sm:w-[min(22rem,calc(100vw-2rem))] sm:rounded-2xl sm:bg-night-900/95 sm:shadow-2xl sm:backdrop-blur-xl">
                       <div className="flex items-center justify-between gap-3 border-b border-royal-600/25 px-4 py-3">
@@ -147,6 +165,22 @@ export function Navbar() {
                         <div className="flex flex-none items-center gap-2">
                           <button
                             type="button"
+                            onClick={() =>
+                              setNotificationSettingsOpen((value) => !value)
+                            }
+                            className={clsx(
+                              "rounded-full border p-2 transition",
+                              notificationSettingsOpen
+                                ? "border-gold-400/60 bg-gold-500/10 text-gold-200"
+                                : "border-royal-500/30 text-ivory/70 hover:border-gold-400/60 hover:text-gold-200",
+                            )}
+                            aria-label="Reglages notifications"
+                            aria-pressed={notificationSettingsOpen}
+                          >
+                            <Settings className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
                             onClick={markAllRead}
                             className="rounded-full border border-royal-500/30 p-2 text-ivory/70 transition hover:border-gold-400/60 hover:text-gold-200"
                             aria-label="Tout marquer comme lu"
@@ -155,7 +189,10 @@ export function Navbar() {
                           </button>
                           <button
                             type="button"
-                            onClick={() => setNotificationsOpen(false)}
+                            onClick={() => {
+                              setNotificationsOpen(false);
+                              setNotificationSettingsOpen(false);
+                            }}
                             className="rounded-full border border-royal-500/30 p-2 text-ivory/70 transition hover:border-gold-400/60 hover:text-gold-200 sm:hidden"
                             aria-label="Fermer les notifications"
                           >
@@ -166,9 +203,16 @@ export function Navbar() {
 
                       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
                         {notifications.length === 0 ? (
-                          <p className="px-4 py-6 text-sm text-ivory/60">
-                            Aucune notification pour le moment.
-                          </p>
+                          <div className="flex min-h-56 flex-col items-center justify-center px-5 py-8 text-center">
+                            <Bell className="mb-3 h-8 w-8 text-gold-200/60" />
+                            <p className="text-sm font-semibold text-ivory/85">
+                              Aucune notification
+                            </p>
+                            <p className="mt-1 max-w-56 text-xs leading-relaxed text-ivory/55">
+                              Les likes, commentaires et identifications
+                              arriveront ici.
+                            </p>
+                          </div>
                         ) : (
                           notifications.slice(0, 12).map((notification) => (
                             <div
@@ -191,6 +235,7 @@ export function Navbar() {
                                   onClick={() => {
                                     markRead(notification.id);
                                     setNotificationsOpen(false);
+                                    setNotificationSettingsOpen(false);
                                   }}
                                   className="block"
                                 >
@@ -227,83 +272,104 @@ export function Navbar() {
                         )}
                       </div>
 
-                      <div className="flex-none space-y-2 border-t border-royal-600/25 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
-                        <label className="flex min-h-10 items-center justify-between gap-3 text-xs text-ivory/75">
-                          Dans l'app
-                          <input
-                            type="checkbox"
-                            checked={preferences.inApp}
-                            onChange={(event) =>
-                              updatePreferences({ inApp: event.target.checked })
-                            }
-                            className="h-4 w-4 accent-gold-400"
-                          />
-                        </label>
-                        <label className="flex min-h-10 items-center justify-between gap-3 text-xs text-ivory/75">
-                          Likes communaute
-                          <input
-                            type="checkbox"
-                            checked={preferences.communityLikes}
-                            onChange={(event) =>
-                              updatePreferences({
-                                communityLikes: event.target.checked,
-                              })
-                            }
-                            className="h-4 w-4 accent-gold-400"
-                          />
-                        </label>
-                        <label className="flex min-h-10 items-center justify-between gap-3 text-xs text-ivory/75">
-                          Commentaires
-                          <input
-                            type="checkbox"
-                            checked={preferences.communityComments}
-                            onChange={(event) =>
-                              updatePreferences({
-                                communityComments: event.target.checked,
-                              })
-                            }
-                            className="h-4 w-4 accent-gold-400"
-                          />
-                        </label>
-                        <label className="flex min-h-10 items-center justify-between gap-3 text-xs text-ivory/75">
-                          Identifications
-                          <input
-                            type="checkbox"
-                            checked={preferences.mentions}
-                            onChange={(event) =>
-                              updatePreferences({
-                                mentions: event.target.checked,
-                              })
-                            }
-                            className="h-4 w-4 accent-gold-400"
-                          />
-                        </label>
-                        <div className="flex min-h-10 items-center justify-between gap-3 pt-1">
-                          <span className="text-xs text-ivory/75">
-                            Notifications PC/tel
-                          </span>
-                          {permission === "granted" ? (
-                            <input
-                              type="checkbox"
-                              checked={preferences.browser}
-                              onChange={(event) =>
-                                updatePreferences({
-                                  browser: event.target.checked,
-                                })
-                              }
-                              className="h-4 w-4 accent-gold-400"
-                            />
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={requestBrowserPermission}
-                              className="rounded-full border border-gold-400/45 px-3 py-1 text-[11px] font-semibold text-gold-200 transition hover:bg-gold-500/10 disabled:cursor-not-allowed disabled:opacity-50"
-                              disabled={permission === "unsupported"}
-                            >
-                              Activer
-                            </button>
-                          )}
-                        </div>
+                      <div
+                        className={clsx(
+                          "flex-none border-t border-royal-600/25 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))]",
+                          notificationSettingsOpen ? "space-y-2 py-3" : "py-2",
+                        )}
+                      >
+                        {!notificationSettingsOpen && (
+                          <button
+                            type="button"
+                            onClick={() => setNotificationSettingsOpen(true)}
+                            className="flex min-h-10 w-full items-center justify-between rounded-xl px-1 text-left text-xs text-ivory/65 transition hover:text-gold-200"
+                          >
+                            <span>Reglages notifications</span>
+                            <Settings className="h-4 w-4" />
+                          </button>
+                        )}
+                        {notificationSettingsOpen && (
+                          <>
+                            <label className="flex min-h-10 items-center justify-between gap-3 text-xs text-ivory/75">
+                              Dans l'app
+                              <input
+                                type="checkbox"
+                                checked={preferences.inApp}
+                                onChange={(event) =>
+                                  updatePreferences({
+                                    inApp: event.target.checked,
+                                  })
+                                }
+                                className="h-4 w-4 accent-gold-400"
+                              />
+                            </label>
+                            <label className="flex min-h-10 items-center justify-between gap-3 text-xs text-ivory/75">
+                              Likes communaute
+                              <input
+                                type="checkbox"
+                                checked={preferences.communityLikes}
+                                onChange={(event) =>
+                                  updatePreferences({
+                                    communityLikes: event.target.checked,
+                                  })
+                                }
+                                className="h-4 w-4 accent-gold-400"
+                              />
+                            </label>
+                            <label className="flex min-h-10 items-center justify-between gap-3 text-xs text-ivory/75">
+                              Commentaires
+                              <input
+                                type="checkbox"
+                                checked={preferences.communityComments}
+                                onChange={(event) =>
+                                  updatePreferences({
+                                    communityComments: event.target.checked,
+                                  })
+                                }
+                                className="h-4 w-4 accent-gold-400"
+                              />
+                            </label>
+                            <label className="flex min-h-10 items-center justify-between gap-3 text-xs text-ivory/75">
+                              Identifications
+                              <input
+                                type="checkbox"
+                                checked={preferences.mentions}
+                                onChange={(event) =>
+                                  updatePreferences({
+                                    mentions: event.target.checked,
+                                  })
+                                }
+                                className="h-4 w-4 accent-gold-400"
+                              />
+                            </label>
+                            <div className="flex min-h-10 items-center justify-between gap-3 pt-1">
+                              <span className="text-xs text-ivory/75">
+                                Notifications PC/tel
+                              </span>
+                              {permission === "granted" ? (
+                                <input
+                                  type="checkbox"
+                                  checked={preferences.browser}
+                                  onChange={(event) =>
+                                    updatePreferences({
+                                      browser: event.target.checked,
+                                    })
+                                  }
+                                  className="h-4 w-4 accent-gold-400"
+                                />
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={requestBrowserPermission}
+                                  className="rounded-full border border-gold-400/45 px-3 py-1 text-[11px] font-semibold text-gold-200 transition hover:bg-gold-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                                  disabled={permission === "unsupported"}
+                                >
+                                  Activer
+                                </button>
+                              )}
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
