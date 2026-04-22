@@ -17,7 +17,7 @@ import {
   ShieldAlert,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import clsx from "clsx";
 
 const NAV = [
@@ -51,19 +51,28 @@ export function Navbar() {
   const adminLabel =
     backendMe?.role === "animator" ? "Chroniques" : "Salle du Trone";
 
+  useEffect(() => {
+    if (!notificationsOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [notificationsOpen]);
+
   return (
     <header className="sticky top-0 z-40">
       <div className="border-b border-royal-600/20 bg-night-900/80 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-3">
-          <Link to="/" className="group flex items-center gap-2">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-3 py-3 sm:gap-4 sm:px-5">
+          <Link to="/" className="group flex min-w-0 items-center gap-2">
             <span className="relative flex h-9 w-9 items-center justify-center rounded-full bg-gold-shine text-night-900 shadow-glow-gold transition group-hover:scale-105">
               <Crown className="h-5 w-5" />
             </span>
-            <span className="font-display text-lg font-bold text-gold-200">
+            <span className="hidden font-display text-lg font-bold text-gold-200 sm:inline">
               Vaelyndra
             </span>
             {isLiveOn && (
-              <span className="ml-2 inline-flex items-center gap-1 rounded-full border border-rose-400/50 bg-rose-500/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-rose-300">
+              <span className="ml-1 hidden items-center gap-1 rounded-full border border-rose-400/50 bg-rose-500/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-rose-300 sm:inline-flex">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-rose-400" />
                 Live
               </span>
@@ -90,7 +99,7 @@ export function Navbar() {
             ))}
           </nav>
 
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-1 sm:gap-2">
             <Link
               to={user ? "/live/studio" : "/connexion"}
               className="hidden items-center gap-1.5 rounded-full border border-royal-500/30 px-3 py-2 text-xs text-ivory/80 transition hover:border-gold-400/60 hover:text-gold-200 md:inline-flex"
@@ -103,7 +112,7 @@ export function Navbar() {
               <div className="relative">
                 <button
                   onClick={() => setNotificationsOpen((value) => !value)}
-                  className="relative inline-flex items-center gap-1.5 rounded-full border border-royal-500/30 px-3 py-2 text-xs text-ivory/80 transition hover:border-gold-400/60 hover:text-gold-200"
+                  className="relative inline-flex h-10 w-10 items-center justify-center gap-1.5 rounded-full border border-royal-500/30 p-0 text-xs text-ivory/80 transition hover:border-gold-400/60 hover:text-gold-200 sm:w-auto sm:px-3"
                   aria-label="Notifications"
                   aria-expanded={notificationsOpen}
                 >
@@ -118,163 +127,177 @@ export function Navbar() {
                   )}
                 </button>
                 {notificationsOpen && (
-                  <div className="absolute right-0 top-full z-50 mt-2 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-royal-500/30 bg-night-900/95 shadow-2xl shadow-night-950/60 backdrop-blur-xl">
-                    <div className="flex items-center justify-between gap-3 border-b border-royal-600/25 px-4 py-3">
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gold-200">
-                          Notifications
-                        </p>
-                        <p className="text-[11px] text-ivory/55">
-                          Likes, commentaires et identifications
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={markAllRead}
-                        className="rounded-full border border-royal-500/30 p-2 text-ivory/70 transition hover:border-gold-400/60 hover:text-gold-200"
-                        aria-label="Tout marquer comme lu"
-                      >
-                        <CheckCheck className="h-4 w-4" />
-                      </button>
-                    </div>
-
-                    <div className="max-h-72 overflow-y-auto">
-                      {notifications.length === 0 ? (
-                        <p className="px-4 py-6 text-sm text-ivory/60">
-                          Aucune notification pour le moment.
-                        </p>
-                      ) : (
-                        notifications.slice(0, 12).map((notification) => (
-                          <div
-                            key={notification.id}
-                            className={clsx(
-                              "flex gap-3 border-b border-royal-600/15 px-4 py-3 last:border-b-0",
-                              notification.readAt
-                                ? "bg-transparent"
-                                : "bg-gold-500/10",
-                            )}
+                  <div className="fixed inset-0 z-50 flex items-end bg-night-950/70 p-0 backdrop-blur-sm sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:mt-2 sm:block sm:bg-transparent sm:p-0 sm:backdrop-blur-0">
+                    <div className="flex max-h-[88dvh] w-full flex-col overflow-hidden rounded-t-2xl border border-royal-500/30 bg-night-900/98 shadow-2xl shadow-night-950/60 backdrop-blur-xl sm:max-h-[min(42rem,calc(100vh-6rem))] sm:w-[min(22rem,calc(100vw-2rem))] sm:rounded-2xl">
+                      <div className="flex items-center justify-between gap-3 border-b border-royal-600/25 px-4 py-3">
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gold-200">
+                            Notifications
+                          </p>
+                          <p className="truncate text-[11px] text-ivory/55">
+                            Likes, commentaires et identifications
+                          </p>
+                        </div>
+                        <div className="flex flex-none items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={markAllRead}
+                            className="rounded-full border border-royal-500/30 p-2 text-ivory/70 transition hover:border-gold-400/60 hover:text-gold-200"
+                            aria-label="Tout marquer comme lu"
                           >
-                            <img
-                              src={notification.actorAvatar || "/vite.svg"}
-                              alt=""
-                              className="h-9 w-9 flex-none rounded-full object-cover ring-1 ring-gold-400/40"
-                            />
-                            <div className="min-w-0 flex-1">
-                              <Link
-                                to={notification.url ?? "/communaute"}
-                                onClick={() => {
-                                  markRead(notification.id);
-                                  setNotificationsOpen(false);
-                                }}
-                                className="block"
-                              >
-                                <p className="truncate text-sm font-semibold text-ivory">
-                                  {notification.title}
-                                </p>
-                                <p className="line-clamp-2 text-xs text-ivory/65">
-                                  {notification.body}
-                                </p>
-                                <p className="mt-1 text-[10px] uppercase tracking-[0.16em] text-gold-200/70">
-                                  {new Date(
-                                    notification.createdAt,
-                                  ).toLocaleDateString("fr-FR", {
-                                    day: "2-digit",
-                                    month: "short",
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  })}
-                                </p>
-                              </Link>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => clearNotification(notification.id)}
-                              className="self-start rounded-full p-1 text-ivory/45 transition hover:text-gold-200"
-                              aria-label="Supprimer la notification"
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        ))
-                      )}
-                    </div>
+                            <CheckCheck className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setNotificationsOpen(false)}
+                            className="rounded-full border border-royal-500/30 p-2 text-ivory/70 transition hover:border-gold-400/60 hover:text-gold-200 sm:hidden"
+                            aria-label="Fermer les notifications"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
 
-                    <div className="space-y-2 border-t border-royal-600/25 px-4 py-3">
-                      <label className="flex items-center justify-between gap-3 text-xs text-ivory/75">
-                        Dans l'app
-                        <input
-                          type="checkbox"
-                          checked={preferences.inApp}
-                          onChange={(event) =>
-                            updatePreferences({ inApp: event.target.checked })
-                          }
-                          className="h-4 w-4 accent-gold-400"
-                        />
-                      </label>
-                      <label className="flex items-center justify-between gap-3 text-xs text-ivory/75">
-                        Likes communaute
-                        <input
-                          type="checkbox"
-                          checked={preferences.communityLikes}
-                          onChange={(event) =>
-                            updatePreferences({
-                              communityLikes: event.target.checked,
-                            })
-                          }
-                          className="h-4 w-4 accent-gold-400"
-                        />
-                      </label>
-                      <label className="flex items-center justify-between gap-3 text-xs text-ivory/75">
-                        Commentaires
-                        <input
-                          type="checkbox"
-                          checked={preferences.communityComments}
-                          onChange={(event) =>
-                            updatePreferences({
-                              communityComments: event.target.checked,
-                            })
-                          }
-                          className="h-4 w-4 accent-gold-400"
-                        />
-                      </label>
-                      <label className="flex items-center justify-between gap-3 text-xs text-ivory/75">
-                        Identifications
-                        <input
-                          type="checkbox"
-                          checked={preferences.mentions}
-                          onChange={(event) =>
-                            updatePreferences({
-                              mentions: event.target.checked,
-                            })
-                          }
-                          className="h-4 w-4 accent-gold-400"
-                        />
-                      </label>
-                      <div className="flex items-center justify-between gap-3 pt-1">
-                        <span className="text-xs text-ivory/75">
-                          Notifications PC/tel
-                        </span>
-                        {permission === "granted" ? (
+                      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+                        {notifications.length === 0 ? (
+                          <p className="px-4 py-6 text-sm text-ivory/60">
+                            Aucune notification pour le moment.
+                          </p>
+                        ) : (
+                          notifications.slice(0, 12).map((notification) => (
+                            <div
+                              key={notification.id}
+                              className={clsx(
+                                "flex gap-3 border-b border-royal-600/15 px-4 py-3 last:border-b-0",
+                                notification.readAt
+                                  ? "bg-transparent"
+                                  : "bg-gold-500/10",
+                              )}
+                            >
+                              <img
+                                src={notification.actorAvatar || "/vite.svg"}
+                                alt=""
+                                className="h-9 w-9 flex-none rounded-full object-cover ring-1 ring-gold-400/40"
+                              />
+                              <div className="min-w-0 flex-1">
+                                <Link
+                                  to={notification.url ?? "/communaute"}
+                                  onClick={() => {
+                                    markRead(notification.id);
+                                    setNotificationsOpen(false);
+                                  }}
+                                  className="block"
+                                >
+                                  <p className="truncate text-sm font-semibold text-ivory">
+                                    {notification.title}
+                                  </p>
+                                  <p className="line-clamp-2 text-xs text-ivory/65">
+                                    {notification.body}
+                                  </p>
+                                  <p className="mt-1 text-[10px] uppercase tracking-[0.16em] text-gold-200/70">
+                                    {new Date(
+                                      notification.createdAt,
+                                    ).toLocaleDateString("fr-FR", {
+                                      day: "2-digit",
+                                      month: "short",
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    })}
+                                  </p>
+                                </Link>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  clearNotification(notification.id)
+                                }
+                                className="self-start rounded-full p-1 text-ivory/45 transition hover:text-gold-200"
+                                aria-label="Supprimer la notification"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+
+                      <div className="flex-none space-y-2 border-t border-royal-600/25 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+                        <label className="flex min-h-10 items-center justify-between gap-3 text-xs text-ivory/75">
+                          Dans l'app
                           <input
                             type="checkbox"
-                            checked={preferences.browser}
+                            checked={preferences.inApp}
+                            onChange={(event) =>
+                              updatePreferences({ inApp: event.target.checked })
+                            }
+                            className="h-4 w-4 accent-gold-400"
+                          />
+                        </label>
+                        <label className="flex min-h-10 items-center justify-between gap-3 text-xs text-ivory/75">
+                          Likes communaute
+                          <input
+                            type="checkbox"
+                            checked={preferences.communityLikes}
                             onChange={(event) =>
                               updatePreferences({
-                                browser: event.target.checked,
+                                communityLikes: event.target.checked,
                               })
                             }
                             className="h-4 w-4 accent-gold-400"
                           />
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={requestBrowserPermission}
-                            className="rounded-full border border-gold-400/45 px-3 py-1 text-[11px] font-semibold text-gold-200 transition hover:bg-gold-500/10 disabled:cursor-not-allowed disabled:opacity-50"
-                            disabled={permission === "unsupported"}
-                          >
-                            Activer
-                          </button>
-                        )}
+                        </label>
+                        <label className="flex min-h-10 items-center justify-between gap-3 text-xs text-ivory/75">
+                          Commentaires
+                          <input
+                            type="checkbox"
+                            checked={preferences.communityComments}
+                            onChange={(event) =>
+                              updatePreferences({
+                                communityComments: event.target.checked,
+                              })
+                            }
+                            className="h-4 w-4 accent-gold-400"
+                          />
+                        </label>
+                        <label className="flex min-h-10 items-center justify-between gap-3 text-xs text-ivory/75">
+                          Identifications
+                          <input
+                            type="checkbox"
+                            checked={preferences.mentions}
+                            onChange={(event) =>
+                              updatePreferences({
+                                mentions: event.target.checked,
+                              })
+                            }
+                            className="h-4 w-4 accent-gold-400"
+                          />
+                        </label>
+                        <div className="flex min-h-10 items-center justify-between gap-3 pt-1">
+                          <span className="text-xs text-ivory/75">
+                            Notifications PC/tel
+                          </span>
+                          {permission === "granted" ? (
+                            <input
+                              type="checkbox"
+                              checked={preferences.browser}
+                              onChange={(event) =>
+                                updatePreferences({
+                                  browser: event.target.checked,
+                                })
+                              }
+                              className="h-4 w-4 accent-gold-400"
+                            />
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={requestBrowserPermission}
+                              className="rounded-full border border-gold-400/45 px-3 py-1 text-[11px] font-semibold text-gold-200 transition hover:bg-gold-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                              disabled={permission === "unsupported"}
+                            >
+                              Activer
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -284,7 +307,7 @@ export function Navbar() {
             {user && (
               <Link
                 to="/messages"
-                className="relative inline-flex items-center gap-1.5 rounded-full border border-royal-500/30 px-3 py-2 text-xs text-ivory/80 transition hover:border-gold-400/60 hover:text-gold-200"
+                className="relative inline-flex h-10 w-10 items-center justify-center gap-1.5 rounded-full border border-royal-500/30 p-0 text-xs text-ivory/80 transition hover:border-gold-400/60 hover:text-gold-200 sm:w-auto sm:px-3"
                 aria-label="Messagerie privée"
               >
                 <MessageCircle className="h-4 w-4" />
@@ -298,7 +321,7 @@ export function Navbar() {
             )}
             <Link
               to="/panier"
-              className="relative inline-flex items-center gap-1.5 rounded-full border border-royal-500/30 px-3 py-2 text-xs text-ivory/80 transition hover:border-gold-400/60 hover:text-gold-200"
+              className="relative inline-flex h-10 w-10 items-center justify-center gap-1.5 rounded-full border border-royal-500/30 p-0 text-xs text-ivory/80 transition hover:border-gold-400/60 hover:text-gold-200 sm:w-auto sm:px-3"
             >
               <ShoppingBag className="h-4 w-4" />
               <span className="hidden sm:inline">Panier</span>
@@ -309,7 +332,7 @@ export function Navbar() {
               )}
             </Link>
             {user ? (
-              <div className="flex items-center gap-2">
+              <div className="flex min-w-0 items-center gap-1 sm:gap-2">
                 {canAccessAdmin && (
                   <Link
                     to="/admin"
@@ -320,7 +343,7 @@ export function Navbar() {
                 )}
                 <Link
                   to="/moi"
-                  className="relative flex items-center gap-2 rounded-full border border-royal-500/30 bg-night-800/60 py-1 pl-1 pr-3"
+                  className="relative flex h-10 items-center gap-2 rounded-full border border-royal-500/30 bg-night-800/60 py-1 pl-1 pr-1 sm:pr-3"
                   title={
                     backendMe?.totp_enabled
                       ? "Double authentification activée"
@@ -353,7 +376,7 @@ export function Navbar() {
                     logout();
                     navigate("/");
                   }}
-                  className="rounded-full border border-royal-500/30 p-2 text-ivory/70 transition hover:text-gold-200"
+                  className="hidden rounded-full border border-royal-500/30 p-2 text-ivory/70 transition hover:text-gold-200 sm:inline-flex"
                   aria-label="Déconnexion"
                 >
                   <LogOut className="h-4 w-4" />
@@ -418,6 +441,17 @@ export function Navbar() {
                 >
                   Historique & appareils
                 </NavLink>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    logout();
+                    navigate("/");
+                  }}
+                  className="rounded-xl border border-royal-500/30 px-4 py-3 text-left font-regal text-xs font-semibold tracking-[0.22em] text-ivory/80"
+                >
+                  Deconnexion
+                </button>
               </>
             )}
             {canAccessAdmin && (
