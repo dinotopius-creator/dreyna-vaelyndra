@@ -22,15 +22,16 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field, field_validator
 from sqlmodel import Session, select
 
-from ..auth.dependencies import require_auth
+from ..auth.dependencies import optional_user, require_auth
 from ..db import get_session
 from ..models import (
     LiveJoinRequest,
     LiveModeration,
+    NativeLiveBroadcastToken,
     LiveSession,
     NativeLiveSignal,
     UserProfile,
@@ -241,6 +242,11 @@ class NativeSignalListOut(BaseModel):
     offers: list[NativeSignalOut]
 
 
+class NativeBroadcastTokenOut(BaseModel):
+    token: str
+    expires_at: str
+
+
 def _json_list(raw: str) -> list[dict[str, Any]]:
     try:
         parsed = json.loads(raw or "[]")
@@ -276,12 +282,72 @@ def _purge_stale_native_signals(session: Session) -> None:
         session.delete(row)
 
 
+def _native_token_user_id(request: Request, session: Session) -> Optional[str]:
+    auth = request.headers.get("authorization", "")
+    prefix = "Bearer "
+    if not auth.startswith(prefix):
+        return None
+    token = auth[len(prefix) :].strip()
+    if not token:
+        return None
+    row = session.get(NativeLiveBroadcastToken, token)
+    if row is None:
+        return None
+    now = datetime.now(timezone.utc).isoformat()
+    if row.expires_at < now:
+        session.delete(row)
+        session.commit()
+        return None
+    return row.broadcaster_id
+
+
+def _require_native_broadcaster(request: Request) -> str:
+    with get_session() as session:
+        token_user_id = _native_token_user_id(request, session)
+        if token_user_id:
+            return token_user_id
+    user = optional_user(request)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentification requise.",
+        )
+    return user.id
+
+
+@router.post("/native/broadcast-token", response_model=NativeBroadcastTokenOut)
+def create_native_broadcast_token(
+    user: UserProfile = Depends(require_auth),
+) -> NativeBroadcastTokenOut:
+    now = datetime.now(timezone.utc)
+    expires_at = (now + timedelta(hours=4)).isoformat()
+    token = str(uuid.uuid4())
+    with get_session() as session:
+        stale = session.exec(
+            select(NativeLiveBroadcastToken).where(
+                NativeLiveBroadcastToken.expires_at < now.isoformat()
+            )
+        ).all()
+        for row in stale:
+            session.delete(row)
+        session.add(
+            NativeLiveBroadcastToken(
+                token=token,
+                broadcaster_id=user.id,
+                created_at=now.isoformat(),
+                expires_at=expires_at,
+            )
+        )
+        session.commit()
+    return NativeBroadcastTokenOut(token=token, expires_at=expires_at)
+
+
 @router.post("/native/offers", response_model=NativeSignalOut)
 def create_native_offer(
     payload: NativeSignalOfferIn,
-    user: UserProfile = Depends(require_auth),
+    user: Optional[UserProfile] = Depends(optional_user),
 ) -> NativeSignalOut:
-    if payload.broadcaster_id == user.id:
+    if user is not None and payload.broadcaster_id == user.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"message": "cannot_watch_own_native_live"},
@@ -303,7 +369,7 @@ def create_native_offer(
         row = NativeLiveSignal(
             session_id=str(uuid.uuid4()),
             broadcaster_id=payload.broadcaster_id,
-            viewer_id=user.id,
+            viewer_id=user.id if user is not None else f"anon:{uuid.uuid4()}",
             offer_sdp=payload.offer_sdp,
             created_at=now,
             updated_at=now,
@@ -316,13 +382,14 @@ def create_native_offer(
 
 @router.get("/native/offers", response_model=NativeSignalListOut)
 def list_native_offers(
-    user: UserProfile = Depends(require_auth),
+    request: Request,
 ) -> NativeSignalListOut:
+    broadcaster_id = _require_native_broadcaster(request)
     with get_session() as session:
         _purge_stale_native_signals(session)
         rows = session.exec(
             select(NativeLiveSignal)
-            .where(NativeLiveSignal.broadcaster_id == user.id)
+            .where(NativeLiveSignal.broadcaster_id == broadcaster_id)
             .order_by(NativeLiveSignal.created_at.desc())
         ).all()
         if rows:
@@ -333,7 +400,6 @@ def list_native_offers(
 @router.get("/native/offers/{session_id}", response_model=NativeSignalOut)
 def get_native_offer(
     session_id: str,
-    user: UserProfile = Depends(require_auth),
 ) -> NativeSignalOut:
     with get_session() as session:
         row = session.get(NativeLiveSignal, session_id)
@@ -342,11 +408,6 @@ def get_native_offer(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail={"message": "native_signal_not_found"},
             )
-        if user.id not in {row.viewer_id, row.broadcaster_id}:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail={"message": "not_your_native_signal"},
-            )
         return _signal_out(row)
 
 
@@ -354,14 +415,15 @@ def get_native_offer(
 def answer_native_offer(
     session_id: str,
     payload: NativeSignalAnswerIn,
-    user: UserProfile = Depends(require_auth),
+    request: Request,
 ) -> NativeSignalOut:
+    broadcaster_id = _require_native_broadcaster(request)
     now = datetime.now(timezone.utc).isoformat()
     with get_session() as session:
         row = session.get(NativeLiveSignal, session_id)
         if row is None:
             raise HTTPException(status_code=404, detail={"message": "native_signal_not_found"})
-        if row.broadcaster_id != user.id:
+        if row.broadcaster_id != broadcaster_id:
             raise HTTPException(status_code=403, detail={"message": "not_your_native_signal"})
         row.answer_sdp = payload.answer_sdp
         row.updated_at = now
@@ -374,7 +436,7 @@ def answer_native_offer(
 def _append_native_ice(
     session_id: str,
     payload: NativeIceIn,
-    user: UserProfile,
+    user_id: Optional[str],
     *,
     from_viewer: bool,
 ) -> NativeSignalOut:
@@ -383,8 +445,7 @@ def _append_native_ice(
         row = session.get(NativeLiveSignal, session_id)
         if row is None:
             raise HTTPException(status_code=404, detail={"message": "native_signal_not_found"})
-        expected = row.viewer_id if from_viewer else row.broadcaster_id
-        if expected != user.id:
+        if not from_viewer and row.broadcaster_id != user_id:
             raise HTTPException(status_code=403, detail={"message": "not_your_native_signal"})
         attr = "viewer_ice_json" if from_viewer else "broadcaster_ice_json"
         items = _json_list(getattr(row, attr))
@@ -401,9 +462,8 @@ def _append_native_ice(
 def add_viewer_native_ice(
     session_id: str,
     payload: NativeIceIn,
-    user: UserProfile = Depends(require_auth),
 ) -> NativeSignalOut:
-    return _append_native_ice(session_id, payload, user, from_viewer=True)
+    return _append_native_ice(session_id, payload, None, from_viewer=True)
 
 
 @router.post(
@@ -412,9 +472,10 @@ def add_viewer_native_ice(
 def add_broadcaster_native_ice(
     session_id: str,
     payload: NativeIceIn,
-    user: UserProfile = Depends(require_auth),
+    request: Request,
 ) -> NativeSignalOut:
-    return _append_native_ice(session_id, payload, user, from_viewer=False)
+    broadcaster_id = _require_native_broadcaster(request)
+    return _append_native_ice(session_id, payload, broadcaster_id, from_viewer=False)
 
 
 # ---------------------------------------------------------------------------

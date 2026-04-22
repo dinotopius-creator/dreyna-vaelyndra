@@ -92,6 +92,16 @@ export async function apiStopLive(): Promise<void> {
   await request<null>("/live/stop", { method: "DELETE" });
 }
 
+export async function apiCreateNativeBroadcastToken(): Promise<{
+  token: string;
+  expires_at: string;
+}> {
+  return (await request<{ token: string; expires_at: string }>(
+    "/live/native/broadcast-token",
+    { method: "POST" },
+  )) as { token: string; expires_at: string };
+}
+
 export interface NativeIceCandidate {
   candidate: string;
   sdpMid?: string | null;

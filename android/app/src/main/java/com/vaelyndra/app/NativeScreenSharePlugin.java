@@ -63,6 +63,10 @@ public class NativeScreenSharePlugin extends Plugin {
             call.getString("apiBase", "https://api.vaelyndra.com")
         );
         serviceIntent.putExtra(
+            NativeScreenShareService.EXTRA_BROADCAST_TOKEN,
+            call.getString("broadcastToken", "")
+        );
+        serviceIntent.putExtra(
             NativeScreenShareService.EXTRA_RESULT_CODE,
             result.getResultCode()
         );

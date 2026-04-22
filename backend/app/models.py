@@ -254,6 +254,15 @@ class NativeLiveSignal(SQLModel, table=True):
     updated_at: str = Field(default_factory=_now_iso, index=True)
 
 
+class NativeLiveBroadcastToken(SQLModel, table=True):
+    """Jeton court pour authentifier le service Android natif du broadcaster."""
+
+    token: str = Field(primary_key=True)
+    broadcaster_id: str = Field(index=True)
+    created_at: str = Field(default_factory=_now_iso, index=True)
+    expires_at: str = Field(index=True)
+
+
 class LiveModeration(SQLModel, table=True):
     """Actions de modération du broadcaster sur son propre live.
 
