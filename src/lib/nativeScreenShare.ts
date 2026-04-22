@@ -3,9 +3,21 @@ import { API_BASE } from "./api";
 
 type NativeScreenSharePlugin = {
   isAvailable(): Promise<{ available: boolean }>;
+  status(): Promise<{
+    active: boolean;
+    title?: string;
+    category?: string;
+    startedAtMs?: number;
+  }>;
+  requestBatteryOptimizationBypass(): Promise<{
+    requested: boolean;
+    alreadyAllowed: boolean;
+  }>;
   start(options: {
     apiBase: string;
     broadcastToken: string;
+    title: string;
+    category: string;
   }): Promise<{ granted: boolean; status: string }>;
   stop(): Promise<{ stopped: boolean }>;
 };
@@ -105,15 +117,55 @@ export async function isNativeScreenShareAvailable(): Promise<boolean> {
   }
 }
 
-export async function startNativeScreenShare(
-  broadcastToken: string,
-): Promise<void> {
+export async function getNativeScreenShareStatus(): Promise<{
+  active: boolean;
+  title: string;
+  category: string;
+  startedAt: string | null;
+}> {
+  if (!isNativeAndroidApp()) {
+    return { active: false, title: "", category: "", startedAt: null };
+  }
+  try {
+    const result = await NativeScreenShare.status();
+    const startedAtMs = Number(result.startedAtMs ?? 0);
+    return {
+      active: !!result.active,
+      title: result.title ?? "",
+      category: result.category ?? "",
+      startedAt:
+        Number.isFinite(startedAtMs) && startedAtMs > 0
+          ? new Date(startedAtMs).toISOString()
+          : null,
+    };
+  } catch {
+    return { active: false, title: "", category: "", startedAt: null };
+  }
+}
+
+export async function requestNativeLiveBatteryBypass(): Promise<void> {
+  if (!isNativeAndroidApp()) return;
+  await NativeScreenShare.requestBatteryOptimizationBypass().catch(() => {
+    // Best effort only. Some vendors block this intent.
+  });
+}
+
+export async function startNativeScreenShare(input: {
+  broadcastToken: string;
+  title: string;
+  category: string;
+}): Promise<void> {
   if (!isNativeAndroidApp()) {
     throw new Error("native_screen_share_unavailable");
   }
   markNativeScreenShareAuthGrace();
   try {
-    await NativeScreenShare.start({ apiBase: API_BASE, broadcastToken });
+    await NativeScreenShare.start({
+      apiBase: API_BASE,
+      broadcastToken: input.broadcastToken,
+      title: input.title,
+      category: input.category,
+    });
   } catch (err) {
     clearNativeScreenShareAuthGrace();
     throw err;
