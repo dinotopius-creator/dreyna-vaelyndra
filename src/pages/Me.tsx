@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Banknote,
@@ -14,7 +14,7 @@ import {
   UserCog,
   X,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useStore } from "../contexts/StoreContext";
 import { useToast } from "../contexts/ToastContext";
@@ -37,10 +37,55 @@ import {
 } from "../lib/sylvins";
 
 export function Me() {
-  const { user, updateProfile } = useAuth();
+  const { user, updateProfile, backendMe, refreshBackendMe } = useAuth();
   const { articles, orders, products, myWallet } = useStore();
   const { profile: serverProfile } = useProfile();
   const { notify } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const paymentStatus = searchParams.get("payment");
+
+  /**
+   * Au retour d'un paiement Stripe, le flag `?payment=success` reste dans
+   * l'URL. Le webhook Stripe peut prendre quelques secondes à tomber et
+   * crédite seulement ensuite le `sylvins_paid`. On relance `refreshBackendMe`
+   * quelques fois (toutes les 2 s pendant ~20 s) pour rafraîchir le wallet
+   * affiché sans que l'utilisateur ait à faire F5 manuellement. Une fois
+   * que le pot PAID a bougé (ou au bout de 20 s), on retire le flag de l'URL.
+   */
+  const startPaidRef = useRef<number | null>(null);
+  const backendMeLoaded = backendMe !== null;
+  useEffect(() => {
+    if (paymentStatus !== "success") return;
+    // Le redirect Stripe est un full-page load : `backendMe` est `null`
+    // pendant que `/auth/me` se résout. Si on capturait la baseline à
+    // ce moment-là, elle vaudrait `0` et n'importe quel utilisateur qui
+    // a déjà des Sylvins payés verrait le toast "paiement confirmé"
+    // dès le premier tick (faux positif). On attend donc que
+    // `backendMe` soit chargé avant de démarrer le polling.
+    if (!backendMeLoaded) return;
+    if (startPaidRef.current === null) {
+      startPaidRef.current = backendMe?.sylvins_paid ?? 0;
+    }
+    let tries = 0;
+    const interval = setInterval(async () => {
+      tries += 1;
+      const fresh = await refreshBackendMe().catch(() => null);
+      const nowPaid = fresh?.sylvins_paid ?? backendMe?.sylvins_paid ?? 0;
+      const startPaid = startPaidRef.current ?? 0;
+      if (nowPaid > startPaid || tries >= 10) {
+        clearInterval(interval);
+        const next = new URLSearchParams(searchParams);
+        next.delete("payment");
+        next.delete("session_id");
+        setSearchParams(next, { replace: true });
+        if (nowPaid > startPaid) {
+          notify("Paiement confirmé, Sylvins crédités ✨", "success");
+        }
+      }
+    }, 2000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paymentStatus, backendMeLoaded]);
   const [bio, setBio] = useState(user?.bio ?? "");
   const [username, setUsername] = useState(user?.username ?? "");
   const [avatar, setAvatar] = useState(user?.avatar ?? "");
@@ -95,6 +140,23 @@ export function Me() {
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-14">
+      {paymentStatus === "success" && (
+        <div className="mb-6 rounded-2xl border border-emerald-400/30 bg-emerald-500/10 p-4 text-sm text-emerald-100">
+          <div className="flex items-start gap-3">
+            <Sparkles className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-300" />
+            <div>
+              <p className="font-regal tracking-wide">
+                Paiement reçu — confirmation en cours
+              </p>
+              <p className="mt-1 text-xs text-emerald-100/80">
+                Ton paiement Stripe a bien été accepté. Les Sylvins arrivent
+                sur ton compte dès que la confirmation serveur nous parvient
+                (quelques secondes).
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
       <motion.header
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
