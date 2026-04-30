@@ -42,6 +42,7 @@ from typing import Any, Optional
 import stripe
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
+from sqlalchemy import update as sa_update
 from sqlmodel import Session
 
 from ..auth.dependencies import require_auth
@@ -272,32 +273,78 @@ def _apply_paid_checkout(
 
     `stripe_object` est typé `Any` car Stripe renvoie un `StripeObject`
     (pas un `dict`) qui n'a pas `.get()` ; on passe par `_sg()`.
+
+    Pour éviter un double-crédit en cas de livraison concurrente du
+    même webhook (Stripe retry pendant un hiccup réseau, ou simple
+    retry côté Stripe), on utilise un compare-and-swap atomique sur le
+    statut `pending` → `paid` via un `UPDATE ... WHERE status='pending'`.
+    Seule la première transaction qui modifie la ligne obtient
+    `rowcount == 1` et peut procéder au crédit ; les autres voient
+    `rowcount == 0` et sortent sans rien faire. C'est nettement plus
+    sûr qu'un pattern read-check-write qui est vulnérable au TOCTOU.
     """
-    record: Optional[StripePayment] = session.get(StripePayment, checkout_id)
-    if record is None:
-        # La session a été créée côté Stripe mais pas via notre endpoint
-        # `create_sylvins_checkout` (ex. test manuel dans le dashboard).
-        # On logge et on ignore plutôt que de créditer sur la base des
-        # `metadata` seules (anti-spoof : les metadata sont libres, on ne
-        # leur fait pas confiance si on n'a aucune trace côté backend).
-        log.warning(
-            "stripe_webhook_unknown_session session_id=%s payment_status=%s",
-            checkout_id,
-            _sg(stripe_object, "payment_status"),
-        )
-        return
-
-    if record.status == "paid":
-        # Webhook rejoué par Stripe : idempotence.
-        log.info("stripe_webhook_duplicate session_id=%s", checkout_id)
-        return
-
+    # 1. Anti-spoof : on ne considère la session que si Stripe nous
+    #    dit qu'elle est bien payée. Check fait AVANT la transition
+    #    atomique pour ne pas figer la ligne en "paid" sur un event
+    #    non-paiement.
     payment_status = _sg(stripe_object, "payment_status")
     if payment_status != "paid":
         log.info(
             "stripe_webhook_not_paid session_id=%s payment_status=%s",
             checkout_id,
             payment_status,
+        )
+        return
+
+    # 2. Transition atomique pending → paid. Sur Postgres, l'UPDATE
+    #    prend un verrou ligne ; deux webhooks concurrents se
+    #    sérialisent et seul le premier voit `rowcount == 1`. Sur
+    #    SQLite, le global write lock donne le même comportement.
+    now = _now_iso()
+    result = session.exec(
+        sa_update(StripePayment)
+        .where(
+            StripePayment.id == checkout_id,
+            StripePayment.status == "pending",
+        )
+        .values(status="paid", completed_at=now)
+    )
+    # SQLAlchemy < 2 : session.exec retourne un `CursorResult`. Son
+    # attribut `.rowcount` est fiable pour un UPDATE simple.
+    rowcount = getattr(result, "rowcount", 0) or 0
+    if rowcount == 0:
+        # Soit la ligne n'existe pas (session créée hors de notre
+        # endpoint create_sylvins_checkout — on ne crédite rien dans
+        # ce cas, anti-spoof), soit elle a déjà été passée en "paid"
+        # ou "failed" par un autre webhook concurrent (idempotence).
+        existing: Optional[StripePayment] = session.get(
+            StripePayment, checkout_id
+        )
+        if existing is None:
+            log.warning(
+                "stripe_webhook_unknown_session session_id=%s payment_status=%s",
+                checkout_id,
+                payment_status,
+            )
+        else:
+            log.info(
+                "stripe_webhook_duplicate session_id=%s status=%s",
+                checkout_id,
+                existing.status,
+            )
+        # Libère la transaction du flush en attente côté session.
+        session.commit()
+        return
+
+    # 3. On a gagné la course CAS : on peut créditer sans risque
+    #    de doublon. On recharge la ligne pour connaître le
+    #    montant et l'utilisateur associés.
+    session.commit()
+    record: Optional[StripePayment] = session.get(StripePayment, checkout_id)
+    if record is None:
+        # Très improbable (on vient de l'updater) mais on reste safe.
+        log.error(
+            "stripe_webhook_post_cas_missing session_id=%s", checkout_id
         )
         return
 
@@ -308,11 +355,6 @@ def _apply_paid_checkout(
             checkout_id,
             record.user_id,
         )
-        # On marque quand même comme "paid" pour qu'un admin puisse reconstituer.
-        record.status = "paid"
-        record.completed_at = _now_iso()
-        session.add(record)
-        session.commit()
         return
 
     # Incrément atomique côté SQL pour éviter la lost-update race :
@@ -323,10 +365,7 @@ def _apply_paid_checkout(
     # `SET sylvins_paid = sylvins_paid + N`, qui est atomique côté DB.
     profile.sylvins_paid = UserProfile.sylvins_paid + record.sylvins_amount
     profile.updated_at = _now_iso()
-    record.status = "paid"
-    record.completed_at = _now_iso()
     session.add(profile)
-    session.add(record)
     session.commit()
 
     log.info(

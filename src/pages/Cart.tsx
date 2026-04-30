@@ -65,10 +65,26 @@ export function Cart() {
         const pb = products.find((pp) => pp.id === b.productId);
         return (pb?.price ?? 0) - (pa?.price ?? 0);
       })[0];
-      if (otherInCart.length > 0) {
+      // On avertit dans 3 cas où le montant facturé par Stripe sera
+      // inférieur au total affiché dans le panier :
+      //  1) Il y a AUSSI des items non-Sylvins (ils ne partiront pas
+      //     sur Stripe → restent en panier après paiement).
+      //  2) Il y a plusieurs packs Sylvins différents (on n'en
+      //     encaisse qu'un, le plus cher).
+      //  3) Un seul pack Sylvins mais avec une quantité > 1 : le
+      //     backend force `quantity: 1` dans la session Stripe (cf.
+      //     `backend/app/routers/stripe_router.py` "quantity": 1) → on
+      //     ne facture qu'une unité. L'utilisateur doit le savoir.
+      const firstSylvinQty = firstSylvin?.quantity ?? 1;
+      const needsWarning =
+        otherInCart.length > 0 ||
+        sylvinsInCart.length > 1 ||
+        firstSylvinQty > 1;
+      if (needsWarning) {
         notify(
-          "Stripe ne gère pour l'instant qu'un pack Sylvins à la fois. " +
-            "Les autres objets restent dans ton panier.",
+          "Stripe ne gère pour l'instant qu'un pack Sylvins (qté 1) à la fois. " +
+            "Le reste du panier (autres packs, quantités > 1, autres objets) " +
+            "restera dans ton panier après le paiement.",
           "info",
         );
       }
