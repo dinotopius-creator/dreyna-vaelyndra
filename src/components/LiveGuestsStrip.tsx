@@ -19,7 +19,21 @@ import { useLiveMeshAudio } from "../contexts/LiveMeshAudioContext";
  *  - un toggle "me silencer ce peer" (mute local, côté écoute) au clic,
  *    visible uniquement pour les autres participants (pas pour soi-même).
  */
-export function LiveGuestsStrip({ broadcasterId }: { broadcasterId: string }) {
+interface LiveGuestsStripProps {
+  broadcasterId: string;
+  /**
+   * "overlay" : surimpression haut centre du cadre vidéo (ancien
+   * comportement, encore utilisé en plein écran).
+   * "panel"   : rendu statique dans une carte hors du player (mode
+   * normal — on ne salit plus la vidéo).
+   */
+  variant?: "overlay" | "panel";
+}
+
+export function LiveGuestsStrip({
+  broadcasterId,
+  variant = "overlay",
+}: LiveGuestsStripProps) {
   const { user } = useAuth();
   const { state } = useLiveInvites();
   const { remoteAudios, mutedPeers, togglePeerMute, meshActive } =
@@ -37,9 +51,18 @@ export function LiveGuestsStrip({ broadcasterId }: { broadcasterId: string }) {
 
   if (guests.length === 0) return null;
 
+  const outerClass =
+    variant === "overlay"
+      ? "pointer-events-none absolute inset-x-0 top-4 z-10 flex justify-center"
+      : "flex flex-wrap items-center justify-start";
+  const pillClass =
+    variant === "overlay"
+      ? "pointer-events-auto flex items-center gap-2 rounded-full border border-emerald-400/40 bg-night-900/70 px-3 py-1.5 backdrop-blur"
+      : "flex flex-wrap items-center gap-2 rounded-full border border-emerald-400/40 bg-emerald-500/10 px-3 py-1.5";
+
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-4 z-10 flex justify-center">
-      <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-emerald-400/40 bg-night-900/70 px-3 py-1.5 backdrop-blur">
+    <div className={outerClass}>
+      <div className={pillClass}>
         <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-emerald-200">
           <Mic className="h-3 w-3" /> Sur scène
         </span>
