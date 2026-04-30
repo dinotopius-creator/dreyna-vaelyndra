@@ -35,7 +35,6 @@ import { LIVE_CATEGORIES, getLiveCategory } from "../data/liveCategories";
 import { SectionHeading } from "../components/SectionHeading";
 import { GiftPanel } from "../components/GiftPanel";
 import { GiftFlight } from "../components/GiftFlight";
-import { LiveAvatarOverlay } from "../components/LiveAvatarOverlay";
 import { LiveChatHistory } from "../components/LiveChatHistory";
 import { LiveChatOverlay } from "../components/LiveChatOverlay";
 import { LiveHeartsOverlay } from "../components/LiveHeartsOverlay";
@@ -1872,37 +1871,17 @@ export function Live() {
                     <TwitchEmbed channel={twitchChannel} />
                   )}
                   {/*
-                    Overlay « avatar en live » : médaillon du broadcaster
-                    avec sa scène + sa parure équipées. Affiché
-                    UNIQUEMENT en plein écran, pour ne pas salir l'image
-                    du live en mode normal (cf. retour Alexandre — la
-                    vidéo doit rester propre, l'identité du streamer est
-                    déjà reprise dans la carte « présentation » sous le
-                    lecteur).
+                    Aucun overlay d'identité / métadonnées sur la vidéo,
+                    en mode normal comme en plein écran (cf. retours
+                    Alexandre : « il faut qu'il y ait uniquement le chat
+                    à la limite dessus »). Médaillon avatar, bandeau
+                    « Sur scène », badge En direct + catégorie + titre,
+                    Top soutiens : tous rendus dans le panneau d'infos
+                    sous le player en mode normal. En plein écran, on
+                    ne ré-affiche RIEN par-dessus le flux : seuls le
+                    chat flottant et les contrôles top-right restent
+                    visibles.
                   */}
-                  {fullscreenActive && (
-                    <LiveAvatarOverlay
-                      broadcasterId={broadcasterId}
-                      broadcasterName={
-                        broadcasterProfile?.username ?? "Vaelyndra"
-                      }
-                      fallbackAvatar={broadcasterProfile?.avatar ?? null}
-                      showControls={amBroadcaster}
-                    />
-                  )}
-                  {/* Bandeau « Sur scène » (invités acceptés). Plein
-                      écran uniquement ; en mode normal il est rendu
-                      dans le panneau d'infos sous le player. */}
-                  {fullscreenActive && (
-                    <LiveGuestsStrip
-                      broadcasterId={broadcasterId}
-                      variant="overlay"
-                    />
-                  )}
-                  {/* Plein écran : bloc d'infos en overlay compact (pas
-                      de « sous le player » disponible). Hors plein
-                      écran, le bloc est rendu après la balise vidéo. */}
-                  {fullscreenActive && renderLiveInfo(true)}
                 </>
               ) : !shouldOfferLiveResume &&
                 isActiveLive &&
@@ -1990,16 +1969,11 @@ export function Live() {
               <LiveHeartsOverlay key={broadcasterId} events={heartEvents} />
               <GiftFlight items={giftFlights} />
 
-              {/* Classement live Top 3 Sylvins en surimpression : plein
-                  écran UNIQUEMENT (mode normal → rendu dans le panneau
-                  sous le player, pour ne pas salir la vidéo). */}
-              {isActiveLive && fullscreenActive && (
-                <LiveLeaderboardOverlay
-                  key={`lb-${broadcasterId}`}
-                  entries={Object.values(tributes)}
-                  variant="overlay"
-                />
-              )}
+              {/* Top Soutiens : plus de version overlay nulle part —
+                  rendu uniquement dans le panneau d'infos sous le
+                  player en mode normal. En plein écran on accepte de
+                  perdre le classement plutôt que de salir la vidéo
+                  (cf. retour Alexandre). */}
 
               {/* Chat flottant TikTok/Twitch : visible uniquement si un
                   live est effectivement en cours sur ce broadcaster, et
