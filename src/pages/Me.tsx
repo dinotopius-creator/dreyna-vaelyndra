@@ -53,8 +53,16 @@ export function Me() {
    * que le pot PAID a bougé (ou au bout de 20 s), on retire le flag de l'URL.
    */
   const startPaidRef = useRef<number | null>(null);
+  const backendMeLoaded = backendMe !== null;
   useEffect(() => {
     if (paymentStatus !== "success") return;
+    // Le redirect Stripe est un full-page load : `backendMe` est `null`
+    // pendant que `/auth/me` se résout. Si on capturait la baseline à
+    // ce moment-là, elle vaudrait `0` et n'importe quel utilisateur qui
+    // a déjà des Sylvins payés verrait le toast "paiement confirmé"
+    // dès le premier tick (faux positif). On attend donc que
+    // `backendMe` soit chargé avant de démarrer le polling.
+    if (!backendMeLoaded) return;
     if (startPaidRef.current === null) {
       startPaidRef.current = backendMe?.sylvins_paid ?? 0;
     }
@@ -77,7 +85,7 @@ export function Me() {
     }, 2000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paymentStatus]);
+  }, [paymentStatus, backendMeLoaded]);
   const [bio, setBio] = useState(user?.bio ?? "");
   const [username, setUsername] = useState(user?.username ?? "");
   const [avatar, setAvatar] = useState(user?.avatar ?? "");
