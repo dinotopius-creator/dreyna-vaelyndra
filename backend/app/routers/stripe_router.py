@@ -352,19 +352,33 @@ def _apply_paid_checkout(
     record: Optional[StripePayment] = session.get(StripePayment, checkout_id)
     if record is None:
         # Très improbable (on vient de l'updater) mais on reste safe.
+        # Important : on lève une 5xx pour que Stripe retente le webhook.
+        # Si on faisait juste `return`, FastAPI renverrait 200, le
+        # cleanup de `_session_dep` rollback la transition CAS → paid,
+        # et on aurait débité le client sans jamais le créditer ni
+        # avoir de retry pour rattraper.
         log.error(
             "stripe_webhook_post_cas_missing session_id=%s", checkout_id
         )
-        return
+        raise HTTPException(
+            status_code=500,
+            detail="StripePayment introuvable après CAS — retry attendu.",
+        )
 
     profile = session.get(UserProfile, record.user_id)
     if profile is None:
+        # Idem : 5xx pour que Stripe retente. Sans ça, le client est
+        # débité, la CAS est rollbackée par le cleanup de session, et
+        # on n'a aucun moyen automatique de récupérer le crédit.
         log.error(
             "stripe_webhook_missing_user session_id=%s user_id=%s",
             checkout_id,
             record.user_id,
         )
-        return
+        raise HTTPException(
+            status_code=500,
+            detail="Profil utilisateur introuvable — retry attendu.",
+        )
 
     # Incrément atomique côté SQL pour éviter la lost-update race :
     # si deux webhooks pour le même utilisateur (packs différents)
