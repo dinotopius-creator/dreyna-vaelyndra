@@ -339,7 +339,16 @@ def _apply_paid_checkout(
     # 3. On a gagné la course CAS : on peut créditer sans risque
     #    de doublon. On recharge la ligne pour connaître le
     #    montant et l'utilisateur associés.
-    session.commit()
+    #
+    #    Important : on ne commit PAS encore. Si on committait ici puis
+    #    qu'un crash survient avant le commit final (ligne 369), la ligne
+    #    `StripePayment` resterait en `paid` mais les Sylvins ne seraient
+    #    jamais crédités → la CAS suivante verrait `rowcount == 0` et
+    #    sortirait via la branche idempotence : crédit perdu.
+    #    En gardant un seul commit à la fin, l'UPDATE de status et
+    #    l'incrément des Sylvins partent dans la même transaction. Les
+    #    `session.get()` ci-dessous voient l'UPDATE non encore committé
+    #    via les sémantiques read-your-own-writes (Postgres + SQLite).
     record: Optional[StripePayment] = session.get(StripePayment, checkout_id)
     if record is None:
         # Très improbable (on vient de l'updater) mais on reste safe.
