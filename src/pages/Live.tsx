@@ -1714,6 +1714,70 @@ export function Live() {
       ? `Avec ${broadcasterProfile.username} · depuis l'archipel de Vaelyndra`
       : "Depuis l'archipel de Vaelyndra");
 
+  // Bloc d'infos du live : badge "En direct" + catégorie + titre +
+  // description + "avec [streamer]". Rendu à deux endroits différents
+  // selon le mode :
+  //  - Hors fullscreen : SOUS le player (pas d'overlay), pour ne plus
+  //    bouffer le bas de la vidéo. Cf. retour Alexandre : "le truc en
+  //    direct et just chatting du live et le titre du live, il faut les
+  //    mettre en dessous de l'écran du live pendant le live, parce que
+  //    là ça prend trop de place sur l'écran."
+  //  - Fullscreen : on garde une variante overlay compacte avec dégradé,
+  //    parce qu'il n'y a pas de "dessous" exploitable en plein écran.
+  const renderLiveInfo = (asOverlay: boolean) => (
+    <div
+      className={
+        asOverlay
+          ? "pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-night-900/95 via-night-900/40 to-transparent p-6"
+          : "p-4 sm:p-5"
+      }
+    >
+      <div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-400/50 bg-rose-500/20 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-rose-200">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-rose-400" />{" "}
+            En direct
+          </span>
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] ${heroCategory.chipClass}`}
+          >
+            <span aria-hidden>{heroCategory.icon}</span>
+            {heroCategory.label}
+          </span>
+        </div>
+        <h3 className="mt-3 font-display text-2xl text-gold-200 md:text-4xl">
+          {heroTitle}
+        </h3>
+        <p className="mt-1 text-sm text-ivory/70">{heroDescription}</p>
+        {broadcasterProfile && (
+          <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-ivory/80">
+            <div className="flex items-center gap-2">
+              <img
+                src={broadcasterProfile.avatar}
+                alt=""
+                className="h-6 w-6 rounded-full border border-gold-400/40 object-cover"
+              />
+              <span>
+                avec{" "}
+                <span className="font-display text-gold-200">
+                  {broadcasterProfile.username}
+                </span>
+              </span>
+            </div>
+            {user && user.id !== broadcasterId && (
+              <ReportButton
+                targetType="live"
+                targetId={broadcasterId}
+                targetLabel={`Live de ${broadcasterProfile.username}`}
+                targetUrl={`/live/${broadcasterId}`}
+              />
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div className="mx-auto max-w-7xl px-3 py-6 sm:px-6 sm:py-12">
       <SectionHeading
@@ -1783,53 +1847,11 @@ export function Live() {
                   {/* Bandeau d'invités sur scène (PR H). Positionné en haut
                       du cadre, juste en-dessous du médaillon avatar. */}
                   <LiveGuestsStrip broadcasterId={broadcasterId} />
-                  <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-night-900/95 via-night-900/40 to-transparent p-6">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-400/50 bg-rose-500/20 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-rose-200">
-                          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-rose-400" />{" "}
-                          En direct
-                        </span>
-                        <span
-                          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] ${heroCategory.chipClass}`}
-                        >
-                          <span aria-hidden>{heroCategory.icon}</span>
-                          {heroCategory.label}
-                        </span>
-                      </div>
-                      <h3 className="mt-3 font-display text-2xl text-gold-200 md:text-4xl">
-                        {heroTitle}
-                      </h3>
-                      <p className="mt-1 text-sm text-ivory/70">
-                        {heroDescription}
-                      </p>
-                      {broadcasterProfile && (
-                        <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-ivory/80">
-                          <div className="flex items-center gap-2">
-                            <img
-                              src={broadcasterProfile.avatar}
-                              alt=""
-                              className="h-6 w-6 rounded-full border border-gold-400/40 object-cover"
-                            />
-                            <span>
-                              avec{" "}
-                              <span className="font-display text-gold-200">
-                                {broadcasterProfile.username}
-                              </span>
-                            </span>
-                          </div>
-                          {user && user.id !== broadcasterId && (
-                            <ReportButton
-                              targetType="live"
-                              targetId={broadcasterId}
-                              targetLabel={`Live de ${broadcasterProfile.username}`}
-                              targetUrl={`/live/${broadcasterId}`}
-                            />
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                  {/* En fullscreen, on garde le bloc d'infos en overlay
+                      compact (pas de "dessous" disponible). Hors
+                      fullscreen, le bloc est rendu après la balise vidéo
+                      pour ne plus manger le bas de l'écran. */}
+                  {fullscreenActive && renderLiveInfo(true)}
                 </>
               ) : !shouldOfferLiveResume &&
                 isActiveLive &&
@@ -2014,6 +2036,12 @@ export function Live() {
                 </button>
               </div>
             </div>
+            {/* Bloc d'infos du live (badge En direct, catégorie, titre,
+                description, "avec [streamer]") rendu SOUS le player en
+                mode normal pour ne pas bouffer le bas de la vidéo (cf.
+                retour Alexandre). En fullscreen, ce bloc est rendu
+                en overlay compact à l'intérieur du player. */}
+            {!fullscreenActive && showViewer && renderLiveInfo(false)}
             <div
               className={
                 fullscreenActive
