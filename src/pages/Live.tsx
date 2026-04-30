@@ -1732,47 +1732,88 @@ export function Live() {
           : "p-4 sm:p-5"
       }
     >
-      <div>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-400/50 bg-rose-500/20 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-rose-200">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-rose-400" />{" "}
-            En direct
-          </span>
-          <span
-            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] ${heroCategory.chipClass}`}
-          >
-            <span aria-hidden>{heroCategory.icon}</span>
-            {heroCategory.label}
-          </span>
-        </div>
-        <h3 className="mt-3 font-display text-2xl text-gold-200 md:text-4xl">
-          {heroTitle}
-        </h3>
-        <p className="mt-1 text-sm text-ivory/70">{heroDescription}</p>
-        {broadcasterProfile && (
-          <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-ivory/80">
-            <div className="flex items-center gap-2">
-              <img
-                src={broadcasterProfile.avatar}
-                alt=""
-                className="h-6 w-6 rounded-full border border-gold-400/40 object-cover"
-              />
-              <span>
-                avec{" "}
-                <span className="font-display text-gold-200">
-                  {broadcasterProfile.username}
-                </span>
-              </span>
-            </div>
-            {user && user.id !== broadcasterId && (
-              <ReportButton
-                targetType="live"
-                targetId={broadcasterId}
-                targetLabel={`Live de ${broadcasterProfile.username}`}
-                targetUrl={`/live/${broadcasterId}`}
-              />
-            )}
+      {/*
+        Mode normal : grille à 2 colonnes desktop ([titre du live
+        | Top soutiens]), pile sur mobile. En plein écran (overlay),
+        on garde la version compacte d'avant — pas la place pour un
+        panneau latéral en surimpression.
+      */}
+      <div
+        className={
+          asOverlay
+            ? ""
+            : "grid gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,18rem)] lg:items-start"
+        }
+      >
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-400/50 bg-rose-500/20 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-rose-200">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-rose-400" />{" "}
+              En direct
+            </span>
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] ${heroCategory.chipClass}`}
+            >
+              <span aria-hidden>{heroCategory.icon}</span>
+              {heroCategory.label}
+            </span>
           </div>
+          <h3 className="mt-3 font-display text-2xl text-gold-200 md:text-4xl">
+            {heroTitle}
+          </h3>
+          <p className="mt-1 text-sm text-ivory/70">{heroDescription}</p>
+          {broadcasterProfile && (
+            <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-ivory/80">
+              <div className="flex items-center gap-2">
+                <img
+                  src={broadcasterProfile.avatar}
+                  alt=""
+                  className="h-6 w-6 rounded-full border border-gold-400/40 object-cover"
+                />
+                <span>
+                  avec{" "}
+                  <span className="font-display text-gold-200">
+                    {broadcasterProfile.username}
+                  </span>
+                </span>
+              </div>
+              {user && user.id !== broadcasterId && (
+                <ReportButton
+                  targetType="live"
+                  targetId={broadcasterId}
+                  targetLabel={`Live de ${broadcasterProfile.username}`}
+                  targetUrl={`/live/${broadcasterId}`}
+                />
+              )}
+            </div>
+          )}
+          {/*
+            Bandeau « Sur scène » (invités acceptés). Rendu inline ici
+            en mode normal pour ne plus polluer la vidéo. En plein
+            écran, c'est la version overlay qui s'affiche sur le cadre.
+          */}
+          {!asOverlay && isActiveLive && (
+            <div className="mt-3">
+              <LiveGuestsStrip
+                broadcasterId={broadcasterId}
+                variant="panel"
+              />
+            </div>
+          )}
+        </div>
+        {/*
+          Petit coin « Top soutiens » du streamer, sur la droite en
+          desktop, sous le titre en mobile. Rendu uniquement en mode
+          normal — en plein écran on bascule sur l'overlay.
+        */}
+        {!asOverlay && isActiveLive && (
+          <aside className="rounded-2xl border border-gold-400/25 bg-night-900/40 p-4 sm:p-5">
+            <LiveLeaderboardOverlay
+              key={`lb-panel-${broadcasterId}`}
+              entries={Object.values(tributes)}
+              variant="panel"
+            />
+          </aside>
         )}
       </div>
     </div>
@@ -1832,25 +1873,35 @@ export function Live() {
                   )}
                   {/*
                     Overlay « avatar en live » : médaillon du broadcaster
-                    (avec sa scène + sa parure équipées) en surimpression,
-                    pour que les viewers voient toujours qui ils regardent
-                    même sur un partage d'écran ou un embed Twitch.
+                    avec sa scène + sa parure équipées. Affiché
+                    UNIQUEMENT en plein écran, pour ne pas salir l'image
+                    du live en mode normal (cf. retour Alexandre — la
+                    vidéo doit rester propre, l'identité du streamer est
+                    déjà reprise dans la carte « présentation » sous le
+                    lecteur).
                   */}
-                  <LiveAvatarOverlay
-                    broadcasterId={broadcasterId}
-                    broadcasterName={
-                      broadcasterProfile?.username ?? "Vaelyndra"
-                    }
-                    fallbackAvatar={broadcasterProfile?.avatar ?? null}
-                    showControls={amBroadcaster}
-                  />
-                  {/* Bandeau d'invités sur scène (PR H). Positionné en haut
-                      du cadre, juste en-dessous du médaillon avatar. */}
-                  <LiveGuestsStrip broadcasterId={broadcasterId} />
-                  {/* En fullscreen, on garde le bloc d'infos en overlay
-                      compact (pas de "dessous" disponible). Hors
-                      fullscreen, le bloc est rendu après la balise vidéo
-                      pour ne plus manger le bas de l'écran. */}
+                  {fullscreenActive && (
+                    <LiveAvatarOverlay
+                      broadcasterId={broadcasterId}
+                      broadcasterName={
+                        broadcasterProfile?.username ?? "Vaelyndra"
+                      }
+                      fallbackAvatar={broadcasterProfile?.avatar ?? null}
+                      showControls={amBroadcaster}
+                    />
+                  )}
+                  {/* Bandeau « Sur scène » (invités acceptés). Plein
+                      écran uniquement ; en mode normal il est rendu
+                      dans le panneau d'infos sous le player. */}
+                  {fullscreenActive && (
+                    <LiveGuestsStrip
+                      broadcasterId={broadcasterId}
+                      variant="overlay"
+                    />
+                  )}
+                  {/* Plein écran : bloc d'infos en overlay compact (pas
+                      de « sous le player » disponible). Hors plein
+                      écran, le bloc est rendu après la balise vidéo. */}
                   {fullscreenActive && renderLiveInfo(true)}
                 </>
               ) : !shouldOfferLiveResume &&
@@ -1939,13 +1990,14 @@ export function Live() {
               <LiveHeartsOverlay key={broadcasterId} events={heartEvents} />
               <GiftFlight items={giftFlights} />
 
-              {/* Classement live Top 3 Sylvins. Purgé au changement de
-                  broadcaster via le `key`. Masqué si le live n'est pas
-                  actif (pas de compétition à afficher sur un rideau tiré). */}
-              {isActiveLive && (
+              {/* Classement live Top 3 Sylvins en surimpression : plein
+                  écran UNIQUEMENT (mode normal → rendu dans le panneau
+                  sous le player, pour ne pas salir la vidéo). */}
+              {isActiveLive && fullscreenActive && (
                 <LiveLeaderboardOverlay
                   key={`lb-${broadcasterId}`}
                   entries={Object.values(tributes)}
+                  variant="overlay"
                 />
               )}
 

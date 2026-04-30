@@ -26,6 +26,13 @@ export interface TributeEntry {
 
 interface Props {
   entries: TributeEntry[];
+  /**
+   * "overlay" : surimpression coin haut-gauche du cadre vidéo (ancien
+   * comportement, encore utilisé en plein écran).
+   * "panel"   : rendu statique dans une carte hors du player (mode
+   * normal — on ne salit plus la vidéo).
+   */
+  variant?: "overlay" | "panel";
 }
 
 const RANK_STYLES = [
@@ -46,7 +53,10 @@ const RANK_STYLES = [
   },
 ];
 
-export function LiveLeaderboardOverlay({ entries }: Props) {
+export function LiveLeaderboardOverlay({
+  entries,
+  variant = "overlay",
+}: Props) {
   // On trie et on coupe à 3. Les totaux nuls sont exclus (jusqu'à ce
   // qu'il y en ait vraiment un, pas d'affichage "0 Sylvins").
   const top3 = useMemo(
@@ -58,13 +68,29 @@ export function LiveLeaderboardOverlay({ entries }: Props) {
     [entries],
   );
 
-  if (top3.length === 0) return null;
+  // Le panneau (variant="panel") s'affiche même vide pour réserver une
+  // place visuelle stable à côté du titre du live ; la version overlay
+  // reste invisible tant qu'il n'y a pas de soutien (pas de bandeau
+  // vide en surimpression de la vidéo).
+  if (top3.length === 0 && variant === "overlay") return null;
+
+  const wrapperClass =
+    variant === "overlay"
+      ? "pointer-events-none absolute left-4 top-4 z-10 flex flex-col gap-1.5"
+      : "flex flex-col gap-2";
+  const headerClass =
+    variant === "overlay"
+      ? "rounded-full bg-night-900/70 px-3 py-1 text-[10px] uppercase tracking-[0.22em] text-gold-200 backdrop-blur"
+      : "text-[11px] font-semibold uppercase tracking-[0.22em] text-gold-200";
 
   return (
-    <div className="pointer-events-none absolute left-4 top-4 z-10 flex flex-col gap-1.5">
-      <div className="rounded-full bg-night-900/70 px-3 py-1 text-[10px] uppercase tracking-[0.22em] text-gold-200 backdrop-blur">
-        Top soutiens
-      </div>
+    <div className={wrapperClass}>
+      <div className={headerClass}>Top soutiens</div>
+      {top3.length === 0 && variant === "panel" && (
+        <p className="text-xs text-ivory/55">
+          Personne n'a encore offert de Sylvins sur ce live. Sois le premier ✨
+        </p>
+      )}
       <AnimatePresence initial={false}>
         {top3.map((entry, i) => {
           const style = RANK_STYLES[i];
