@@ -39,6 +39,10 @@ const LiveObsChatOverlay = lazy(async () => {
   const mod = await import("./pages/LiveObsChatOverlay");
   return { default: mod.LiveObsChatOverlay };
 });
+const LiveDesktopChatPopout = lazy(async () => {
+  const mod = await import("./pages/LiveDesktopChatPopout");
+  return { default: mod.LiveDesktopChatPopout };
+});
 const Community = lazy(async () => {
   const mod = await import("./pages/Community");
   return { default: mod.Community };
@@ -254,6 +258,20 @@ function App() {
         />
         <Route path="*" element={<NotFound />} />
       </Routes>
+    );
+  }
+
+  if (location.pathname.startsWith("/live/popout/chat/")) {
+    return (
+      <Suspense fallback={<RouteFallback />}>
+        <Routes>
+          <Route
+            path="/live/popout/chat/:broadcasterId"
+            element={<LiveDesktopChatPopout />}
+          />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </Suspense>
     );
   }
 

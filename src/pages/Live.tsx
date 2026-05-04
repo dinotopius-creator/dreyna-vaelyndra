@@ -150,6 +150,11 @@ function extractTwitchChannel(raw: string) {
   return v.replace(/^@/, "").replace(/[^A-Za-z0-9_]/g, "");
 }
 
+function isDesktopViewport() {
+  if (typeof window === "undefined") return false;
+  return window.matchMedia("(min-width: 1024px)").matches;
+}
+
 function LiveVideoStage({
   isHost,
   localStream,
@@ -539,6 +544,10 @@ function BroadcasterControls() {
     return `${window.location.origin}/live/overlay/chat/${encodeURIComponent(broadcasterOverlayUserId)}`;
   }
 
+  function desktopChatUrl() {
+    return `${window.location.origin}/live/popout/chat/${encodeURIComponent(broadcasterOverlayUserId)}`;
+  }
+
   async function copyOverlayUrl() {
     try {
       await navigator.clipboard.writeText(overlayUrl());
@@ -556,23 +565,56 @@ function BroadcasterControls() {
     );
   }
 
+  function openDesktopChatPopout() {
+    window.open(
+      desktopChatUrl(),
+      "vaelyndra-live-chat-popout",
+      "popup=yes,width=420,height=760,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no",
+    );
+  }
+
+  function prepareDesktopChatWindow() {
+    if (isMobile || !isDesktopViewport()) return null;
+    return window.open(
+      "",
+      "vaelyndra-live-chat-popout",
+      "popup=yes,width=420,height=760,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no",
+    );
+  }
+
   async function goLive() {
     if (!config.title.trim()) {
       notify("Donne un titre à ton live.", "info");
       return;
     }
+    const preparedChatWindow = prepareDesktopChatWindow();
     if (config.mode === "camera") {
       // `facing` par défaut = frontale sur mobile (selfie), seule caméra
       // dispo sur desktop (webcam intégrée).
-      await startCameraShare("user");
+      try {
+        await startCameraShare("user");
+        preparedChatWindow?.location.assign(desktopChatUrl());
+        preparedChatWindow?.focus();
+      } catch (error) {
+        preparedChatWindow?.close();
+        throw error;
+      }
       return;
     }
     if (config.mode === "screen") {
-      await startScreenShare();
+      try {
+        await startScreenShare();
+        preparedChatWindow?.location.assign(desktopChatUrl());
+        preparedChatWindow?.focus();
+      } catch (error) {
+        preparedChatWindow?.close();
+        throw error;
+      }
       return;
     }
     const handle = extractTwitchChannel(config.twitchChannel);
     if (!handle) {
+      preparedChatWindow?.close();
       notify("Renseigne ton nom de chaîne Twitch.", "info");
       return;
     }
@@ -580,6 +622,8 @@ function BroadcasterControls() {
     // On passe explicitement `handle` : updateConfig est batché donc
     // configRef.current lit encore la valeur brute pré-normalisation.
     announceTwitchLive(handle);
+    preparedChatWindow?.location.assign(desktopChatUrl());
+    preparedChatWindow?.focus();
   }
 
   return (
@@ -910,6 +954,15 @@ function BroadcasterControls() {
         )}
         {isLive && (
           <>
+            <button
+              type="button"
+              onClick={openDesktopChatPopout}
+              className="btn-gold"
+              title="Ouvrir le chat live dans une vraie fenetre PC deplacable"
+            >
+              <MessageSquare className="h-4 w-4" />
+              Chat pop-out
+            </button>
             <button
               type="button"
               onClick={openOverlayPopout}
