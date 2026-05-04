@@ -4,6 +4,7 @@ import { useParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { apiGetProfile } from "../lib/api";
 import { generateId } from "../lib/helpers";
+import { subscribeCrossWindowLiveChat } from "../lib/liveChatBus";
 import {
   apiListLiveChat,
   apiPostLiveChat,
@@ -95,6 +96,34 @@ export function LiveDesktopChatPopout() {
     return () => {
       cancelled = true;
       window.clearInterval(id);
+    };
+  }, [broadcasterId]);
+
+  useEffect(() => {
+    if (!broadcasterId) return;
+    const unsubscribe = subscribeCrossWindowLiveChat((payload) => {
+      if (payload.broadcasterId !== broadcasterId) return;
+      setMessages((current) => {
+        if (seenIdsRef.current.has(payload.message.id)) return current;
+        seenIdsRef.current.add(payload.message.id);
+        const nextMessage: LiveChatMessageOut = {
+          id: payload.message.id,
+          broadcaster_id: broadcasterId,
+          author_id: payload.message.authorId,
+          author_name: payload.message.authorName,
+          author_avatar: payload.message.authorAvatar,
+          content: payload.message.content,
+          created_at: payload.message.createdAt,
+          highlight: payload.message.highlight ?? false,
+          grade_short: payload.message.gradeShort ?? null,
+        };
+        return [...current, nextMessage].slice(-MAX_MESSAGES);
+      });
+      lastCreatedAtRef.current = payload.message.createdAt;
+      setStatus("ready");
+    });
+    return () => {
+      unsubscribe?.();
     };
   }, [broadcasterId]);
 
