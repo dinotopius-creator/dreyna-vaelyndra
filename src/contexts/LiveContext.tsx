@@ -40,6 +40,7 @@ import {
   type LiveSessionOut,
   type NativeIceCandidate,
 } from "../lib/liveApi";
+import { publishCrossWindowLiveChat } from "../lib/liveChatBus";
 
 /**
  * Contexte dédié aux lives (queen + cour). Multi-utilisateur.
@@ -739,6 +740,16 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         console.warn("chat listener threw", err);
       }
     });
+    if (
+      isHostingChatRef.current &&
+      configRef.current.status === "live" &&
+      userRef.current?.id
+    ) {
+      publishCrossWindowLiveChat({
+        broadcasterId: userRef.current.id,
+        message: msg,
+      });
+    }
   }, []);
 
   /**
