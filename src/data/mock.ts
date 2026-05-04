@@ -7,7 +7,7 @@ import type {
   LiveSession,
   Product,
 } from "../types";
-import dreynaPhoto from "../assets/dreyna-zepeto.png";
+import dreynaPhoto from "../assets/hero.png";
 
 // Profil de seed de Dreyna : depuis la dé-Dreyna-isation du site, ce profil
 // est traité comme un compte animateur normal (pas de rôle "queen", pas de
