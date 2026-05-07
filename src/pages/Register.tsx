@@ -5,6 +5,7 @@ import { Crown, Mail, KeyRound, UserRound, MailCheck } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
 import { CREATURES } from "../data/creatures";
+import { suggestEmailCorrection } from "../lib/emailTypo";
 
 export function Register() {
   const { register } = useAuth();
@@ -21,6 +22,8 @@ export function Register() {
   const [submitting, setSubmitting] = useState(false);
   const [sentMessage, setSentMessage] = useState<string>("");
 
+  const emailSuggestion = suggestEmailCorrection(email.trim());
+
   function goToCreature(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -30,6 +33,12 @@ export function Register() {
     }
     if (!/^\S+@\S+\.\S+$/.test(email)) {
       setError("Un mail valide est requis.");
+      return;
+    }
+    if (emailSuggestion) {
+      setError(
+        `L'adresse email a l'air d'avoir une faute de frappe. Tu voulais dire ${emailSuggestion} ?`,
+      );
       return;
     }
     if (password.length < 8) {
@@ -121,6 +130,22 @@ export function Register() {
                 className="glass-input pl-9"
               />
             </div>
+            {emailSuggestion && (
+              <p className="text-xs text-amber-300">
+                Tu voulais dire{" "}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEmail(emailSuggestion);
+                    setError(null);
+                  }}
+                  className="font-semibold underline decoration-dotted underline-offset-2 hover:text-amber-200"
+                >
+                  {emailSuggestion}
+                </button>{" "}
+                ?
+              </p>
+            )}
             <div className="relative">
               <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ivory/40" />
               <input
