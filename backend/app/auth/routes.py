@@ -60,6 +60,7 @@ from .dependencies import (
     require_auth_session,
     set_session_cookie,
 )
+from .email_typo import suggest_domain_correction
 from .models import (
     AuthSession,
     Credential,
@@ -89,12 +90,30 @@ def _now_iso() -> str:
 
 
 def _normalize_email(email: str) -> str:
-    """Valide syntaxiquement et normalise l'email (lowercase domaine)."""
+    """Valide syntaxiquement et normalise l'email (lowercase domaine).
+
+    En plus du contrôle syntaxique fourni par `email_validator`, on
+    refuse explicitement les domaines qui sont des fautes de frappe
+    proches d'un fournisseur grand public connu (`gmil.com` →
+    `gmail.com`, `hotmial.com` → `hotmail.com`, …). C'est essentiel :
+    sans ça, l'utilisateur s'inscrit avec un domaine bidon, ne reçoit
+    jamais le mail de vérification et reste bloqué côté `is_verified`.
+    """
     try:
         info = validate_email(email, check_deliverability=False)
     except EmailNotValidError as exc:
         raise HTTPException(400, f"Email invalide : {exc}") from exc
-    return info.normalized.lower()
+    normalized = info.normalized.lower()
+    domain = normalized.rsplit("@", 1)[1] if "@" in normalized else ""
+    suggestion = suggest_domain_correction(domain)
+    if suggestion is not None:
+        local = normalized.rsplit("@", 1)[0]
+        raise HTTPException(
+            400,
+            f"L'adresse email a l'air d'avoir une faute de frappe. "
+            f"Tu voulais dire {local}@{suggestion} ?",
+        )
+    return normalized
 
 
 def _check_password_strength(password: str) -> None:
