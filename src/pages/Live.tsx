@@ -1803,6 +1803,7 @@ export function Live() {
    */
   function onGiftSent(gift: Gift) {
     if (!user) return;
+    setIsOfferingOpen(false);
     const event: LiveGiftEvent = {
       id: generateId("giftevt"),
       giftId: gift.id,
@@ -2237,6 +2238,17 @@ export function Live() {
                     : "Le rideau est tiré. Reviens quand la scène s'allume."}
               </p>
             </div>
+            {isOfferingOpen && broadcasterProfile && !fullscreenActive && (
+              <div className="px-4 pb-4">
+                <GiftPanel
+                  hostId={broadcasterProfile.id}
+                  hostName={broadcasterProfile.username}
+                  onGiftSent={onGiftSent}
+                  variant="overlay"
+                  onClose={() => setIsOfferingOpen(false)}
+                />
+              </div>
+            )}
           </div>
 
           {/* Carte « présentation du streamer » : nom en grand juste
