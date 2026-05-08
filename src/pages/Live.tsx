@@ -1213,7 +1213,11 @@ export function Live() {
   const fullscreenActive = isFullscreen || isPseudoFullscreen;
   const [isOfferingOpen, setIsOfferingOpen] = useState(false);
   const [isViewerListOpen, setIsViewerListOpen] = useState(false);
-  const displayedViewerCount = amBroadcaster ? realViewers.length : viewers;
+  const displayedViewerCount = isActiveLive
+    ? amBroadcaster
+      ? realViewers.length
+      : connectedViewers.length
+    : viewers;
 
   useEffect(() => {
     if (!isActiveLive) setIsOfferingOpen(false);
