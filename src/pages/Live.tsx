@@ -51,9 +51,16 @@ import {
   type SortLevel,
 } from "../components/SortDAppelCaster";
 import { AUTO_CHAT_LINES, GIFT_CATALOGUE, SEED_CHAT } from "../data/mock";
-import type { ChatMessage, Gift, LiveGiftEvent, User } from "../types";
+import type {
+  ChatMessage,
+  Gift,
+  LiveGiftEvent,
+  LiveViewerSummary,
+  User,
+} from "../types";
 import { playGiftSound } from "../lib/giftSounds";
 import { generateId } from "../lib/helpers";
+import { publishCrossWindowLiveViewers } from "../lib/liveChatBus";
 import {
   apiListLiveChat,
   apiModerateLive,
@@ -562,7 +569,7 @@ function BroadcasterControls() {
     window.open(
       overlayUrl(),
       "vaelyndra-live-chat-overlay",
-      "popup=yes,width=420,height=720,menubar=no,toolbar=no,location=no,status=no",
+      "popup=yes,width=420,height=720,menubar=no,toolbar=no,location=no,status=no,alwaysRaised=yes",
     );
   }
 
@@ -570,7 +577,7 @@ function BroadcasterControls() {
     window.open(
       desktopChatUrl(),
       "vaelyndra-live-chat-popout",
-      "popup=yes,width=420,height=760,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no",
+      "popup=yes,width=420,height=760,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no,alwaysRaised=yes",
     );
   }
 
@@ -579,7 +586,7 @@ function BroadcasterControls() {
     return window.open(
       "",
       "vaelyndra-live-chat-popout",
-      "popup=yes,width=420,height=760,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no",
+      "popup=yes,width=420,height=760,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no,alwaysRaised=yes",
     );
   }
 
@@ -1013,6 +1020,7 @@ export function Live() {
     resumableLive,
     resumeLive,
     dismissResumableLive,
+    connectedViewers,
   } = useLive();
 
   // Quel broadcaster regarde-t-on ?
@@ -1061,6 +1069,19 @@ export function Live() {
   const registryEntry = liveRegistry[broadcasterId] ?? null;
   const isHost = amBroadcaster && !!localStream;
   const { resetBroadcast: resetInviteBroadcast } = useLiveInvites();
+  const realViewers = useMemo<LiveViewerSummary[]>(
+    () =>
+      connectedViewers.filter((viewer) => !user || viewer.userId !== user.id),
+    [connectedViewers, user],
+  );
+
+  useEffect(() => {
+    if (!amBroadcaster || !broadcasterId) return;
+    publishCrossWindowLiveViewers({
+      broadcasterId,
+      viewers: realViewers,
+    });
+  }, [amBroadcaster, broadcasterId, realViewers]);
 
   // Rejoindre le flux du broadcaster cible (sauf si on est host).
   const remoteStreamRef = useRef<MediaStream | null>(null);
@@ -1107,6 +1128,11 @@ export function Live() {
     (amBroadcaster ? config.mode : "screen");
   const isActiveLive =
     !!registryEntry || (amBroadcaster && config.status === "live");
+  useEffect(() => {
+    if (!amBroadcaster || !isActiveLive) {
+      setIsViewerListOpen(false);
+    }
+  }, [amBroadcaster, isActiveLive, broadcasterId]);
   const shouldOfferLiveResume =
     amBroadcaster &&
     !localStream &&
@@ -1186,6 +1212,8 @@ export function Live() {
   const [isChatVisible, setIsChatVisible] = useState(true);
   const fullscreenActive = isFullscreen || isPseudoFullscreen;
   const [isOfferingOpen, setIsOfferingOpen] = useState(false);
+  const [isViewerListOpen, setIsViewerListOpen] = useState(false);
+  const displayedViewerCount = amBroadcaster ? realViewers.length : viewers;
 
   useEffect(() => {
     if (!isActiveLive) setIsOfferingOpen(false);
@@ -1572,7 +1600,7 @@ export function Live() {
   // attente soit tirée au hasard dans [minMs, maxMs] du grade courant,
   // ce qui sonne plus naturel qu'un tick mécanique.
   useEffect(() => {
-    if (!isActiveLive) return;
+    return;
     const cadence = getBotCadence(broadcasterGradeSlug);
     let timer: ReturnType<typeof setTimeout> | null = null;
     const scheduleNext = () => {
@@ -1818,6 +1846,11 @@ export function Live() {
   function toggleOfferingPanel() {
     if (!broadcasterProfile || !isActiveLive) return;
     setIsOfferingOpen((open) => !open);
+  }
+
+  function toggleViewerList() {
+    if (!amBroadcaster || !isActiveLive) return;
+    setIsViewerListOpen((open) => !open);
   }
 
   const heroTitle =
@@ -2132,9 +2165,28 @@ export function Live() {
                   les overlays, et assez grands pour être tappables
                   au doigt (h-8 w-8 = 32 px). */}
               <div className="absolute right-2 top-2 z-30 flex items-center gap-2 sm:right-4 sm:top-4">
-                <div className="pointer-events-none flex items-center gap-2 rounded-full bg-night-900/70 px-3 py-1.5 text-xs text-ivory/80 backdrop-blur">
-                  <Users className="h-3.5 w-3.5 text-gold-300" /> {viewers}
-                </div>
+                {amBroadcaster && isActiveLive ? (
+                  <button
+                    type="button"
+                    onClick={toggleViewerList}
+                    className="pointer-events-auto flex items-center gap-2 rounded-full bg-night-900/70 px-3 py-1.5 text-xs text-ivory/80 backdrop-blur transition hover:bg-night-900/90 hover:text-gold-200"
+                    aria-label={
+                      isViewerListOpen
+                        ? "Masquer les spectateurs du live"
+                        : "Afficher les spectateurs du live"
+                    }
+                    aria-pressed={isViewerListOpen}
+                    title="Voir qui regarde le live"
+                  >
+                    <Users className="h-3.5 w-3.5 text-gold-300" />{" "}
+                    {displayedViewerCount}
+                  </button>
+                ) : (
+                  <div className="pointer-events-none flex items-center gap-2 rounded-full bg-night-900/70 px-3 py-1.5 text-xs text-ivory/80 backdrop-blur">
+                    <Users className="h-3.5 w-3.5 text-gold-300" />{" "}
+                    {displayedViewerCount}
+                  </div>
+                )}
                 {nextLiveEntry && !amBroadcaster && (
                   <button
                     type="button"
@@ -2190,6 +2242,55 @@ export function Live() {
                   )}
                 </button>
               </div>
+              {amBroadcaster && isActiveLive && isViewerListOpen && (
+                <div className="absolute right-2 top-12 z-30 w-[min(22rem,calc(100%-1rem))] rounded-2xl border border-gold-400/25 bg-night-950/88 p-3 text-left shadow-2xl backdrop-blur-md sm:right-4 sm:top-14">
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="font-display text-sm text-gold-100">
+                        Spectateurs humains
+                      </p>
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-ivory/45">
+                        {displayedViewerCount} en direct
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsViewerListOpen(false)}
+                      className="rounded-full border border-ivory/10 px-2 py-1 text-[11px] text-ivory/60 transition hover:border-gold-300/40 hover:text-gold-200"
+                    >
+                      Fermer
+                    </button>
+                  </div>
+                  {realViewers.length === 0 ? (
+                    <p className="rounded-xl border border-ivory/10 bg-night-900/60 px-3 py-3 text-xs text-ivory/60">
+                      Aucun viewer humain connecté pour le moment.
+                    </p>
+                  ) : (
+                    <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                      {realViewers.map((viewer) => (
+                        <div
+                          key={viewer.userId}
+                          className="flex items-center gap-3 rounded-xl border border-ivory/10 bg-night-900/60 px-3 py-2"
+                        >
+                          <img
+                            src={viewer.avatar}
+                            alt=""
+                            className="h-9 w-9 rounded-full border border-gold-300/25 object-cover"
+                          />
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-gold-100">
+                              {viewer.username}
+                            </p>
+                            <p className="text-[11px] uppercase tracking-[0.12em] text-ivory/45">
+                              Regarde le live
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             {/* Bloc d'infos du live (badge En direct, catégorie, titre,
                 description, "avec [streamer]") rendu SOUS le player en

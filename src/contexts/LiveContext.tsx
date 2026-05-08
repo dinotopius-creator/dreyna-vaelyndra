@@ -22,7 +22,11 @@ import {
   startNativeScreenShare,
   stopNativeScreenShare,
 } from "../lib/nativeScreenShare";
-import type { ChatMessage, LiveGiftEvent } from "../types";
+import type {
+  ChatMessage,
+  LiveGiftEvent,
+  LiveViewerSummary,
+} from "../types";
 import { GIFT_CATALOGUE } from "../data/mock";
 import {
   DEFAULT_LIVE_CATEGORY,
@@ -456,6 +460,8 @@ interface LiveCtx {
   resumeLive: () => Promise<void>;
   /** Jette le marker : l'user veut démarrer un nouveau live, pas reprendre. */
   dismissResumableLive: () => void;
+  /** Liste réelle des viewers humains actuellement connectés au live de ce host. */
+  connectedViewers: LiveViewerSummary[];
 }
 
 const Ctx = createContext<LiveCtx | null>(null);
@@ -482,6 +488,9 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   // on récupère l'info pour lui proposer `resumeLive()`.
   const [resumableLive, setResumableLive] = useState<LiveResumeMarker | null>(
     () => readResumeMarker(),
+  );
+  const [connectedViewers, setConnectedViewers] = useState<LiveViewerSummary[]>(
+    [],
   );
 
   const hostPeerRef = useRef<Peer | null>(null);
@@ -515,6 +524,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   const giftListenersRef = useRef<
     Set<(event: LiveGiftEvent) => void>
   >(new Set());
+  const hostViewerPresenceRef = useRef<Map<string, LiveViewerSummary>>(new Map());
   // Rôle courant vis-à-vis de `publishChatMessage` : true si on est
   // host (on broadcast), false si on est viewer (on transmet au host).
   const isHostingChatRef = useRef(false);
@@ -868,6 +878,37 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const sanitizeIncomingViewerPresence = useCallback(
+    (payload: unknown): LiveViewerSummary | null => {
+      if (typeof payload !== "object" || payload === null) return null;
+      const p = payload as Record<string, unknown>;
+      if (p.type !== "viewer-presence") return null;
+      const userId = typeof p.userId === "string" ? p.userId : null;
+      const username =
+        typeof p.username === "string" ? p.username.slice(0, 40) : null;
+      const avatar = typeof p.avatar === "string" ? p.avatar : null;
+      const joinedAt =
+        typeof p.joinedAt === "string" ? p.joinedAt : new Date().toISOString();
+      if (!userId || !username || !avatar) return null;
+      return { userId, username, avatar, joinedAt };
+    },
+    [],
+  );
+
+  const syncConnectedViewers = useCallback(() => {
+    const deduped = new Map<string, LiveViewerSummary>();
+    hostViewerPresenceRef.current.forEach((viewer) => {
+      const existing = deduped.get(viewer.userId);
+      if (!existing || existing.joinedAt > viewer.joinedAt) {
+        deduped.set(viewer.userId, viewer);
+      }
+    });
+    const next = Array.from(deduped.values()).sort((a, b) =>
+      a.username.localeCompare(b.username, "fr", { sensitivity: "base" }),
+    );
+    setConnectedViewers(next);
+  }, []);
+
   /**
    * Côté host uniquement : diffuse un cadeau à toutes les
    * DataConnection viewer ouvertes ET le livre localement (pour que
@@ -911,6 +952,8 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       }
     });
     hostDataConnectionsRef.current.clear();
+    hostViewerPresenceRef.current.clear();
+    setConnectedViewers([]);
     isHostingChatRef.current = false;
 
     if (hostPeerRef.current) {
@@ -1291,6 +1334,16 @@ export function LiveProvider({ children }: { children: ReactNode }) {
               // monde voie le même effet visuel + son.
               const event = sanitizeIncomingGift(payload);
               if (event) broadcastGiftFromHost(event);
+            } else if (
+              typeof payload === "object" &&
+              payload !== null &&
+              (payload as { type?: string }).type === "viewer-presence"
+            ) {
+              const viewer = sanitizeIncomingViewerPresence(payload);
+              if (viewer) {
+                hostViewerPresenceRef.current.set(dataConn.peer, viewer);
+                syncConnectedViewers();
+              }
             }
           });
           dataConn.on("close", () => {
@@ -1305,6 +1358,8 @@ export function LiveProvider({ children }: { children: ReactNode }) {
               hostConnectionsRef.current.delete(outbound);
             }
             hostDataConnectionsRef.current.delete(dataConn);
+            hostViewerPresenceRef.current.delete(dataConn.peer);
+            syncConnectedViewers();
           });
         });
       } catch (err) {
@@ -1891,6 +1946,21 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             // ses messages, et au retour sur sa propre page le flag
             // restait faussement à false → chat silencieusement cassé
             // pour le reste de la session).
+            data.on("open", () => {
+              const me = userRef.current;
+              if (!me) return;
+              try {
+                data.send({
+                  type: "viewer-presence",
+                  userId: me.id,
+                  username: me.username,
+                  avatar: me.avatar,
+                  joinedAt: new Date().toISOString(),
+                });
+              } catch {
+                // ignore
+              }
+            });
             data.on("data", (payload) => {
               if (cancelled) return;
               if (typeof payload !== "object" || payload === null) return;
@@ -2305,6 +2375,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       resumableLive,
       resumeLive,
       dismissResumableLive,
+      connectedViewers,
     }),
     [
       config,
@@ -2329,6 +2400,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       resumableLive,
       resumeLive,
       dismissResumableLive,
+      connectedViewers,
     ],
   );
 
