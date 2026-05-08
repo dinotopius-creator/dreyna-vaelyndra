@@ -12,6 +12,7 @@ import {
   Eye,
   EyeOff,
   ExternalLink,
+  Gift as GiftIcon,
   Video,
   Camera,
   RefreshCw,
@@ -1184,6 +1185,11 @@ export function Live() {
   const [isPseudoFullscreen, setIsPseudoFullscreen] = useState(false);
   const [isChatVisible, setIsChatVisible] = useState(true);
   const fullscreenActive = isFullscreen || isPseudoFullscreen;
+  const [isOfferingOpen, setIsOfferingOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isActiveLive) setIsOfferingOpen(false);
+  }, [isActiveLive, broadcasterId]);
 
   useEffect(() => {
     function onFsChange() {
@@ -1808,6 +1814,11 @@ export function Live() {
     publishGiftEvent(event);
   }
 
+  function toggleOfferingPanel() {
+    if (!broadcasterProfile || !isActiveLive) return;
+    setIsOfferingOpen((open) => !open);
+  }
+
   const heroTitle =
     registryEntry?.title?.trim() ||
     viewingMeta?.title?.trim() ||
@@ -2201,6 +2212,18 @@ export function Live() {
                   <Heart className="h-3.5 w-3.5" /> Cœur
                 </button>
                 <SortDAppelCaster onCast={castSortDAppel} disabled={!user} />
+                <button
+                  type="button"
+                  onClick={toggleOfferingPanel}
+                  disabled={!broadcasterProfile || !isActiveLive}
+                  className="btn-ghost"
+                  aria-label={
+                    isOfferingOpen ? "Fermer les offrandes" : "Ouvrir les offrandes"
+                  }
+                  aria-pressed={isOfferingOpen}
+                >
+                  <GiftIcon className="h-3.5 w-3.5" /> Offrande
+                </button>
               </div>
               <p
                 className={
@@ -2223,6 +2246,26 @@ export function Live() {
               diminutif de grade [BRM/SEN/FLX/…] et un lien cliquable
               vers le profil. Cachée seulement si on n'a pas encore
               résolu le broadcaster (rare, transitoire). */}
+          {isOfferingOpen && broadcasterProfile && (
+            <div className="fixed inset-0 z-50 flex items-end justify-center bg-night-950/70 p-3 backdrop-blur-sm sm:items-center sm:p-6">
+              <button
+                type="button"
+                className="absolute inset-0"
+                aria-label="Fermer les offrandes"
+                onClick={() => setIsOfferingOpen(false)}
+              />
+              <div className="relative z-10 max-h-[88vh] w-full max-w-5xl overflow-y-auto">
+                <GiftPanel
+                  hostId={broadcasterProfile.id}
+                  hostName={broadcasterProfile.username}
+                  onGiftSent={onGiftSent}
+                  variant="overlay"
+                  onClose={() => setIsOfferingOpen(false)}
+                />
+              </div>
+            </div>
+          )}
+
           {broadcasterProfile && (
             <div className="mt-4 flex flex-wrap items-center gap-4 rounded-2xl border border-gold-400/25 bg-night-900/60 p-4 sm:p-5">
               <Link
@@ -2319,16 +2362,6 @@ export function Live() {
           />
 
           <BroadcasterControls />
-
-          {broadcasterProfile && (
-            <div className="mt-8">
-              <GiftPanel
-                hostId={broadcasterProfile.id}
-                hostName={broadcasterProfile.username}
-                onGiftSent={onGiftSent}
-              />
-            </div>
-          )}
 
           <section className="mt-12">
             <SectionHeading

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Gift as GiftIcon, Plus, ShieldAlert, Coins } from "lucide-react";
+import { Gift as GiftIcon, Plus, ShieldAlert, Coins, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useStore } from "../contexts/StoreContext";
 import { useAuth } from "../contexts/AuthContext";
@@ -20,6 +20,10 @@ interface Props {
    * pour animer une envolée sur la scène live.
    */
   onGiftSent?: (gift: Gift) => void;
+  /** Variante d'affichage : carte de page ou panneau flottant. */
+  variant?: "section" | "overlay";
+  /** Callback facultatif pour fermer le panneau flottant. */
+  onClose?: () => void;
 }
 
 const RARITY_STYLES: Record<
@@ -53,7 +57,13 @@ const RARITY_STYLES: Record<
   },
 };
 
-export function GiftPanel({ hostId, hostName, onGiftSent }: Props) {
+export function GiftPanel({
+  hostId,
+  hostName,
+  onGiftSent,
+  variant = "section",
+  onClose,
+}: Props) {
   const { gifts, myWallet, dispatch } = useStore();
   const { user } = useAuth();
   const { profile: serverProfile, refresh: refreshProfile } = useProfile();
@@ -137,13 +147,39 @@ export function GiftPanel({ hostId, hostName, onGiftSent }: Props) {
   }
 
   return (
-    <section className="card-royal p-5 md:p-6">
+    <section
+      className={
+        variant === "overlay"
+          ? "rounded-[1.75rem] border border-gold-400/25 bg-[radial-gradient(circle_at_top,rgba(212,175,55,0.14),transparent_34%),linear-gradient(180deg,rgba(21,16,35,0.98),rgba(10,8,18,0.98))] p-5 shadow-2xl md:p-6"
+          : "card-royal p-5 md:p-6"
+      }
+    >
       <header className="flex flex-wrap items-center gap-3">
         <GiftIcon className="h-4 w-4 text-gold-300" />
-        <h3 className="font-display text-lg text-gold-200">
-          Offrir des cadeaux à {hostName}
-        </h3>
+        <div>
+          <h3 className="font-display text-lg text-gold-200">
+            {variant === "overlay"
+              ? `Offrandes pour ${hostName}`
+              : `Offrir des cadeaux à ${hostName}`}
+          </h3>
+          {variant === "overlay" ? (
+            <p className="text-[11px] uppercase tracking-[0.22em] text-ivory/45">
+              Cadeaux, sons et effets live conservés
+            </p>
+          ) : null}
+        </div>
         <div className="ml-auto flex items-center gap-3">
+          {onClose ? (
+            <button
+              type="button"
+              onClick={onClose}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-ivory/10 bg-night-900/55 text-ivory/70 transition hover:border-gold-300/40 hover:text-gold-200"
+              aria-label="Fermer les offrandes"
+              title="Fermer les offrandes"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          ) : null}
           <div className="flex items-center gap-2 rounded-full border border-gold-400/40 bg-night-900/50 px-3 py-1">
             <img
               src="/sylvin-coin-icon.png"
@@ -177,7 +213,11 @@ export function GiftPanel({ hostId, hostName, onGiftSent }: Props) {
         </p>
       )}
 
-      <ul className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
+      <ul
+        className={`mt-5 grid grid-cols-2 gap-3 ${
+          variant === "overlay" ? "sm:grid-cols-3" : "sm:grid-cols-3 md:grid-cols-5"
+        }`}
+      >
         {sorted.map((g) => {
           const style = RARITY_STYLES[g.rarity];
           const insufficient = !!user && effectiveBalance < g.price;
