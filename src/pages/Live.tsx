@@ -1852,7 +1852,6 @@ export function Live() {
     if (!amBroadcaster || !isActiveLive) return;
     setIsViewerListOpen((open) => !open);
   }
-
   const heroTitle =
     registryEntry?.title?.trim() ||
     viewingMeta?.title?.trim() ||
