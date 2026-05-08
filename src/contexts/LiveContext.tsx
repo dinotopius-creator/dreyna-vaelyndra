@@ -22,7 +22,8 @@ import {
   startNativeScreenShare,
   stopNativeScreenShare,
 } from "../lib/nativeScreenShare";
-import type { ChatMessage } from "../types";
+import type { ChatMessage, LiveGiftEvent } from "../types";
+import { GIFT_CATALOGUE } from "../data/mock";
 import {
   DEFAULT_LIVE_CATEGORY,
   normalizeLiveCategory,
@@ -425,6 +426,22 @@ interface LiveCtx {
    */
   subscribeChatMessages: (handler: (msg: ChatMessage) => void) => () => void;
   /**
+   * Publie un événement de cadeau sur le live courant. Mêmes règles
+   * que `publishChatMessage` : viewer → host → tous les viewers, avec
+   * écho local pour le sender. Le host valide que `giftId` existe
+   * dans `GIFT_CATALOGUE` avant de re-broadcaster (évite qu'un viewer
+   * malveillant injecte un faux cadeau dans le top soutien).
+   */
+  publishGiftEvent: (event: LiveGiftEvent) => void;
+  /**
+   * S'abonne aux cadeaux reçus en temps réel sur le live courant.
+   * Appelé par `Live.tsx` pour déclencher animations + son + maj du
+   * leaderboard chez tous les viewers (pas seulement le sender).
+   */
+  subscribeGiftEvents: (
+    handler: (event: LiveGiftEvent) => void,
+  ) => () => void;
+  /**
    * Si présent, le user a été broadcaster il y a moins de 5 min et sa
    * page a été rafraîchie (ou l'onglet rouvert) — on peut lui proposer
    * de reprendre son live en re-prompt getUserMedia / getDisplayMedia.
@@ -490,6 +507,14 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   // Abonnés au flux des messages de chat (un seul dans la pratique,
   // la page Live, mais un Set permet de ne pas se soucier du nombre).
   const chatListenersRef = useRef<Set<(msg: ChatMessage) => void>>(new Set());
+  // Mêmes patterns pour le canal `gift-event` : dédoublonnage + listeners.
+  // Le canal cadeau partage la même DataConnection WebRTC que le chat
+  // (pas de pipe séparé) ; ce sont juste des messages avec un autre
+  // `type`.
+  const giftSeenIdsRef = useRef<Set<string>>(new Set());
+  const giftListenersRef = useRef<
+    Set<(event: LiveGiftEvent) => void>
+  >(new Set());
   // Rôle courant vis-à-vis de `publishChatMessage` : true si on est
   // host (on broadcast), false si on est viewer (on transmet au host).
   const isHostingChatRef = useRef(false);
@@ -780,6 +805,88 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       deliverChatLocally(safeMsg);
     },
     [deliverChatLocally],
+  );
+
+  /**
+   * Sanitise un payload `gift-event` reçu du WebRTC. Comme pour le
+   * chat, on ne fait jamais confiance aveuglément aux champs envoyés
+   * par un viewer — un viewer malveillant pourrait passer un `giftId`
+   * qui n'existe pas pour spammer un faux cadeau "mythique" et
+   * polluer le top soutien chez tous les autres viewers.
+   *
+   * On vérifie systématiquement que `giftId` existe dans
+   * `GIFT_CATALOGUE`. Sinon on drop le message.
+   */
+  const sanitizeIncomingGift = useCallback(
+    (payload: unknown): LiveGiftEvent | null => {
+      if (typeof payload !== "object" || payload === null) return null;
+      const p = payload as Record<string, unknown>;
+      if (p.type !== "gift-event") return null;
+      const id = typeof p.id === "string" ? p.id : null;
+      const giftId = typeof p.giftId === "string" ? p.giftId : null;
+      const senderId = typeof p.senderId === "string" ? p.senderId : null;
+      const senderName =
+        typeof p.senderName === "string" ? p.senderName.slice(0, 40) : null;
+      const senderAvatar =
+        typeof p.senderAvatar === "string" ? p.senderAvatar : undefined;
+      const createdAt =
+        typeof p.createdAt === "string"
+          ? p.createdAt
+          : new Date().toISOString();
+      if (!id || !giftId || !senderId || !senderName) return null;
+      if (!GIFT_CATALOGUE.some((g) => g.id === giftId)) return null;
+      return {
+        id,
+        giftId,
+        senderId,
+        senderName,
+        senderAvatar,
+        createdAt,
+      };
+    },
+    [],
+  );
+
+  /**
+   * Livre un événement de cadeau aux subscribers locaux (la page Live),
+   * en évitant les doublons (le même `id` peut arriver plusieurs fois
+   * si la DataConnection est renégociée).
+   */
+  const deliverGiftLocally = useCallback((event: LiveGiftEvent) => {
+    if (giftSeenIdsRef.current.has(event.id)) return;
+    giftSeenIdsRef.current.add(event.id);
+    if (giftSeenIdsRef.current.size > 500) {
+      const first = giftSeenIdsRef.current.values().next().value;
+      if (first) giftSeenIdsRef.current.delete(first);
+    }
+    giftListenersRef.current.forEach((h) => {
+      try {
+        h(event);
+      } catch (err) {
+        console.warn("gift listener threw", err);
+      }
+    });
+  }, []);
+
+  /**
+   * Côté host uniquement : diffuse un cadeau à toutes les
+   * DataConnection viewer ouvertes ET le livre localement (pour que
+   * le streamer voie aussi l'effet des cadeaux qu'il reçoit / envoie
+   * lui-même à un autre streamer s'il bascule en visionnage).
+   */
+  const broadcastGiftFromHost = useCallback(
+    (event: LiveGiftEvent) => {
+      hostDataConnectionsRef.current.forEach((dc) => {
+        if (!dc.open) return;
+        try {
+          dc.send({ type: "gift-event", ...event });
+        } catch {
+          // ignore — DataConnection peut-être fermée entre-temps
+        }
+      });
+      deliverGiftLocally(event);
+    },
+    [deliverGiftLocally],
   );
 
   /** Ferme UNIQUEMENT les ressources côté host (peer hôte + stream local). */
@@ -1173,6 +1280,17 @@ export function LiveProvider({ children }: { children: ReactNode }) {
               // qui recalculera la bonne valeur à partir du vrai rôle.
               const msg = sanitizeIncomingChat(payload, false);
               if (msg) broadcastChatFromHost(msg);
+            } else if (
+              typeof payload === "object" &&
+              payload !== null &&
+              (payload as { type?: string }).type === "gift-event"
+            ) {
+              // Côté host : un viewer vient d'envoyer un cadeau, on le
+              // re-broadcast à l'ensemble des viewers (y compris
+              // l'émetteur, qui dédoublonne par id) pour que tout le
+              // monde voie le même effet visuel + son.
+              const event = sanitizeIncomingGift(payload);
+              if (event) broadcastGiftFromHost(event);
             }
           });
           dataConn.on("close", () => {
@@ -1805,6 +1923,12 @@ export function LiveProvider({ children }: { children: ReactNode }) {
                 // autres viewers.
                 const msg = sanitizeIncomingChat(payload, true);
                 if (msg) deliverChatLocally(msg);
+              } else if (type === "gift-event") {
+                // Côté viewer : un cadeau a été envoyé sur le live
+                // (par n'importe quel viewer ou par le streamer
+                // lui-même). Le host a déjà validé l'event.
+                const event = sanitizeIncomingGift(payload);
+                if (event) deliverGiftLocally(event);
               }
             });
             data.on("close", () => {
@@ -2076,6 +2200,45 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   );
 
   /**
+   * Publie un événement de cadeau sur le live courant. Mêmes règles
+   * de transport que `publishChatMessage` :
+   *   - host : broadcast direct + livraison locale.
+   *   - viewer : envoi au host (qui rediffuse) + écho local optimiste.
+   *   - mode Twitch / pas de DataConnection : livraison locale uniquement
+   *     (l'effet est visible chez l'émetteur, pas chez les autres).
+   */
+  const publishGiftEvent = useCallback(
+    (event: LiveGiftEvent) => {
+      if (isHostingChatRef.current) {
+        broadcastGiftFromHost(event);
+        return;
+      }
+      const dc = viewerDataConnRef.current;
+      if (dc && dc.open) {
+        try {
+          dc.send({ type: "gift-event", ...event });
+        } catch {
+          // ignore — la connexion a peut-être été coupée.
+        }
+        deliverGiftLocally(event);
+      } else {
+        deliverGiftLocally(event);
+      }
+    },
+    [broadcastGiftFromHost, deliverGiftLocally],
+  );
+
+  const subscribeGiftEvents = useCallback(
+    (handler: (event: LiveGiftEvent) => void) => {
+      giftListenersRef.current.add(handler);
+      return () => {
+        giftListenersRef.current.delete(handler);
+      };
+    },
+    [],
+  );
+
+  /**
    * Reprend un live post-refresh : réinjecte la config (titre,
    * description, catégorie, chaîne Twitch, mode) dans le state et
    * relance la bonne source (Twitch announce, partage d'écran, ou
@@ -2137,6 +2300,8 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       viewingMeta,
       publishChatMessage,
       subscribeChatMessages,
+      publishGiftEvent,
+      subscribeGiftEvents,
       resumableLive,
       resumeLive,
       dismissResumableLive,
@@ -2159,6 +2324,8 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       viewingMeta,
       publishChatMessage,
       subscribeChatMessages,
+      publishGiftEvent,
+      subscribeGiftEvents,
       resumableLive,
       resumeLive,
       dismissResumableLive,
