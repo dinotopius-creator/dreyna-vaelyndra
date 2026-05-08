@@ -100,7 +100,21 @@ type Action =
       toId: string;
       toName: string;
     }
-  | { type: "creditSylvins"; userId: string; amount: number };
+  | { type: "creditSylvins"; userId: string; amount: number }
+  | {
+      /**
+       * Synchronise le wallet local depuis la source de vérité serveur
+       * (`backendMe.sylvins_paid + sylvins_promo`). Sans ça, après un
+       * paiement Stripe (qui crédite uniquement côté backend), la balance
+       * affichée dans /moi, /panier et le GiftPanel resterait à 0 jusqu'à
+       * ce que l'utilisateur dépense quelque chose. Idem au login : un
+       * compte chargé d'achats antérieurs n'affichait jamais ses Sylvins.
+       */
+      type: "syncWalletFromServer";
+      userId: string;
+      balance: number;
+      earnings: number;
+    };
 
 const STORAGE_KEY = "vaelyndra_store_v1";
 
@@ -312,6 +326,27 @@ function reducer(state: StoreState, action: Action): StoreState {
         },
       };
     }
+    case "syncWalletFromServer": {
+      const wallet = getWallet(state.wallets, action.userId);
+      // Idempotence : si rien n'a bougé, on évite un re-render inutile.
+      if (
+        wallet.balance === action.balance &&
+        wallet.earnings === action.earnings
+      ) {
+        return state;
+      }
+      return {
+        ...state,
+        wallets: {
+          ...state.wallets,
+          [action.userId]: {
+            ...wallet,
+            balance: action.balance,
+            earnings: action.earnings,
+          },
+        },
+      };
+    }
     default:
       return state;
   }
@@ -371,7 +406,7 @@ interface StoreCtx extends StoreState {
 const Ctx = createContext<StoreCtx | null>(null);
 
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, backendMe } = useAuth();
   const [state, dispatch] = useReducer(reducer, INITIAL, (init) => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -607,6 +642,31 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       clearInterval(id);
     };
   }, []);
+
+  // Source de vérité du wallet : `backendMe` (`/auth/me`). Sans ce sync, la
+  // balance locale (`state.wallets[user.id]`) ne reçoit jamais les Sylvins
+  // crédités côté serveur (achats Stripe via webhook, top-ups admin, gains
+  // streamer). Résultat : "Solde à dépenser : 0 Sylvins" même après un
+  // paiement réussi. On dispatche dès que les pots changent côté serveur.
+  useEffect(() => {
+    if (!user?.id || !backendMe) return;
+    const balance =
+      (backendMe.sylvins_paid ?? 0) + (backendMe.sylvins_promo ?? 0);
+    const earnings =
+      (backendMe.earnings_paid ?? 0) + (backendMe.earnings_promo ?? 0);
+    dispatch({
+      type: "syncWalletFromServer",
+      userId: user.id,
+      balance,
+      earnings,
+    });
+  }, [
+    user?.id,
+    backendMe?.sylvins_paid,
+    backendMe?.sylvins_promo,
+    backendMe?.earnings_paid,
+    backendMe?.earnings_promo,
+  ]);
 
   const cartTotal = useMemo(() => {
     return state.cart.reduce((acc, c) => {
