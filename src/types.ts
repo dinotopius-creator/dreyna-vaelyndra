@@ -196,3 +196,31 @@ export interface GiftEvent {
   toName: string;
   createdAt: string;
 }
+
+/**
+ * Événement de cadeau diffusé en temps réel sur le live courant via
+ * la DataConnection WebRTC (PeerJS). Mêmes principes de transport que
+ * `ChatMessage` :
+ *   - Viewer → host (le viewer publie son cadeau).
+ *   - Host re-broadcast à TOUS les viewers (y compris l'émetteur, pour
+ *     que tout le monde voie le même état dans le même ordre).
+ *   - Aucun stockage : un viewer qui rejoint le live après le cadeau
+ *     ne le voit pas (volatil, façon "bullet curtain" Twitch).
+ *
+ * Ce qui circule = les infos minimales pour reconstituer l'effet visuel
+ * + le top-soutien chez chaque viewer. Le `giftId` est résolu chez le
+ * client contre `GIFT_CATALOGUE` (icon, prix, rareté). Le host valide
+ * que `giftId` existe avant de re-broadcaster — sans ça un viewer
+ * malveillant pourrait spammer un faux cadeau "mythique" à 1 Sylvin.
+ */
+export interface LiveGiftEvent {
+  /** Identifiant unique de l'événement (dédoublonnage). */
+  id: string;
+  /** ID du cadeau du catalogue (`GIFT_CATALOGUE`). */
+  giftId: string;
+  /** Celui qui a offert le cadeau. */
+  senderId: string;
+  senderName: string;
+  senderAvatar?: string;
+  createdAt: string;
+}

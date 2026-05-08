@@ -34,7 +34,7 @@ import { useLiveInvites } from "../contexts/LiveInvitesContext";
 import { LIVE_CATEGORIES, getLiveCategory } from "../data/liveCategories";
 import { SectionHeading } from "../components/SectionHeading";
 import { GiftPanel } from "../components/GiftPanel";
-import { GiftFlight } from "../components/GiftFlight";
+import { GiftFlight, type GiftFlightItem } from "../components/GiftFlight";
 import { LiveChatHistory } from "../components/LiveChatHistory";
 import { LiveChatOverlay } from "../components/LiveChatOverlay";
 import { LiveHeartsOverlay } from "../components/LiveHeartsOverlay";
@@ -49,8 +49,9 @@ import {
   SORT_LEVELS,
   type SortLevel,
 } from "../components/SortDAppelCaster";
-import { AUTO_CHAT_LINES, SEED_CHAT } from "../data/mock";
-import type { ChatMessage, Gift, User } from "../types";
+import { AUTO_CHAT_LINES, GIFT_CATALOGUE, SEED_CHAT } from "../data/mock";
+import type { ChatMessage, Gift, LiveGiftEvent, User } from "../types";
+import { playGiftSound } from "../lib/giftSounds";
 import { generateId } from "../lib/helpers";
 import {
   apiListLiveChat,
@@ -975,7 +976,7 @@ function BroadcasterControls() {
               type="button"
               onClick={copyOverlayUrl}
               className="btn-ghost"
-              title="Copier l'URL Ã  ajouter dans OBS comme source navigateur"
+              title="Copier l'URL Ã  ajouter dans OBS comme source navigateur"
             >
               <Copy className="h-4 w-4" />
               URL OBS
@@ -1006,6 +1007,8 @@ export function Live() {
     viewingMeta,
     publishChatMessage,
     subscribeChatMessages,
+    publishGiftEvent,
+    subscribeGiftEvents,
     resumableLive,
     resumeLive,
     dismissResumableLive,
@@ -1160,15 +1163,14 @@ export function Live() {
   const [heartEvents, setHeartEvents] = useState<
     { emitterId: string; x: number }[]
   >([]);
-  const [giftFlights, setGiftFlights] = useState<
-    { id: string; gift: Gift; x: number }[]
-  >([]);
-  // Agrégat des Sylvins offerts au broadcaster courant pendant la séance
-  // en cours, clé par senderId. Remis à zéro au changement de broadcaster.
-  // Pré-seedé avec quelques donations fictives pour ne pas afficher un
-  // Top vide en démo.
-  const [tributes, setTributes] = useState<Record<string, TributeEntry>>(() =>
-    seedTributes(),
+  const [giftFlights, setGiftFlights] = useState<GiftFlightItem[]>([]);
+  // Agrégat des Sylvins offerts au broadcaster courant pendant la
+  // séance en cours, clé par senderId. Alimenté UNIQUEMENT par les
+  // vrais cadeaux reçus via le canal `gift-event` du WebRTC — plus
+  // aucune donnée fictive (cf. demande Alexandre : "je ne veux pas de
+  // top soutien fake, je veux les vrais top soutien en temps réel").
+  const [tributes, setTributes] = useState<Record<string, TributeEntry>>(
+    {},
   );
 
   // Optimisation mobile : le cadre vidéo peut passer en plein écran
@@ -1252,7 +1254,10 @@ export function Live() {
   useEffect(() => {
     setMessages(SEED_CHAT);
     setHeartEvents([]);
-    setTributes(seedTributes());
+    // Top soutien repart à vide à chaque changement de live : il ne
+    // se remplit qu'à partir des vrais cadeaux reçus via WebRTC.
+    setTributes({});
+    setGiftFlights([]);
     setMyMuteUntil(null);
     setMyKickUntil(null);
     // Un nouveau broadcaster = nouvelle observation. Si ce nouveau
@@ -1275,6 +1280,69 @@ export function Live() {
     });
     return unsubscribe;
   }, [subscribeChatMessages, broadcasterId]);
+
+  // Abonnement au flux des cadeaux reçus via le DataChannel WebRTC.
+  // À la réception (chez tous les viewers + le host), on déclenche :
+  //  1. le vol du cadeau (animé par rarété, cf. GiftFlight.tsx) ;
+  //  2. le son procédural correspondant ;
+  //  3. la mise à jour du top soutien (cumul des Sylvins par sender) ;
+  //  4. l'annonce dans le chat ("🎁 X a offert Y").
+  // C'est cette réception qui anime tout : l'émetteur reçoit le même
+  // event en écho local (cf. publishGiftEvent), donc il voit aussi
+  // ses propres effets, sans déclencher de double-affichage grâce à
+  // la dédup par id côté LiveContext.
+  useEffect(() => {
+    const unsubscribe = subscribeGiftEvents((event) => {
+      const gift = GIFT_CATALOGUE.find((g) => g.id === event.giftId);
+      if (!gift) return; // Cadeau retiré du catalogue : on ignore.
+
+      // 1. Vol visuel.
+      const flightId = `${event.id}-flight`;
+      setGiftFlights((f) => {
+        if (f.some((x) => x.id === flightId)) return f;
+        return [
+          ...f,
+          {
+            id: flightId,
+            gift,
+            x: 10 + Math.random() * 80,
+            senderName: event.senderName,
+          },
+        ];
+      });
+      // Durée de vie alignée sur la durée d'animation max (mythique = 5s).
+      setTimeout(
+        () => setGiftFlights((f) => f.filter((x) => x.id !== flightId)),
+        5400,
+      );
+
+      // 2. Son procédural par rarété.
+      playGiftSound(gift.rarity);
+
+      // 3. Top soutien temps réel : on cumule les Sylvins par sender.
+      setTributes((prev) => {
+        const current = prev[event.senderId];
+        return {
+          ...prev,
+          [event.senderId]: {
+            userId: event.senderId,
+            name: event.senderName,
+            avatar: event.senderAvatar ?? current?.avatar ?? "",
+            total: (current?.total ?? 0) + gift.price,
+          },
+        };
+      });
+
+      // 4. Annonce dans le chat. Locale (le push local n'est pas
+      // re-broadcasté sur le DataChannel) mais c'est OK : l'event
+      // gift-event est lui-même déjà broadcasté, donc tout le monde
+      // affichera la même annonce indépendamment.
+      pushSystemAnnouncement(
+        `🎁 ${event.senderName} a offert ${gift.name} · +${gift.price} Sylvins`,
+      );
+    });
+    return unsubscribe;
+  }, [subscribeGiftEvents, broadcasterId]);
 
   useEffect(() => {
     if (!isActiveLive || !broadcasterId) return;
@@ -1718,30 +1786,26 @@ export function Live() {
     return true;
   }
 
+  /**
+   * Appelé quand le user (viewer ou broadcaster) clique sur un cadeau
+   * dans le `GiftPanel`. On publie un événement de cadeau sur le
+   * canal WebRTC du live courant. Le host re-broadcast à tous les
+   * viewers (y compris l'émetteur, qui dédoublonne par id) — c'est
+   * la réception qui déclenche l'effet visuel + sonore + le maj du
+   * top soutien chez TOUT LE MONDE, pas juste l'émetteur. Cf.
+   * `useEffect(subscribeGiftEvents)` plus bas.
+   */
   function onGiftSent(gift: Gift) {
-    const id = generateId("gflight");
-    setGiftFlights((f) => [...f, { id, gift, x: 10 + Math.random() * 80 }]);
-    setTimeout(() => setGiftFlights((f) => f.filter((x) => x.id !== id)), 2800);
-    if (user) {
-      pushSystemAnnouncement(
-        `🎁 ${user.username} a offert ${gift.name} à ${broadcasterProfile?.username ?? "la cour"}`,
-      );
-      // On agrège la donation dans le leaderboard live. On additionne le
-      // prix du cadeau à la contribution cumulée de l'utilisateur pour
-      // ce broadcaster depuis le début de la séance.
-      setTributes((prev) => {
-        const current = prev[user.id];
-        return {
-          ...prev,
-          [user.id]: {
-            userId: user.id,
-            name: user.username,
-            avatar: user.avatar,
-            total: (current?.total ?? 0) + gift.price,
-          },
-        };
-      });
-    }
+    if (!user) return;
+    const event: LiveGiftEvent = {
+      id: generateId("giftevt"),
+      giftId: gift.id,
+      senderId: user.id,
+      senderName: user.username,
+      senderAvatar: user.avatar,
+      createdAt: new Date().toISOString(),
+    };
+    publishGiftEvent(event);
   }
 
   const heroTitle =
@@ -2312,31 +2376,4 @@ export function Live() {
   );
 }
 
-/**
- * Donations fictives qui pré-remplissent le Top 3 avant que la première
- * vraie donation n'arrive. Évite un classement vide pendant la démo et
- * donne une vraie "compétition" à dépasser.
- */
-function seedTributes(): Record<string, TributeEntry> {
-  const seeds: TributeEntry[] = [
-    {
-      userId: "seed-lyria",
-      name: "Lyria",
-      avatar: "https://i.pravatar.cc/150?u=lyria",
-      total: 1200,
-    },
-    {
-      userId: "seed-caelum",
-      name: "Caelum",
-      avatar: "https://i.pravatar.cc/150?u=caelum",
-      total: 780,
-    },
-    {
-      userId: "seed-mira",
-      name: "Mira",
-      avatar: "https://i.pravatar.cc/150?u=mira",
-      total: 420,
-    },
-  ];
-  return Object.fromEntries(seeds.map((s) => [s.userId, s]));
-}
+
