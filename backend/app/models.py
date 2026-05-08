@@ -424,6 +424,33 @@ class GiftLedger(SQLModel, table=True):
     created_at: str = Field(default_factory=_now_iso, index=True)
 
 
+class StripePayment(SQLModel, table=True):
+    """Journal des paiements Stripe — permet l'idempotence du webhook.
+
+    La PK est le `checkout_session_id` renvoyé par Stripe. Quand le webhook
+    `checkout.session.completed` arrive, on vérifie si la ligne existe déjà
+    avec `status == "paid"` : si oui, on n'applique pas deux fois le crédit
+    (Stripe peut renvoyer le même événement à cause d'un retry réseau).
+
+    - `user_id` : qui a payé.
+    - `product_id` : id du `CatalogProduct` (catégorie "Sylvins") acheté.
+    - `sylvins_amount` : nombre de Sylvins à créditer sur le pot PAID.
+    - `amount_cents` / `currency` : montant brut de la transaction (pour audit).
+    - `status` : `"pending"` à la création, `"paid"` après webhook, `"failed"`
+      si Stripe rapporte un échec.
+    """
+
+    id: str = Field(primary_key=True)  # checkout_session_id Stripe
+    user_id: str = Field(index=True)
+    product_id: str = Field(index=True)
+    sylvins_amount: int
+    amount_cents: int
+    currency: str = "eur"
+    status: str = Field(default="pending", index=True)
+    created_at: str = Field(default_factory=_now_iso, index=True)
+    completed_at: Optional[str] = None
+
+
 class DirectMessage(SQLModel, table=True):
     """Message privé entre deux membres (1-to-1, texte).
 

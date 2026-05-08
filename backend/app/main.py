@@ -27,6 +27,7 @@ from .routers import (
     posts,
     reports,
     streamers,
+    stripe_router,
     users,
 )
 
@@ -301,3 +302,4 @@ app.include_router(live.router)
 app.include_router(messages.router)
 app.include_router(catalog.router_public)
 app.include_router(catalog.router_admin)
+app.include_router(stripe_router.router)
