@@ -1803,6 +1803,7 @@ export function Live() {
    */
   function onGiftSent(gift: Gift) {
     if (!user) return;
+    setIsOfferingOpen(false);
     const event: LiveGiftEvent = {
       id: generateId("giftevt"),
       giftId: gift.id,
@@ -2237,6 +2238,17 @@ export function Live() {
                     : "Le rideau est tiré. Reviens quand la scène s'allume."}
               </p>
             </div>
+            {isOfferingOpen && broadcasterProfile && !fullscreenActive && (
+              <div className="px-4 pb-4">
+                <GiftPanel
+                  hostId={broadcasterProfile.id}
+                  hostName={broadcasterProfile.username}
+                  onGiftSent={onGiftSent}
+                  variant="overlay"
+                  onClose={() => setIsOfferingOpen(false)}
+                />
+              </div>
+            )}
           </div>
 
           {/* Carte « présentation du streamer » : nom en grand juste
@@ -2246,26 +2258,6 @@ export function Live() {
               diminutif de grade [BRM/SEN/FLX/…] et un lien cliquable
               vers le profil. Cachée seulement si on n'a pas encore
               résolu le broadcaster (rare, transitoire). */}
-          {isOfferingOpen && broadcasterProfile && (
-            <div className="fixed inset-0 z-50 flex items-end justify-center bg-night-950/70 p-3 backdrop-blur-sm sm:items-center sm:p-6">
-              <button
-                type="button"
-                className="absolute inset-0"
-                aria-label="Fermer les offrandes"
-                onClick={() => setIsOfferingOpen(false)}
-              />
-              <div className="relative z-10 max-h-[88vh] w-full max-w-5xl overflow-y-auto">
-                <GiftPanel
-                  hostId={broadcasterProfile.id}
-                  hostName={broadcasterProfile.username}
-                  onGiftSent={onGiftSent}
-                  variant="overlay"
-                  onClose={() => setIsOfferingOpen(false)}
-                />
-              </div>
-            </div>
-          )}
-
           {broadcasterProfile && (
             <div className="mt-4 flex flex-wrap items-center gap-4 rounded-2xl border border-gold-400/25 bg-night-900/60 p-4 sm:p-5">
               <Link
