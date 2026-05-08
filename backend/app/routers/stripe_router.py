@@ -124,6 +124,20 @@ def create_sylvins_checkout(
     amount_cents = round(product.price * 100)
     frontend = _frontend_base_url()
 
+    # Stripe exige des URLs absolues `https://` pour `product_data.images`.
+    # Le catalogue stocke souvent un chemin relatif (`/sylvin-coin-icon.png`),
+    # qu'on doit préfixer par le frontend. On laisse passer les URLs déjà
+    # absolues telles quelles, et on omet le champ si l'image est vide ou
+    # invalide pour ne pas faire échouer le checkout.
+    product_images: list[str] = []
+    raw_image = (product.image or "").strip()
+    if raw_image:
+        if raw_image.startswith(("http://", "https://")):
+            product_images = [raw_image]
+        elif raw_image.startswith("/"):
+            product_images = [f"{frontend}{raw_image}"]
+        # Sinon (chemin relatif sans slash, data-uri, etc.) on n'envoie rien.
+
     try:
         checkout = stripe.checkout.Session.create(
             mode="payment",
@@ -139,7 +153,7 @@ def create_sylvins_checkout(
                                 f"{product.sylvins} Sylvins crédités sur ton "
                                 f"compte Vaelyndra."
                             ),
-                            "images": [product.image] if product.image else [],
+                            "images": product_images,
                         },
                     },
                     "quantity": 1,
