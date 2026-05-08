@@ -4,12 +4,15 @@ import { motion } from "framer-motion";
 import {
   BookPlus,
   Crown,
+  ImagePlus,
+  Pencil,
   PackagePlus,
   Radio,
   RadioTower,
   ShieldCheck,
   Trash2,
   MessageSquareWarning,
+  X,
 } from "lucide-react";
 import { useStore } from "../contexts/StoreContext";
 import { useAuth } from "../contexts/AuthContext";
@@ -20,6 +23,7 @@ import {
   formatNumber,
   generateId,
   readingTime,
+  resizeImageToDataUrl,
   slugify,
 } from "../lib/helpers";
 import clsx from "clsx";
@@ -31,6 +35,7 @@ import {
   createProductRemote,
   deleteArticleRemote,
   deleteProductRemote,
+  updateArticleRemote,
 } from "../lib/catalogApi";
 
 const TABS = [
@@ -43,12 +48,15 @@ const TABS = [
   { id: "moderation", label: "Modération" },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
+const ANIMATOR_TABS = [{ id: "articles", label: "Chroniques" }] as const;
 
 export function Admin() {
   const { user, backendMe } = useAuth();
   const { articles, products, lives, posts, orders, isLiveOn } = useStore();
   const [tab, setTab] = useState<TabId>("dashboard");
   const [openReportsCount, setOpenReportsCount] = useState<number>(0);
+  const isAdmin = backendMe?.role === "admin";
+  const tabs = isAdmin ? TABS : ANIMATOR_TABS;
 
   // Charge le compteur de reports ouverts pour afficher le badge sur l'onglet.
   // Rafraîchi à chaque changement d'onglet pour rester à peu près à jour
@@ -62,6 +70,11 @@ export function Admin() {
       });
   }, [backendMe?.role, tab]);
 
+  useEffect(() => {
+    if (tabs.some((t) => t.id === tab)) return;
+    setTab("articles");
+  }, [tab, tabs]);
+
   if (!user) return null;
 
   return (
@@ -69,10 +82,11 @@ export function Admin() {
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <span className="tag-gold">
-            <ShieldCheck className="h-3 w-3" /> Espace admin
+            <ShieldCheck className="h-3 w-3" />{" "}
+            {isAdmin ? "Espace admin" : "Espace animateur"}
           </span>
           <h1 className="heading-gold mt-3 text-4xl md:text-5xl">
-            Dashboard Administrateur
+            {isAdmin ? "Dashboard Administrateur" : "Gestion des chroniques"}
           </h1>
           <p className="mt-2 text-ivory/70">
             Publications, boutique, lives et modération — pilote toute la
@@ -94,7 +108,7 @@ export function Admin() {
       </header>
 
       <nav className="mt-8 flex flex-wrap gap-2">
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
@@ -132,13 +146,13 @@ export function Admin() {
           />
         )}
         {tab === "articles" && <ArticlesAdmin />}
-        {tab === "products" && <ProductsAdmin />}
-        {tab === "lives" && <LivesAdmin />}
-        {tab === "users" && <AdminUsersTab />}
-        {tab === "reports" && (
+        {isAdmin && tab === "products" && <ProductsAdmin />}
+        {isAdmin && tab === "lives" && <LivesAdmin />}
+        {isAdmin && tab === "users" && <AdminUsersTab />}
+        {isAdmin && tab === "reports" && (
           <AdminReportsTab onCountChange={setOpenReportsCount} />
         )}
-        {tab === "moderation" && <ModerationAdmin />}
+        {isAdmin && tab === "moderation" && <ModerationAdmin />}
       </motion.div>
     </div>
   );
@@ -160,11 +174,31 @@ function Dashboard({
   ordersRevenue: number;
 }) {
   const stats = [
-    { label: "Chroniques", value: articles.length, icon: <Crown className="h-4 w-4" /> },
-    { label: "Produits", value: products.length, icon: <PackagePlus className="h-4 w-4" /> },
-    { label: "Lives", value: lives.length, icon: <Radio className="h-4 w-4" /> },
-    { label: "Posts communauté", value: postsCount, icon: <MessageSquareWarning className="h-4 w-4" /> },
-    { label: "Commandes", value: ordersCount, icon: <PackagePlus className="h-4 w-4" /> },
+    {
+      label: "Chroniques",
+      value: articles.length,
+      icon: <Crown className="h-4 w-4" />,
+    },
+    {
+      label: "Produits",
+      value: products.length,
+      icon: <PackagePlus className="h-4 w-4" />,
+    },
+    {
+      label: "Lives",
+      value: lives.length,
+      icon: <Radio className="h-4 w-4" />,
+    },
+    {
+      label: "Posts communauté",
+      value: postsCount,
+      icon: <MessageSquareWarning className="h-4 w-4" />,
+    },
+    {
+      label: "Commandes",
+      value: ordersCount,
+      icon: <PackagePlus className="h-4 w-4" />,
+    },
     {
       label: "Revenus simulés",
       value: `${formatNumber(Math.round(ordersRevenue))} €`,
@@ -179,9 +213,7 @@ function Dashboard({
           <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gold-400/40 bg-gold-500/10 text-gold-300">
             {s.icon}
           </span>
-          <p className="mt-4 font-display text-3xl text-gold-200">
-            {s.value}
-          </p>
+          <p className="mt-4 font-display text-3xl text-gold-200">{s.value}</p>
           <p className="font-regal text-[10px] tracking-[0.22em] text-ivory/60">
             {s.label}
           </p>
@@ -193,7 +225,10 @@ function Dashboard({
 
 function ArticlesAdmin() {
   const { articles, dispatch } = useStore();
+  const { backendMe, user } = useAuth();
   const { notify } = useToast();
+  const fallbackCover =
+    "https://images.unsplash.com/photo-1470813740244-df37b8c1edcb?w=1600&auto=format&fit=crop&q=80";
   const [form, setForm] = useState<{
     title: string;
     excerpt: string;
@@ -209,51 +244,107 @@ function ArticlesAdmin() {
     cover: "",
     tags: "",
   });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  function resetForm() {
+    setEditingId(null);
+    setForm({
+      title: "",
+      excerpt: "",
+      content: "",
+      category: "Lore",
+      cover: "",
+      tags: "",
+    });
+  }
+
+  function editArticle(article: Article) {
+    setEditingId(article.id);
+    setForm({
+      title: article.title,
+      excerpt: article.excerpt,
+      content: article.content,
+      category: article.category,
+      cover: article.cover,
+      tags: article.tags.join(", "),
+    });
+  }
+
+  async function handleCoverFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      notify("Choisis un fichier image valide.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      notify("Image trop lourde : maximum 5 Mo.");
+      return;
+    }
+    try {
+      const cover = await resizeImageToDataUrl(file, 1200, 0.82);
+      setForm((current) => ({ ...current, cover }));
+    } catch {
+      notify("Impossible d'importer cette image.");
+    } finally {
+      e.target.value = "";
+    }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.title.trim()) return;
+    setSaving(true);
     try {
-      const article = await createArticleRemote({
+      const payload = {
         slug: slugify(form.title),
         title: form.title.trim(),
         excerpt: form.excerpt.trim() || form.content.slice(0, 160),
         content: form.content.trim(),
         category: form.category,
-        cover:
-          form.cover.trim() ||
-          "https://images.unsplash.com/photo-1470813740244-df37b8c1edcb?w=1600&auto=format&fit=crop&q=80",
-        author: "Dreyna",
+        cover: form.cover.trim() || fallbackCover,
+        author: backendMe?.username ?? user?.username ?? "Dreyna",
         readingTime: readingTime(form.content || form.excerpt),
         tags: form.tags
           .split(",")
           .map((t) => t.trim())
           .filter(Boolean),
-      });
-      dispatch({ type: "addArticle", article });
-      notify("Chronique publiée ✨");
-      setForm({
-        title: "",
-        excerpt: "",
-        content: "",
-        category: "Lore",
-        cover: "",
-        tags: "",
-      });
+      };
+      const article = editingId
+        ? await updateArticleRemote(editingId, payload)
+        : await createArticleRemote(payload);
+      dispatch({ type: editingId ? "updateArticle" : "addArticle", article });
+      notify(editingId ? "Chronique modifiée" : "Chronique publiée ✨");
+      resetForm();
     } catch (err) {
       notify(
-        `Impossible de publier : ${(err as Error).message ?? "erreur réseau"}`,
+        `Impossible d'enregistrer : ${(err as Error).message ?? "erreur réseau"}`,
       );
+    } finally {
+      setSaving(false);
     }
   }
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr,1.2fr]">
       <form onSubmit={submit} className="card-royal space-y-4 p-6">
-        <h3 className="font-display text-xl text-gold-200">
-          <BookPlus className="mr-1 inline h-4 w-4 text-gold-300" /> Nouvelle
-          chronique
-        </h3>
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="font-display text-xl text-gold-200">
+            <BookPlus className="mr-1 inline h-4 w-4 text-gold-300" />
+            {editingId ? " Modifier la chronique" : " Nouvelle chronique"}
+          </h3>
+          {editingId && (
+            <button
+              type="button"
+              onClick={resetForm}
+              className="rounded-full border border-ivory/15 px-3 py-1 text-xs text-ivory/60 hover:border-gold-400/40 hover:text-gold-200"
+            >
+              <X className="mr-1 inline h-3 w-3" />
+              Annuler
+            </button>
+          )}
+        </div>
         <input
           className="glass-input"
           placeholder="Titre"
@@ -289,30 +380,44 @@ function ArticlesAdmin() {
             <option>Annonces</option>
             <option>Communauté</option>
           </select>
-          <input
-            className="glass-input"
-            placeholder="URL image de couverture"
-            value={form.cover}
-            onChange={(e) => setForm({ ...form, cover: e.target.value })}
-          />
+          <label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-gold-400/30 bg-night-800/70 px-4 py-3 text-sm text-gold-200 transition hover:border-gold-300">
+            <ImagePlus className="h-4 w-4" />
+            Importer une image
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleCoverFile}
+            />
+          </label>
         </div>
+        {form.cover && (
+          <div className="overflow-hidden rounded-2xl border border-royal-500/30 bg-night-900/50">
+            <img
+              src={form.cover}
+              alt="Aperçu de la couverture"
+              className="h-40 w-full object-cover"
+            />
+          </div>
+        )}
         <input
           className="glass-input"
           placeholder="Tags (séparés par des virgules)"
           value={form.tags}
           onChange={(e) => setForm({ ...form, tags: e.target.value })}
         />
-        <button className="btn-gold w-full justify-center">
-          Publier la chronique
+        <button className="btn-gold w-full justify-center" disabled={saving}>
+          {saving
+            ? "Enregistrement..."
+            : editingId
+              ? "Enregistrer les modifications"
+              : "Publier la chronique"}
         </button>
       </form>
 
       <div className="space-y-3">
         {articles.map((a) => (
-          <div
-            key={a.id}
-            className="card-royal flex items-center gap-4 p-4"
-          >
+          <div key={a.id} className="card-royal flex items-center gap-4 p-4">
             <img
               src={a.cover}
               alt={a.title}
@@ -329,6 +434,13 @@ function ArticlesAdmin() {
                 {a.likes.length} cœurs · {a.comments.length} commentaires
               </p>
             </div>
+            <button
+              onClick={() => editArticle(a)}
+              className="text-ivory/40 hover:text-gold-200"
+              title="Modifier"
+            >
+              <Pencil className="h-4 w-4" />
+            </button>
             <button
               onClick={async () => {
                 try {
@@ -411,8 +523,8 @@ function ProductsAdmin() {
     <div className="grid gap-6 lg:grid-cols-[1fr,1.2fr]">
       <form onSubmit={submit} className="card-royal space-y-4 p-6">
         <h3 className="font-display text-xl text-gold-200">
-          <PackagePlus className="mr-1 inline h-4 w-4 text-gold-300" />{" "}
-          Nouveau trésor
+          <PackagePlus className="mr-1 inline h-4 w-4 text-gold-300" /> Nouveau
+          trésor
         </h3>
         <input
           className="glass-input"
@@ -484,10 +596,7 @@ function ProductsAdmin() {
 
       <div className="space-y-3">
         {products.map((p) => (
-          <div
-            key={p.id}
-            className="card-royal flex items-center gap-4 p-4"
-          >
+          <div key={p.id} className="card-royal flex items-center gap-4 p-4">
             <img
               src={p.image}
               alt={p.name}
@@ -497,12 +606,8 @@ function ProductsAdmin() {
               <p className="font-regal text-[10px] tracking-[0.22em] text-ivory/50">
                 {p.category} · stock {p.stock}
               </p>
-              <h4 className="font-display text-base text-gold-200">
-                {p.name}
-              </h4>
-              <p className="text-sm text-ivory/70">
-                {p.price}€
-              </p>
+              <h4 className="font-display text-base text-gold-200">{p.name}</h4>
+              <p className="text-sm text-ivory/70">{p.price}€</p>
             </div>
             <button
               onClick={async () => {
@@ -599,9 +704,7 @@ function LivesAdmin() {
             rows={3}
             placeholder="Description"
             value={form.description}
-            onChange={(e) =>
-              setForm({ ...form, description: e.target.value })
-            }
+            onChange={(e) => setForm({ ...form, description: e.target.value })}
           />
           <input
             className="glass-input"

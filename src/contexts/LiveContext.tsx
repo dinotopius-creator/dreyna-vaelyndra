@@ -12,7 +12,16 @@ import type Peer from "peerjs";
 import type { DataConnection, MediaConnection } from "peerjs";
 import { useStore } from "./StoreContext";
 import { useAuth } from "./AuthContext";
-import { getPeerOptions } from "../lib/peerConfig";
+import { getIceServers, getPeerOptions } from "../lib/peerConfig";
+import {
+  cacheNativeBroadcastToken,
+  getCachedNativeBroadcastToken,
+  getNativeScreenShareStatus,
+  isNativeAndroidApp,
+  markNativeScreenShareAuthGrace,
+  startNativeScreenShare,
+  stopNativeScreenShare,
+} from "../lib/nativeScreenShare";
 import type { ChatMessage } from "../types";
 import {
   DEFAULT_LIVE_CATEGORY,
@@ -21,10 +30,17 @@ import {
 } from "../data/liveCategories";
 import {
   apiListLive,
+  apiAddNativeViewerIce,
+  apiCreateNativeBroadcastToken,
+  apiCreateNativeLiveOffer,
+  apiGetNativeLiveOffer,
+  apiHeartbeatNativeViewer,
   apiLiveHeartbeat,
   apiStopLive,
   type LiveSessionOut,
+  type NativeIceCandidate,
 } from "../lib/liveApi";
+import { publishCrossWindowLiveChat } from "../lib/liveChatBus";
 
 /**
  * Contexte dédié aux lives (queen + cour). Multi-utilisateur.
@@ -60,7 +76,7 @@ export function getLivePeerId(userId: string): string {
   return `vaelyndra-live-v2-${userId}`;
 }
 
-export type LiveMode = "twitch" | "screen" | "camera";
+export type LiveMode = "twitch" | "screen" | "android-screen" | "camera";
 
 export type CameraFacing = "user" | "environment";
 
@@ -152,6 +168,26 @@ const DEFAULT_CONFIG: LiveConfig = {
   startedAt: null,
 };
 
+async function captureDisplayStream(): Promise<MediaStream> {
+  try {
+    return await navigator.mediaDevices.getDisplayMedia({
+      video: { frameRate: { ideal: 30 } },
+      // Demande le son d'onglet/système quand le navigateur le permet.
+      // Certains navigateurs rejettent toute la capture avec `audio:true`;
+      // dans ce cas on retente en vidéo seule au lieu de laisser le live bloqué.
+      audio: true,
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === "NotAllowedError") {
+      throw err;
+    }
+    return await navigator.mediaDevices.getDisplayMedia({
+      video: { frameRate: { ideal: 30 } },
+      audio: false,
+    });
+  }
+}
+
 function readConfig(): LiveConfig {
   try {
     const raw = localStorage.getItem(CONFIG_STORAGE_KEY);
@@ -178,12 +214,13 @@ function readConfig(): LiveConfig {
 
 /**
  * Heartbeat : l'onglet qui diffuse met à jour `lastHeartbeat` toutes les
- * 30 secondes. Toute entrée sans heartbeat récent (> 90s) est considérée
- * comme orpheline (crash, kill -9, coupure réseau) et éludée.
+ * 15-30 secondes. Sur mobile, Android peut geler le réseau pendant la
+ * capture d'écran ; on garde l'entrée 4 min pour éviter les cycles
+ * "live disparu puis revenu" côté viewers.
  * Les anciennes entrées sans champ heartbeat tombent sur un fallback TTL
  * de 2 minutes depuis `startedAt`.
  */
-const REGISTRY_STALE_MS = 1000 * 90;
+const REGISTRY_STALE_MS = 1000 * 240;
 const REGISTRY_FALLBACK_TTL_MS = 1000 * 60 * 2;
 
 function readRegistry(): Record<string, LiveRegistryEntry> {
@@ -220,7 +257,10 @@ function readRegistry(): Record<string, LiveRegistryEntry> {
 /** Convertit une ligne LiveSession du backend en entrée de registre local. */
 function remoteToRegistry(s: LiveSessionOut): LiveRegistryEntry {
   const mode: LiveMode =
-    s.mode === "twitch" || s.mode === "screen" || s.mode === "camera"
+    s.mode === "twitch" ||
+    s.mode === "screen" ||
+    s.mode === "android-screen" ||
+    s.mode === "camera"
       ? s.mode
       : "screen";
   return {
@@ -264,7 +304,11 @@ function readResumeMarker(): LiveResumeMarker | null {
       return null;
     }
     const mode: LiveMode =
-      parsed.mode === "twitch" || parsed.mode === "camera" ? parsed.mode : "screen";
+      parsed.mode === "twitch" ||
+      parsed.mode === "camera" ||
+      parsed.mode === "android-screen"
+        ? parsed.mode
+        : "screen";
     const facing: CameraFacing =
       parsed.facing === "environment" ? "environment" : "user";
     return {
@@ -298,6 +342,15 @@ function clearResumeMarker() {
   } catch {
     // ignore
   }
+}
+
+function toNativeIceCandidate(candidate: RTCIceCandidate): NativeIceCandidate {
+  const json = candidate.toJSON();
+  return {
+    candidate: json.candidate ?? "",
+    sdpMid: json.sdpMid ?? null,
+    sdpMLineIndex: json.sdpMLineIndex ?? null,
+  };
 }
 
 interface LiveCtx {
@@ -402,9 +455,11 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   const [isConnecting, setIsConnecting] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
   const [cameraFacing, setCameraFacing] = useState<CameraFacing>("user");
-  const [viewingMeta, setViewingMeta] = useState<
-    { title: string; description: string; mode: LiveMode } | null
-  >(null);
+  const [viewingMeta, setViewingMeta] = useState<{
+    title: string;
+    description: string;
+    mode: LiveMode;
+  } | null>(null);
   // Marker de reprise de live (post-refresh). Initialisé à partir de
   // localStorage : si un user a broadcasté il y a < 5 min et refreshé,
   // on récupère l'info pour lui proposer `resumeLive()`.
@@ -415,6 +470,11 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   const hostPeerRef = useRef<Peer | null>(null);
   const viewerPeerRef = useRef<Peer | null>(null);
   const hostConnectionsRef = useRef<Set<MediaConnection>>(new Set());
+  // Host : une MediaConnection sortante par viewer peer-id. Le flux est
+  // initié par le host dès que la DataConnection du viewer s'ouvre, ce qui
+  // évite l'offre SDP "vide" côté viewer qui bloquait certains navigateurs
+  // sur "Connexion au flux..." sans jamais livrer de remote stream.
+  const hostViewerCallsRef = useRef<Map<string, MediaConnection>>(new Map());
   // Host : ensemble des DataConnection avec les viewers. Sert à la fois
   // au push "live-meta" initial (titre/description) et à la diffusion
   // des messages de chat en temps réel.
@@ -422,6 +482,8 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   // Viewer : sa DataConnection vers le host courant. Utilisée pour
   // envoyer ses propres messages de chat au host (qui les rediffuse).
   const viewerDataConnRef = useRef<DataConnection | null>(null);
+  // Viewer : MediaConnection entrante ouverte par le host courant.
+  const viewerMediaCallRef = useRef<MediaConnection | null>(null);
   // Dédoublonnage des messages de chat reçus (un message peut arriver
   // plusieurs fois côté viewer si la connexion est renégociée).
   const chatSeenIdsRef = useRef<Set<string>>(new Set());
@@ -455,6 +517,8 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   // réel de l'auteur tel que connu localement.
   const usersRef = useRef(users);
   usersRef.current = users;
+  const liveRegistryRef = useRef(liveRegistry);
+  liveRegistryRef.current = liveRegistry;
 
   useEffect(() => {
     try {
@@ -615,7 +679,9 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         typeof p.authorAvatar === "string" ? p.authorAvatar : null;
       const content = typeof p.content === "string" ? p.content : null;
       const createdAt =
-        typeof p.createdAt === "string" ? p.createdAt : new Date().toISOString();
+        typeof p.createdAt === "string"
+          ? p.createdAt
+          : new Date().toISOString();
       if (!id || !authorId || !authorName || !authorAvatar || !content) {
         return null;
       }
@@ -674,6 +740,16 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         console.warn("chat listener threw", err);
       }
     });
+    if (
+      isHostingChatRef.current &&
+      configRef.current.status === "live" &&
+      userRef.current?.id
+    ) {
+      publishCrossWindowLiveChat({
+        broadcasterId: userRef.current.id,
+        message: msg,
+      });
+    }
   }, []);
 
   /**
@@ -707,7 +783,10 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   );
 
   /** Ferme UNIQUEMENT les ressources côté host (peer hôte + stream local). */
-  const stopHosting = useCallback(() => {
+  const stopHosting = useCallback((options?: { stopNative?: boolean }) => {
+    if (options?.stopNative) {
+      stopNativeScreenShare();
+    }
     hostConnectionsRef.current.forEach((call) => {
       try {
         call.close();
@@ -716,6 +795,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       }
     });
     hostConnectionsRef.current.clear();
+    hostViewerCallsRef.current.clear();
     hostDataConnectionsRef.current.forEach((dc) => {
       try {
         dc.close();
@@ -745,6 +825,14 @@ export function LiveProvider({ children }: { children: ReactNode }) {
 
   /** Ferme UNIQUEMENT les ressources côté viewer (peer + remoteStream). */
   const stopViewing = useCallback(() => {
+    if (viewerMediaCallRef.current) {
+      try {
+        viewerMediaCallRef.current.close();
+      } catch {
+        // ignore
+      }
+      viewerMediaCallRef.current = null;
+    }
     if (viewerDataConnRef.current) {
       try {
         viewerDataConnRef.current.close();
@@ -768,7 +856,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
 
   /** Ferme tout (utilisé au démontage du provider). */
   const cleanup = useCallback(() => {
-    stopHosting();
+    stopHosting({ stopNative: false });
     stopViewing();
   }, [stopHosting, stopViewing]);
 
@@ -776,7 +864,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     const me = userRef.current;
     // IMPORTANT : ne ferme QUE le côté host, pour ne pas casser le stream
     // qu'on est en train de regarder sur un autre user (viewerPeerRef).
-    stopHosting();
+    stopHosting({ stopNative: true });
     setConfig((c) => ({ ...c, status: "idle", startedAt: null }));
     // Clic volontaire sur "stopper le live" → plus de reprise possible.
     clearResumeMarker();
@@ -796,6 +884,54 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       });
     }
   }, [stopHosting, updateRegistry]);
+
+  const pauseLiveForRecovery = useCallback(
+    (
+      mode: Extract<LiveMode, "screen" | "camera">,
+      message = "Le flux a ete interrompu. Ton live reste annonce : relance le partage pour reprendre.",
+    ) => {
+      const me = userRef.current;
+      if (!me) return;
+      const now = new Date().toISOString();
+      const startedAt = configRef.current.startedAt ?? now;
+      stopHosting({ stopNative: false });
+      setConfig((c) => ({
+        ...c,
+        status: "live",
+        mode,
+        startedAt,
+      }));
+      updateRegistry((r) => ({
+        ...r,
+        [me.id]: {
+          userId: me.id,
+          username: me.username,
+          avatar: me.avatar,
+          title: configRef.current.title.trim() || `${me.username} en direct`,
+          description: configRef.current.description.trim(),
+          mode,
+          category: configRef.current.category,
+          twitchChannel: "",
+          startedAt,
+          lastHeartbeat: now,
+        },
+      }));
+      const marker: LiveResumeMarker = {
+        userId: me.id,
+        mode,
+        facing: cameraFacing,
+        title: configRef.current.title,
+        description: configRef.current.description,
+        category: configRef.current.category,
+        twitchChannel: "",
+        savedAt: now,
+      };
+      writeResumeMarker(marker);
+      setResumableLive(marker);
+      setLastError(message);
+    },
+    [cameraFacing, stopHosting, updateRegistry],
+  );
 
   const announceTwitchLive = useCallback(
     (channelOverride?: string) => {
@@ -931,8 +1067,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
               err.type === "unavailable-id"
                 ? "Un live Vaelyndra est déjà actif à ton nom ailleurs. Ferme l'autre onglet."
                 : `Impossible de démarrer le relais live : ${err.message || err.type || "erreur inconnue"}`;
-            setLastError(friendly);
-            stopLive();
+            pauseLiveForRecovery(mode, friendly);
             return;
           }
           console.warn("PeerJS host error after open", err);
@@ -943,7 +1078,14 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             setLastError(
               "La connexion au serveur de relais a été perdue. Relance un live quand tu es prêt.",
             );
-            stopLive();
+            try {
+              peer.reconnect();
+            } catch {
+              pauseLiveForRecovery(
+                mode,
+                "Le relais live a decroche. Ton live reste annonce : relance le partage pour reprendre.",
+              );
+            }
           }
         });
 
@@ -966,6 +1108,33 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         });
 
         peer.on("connection", (dataConn) => {
+          const startCallForViewer = (viewerPeerId: string) => {
+            const active = localStreamRef.current;
+            if (!active) return;
+            const previous = hostViewerCallsRef.current.get(viewerPeerId);
+            if (previous) {
+              try {
+                previous.close();
+              } catch {
+                // ignore
+              }
+              hostViewerCallsRef.current.delete(viewerPeerId);
+              hostConnectionsRef.current.delete(previous);
+            }
+            const outbound = peer.call(viewerPeerId, active);
+            if (!outbound) return;
+            hostViewerCallsRef.current.set(viewerPeerId, outbound);
+            hostConnectionsRef.current.add(outbound);
+            const release = () => {
+              if (hostViewerCallsRef.current.get(viewerPeerId) === outbound) {
+                hostViewerCallsRef.current.delete(viewerPeerId);
+              }
+              hostConnectionsRef.current.delete(outbound);
+            };
+            outbound.on("close", release);
+            outbound.on("error", release);
+          };
+
           // Chaque viewer ouvre une DataConnection vers le host.
           //
           // Deux usages :
@@ -986,6 +1155,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             } catch {
               // ignore
             }
+            startCallForViewer(dataConn.peer);
           });
           dataConn.on("data", (payload) => {
             // Réception d'un message de chat venant d'un viewer : on le
@@ -1006,6 +1176,16 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             }
           });
           dataConn.on("close", () => {
+            const outbound = hostViewerCallsRef.current.get(dataConn.peer);
+            if (outbound) {
+              try {
+                outbound.close();
+              } catch {
+                // ignore
+              }
+              hostViewerCallsRef.current.delete(dataConn.peer);
+              hostConnectionsRef.current.delete(outbound);
+            }
             hostDataConnectionsRef.current.delete(dataConn);
           });
         });
@@ -1021,7 +1201,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         return;
       }
     },
-    [stopLive, updateRegistry, cameraFacing],
+    [pauseLiveForRecovery, updateRegistry, cameraFacing],
   );
 
   const startScreenShare = useCallback(async () => {
@@ -1043,6 +1223,87 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       !navigator.mediaDevices ||
       typeof navigator.mediaDevices.getDisplayMedia !== "function"
     ) {
+      if (isNativeAndroidApp()) {
+        try {
+          markNativeScreenShareAuthGrace();
+          const startedAt = new Date().toISOString();
+          const title =
+            configRef.current.title.trim() || `${me.username} en direct`;
+          const description = configRef.current.description.trim();
+          const category = configRef.current.category;
+          let broadcastToken = getCachedNativeBroadcastToken();
+          try {
+            const nativeToken = await apiCreateNativeBroadcastToken();
+            broadcastToken = nativeToken.token;
+            cacheNativeBroadcastToken({
+              token: nativeToken.token,
+              expiresAt: nativeToken.expires_at,
+            });
+          } catch (tokenError) {
+            if (!broadcastToken) throw tokenError;
+          }
+          apiLiveHeartbeat({
+            title,
+            description,
+            category,
+            mode: "android-screen",
+            twitchChannel: "",
+          }).catch(() => {
+            // Si Android vient de basculer hors WebView et que le cookie web
+            // saute, le service natif maintient le live via son bearer token.
+          });
+          await startNativeScreenShare({
+            broadcastToken,
+            title,
+            category,
+          });
+          const nativeStatus = await getNativeScreenShareStatus();
+          setConfig((c) => ({
+            ...c,
+            status: "live",
+            mode: "android-screen",
+            startedAt: nativeStatus.startedAt ?? startedAt,
+          }));
+          updateRegistry((r) => ({
+            ...r,
+            [me.id]: {
+              userId: me.id,
+              username: me.username,
+              avatar: me.avatar,
+              title,
+              description,
+              mode: "android-screen",
+              category,
+              twitchChannel: "",
+              startedAt: nativeStatus.startedAt ?? startedAt,
+              lastHeartbeat: new Date().toISOString(),
+            },
+          }));
+          const marker: LiveResumeMarker = {
+            userId: me.id,
+            mode: "android-screen",
+            facing: cameraFacing,
+            title: configRef.current.title,
+            description: configRef.current.description,
+            category,
+            twitchChannel: "",
+            savedAt: startedAt,
+          };
+          writeResumeMarker(marker);
+          setResumableLive(marker);
+          setLastError(
+            "Partage d'ecran Android lance. Ton live reste actif meme si tu passes sur une autre application.",
+          );
+        } catch (err) {
+          if (err instanceof Error && err.message !== "screen_capture_denied") {
+            const message = err.message.includes("Authentification requise")
+              ? "Vaelyndra a perdu l'auth web pendant le basculement Android. Reste connecte et relance le partage."
+              : `Partage d'ecran Android interrompu : ${err.message}`;
+            setLastError(message);
+          }
+        }
+        return;
+      }
       // iOS Safari (<= 18) et la plupart des navigateurs Android n'exposent
       // pas `getDisplayMedia`. On le signale explicitement pour que l'UI
       // oriente vers le mode "camera" au lieu d'un échec silencieux.
@@ -1051,18 +1312,9 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       );
       return;
     }
-    let stream: MediaStream;
+    let displayStream: MediaStream;
     try {
-      stream = await navigator.mediaDevices.getDisplayMedia({
-        video: { frameRate: { ideal: 30 } },
-        // `audio: true` tente de capter le son du système/onglet. Dans les
-        // faits, Chrome Windows est le seul navigateur qui le fait vraiment
-        // (et uniquement sur "l'onglet" ou "la fenêtre" pas "tout l'écran").
-        // Safari / Firefox / Chrome mac&linux l'ignorent silencieusement →
-        // la piste système peut manquer, mais on veut au moins le micro,
-        // donc on capture le micro séparément juste après.
-        audio: true,
-      });
+      displayStream = await captureDisplayStream();
     } catch (err) {
       if (err instanceof Error && err.name !== "NotAllowedError") {
         setLastError(`Impossible d'accéder à l'écran : ${err.message}`);
@@ -1079,9 +1331,15 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     // navigateur "en train de partager l'écran" reste bloqué sans bouton
     // pour arrêter). Ça bloque aussi un double-clic involontaire sur le
     // bouton "live" via le guard au début de la fonction.
+    const stream = displayStream;
     stream.getVideoTracks().forEach((track) => {
       track.addEventListener("ended", () => {
-        if (localStreamRef.current === stream) stopLive();
+        if (localStreamRef.current === stream) {
+          pauseLiveForRecovery(
+            "screen",
+            "Le partage d'ecran a ete interrompu. Ton live reste annonce : relance le partage pour reprendre.",
+          );
+        }
       });
     });
     localStreamRef.current = stream;
@@ -1130,7 +1388,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     // rien aux peers.
     if (localStreamRef.current !== stream) return;
     await attachStreamToPeer(stream, "screen");
-  }, [attachStreamToPeer, stopLive]);
+  }, [attachStreamToPeer, pauseLiveForRecovery, updateRegistry, cameraFacing]);
 
   const startCameraShare = useCallback(
     async (facingMode: CameraFacing = "user") => {
@@ -1178,14 +1436,19 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       setCameraFacing(facingMode);
       stream.getVideoTracks().forEach((track) => {
         track.addEventListener("ended", () => {
-          if (localStreamRef.current === stream) stopLive();
+          if (localStreamRef.current === stream) {
+            pauseLiveForRecovery(
+              "camera",
+              "La camera a ete interrompue. Ton live reste annonce : relance la camera pour reprendre.",
+            );
+          }
         });
       });
       localStreamRef.current = stream;
       setLocalStream(stream);
       await attachStreamToPeer(stream, "camera");
     },
-    [attachStreamToPeer, stopLive],
+    [attachStreamToPeer, pauseLiveForRecovery],
   );
 
   /**
@@ -1269,7 +1532,12 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       // Stoppe l'ancien stream (tracks) puis publie le nouveau côté host.
       current.getTracks().forEach((t) => t.stop());
       newVideoTrack.addEventListener("ended", () => {
-        if (localStreamRef.current === next) stopLive();
+        if (localStreamRef.current === next) {
+          pauseLiveForRecovery(
+            "camera",
+            "La camera a ete interrompue. Ton live reste annonce : relance la camera pour reprendre.",
+          );
+        }
       });
       localStreamRef.current = next;
       setLocalStream(next);
@@ -1277,171 +1545,336 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     } finally {
       switchingCameraRef.current = false;
     }
-  }, [cameraFacing, stopLive]);
+  }, [cameraFacing, pauseLiveForRecovery]);
 
   /**
    * Côté viewer : tente activement de rejoindre le live d'un broadcaster
    * donné. Idempotent : si un viewerPeer existe déjà ou si on est le host
    * du broadcasterId ciblé, on ne refait rien.
    */
-  const joinAsViewer = useCallback((broadcasterId: string) => {
-    if (!broadcasterId) return () => {};
-    // Déjà hôte de ce broadcast : on regarde notre propre flux.
-    if (hostPeerRef.current && userRef.current?.id === broadcasterId)
-      return () => {};
-    // Déjà en train de se connecter / connecté.
-    if (viewerPeerRef.current) return () => {};
+  const joinAsViewer = useCallback(
+    (broadcasterId: string) => {
+      if (!broadcasterId) return () => {};
+      // Déjà hôte de ce broadcast : on regarde notre propre flux.
+      if (hostPeerRef.current && userRef.current?.id === broadcasterId)
+        return () => {};
+      // Déjà en train de se connecter / connecté.
+      if (viewerPeerRef.current) return () => {};
 
-    let cancelled = false;
-    setIsConnecting(true);
-    setLastError(null);
+      if (liveRegistryRef.current[broadcasterId]?.mode === "android-screen") {
+        let cancelled = false;
+        let pollId: number | null = null;
+        const pc = new RTCPeerConnection({
+          iceServers: getIceServers(),
+          iceTransportPolicy: "all",
+        });
+        const remote = new MediaStream();
+        const pendingIce: NativeIceCandidate[] = [];
+        const appliedBroadcasterIce = new Set<string>();
+        const remoteTrackIds = new Set<string>();
+        let sessionId: string | null = null;
+        let lastViewerHeartbeatAt = 0;
 
-    (async () => {
-      try {
-        const { default: PeerCtor } = await import("peerjs");
-        if (cancelled) return;
-        // Sans id → PeerJS génère un id via son broker. PeerJS expose
-        // deux signatures (`new Peer(options)` et `new Peer(id,
-        // options?)`) ; seule la version nommée est typée publiquement,
-        // donc on passe par un cast léger pour garder la version
-        // anonyme utilisée ici.
-        const viewerPeer = new (PeerCtor as unknown as {
-          new (options: ReturnType<typeof getPeerOptions>): Peer;
-        })(getPeerOptions());
-        viewerPeerRef.current = viewerPeer;
+        setIsConnecting(true);
+        setLastError(null);
 
-        viewerPeer.on("open", () => {
+        pc.addTransceiver("video", { direction: "recvonly" });
+        pc.addTransceiver("audio", { direction: "recvonly" });
+        pc.ontrack = (event) => {
+          event.streams[0]?.getTracks().forEach((track) => {
+            if (remoteTrackIds.has(track.id)) return;
+            remoteTrackIds.add(track.id);
+            remote.addTrack(track);
+          });
+          if (!cancelled) {
+            setRemoteStream(remote);
+            setIsConnecting(false);
+          }
+        };
+        pc.onconnectionstatechange = () => {
           if (cancelled) return;
-          const targetPeerId = getLivePeerId(broadcasterId);
-          const call = viewerPeer.call(targetPeerId, new MediaStream());
-          if (!call) {
+          if (pc.connectionState === "connected") {
             setIsConnecting(false);
             return;
           }
-          call.on("stream", (stream) => {
-            if (cancelled) return;
-            setRemoteStream(stream);
-            setIsConnecting(false);
-          });
-          call.on("close", () => {
-            if (cancelled) return;
-            setRemoteStream(null);
-          });
-          call.on("error", () => {
-            if (cancelled) return;
+          if (
+            pc.connectionState === "failed" ||
+            pc.connectionState === "closed"
+          ) {
             setRemoteStream(null);
             setIsConnecting(false);
-          });
+          }
+        };
+        pc.onicecandidate = (event) => {
+          if (!event.candidate) return;
+          const candidate = toNativeIceCandidate(event.candidate);
+          if (!candidate.candidate) return;
+          if (!sessionId) {
+            pendingIce.push(candidate);
+            return;
+          }
+          apiAddNativeViewerIce({ sessionId, candidate }).catch(() => {});
+        };
 
-          // DataConnection bidirectionnelle avec le host :
-          //  - réception : métadonnées du live + messages de chat
-          //    redistribués par le host.
-          //  - émission : messages de chat tapés par ce viewer (le host
-          //    les re-diffuse à tous les autres viewers).
-          const data = viewerPeer.connect(targetPeerId);
-          viewerDataConnRef.current = data;
-          // On ne touche volontairement PAS à `isHostingChatRef` ici :
-          // le flag appartient au cycle de vie "hosting" (set à `true`
-          // dans `attachStreamToPeer` quand on commence à broadcaster,
-          // `false` dans `stopHosting` quand on arrête). Si un broadcaster
-          // actif va regarder un autre live (navigation vers
-          // `/live/@someone`), il RESTE hôte de son propre live — flipper
-          // le ref ici déviait son `publishChatMessage` vers la
-          // DataConnection du host visité (ses viewers ne voyaient plus
-          // ses messages, et au retour sur sa propre page le flag
-          // restait faussement à false → chat silencieusement cassé
-          // pour le reste de la session).
-          data.on("data", (payload) => {
-            if (cancelled) return;
-            if (typeof payload !== "object" || payload === null) return;
-            const type = (payload as { type?: string }).type;
-            if (type === "live-meta") {
-              const meta = payload as {
-                title?: string;
-                description?: string;
-                mode?: LiveMode;
-              };
-              setViewingMeta({
-                title: typeof meta.title === "string" ? meta.title : "",
-                description:
-                  typeof meta.description === "string"
-                    ? meta.description
-                    : "",
-                mode:
-                  meta.mode === "twitch" ||
-                  meta.mode === "screen" ||
-                  meta.mode === "camera"
-                    ? meta.mode
-                    : "screen",
-              });
-            } else if (type === "chat-message") {
-              // Côté viewer : le message vient du host, qui a déjà
-              // validé et recalculé `highlight` (cf. broadcastChat
-              // FromHost). On fait confiance à sa valeur, sans quoi
-              // le badge 👑 reine ne s'affichera jamais chez les
-              // autres viewers.
-              const msg = sanitizeIncomingChat(payload, true);
-              if (msg) deliverChatLocally(msg);
+        (async () => {
+          try {
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            if (!offer.sdp || cancelled) return;
+            const signal = await apiCreateNativeLiveOffer({
+              broadcasterId,
+              offerSdp: offer.sdp,
+            });
+            sessionId = signal.session_id;
+            for (const candidate of pendingIce.splice(0)) {
+              await apiAddNativeViewerIce({ sessionId, candidate }).catch(
+                () => {},
+              );
             }
-          });
-          data.on("close", () => {
-            if (viewerDataConnRef.current === data) {
-              viewerDataConnRef.current = null;
+            pollId = window.setInterval(() => {
+              if (!sessionId || cancelled) return;
+              const now = Date.now();
+              if (now - lastViewerHeartbeatAt > 10_000) {
+                apiHeartbeatNativeViewer(sessionId)
+                  .then(() => {
+                    lastViewerHeartbeatAt = now;
+                  })
+                  .catch(() => {});
+              }
+              apiGetNativeLiveOffer(sessionId)
+                .then(async (latest) => {
+                  if (latest.answer_sdp && !pc.currentRemoteDescription) {
+                    await pc.setRemoteDescription({
+                      type: "answer",
+                      sdp: latest.answer_sdp,
+                    });
+                  }
+                  for (const candidate of latest.broadcaster_ice) {
+                    if (!candidate.candidate) continue;
+                    const key = `${candidate.sdpMid ?? ""}:${candidate.sdpMLineIndex ?? ""}:${candidate.candidate}`;
+                    if (appliedBroadcasterIce.has(key)) continue;
+                    appliedBroadcasterIce.add(key);
+                    await pc.addIceCandidate(candidate).catch(() => {});
+                  }
+                })
+                .catch(() => {});
+            }, 1500);
+          } catch (err) {
+            if (!cancelled) {
+              setIsConnecting(false);
+              setLastError(
+                `Impossible de rejoindre le live Android : ${
+                  err instanceof Error ? err.message : String(err)
+                }`,
+              );
             }
-          });
-        });
+          }
+        })();
 
-        viewerPeer.on("error", (err: Error & { type?: string }) => {
-          if (err.type === "peer-unavailable") {
-            setIsConnecting(false);
-            if (viewerPeerRef.current === viewerPeer) {
+        return () => {
+          cancelled = true;
+          if (pollId !== null) window.clearInterval(pollId);
+          pc.close();
+          remote.getTracks().forEach((track) => track.stop());
+          setRemoteStream(null);
+          setIsConnecting(false);
+          setViewingMeta(null);
+        };
+      }
+
+      let cancelled = false;
+      setIsConnecting(true);
+      setLastError(null);
+
+      (async () => {
+        try {
+          const { default: PeerCtor } = await import("peerjs");
+          if (cancelled) return;
+          // Sans id → PeerJS génère un id via son broker. PeerJS expose
+          // deux signatures (`new Peer(options)` et `new Peer(id,
+          // options?)`) ; seule la version nommée est typée publiquement,
+          // donc on passe par un cast léger pour garder la version
+          // anonyme utilisée ici.
+          const viewerPeer = new (PeerCtor as unknown as {
+            new (options: ReturnType<typeof getPeerOptions>): Peer;
+          })(getPeerOptions());
+          viewerPeerRef.current = viewerPeer;
+
+          viewerPeer.on("call", (call) => {
+            if (cancelled) {
               try {
-                viewerPeer.destroy();
+                call.close();
               } catch {
                 // ignore
               }
-              viewerPeerRef.current = null;
+              return;
             }
-            return;
-          }
-          console.warn("PeerJS viewer error", err);
-          setIsConnecting(false);
-        });
-      } catch (err) {
-        if (!cancelled) {
-          setIsConnecting(false);
-          setLastError(
-            `Impossible de rejoindre le live : ${
-              err instanceof Error ? err.message : String(err)
-            }`,
-          );
-        }
-      }
-    })();
+            if (
+              viewerMediaCallRef.current &&
+              viewerMediaCallRef.current !== call
+            ) {
+              try {
+                viewerMediaCallRef.current.close();
+              } catch {
+                // ignore
+              }
+            }
+            viewerMediaCallRef.current = call;
+            call.on("stream", (stream) => {
+              if (cancelled) return;
+              setRemoteStream(stream);
+              setIsConnecting(false);
+            });
+            call.on("close", () => {
+              if (viewerMediaCallRef.current === call) {
+                viewerMediaCallRef.current = null;
+              }
+              if (cancelled) return;
+              setRemoteStream(null);
+            });
+            call.on("error", () => {
+              if (viewerMediaCallRef.current === call) {
+                viewerMediaCallRef.current = null;
+              }
+              if (cancelled) return;
+              setRemoteStream(null);
+              setIsConnecting(false);
+            });
+            try {
+              // Réponse receive-only : l'offre provient désormais du host, qui
+              // porte déjà les m-lines audio/vidéo réelles. Répondre avec un
+              // stream local vide reste valide sans forcer le viewer à partager
+              // micro/caméra, et évite l'offre initiale vide qui cassait la
+              // négociation sur certains browsers.
+              call.answer(new MediaStream());
+            } catch {
+              setIsConnecting(false);
+            }
+          });
 
-    return () => {
-      cancelled = true;
-      if (viewerDataConnRef.current) {
-        try {
-          viewerDataConnRef.current.close();
-        } catch {
-          // ignore
+          viewerPeer.on("open", () => {
+            if (cancelled) return;
+            const targetPeerId = getLivePeerId(broadcasterId);
+            // DataConnection bidirectionnelle avec le host :
+            //  - réception : métadonnées du live + messages de chat
+            //    redistribués par le host.
+            //  - émission : messages de chat tapés par ce viewer (le host
+            //    les re-diffuse à tous les autres viewers).
+            const data = viewerPeer.connect(targetPeerId);
+            viewerDataConnRef.current = data;
+            // On ne touche volontairement PAS à `isHostingChatRef` ici :
+            // le flag appartient au cycle de vie "hosting" (set à `true`
+            // dans `attachStreamToPeer` quand on commence à broadcaster,
+            // `false` dans `stopHosting` quand on arrête). Si un broadcaster
+            // actif va regarder un autre live (navigation vers
+            // `/live/@someone`), il RESTE hôte de son propre live — flipper
+            // le ref ici déviait son `publishChatMessage` vers la
+            // DataConnection du host visité (ses viewers ne voyaient plus
+            // ses messages, et au retour sur sa propre page le flag
+            // restait faussement à false → chat silencieusement cassé
+            // pour le reste de la session).
+            data.on("data", (payload) => {
+              if (cancelled) return;
+              if (typeof payload !== "object" || payload === null) return;
+              const type = (payload as { type?: string }).type;
+              if (type === "live-meta") {
+                const meta = payload as {
+                  title?: string;
+                  description?: string;
+                  mode?: LiveMode;
+                };
+                setViewingMeta({
+                  title: typeof meta.title === "string" ? meta.title : "",
+                  description:
+                    typeof meta.description === "string"
+                      ? meta.description
+                      : "",
+                  mode:
+                    meta.mode === "twitch" ||
+                    meta.mode === "screen" ||
+                    meta.mode === "camera" ||
+                    meta.mode === "android-screen"
+                      ? meta.mode
+                      : "screen",
+                });
+              } else if (type === "chat-message") {
+                // Côté viewer : le message vient du host, qui a déjà
+                // validé et recalculé `highlight` (cf. broadcastChat
+                // FromHost). On fait confiance à sa valeur, sans quoi
+                // le badge 👑 reine ne s'affichera jamais chez les
+                // autres viewers.
+                const msg = sanitizeIncomingChat(payload, true);
+                if (msg) deliverChatLocally(msg);
+              }
+            });
+            data.on("close", () => {
+              if (viewerDataConnRef.current === data) {
+                viewerDataConnRef.current = null;
+              }
+            });
+          });
+
+          viewerPeer.on("error", (err: Error & { type?: string }) => {
+            if (err.type === "peer-unavailable") {
+              setIsConnecting(false);
+              if (viewerPeerRef.current === viewerPeer) {
+                try {
+                  viewerPeer.destroy();
+                } catch {
+                  // ignore
+                }
+                viewerPeerRef.current = null;
+              }
+              return;
+            }
+            console.warn("PeerJS viewer error", err);
+            setIsConnecting(false);
+          });
+        } catch (err) {
+          if (!cancelled) {
+            setIsConnecting(false);
+            setLastError(
+              `Impossible de rejoindre le live : ${
+                err instanceof Error ? err.message : String(err)
+              }`,
+            );
+          }
         }
-        viewerDataConnRef.current = null;
-      }
-      if (viewerPeerRef.current) {
-        try {
-          viewerPeerRef.current.destroy();
-        } catch {
-          // ignore
+      })();
+
+      return () => {
+        cancelled = true;
+        if (viewerDataConnRef.current) {
+          try {
+            viewerDataConnRef.current.close();
+          } catch {
+            // ignore
+          }
+          viewerDataConnRef.current = null;
         }
-        viewerPeerRef.current = null;
-      }
-      setRemoteStream(null);
-      setIsConnecting(false);
-      setViewingMeta(null);
-    };
-  }, []);
+        if (viewerMediaCallRef.current) {
+          try {
+            viewerMediaCallRef.current.close();
+          } catch {
+            // ignore
+          }
+          viewerMediaCallRef.current = null;
+        }
+        if (viewerPeerRef.current) {
+          try {
+            viewerPeerRef.current.destroy();
+          } catch {
+            // ignore
+          }
+          viewerPeerRef.current = null;
+        }
+        setRemoteStream(null);
+        setIsConnecting(false);
+        setViewingMeta(null);
+      };
+    },
+    [deliverChatLocally, sanitizeIncomingChat],
+  );
 
   useEffect(() => {
     return () => {
@@ -1534,15 +1967,30 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         const remote = await apiListLive();
         if (cancelled) return;
         const me = userRef.current;
+        const localHostIsLive = !!me && configRef.current.status === "live";
         setLiveRegistry((prev) => {
           const next: Record<string, LiveRegistryEntry> = {};
           // 1. Toutes les entrées serveur (tous broadcasters).
           for (const s of remote) {
-            // On ne touche pas à la sienne — l'entrée locale est la
-            // source de vérité pour son propre live (titre modifié en
-            // direct, heartbeat frais).
-            if (me && s.broadcaster_id === me.id) continue;
+            // Si CE tab diffuse vraiment, son entrée locale reste prioritaire.
+            // Sinon, on garde aussi mon entrée serveur pour le hub public et
+            // les retours post-refresh.
+            if (localHostIsLive && me && s.broadcaster_id === me.id) continue;
             next[s.broadcaster_id] = remoteToRegistry(s);
+          }
+          // 1b. Si un live Android disparaît brièvement de `/live` pendant
+          // un trou réseau mobile, on garde l'entrée locale jusqu'au TTL
+          // heartbeat. Sans cette grâce, les viewers voient "connexion",
+          // puis retour du live, puis re-connexion en boucle.
+          const now = Date.now();
+          for (const [id, entry] of Object.entries(prev)) {
+            if (next[id] || entry.mode !== "android-screen") continue;
+            const heartbeat = entry.lastHeartbeat ?? entry.startedAt;
+            const heartbeatAt = new Date(heartbeat).getTime();
+            if (!Number.isFinite(heartbeatAt)) continue;
+            if (now - heartbeatAt <= REGISTRY_STALE_MS) {
+              next[id] = entry;
+            }
           }
           // 2. Ma propre entrée conservée uniquement si je suis EFFECTIVEMENT
           //    en live sur CE tab. Sans cette garde, un rafraîchissement
@@ -1551,11 +1999,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
           //    plus de heartbeat → plus de refresh serveur → le serveur
           //    la purge à 90 s, mais ce bloc la ré-injectait à chaque
           //    poll depuis `prev`, la figeant pour toujours côté tab).
-          if (
-            me &&
-            prev[me.id] &&
-            configRef.current.status === "live"
-          ) {
+          if (localHostIsLive && me && prev[me.id]) {
             next[me.id] = prev[me.id];
           }
           writeRegistry(next);
@@ -1566,7 +2010,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       }
     };
     sync();
-    const id = setInterval(sync, 10_000);
+    const id = setInterval(sync, 5_000);
     // Re-sync au retour d'onglet (user mobile qui bascule d'app → revient).
     const onVisible = () => {
       if (document.visibilityState === "visible") sync();

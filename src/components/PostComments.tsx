@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Send, Trash2 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
@@ -18,10 +18,14 @@ interface Props {
 }
 
 export function PostComments({ postId, comments, postAuthorId }: Props) {
-  const { user, isQueen } = useAuth();
+  const { user, users, isQueen } = useAuth();
   const { dispatch } = useStore();
   const { notify } = useToast();
   const [draft, setDraft] = useState("");
+  const usersById = useMemo(
+    () => new Map(users.map((u) => [u.id, u])),
+    [users],
+  );
 
   function profileHref(authorId: string) {
     return `/u/${authorId}`;
@@ -66,13 +70,15 @@ export function PostComments({ postId, comments, postAuthorId }: Props) {
     <div className="mt-4 border-t border-royal-500/15 pt-4">
       <ul className="space-y-3">
         {comments.map((c) => {
+          const authorAvatar =
+            usersById.get(c.authorId)?.avatar || c.authorAvatar;
           const canDelete =
             isQueen || user?.id === c.authorId || user?.id === postAuthorId;
           return (
             <li key={c.id} className="flex items-start gap-3">
               <Link to={profileHref(c.authorId)} className="shrink-0">
                 <img
-                  src={c.authorAvatar}
+                  src={authorAvatar}
                   alt={c.authorName}
                   className="h-8 w-8 rounded-full object-cover ring-2 ring-royal-500/30 transition hover:ring-gold-400/60"
                 />

@@ -233,6 +233,50 @@ class LiveSession(SQLModel, table=True):
     last_heartbeat_at: str = Field(default_factory=_now_iso, index=True)
 
 
+class NativeLiveSignal(SQLModel, table=True):
+    """Signalisation WebRTC pour les lives Android natifs.
+
+    PeerJS ne peut pas transporter une piste créée côté Android natif
+    (`MediaProjection`). On utilise donc une signalisation serveur légère :
+    le viewer web poste une offre SDP, l'app Android polle les offres de
+    son live, répond avec une answer SDP, puis les deux côtés échangent les
+    candidats ICE via cette table.
+    """
+
+    session_id: str = Field(primary_key=True)
+    broadcaster_id: str = Field(index=True)
+    viewer_id: str = Field(index=True)
+    offer_sdp: str
+    answer_sdp: str = ""
+    viewer_ice_json: str = Field(default="[]")
+    broadcaster_ice_json: str = Field(default="[]")
+    created_at: str = Field(default_factory=_now_iso, index=True)
+    updated_at: str = Field(default_factory=_now_iso, index=True)
+
+
+class NativeLiveBroadcastToken(SQLModel, table=True):
+    """Jeton court pour authentifier le service Android natif du broadcaster."""
+
+    token: str = Field(primary_key=True)
+    broadcaster_id: str = Field(index=True)
+    created_at: str = Field(default_factory=_now_iso, index=True)
+    expires_at: str = Field(index=True)
+
+
+class LiveChatMessage(SQLModel, table=True):
+    """Message de chat live persistant court, lu par le web et l'overlay natif."""
+
+    id: str = Field(primary_key=True)
+    broadcaster_id: str = Field(index=True)
+    author_id: str = Field(index=True)
+    author_name: str = ""
+    author_avatar: str = ""
+    content: str
+    created_at: str = Field(default_factory=_now_iso, index=True)
+    highlight: bool = False
+    grade_short: Optional[str] = None
+
+
 class LiveModeration(SQLModel, table=True):
     """Actions de modération du broadcaster sur son propre live.
 

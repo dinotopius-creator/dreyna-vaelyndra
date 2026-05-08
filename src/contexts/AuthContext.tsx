@@ -44,6 +44,10 @@ import {
   authRegister,
   type AuthMe,
 } from "../lib/authApi";
+import {
+  clearNativeScreenShareAuthGrace,
+  isNativeScreenShareAuthGraceActive,
+} from "../lib/nativeScreenShare";
 
 interface StoredUser extends User {
   passwordHash: string;
@@ -90,6 +94,7 @@ interface AuthCtx {
   ) => Promise<RegisterResult>;
   logout: () => Promise<void>;
   refreshBackendMe: () => Promise<AuthMe | null>;
+  syncProfileAvatar: (avatar: string) => void;
   updateBio: (bio: string) => void;
   updateProfile: (patch: {
     username?: string;
@@ -352,16 +357,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             confirmedUnauthenticated = true;
           }
         } catch (err) {
-          console.warn(
-            `auth bootstrap failed (attempt ${attempt + 1}):`,
-            err,
-          );
+          console.warn(`auth bootstrap failed (attempt ${attempt + 1}):`, err);
         }
         if (attempt === 0) {
           await new Promise((r) => setTimeout(r, 600));
         }
       }
-      if (confirmedUnauthenticated) {
+      if (confirmedUnauthenticated && !isNativeScreenShareAuthGraceActive()) {
         console.info("authMe: session backend expirée (401 persistant).");
         setBackendMe(null);
       }
@@ -386,7 +388,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setUserId(me.id);
           } else {
             // 401 explicite lors du focus → session révoquée, on clean.
-            setBackendMe(null);
+            if (!isNativeScreenShareAuthGraceActive()) {
+              setBackendMe(null);
+            }
           }
         })
         .catch(() => {
@@ -472,8 +476,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (err.status === 429) {
             return {
               ok: false,
-              error:
-                "Trop de tentatives. Réessaie dans quelques minutes.",
+              error: "Trop de tentatives. Réessaie dans quelques minutes.",
             };
           }
           // 401 / 404 backend : NE PAS retomber sur le localStorage.
@@ -547,7 +550,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (err) {
         if (err instanceof ApiError) {
           if (err.status === 409)
-            return { ok: false, error: "Ce mail est déjà inscrit aux archives." };
+            return {
+              ok: false,
+              error: "Ce mail est déjà inscrit aux archives.",
+            };
           if (err.status === 429)
             return {
               ok: false,
@@ -568,16 +574,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       /* noop */
     }
+    clearNativeScreenShareAuthGrace();
     setUserId(null);
     setBackendMe(null);
   }, []);
 
+  const syncProfileAvatar = useCallback(
+    (avatar: string) => {
+      if (!userId || !avatar) return;
+      setUsers((arr) =>
+        arr.map((u) => (u.id === userId ? { ...u, avatar } : u)),
+      );
+      setBackendMe((me) =>
+        me && me.id === userId ? { ...me, avatar_image_url: avatar } : me,
+      );
+    },
+    [userId],
+  );
+
   const updateBio = useCallback(
     (bio: string) => {
       if (!userId) return;
-      setUsers((arr) =>
-        arr.map((u) => (u.id === userId ? { ...u, bio } : u)),
-      );
+      setUsers((arr) => arr.map((u) => (u.id === userId ? { ...u, bio } : u)));
     },
     [userId],
   );
@@ -676,6 +694,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           };
         }),
       );
+      if (savedAvatar && trimmedAvatar) syncProfileAvatar(trimmedAvatar);
       // Recharge `backendMe` pour que `OfflineBanner`, le badge de
       // profil et les écrans qui lisent `avatar_image_url` affichent
       // la nouvelle image sans nécessiter de refresh.
@@ -690,7 +709,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       return { ok: true };
     },
-    [userId, syncBackendUser],
+    [userId, syncBackendUser, syncProfileAvatar],
   );
 
   const value = useMemo<AuthCtx>(
@@ -714,6 +733,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       register,
       logout,
       refreshBackendMe,
+      syncProfileAvatar,
       updateBio,
       updateProfile,
     }),
@@ -726,6 +746,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       register,
       logout,
       refreshBackendMe,
+      syncProfileAvatar,
       updateBio,
       updateProfile,
     ],

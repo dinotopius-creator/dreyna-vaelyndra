@@ -34,6 +34,8 @@ import { useAuth } from "../contexts/AuthContext";
 import { useLive } from "../contexts/LiveContext";
 import { apiGetProfile } from "../lib/api";
 import { generateId } from "../lib/helpers";
+import { apiPostLiveChat } from "../lib/liveApi";
+import { isNativeAndroidApp } from "../lib/nativeScreenShare";
 import type { ChatMessage } from "../types";
 
 const POSITION_STORAGE_KEY = "vaelyndra_floating_live_chat_pos";
@@ -105,6 +107,7 @@ export function FloatingLiveChat() {
   const { config } = useLive();
   const isBroadcasting = config.status === "live";
   if (!isBroadcasting || !user) return null;
+  if (config.mode === "android-screen" && isNativeAndroidApp()) return null;
   // `startedAt` change à chaque nouveau stream → remount complet de
   // la session (état interne réinitialisé "gratuitement" par React,
   // sans setState-in-effect).
@@ -296,8 +299,9 @@ function FloatingLiveChatSession() {
     e.preventDefault();
     const value = input.trim();
     if (!value || !user) return;
+    const clientId = generateId("msg");
     publishChatMessage({
-      id: generateId("msg"),
+      id: clientId,
       authorId: user.id,
       authorName: user.username,
       authorAvatar: user.avatar,
@@ -305,6 +309,14 @@ function FloatingLiveChatSession() {
       createdAt: new Date().toISOString(),
       highlight: user.role === "queen",
       gradeShort: myGradeShort,
+    });
+    apiPostLiveChat({
+      broadcasterId: user.id,
+      content: value,
+      clientId,
+      gradeShort: myGradeShort,
+    }).catch(() => {
+      // Le DataChannel reste actif ; le backend sert à l'overlay Android natif.
     });
     setInput("");
   }
@@ -379,7 +391,7 @@ function FloatingLiveChatSession() {
         <MessageSquare className="h-4 w-4 text-gold-300" />
         <div className="flex min-w-0 flex-1 flex-col leading-tight">
           <span className="truncate font-display text-sm text-gold-200">
-            Chat de ton live
+            Chat live
           </span>
           <span className="truncate text-[10px] text-ivory/50">
             {sortedMessages.length} message

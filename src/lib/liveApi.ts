@@ -15,7 +15,7 @@ export interface LiveSessionOut {
   title: string;
   description: string;
   category: string;
-  mode: "screen" | "camera" | "twitch";
+  mode: "screen" | "android-screen" | "camera" | "twitch";
   twitch_channel: string;
   started_at: string;
   last_heartbeat_at: string;
@@ -59,7 +59,7 @@ export interface LiveHeartbeatInput {
   title?: string;
   description?: string;
   category?: string;
-  mode?: "screen" | "camera" | "twitch";
+  mode?: "screen" | "android-screen" | "camera" | "twitch";
   twitchChannel?: string;
 }
 
@@ -90,6 +90,123 @@ export async function apiLiveHeartbeat(
 /** Arrêt explicite du live du user connecté (bouton Stop ou unload). */
 export async function apiStopLive(): Promise<void> {
   await request<null>("/live/stop", { method: "DELETE" });
+}
+
+export interface LiveChatMessageOut {
+  id: string;
+  broadcaster_id: string;
+  author_id: string;
+  author_name: string;
+  author_avatar: string;
+  content: string;
+  created_at: string;
+  highlight: boolean;
+  grade_short: string | null;
+}
+
+export async function apiListLiveChat(input: {
+  broadcasterId: string;
+  after?: string | null;
+  limit?: number;
+}): Promise<LiveChatMessageOut[]> {
+  const params = new URLSearchParams({
+    limit: String(input.limit ?? 120),
+  });
+  if (input.after) params.set("after", input.after);
+  const res = await request<{ messages: LiveChatMessageOut[] }>(
+    `/live/chat/${encodeURIComponent(input.broadcasterId)}?${params.toString()}`,
+  );
+  return res?.messages ?? [];
+}
+
+export async function apiPostLiveChat(input: {
+  broadcasterId: string;
+  content: string;
+  clientId?: string;
+  gradeShort?: string | null;
+}): Promise<LiveChatMessageOut> {
+  return (await request<LiveChatMessageOut>(
+    `/live/chat/${encodeURIComponent(input.broadcasterId)}`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        content: input.content,
+        client_id: input.clientId ?? "",
+        grade_short: input.gradeShort ?? null,
+      }),
+    },
+  )) as LiveChatMessageOut;
+}
+
+export async function apiCreateNativeBroadcastToken(): Promise<{
+  token: string;
+  expires_at: string;
+}> {
+  return (await request<{ token: string; expires_at: string }>(
+    "/live/native/broadcast-token",
+    { method: "POST" },
+  )) as { token: string; expires_at: string };
+}
+
+export interface NativeIceCandidate {
+  candidate: string;
+  sdpMid?: string | null;
+  sdpMLineIndex?: number | null;
+}
+
+export interface NativeLiveSignalOut {
+  session_id: string;
+  broadcaster_id: string;
+  viewer_id: string;
+  offer_sdp: string;
+  answer_sdp: string;
+  viewer_ice: NativeIceCandidate[];
+  broadcaster_ice: NativeIceCandidate[];
+  created_at: string;
+  updated_at: string;
+}
+
+export async function apiCreateNativeLiveOffer(input: {
+  broadcasterId: string;
+  offerSdp: string;
+}): Promise<NativeLiveSignalOut> {
+  return (await request<NativeLiveSignalOut>("/live/native/offers", {
+    method: "POST",
+    body: JSON.stringify({
+      broadcaster_id: input.broadcasterId,
+      offer_sdp: input.offerSdp,
+    }),
+  })) as NativeLiveSignalOut;
+}
+
+export async function apiGetNativeLiveOffer(
+  sessionId: string,
+): Promise<NativeLiveSignalOut> {
+  return (await request<NativeLiveSignalOut>(
+    `/live/native/offers/${encodeURIComponent(sessionId)}`,
+  )) as NativeLiveSignalOut;
+}
+
+export async function apiHeartbeatNativeViewer(
+  sessionId: string,
+): Promise<void> {
+  await request<NativeLiveSignalOut>(
+    `/live/native/offers/${encodeURIComponent(sessionId)}/viewer-heartbeat`,
+    { method: "POST" },
+  );
+}
+
+export async function apiAddNativeViewerIce(input: {
+  sessionId: string;
+  candidate: NativeIceCandidate;
+}): Promise<void> {
+  await request<NativeLiveSignalOut>(
+    `/live/native/offers/${encodeURIComponent(input.sessionId)}/viewer-ice`,
+    {
+      method: "POST",
+      body: JSON.stringify({ candidate: input.candidate }),
+    },
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -196,6 +313,17 @@ export async function apiMyJoinRequest(
   return res ?? null;
 }
 
+/** Participant : liste les invités acceptés sur le live courant. */
+export async function apiListAcceptedJoinRequests(
+  broadcasterId: string,
+): Promise<JoinRequestOut[]> {
+  return (
+    (await request<JoinRequestOut[]>(
+      `/live/${encodeURIComponent(broadcasterId)}/join/accepted`,
+    )) ?? []
+  );
+}
+
 /** Broadcaster : liste des demandes sur SON live (polled ~5 s). */
 export async function apiListJoinRequests(): Promise<JoinRequestOut[]> {
   return (await request<JoinRequestOut[]>("/live/join-requests")) ?? [];
@@ -206,11 +334,8 @@ export async function apiDecideJoinRequest(
   requestId: number,
   decision: "accepted" | "refused",
 ): Promise<JoinRequestOut> {
-  return (await request<JoinRequestOut>(
-    `/live/join-requests/${requestId}`,
-    {
-      method: "PATCH",
-      body: JSON.stringify({ status: decision }),
-    },
-  )) as JoinRequestOut;
+  return (await request<JoinRequestOut>(`/live/join-requests/${requestId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status: decision }),
+  })) as JoinRequestOut;
 }

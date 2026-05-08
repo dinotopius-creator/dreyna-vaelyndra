@@ -1,54 +1,87 @@
-import { Link, NavLink, useNavigate } from "react-router-dom";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useStore } from "../contexts/StoreContext";
 import { useMessages } from "../contexts/MessagesContext";
+import { useNotifications } from "../contexts/NotificationsContext";
 import {
+  Bell,
   Crown,
+  CheckCheck,
   Menu,
   MessageCircle,
   ShoppingBag,
   Radio,
+  Settings,
   LogOut,
   UserCircle2,
   ShieldCheck,
   ShieldAlert,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import clsx from "clsx";
 
 const NAV = [
   { to: "/", label: "Royaume" },
   { to: "/blog", label: "Chroniques" },
   { to: "/boutique", label: "Boutique" },
-  { to: "/live", label: "Lives" },
+  { to: "/live", label: "Live" },
   { to: "/communaute", label: "Communauté" },
 ];
 
 export function Navbar() {
   const { user, isQueen, logout, backendMe } = useAuth();
-  const { cartCount, isLiveOn } = useStore();
+  const { cartCount } = useStore();
   const { unreadCount } = useMessages();
+  const {
+    notifications,
+    unreadCount: notificationUnreadCount,
+    preferences,
+    permission,
+    markRead,
+    markAllRead,
+    clearNotification,
+    updatePreferences,
+    requestBrowserPermission,
+  } = useNotifications();
   const [open, setOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notificationSettingsOpen, setNotificationSettingsOpen] =
+    useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+  const canAccessAdmin =
+    isQueen || backendMe?.role === "admin" || backendMe?.role === "animator";
+  const adminLabel =
+    backendMe?.role === "animator" ? "Chroniques" : "Salle du Trone";
+
+  useEffect(() => {
+    if (!notificationsOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [notificationsOpen]);
+
+  useEffect(() => {
+    setNotificationsOpen(false);
+    setNotificationSettingsOpen(false);
+    setOpen(false);
+  }, [location.pathname]);
 
   return (
     <header className="sticky top-0 z-40">
       <div className="border-b border-royal-600/20 bg-night-900/80 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-3">
-          <Link to="/" className="group flex items-center gap-2">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-3 py-3 sm:gap-4 sm:px-5">
+          <Link to="/" className="group flex min-w-0 items-center gap-2">
             <span className="relative flex h-9 w-9 items-center justify-center rounded-full bg-gold-shine text-night-900 shadow-glow-gold transition group-hover:scale-105">
               <Crown className="h-5 w-5" />
             </span>
-            <span className="font-display text-lg font-bold text-gold-200">
+            <span className="hidden font-display text-lg font-bold text-gold-200 sm:inline">
               Vaelyndra
             </span>
-            {isLiveOn && (
-              <span className="ml-2 inline-flex items-center gap-1 rounded-full border border-rose-400/50 bg-rose-500/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-rose-300">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-rose-400" />
-                Live
-              </span>
-            )}
           </Link>
 
           <nav className="hidden items-center gap-1 lg:flex">
@@ -56,7 +89,6 @@ export function Navbar() {
               <NavLink
                 key={n.to}
                 to={n.to}
-                end={n.to === "/"}
                 className={({ isActive }) =>
                   clsx(
                     "rounded-full px-4 py-2 font-regal text-[11px] font-semibold tracking-[0.22em] transition",
@@ -65,25 +97,288 @@ export function Navbar() {
                       : "text-ivory/70 hover:text-gold-200",
                   )
                 }
+                end={n.to === "/" || n.to === "/live"}
               >
                 {n.label}
               </NavLink>
             ))}
           </nav>
 
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-1 sm:gap-2">
             <Link
-              to="/live"
+              to={user ? "/live/studio" : "/connexion"}
               className="hidden items-center gap-1.5 rounded-full border border-royal-500/30 px-3 py-2 text-xs text-ivory/80 transition hover:border-gold-400/60 hover:text-gold-200 md:inline-flex"
-              aria-label="Lives"
+              aria-label="Espace live streamer"
             >
               <Radio className="h-4 w-4" />
-              Lives
+              Mon live
             </Link>
+            {user && (
+              <div className="relative">
+                <button
+                  onClick={() => {
+                    setNotificationsOpen((value) => {
+                      if (value) setNotificationSettingsOpen(false);
+                      return !value;
+                    });
+                  }}
+                  className="relative inline-flex h-10 w-10 items-center justify-center gap-1.5 rounded-full border border-royal-500/30 p-0 text-xs text-ivory/80 transition hover:border-gold-400/60 hover:text-gold-200 sm:w-auto sm:px-3"
+                  aria-label="Notifications"
+                  aria-expanded={notificationsOpen}
+                >
+                  <Bell className="h-4 w-4" />
+                  <span className="hidden sm:inline">Notifs</span>
+                  {notificationUnreadCount > 0 && (
+                    <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-gold-shine px-1 text-[10px] font-bold text-night-900">
+                      {notificationUnreadCount > 99
+                        ? "99+"
+                        : notificationUnreadCount}
+                    </span>
+                  )}
+                </button>
+                {notificationsOpen &&
+                  createPortal(
+                    <div className="fixed inset-0 z-[100] flex bg-night-950 p-0 sm:items-start sm:justify-end sm:bg-night-950/35 sm:p-4">
+                      <button
+                        type="button"
+                        className="absolute inset-0 hidden sm:block"
+                        aria-label="Fermer les notifications"
+                        onClick={() => {
+                          setNotificationsOpen(false);
+                          setNotificationSettingsOpen(false);
+                        }}
+                      />
+                      <div className="relative flex h-[100dvh] w-full flex-col overflow-hidden bg-night-900 sm:mt-12 sm:h-auto sm:max-h-[min(42rem,calc(100vh-6rem))] sm:w-[min(24rem,calc(100vw-2rem))] sm:rounded-2xl sm:border sm:border-royal-500/30 sm:bg-night-900/95 sm:shadow-2xl sm:shadow-night-950/60">
+                        <div className="flex items-center justify-between gap-3 border-b border-royal-600/25 px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:py-3">
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gold-200">
+                              Notifications
+                            </p>
+                            <p className="truncate text-[11px] text-ivory/55">
+                              Likes, commentaires et identifications
+                            </p>
+                          </div>
+                          <div className="flex flex-none items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setNotificationSettingsOpen((value) => !value)
+                              }
+                              className={clsx(
+                                "rounded-full border p-2 transition",
+                                notificationSettingsOpen
+                                  ? "border-gold-400/60 bg-gold-500/10 text-gold-200"
+                                  : "border-royal-500/30 text-ivory/70 hover:border-gold-400/60 hover:text-gold-200",
+                              )}
+                              aria-label="Reglages notifications"
+                              aria-pressed={notificationSettingsOpen}
+                            >
+                              <Settings className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={markAllRead}
+                              className="rounded-full border border-royal-500/30 p-2 text-ivory/70 transition hover:border-gold-400/60 hover:text-gold-200"
+                              aria-label="Tout marquer comme lu"
+                            >
+                              <CheckCheck className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setNotificationsOpen(false);
+                                setNotificationSettingsOpen(false);
+                              }}
+                              className="rounded-full border border-royal-500/30 p-2 text-ivory/70 transition hover:border-gold-400/60 hover:text-gold-200 sm:hidden"
+                              aria-label="Fermer les notifications"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+                          {notifications.length === 0 ? (
+                            <div className="flex min-h-56 flex-col items-center justify-center px-5 py-8 text-center">
+                              <Bell className="mb-3 h-8 w-8 text-gold-200/60" />
+                              <p className="text-sm font-semibold text-ivory/85">
+                                Aucune notification
+                              </p>
+                              <p className="mt-1 max-w-56 text-xs leading-relaxed text-ivory/55">
+                                Les likes, commentaires et identifications
+                                arriveront ici.
+                              </p>
+                            </div>
+                          ) : (
+                            notifications.slice(0, 12).map((notification) => (
+                              <div
+                                key={notification.id}
+                                className={clsx(
+                                  "flex gap-3 border-b border-royal-600/15 px-4 py-3 last:border-b-0",
+                                  notification.readAt
+                                    ? "bg-transparent"
+                                    : "bg-gold-500/10",
+                                )}
+                              >
+                                <img
+                                  src={notification.actorAvatar || "/vite.svg"}
+                                  alt=""
+                                  className="h-9 w-9 flex-none rounded-full object-cover ring-1 ring-gold-400/40"
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <Link
+                                    to={notification.url ?? "/communaute"}
+                                    onClick={() => {
+                                      markRead(notification.id);
+                                      setNotificationsOpen(false);
+                                      setNotificationSettingsOpen(false);
+                                    }}
+                                    className="block"
+                                  >
+                                    <p className="truncate text-sm font-semibold text-ivory">
+                                      {notification.title}
+                                    </p>
+                                    <p className="line-clamp-2 text-xs text-ivory/65">
+                                      {notification.body}
+                                    </p>
+                                    <p className="mt-1 text-[10px] uppercase tracking-[0.16em] text-gold-200/70">
+                                      {new Date(
+                                        notification.createdAt,
+                                      ).toLocaleDateString("fr-FR", {
+                                        day: "2-digit",
+                                        month: "short",
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                      })}
+                                    </p>
+                                  </Link>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    clearNotification(notification.id)
+                                  }
+                                  className="self-start rounded-full p-1 text-ivory/45 transition hover:text-gold-200"
+                                  aria-label="Supprimer la notification"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            ))
+                          )}
+                        </div>
+
+                        <div
+                          className={clsx(
+                            "flex-none border-t border-royal-600/25 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))]",
+                            notificationSettingsOpen
+                              ? "space-y-2 py-3"
+                              : "py-2",
+                          )}
+                        >
+                          {!notificationSettingsOpen && (
+                            <button
+                              type="button"
+                              onClick={() => setNotificationSettingsOpen(true)}
+                              className="flex min-h-10 w-full items-center justify-between rounded-xl px-1 text-left text-xs text-ivory/65 transition hover:text-gold-200"
+                            >
+                              <span>Reglages notifications</span>
+                              <Settings className="h-4 w-4" />
+                            </button>
+                          )}
+                          {notificationSettingsOpen && (
+                            <>
+                              <label className="flex min-h-10 items-center justify-between gap-3 text-xs text-ivory/75">
+                                Dans l'app
+                                <input
+                                  type="checkbox"
+                                  checked={preferences.inApp}
+                                  onChange={(event) =>
+                                    updatePreferences({
+                                      inApp: event.target.checked,
+                                    })
+                                  }
+                                  className="h-4 w-4 accent-gold-400"
+                                />
+                              </label>
+                              <label className="flex min-h-10 items-center justify-between gap-3 text-xs text-ivory/75">
+                                Likes communaute
+                                <input
+                                  type="checkbox"
+                                  checked={preferences.communityLikes}
+                                  onChange={(event) =>
+                                    updatePreferences({
+                                      communityLikes: event.target.checked,
+                                    })
+                                  }
+                                  className="h-4 w-4 accent-gold-400"
+                                />
+                              </label>
+                              <label className="flex min-h-10 items-center justify-between gap-3 text-xs text-ivory/75">
+                                Commentaires
+                                <input
+                                  type="checkbox"
+                                  checked={preferences.communityComments}
+                                  onChange={(event) =>
+                                    updatePreferences({
+                                      communityComments: event.target.checked,
+                                    })
+                                  }
+                                  className="h-4 w-4 accent-gold-400"
+                                />
+                              </label>
+                              <label className="flex min-h-10 items-center justify-between gap-3 text-xs text-ivory/75">
+                                Identifications
+                                <input
+                                  type="checkbox"
+                                  checked={preferences.mentions}
+                                  onChange={(event) =>
+                                    updatePreferences({
+                                      mentions: event.target.checked,
+                                    })
+                                  }
+                                  className="h-4 w-4 accent-gold-400"
+                                />
+                              </label>
+                              <div className="flex min-h-10 items-center justify-between gap-3 pt-1">
+                                <span className="text-xs text-ivory/75">
+                                  Notifications PC/tel
+                                </span>
+                                {permission === "granted" ? (
+                                  <input
+                                    type="checkbox"
+                                    checked={preferences.browser}
+                                    onChange={(event) =>
+                                      updatePreferences({
+                                        browser: event.target.checked,
+                                      })
+                                    }
+                                    className="h-4 w-4 accent-gold-400"
+                                  />
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={requestBrowserPermission}
+                                    className="rounded-full border border-gold-400/45 px-3 py-1 text-[11px] font-semibold text-gold-200 transition hover:bg-gold-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                                    disabled={permission === "unsupported"}
+                                  >
+                                    Activer
+                                  </button>
+                                )}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>,
+                    document.body,
+                  )}
+              </div>
+            )}
             {user && (
               <Link
                 to="/messages"
-                className="relative inline-flex items-center gap-1.5 rounded-full border border-royal-500/30 px-3 py-2 text-xs text-ivory/80 transition hover:border-gold-400/60 hover:text-gold-200"
+                className="relative inline-flex h-10 w-10 items-center justify-center gap-1.5 rounded-full border border-royal-500/30 p-0 text-xs text-ivory/80 transition hover:border-gold-400/60 hover:text-gold-200 sm:w-auto sm:px-3"
                 aria-label="Messagerie privée"
               >
                 <MessageCircle className="h-4 w-4" />
@@ -97,7 +392,7 @@ export function Navbar() {
             )}
             <Link
               to="/panier"
-              className="relative inline-flex items-center gap-1.5 rounded-full border border-royal-500/30 px-3 py-2 text-xs text-ivory/80 transition hover:border-gold-400/60 hover:text-gold-200"
+              className="relative inline-flex h-10 w-10 items-center justify-center gap-1.5 rounded-full border border-royal-500/30 p-0 text-xs text-ivory/80 transition hover:border-gold-400/60 hover:text-gold-200 sm:w-auto sm:px-3"
             >
               <ShoppingBag className="h-4 w-4" />
               <span className="hidden sm:inline">Panier</span>
@@ -108,18 +403,18 @@ export function Navbar() {
               )}
             </Link>
             {user ? (
-              <div className="flex items-center gap-2">
-                {isQueen && (
+              <div className="flex min-w-0 items-center gap-1 sm:gap-2">
+                {canAccessAdmin && (
                   <Link
                     to="/admin"
                     className="hidden items-center gap-1.5 rounded-full border border-gold-400/40 bg-gold-500/10 px-3 py-2 text-xs font-semibold text-gold-200 hover:bg-gold-500/20 md:inline-flex"
                   >
-                    <ShieldCheck className="h-4 w-4" /> Salle du Trône
+                    <ShieldCheck className="h-4 w-4" /> {adminLabel}
                   </Link>
                 )}
                 <Link
                   to="/moi"
-                  className="relative flex items-center gap-2 rounded-full border border-royal-500/30 bg-night-800/60 py-1 pl-1 pr-3"
+                  className="relative flex h-10 items-center gap-2 rounded-full border border-royal-500/30 bg-night-800/60 py-1 pl-1 pr-1 sm:pr-3"
                   title={
                     backendMe?.totp_enabled
                       ? "Double authentification activée"
@@ -152,7 +447,7 @@ export function Navbar() {
                     logout();
                     navigate("/");
                   }}
-                  className="rounded-full border border-royal-500/30 p-2 text-ivory/70 transition hover:text-gold-200"
+                  className="hidden rounded-full border border-royal-500/30 p-2 text-ivory/70 transition hover:text-gold-200 sm:inline-flex"
                   aria-label="Déconnexion"
                 >
                   <LogOut className="h-4 w-4" />
@@ -182,14 +477,12 @@ export function Navbar() {
               <NavLink
                 key={n.to}
                 to={n.to}
-                end={n.to === "/"}
+                end={n.to === "/" || n.to === "/live"}
                 onClick={() => setOpen(false)}
                 className={({ isActive }) =>
                   clsx(
                     "rounded-xl px-4 py-3 font-regal text-xs font-semibold tracking-[0.22em]",
-                    isActive
-                      ? "bg-gold-500/15 text-gold-200"
-                      : "text-ivory/70",
+                    isActive ? "bg-gold-500/15 text-gold-200" : "text-ivory/70",
                   )
                 }
               >
@@ -198,6 +491,13 @@ export function Navbar() {
             ))}
             {user && (
               <>
+                <NavLink
+                  to="/live/studio"
+                  onClick={() => setOpen(false)}
+                  className="rounded-xl border border-royal-500/30 px-4 py-3 font-regal text-xs font-semibold tracking-[0.22em] text-ivory/80"
+                >
+                  Mon live
+                </NavLink>
                 <NavLink
                   to="/compte"
                   onClick={() => setOpen(false)}
@@ -212,15 +512,26 @@ export function Navbar() {
                 >
                   Historique & appareils
                 </NavLink>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    logout();
+                    navigate("/");
+                  }}
+                  className="rounded-xl border border-royal-500/30 px-4 py-3 text-left font-regal text-xs font-semibold tracking-[0.22em] text-ivory/80"
+                >
+                  Deconnexion
+                </button>
               </>
             )}
-            {isQueen && (
+            {canAccessAdmin && (
               <NavLink
                 to="/admin"
                 onClick={() => setOpen(false)}
                 className="rounded-xl border border-gold-400/40 bg-gold-500/10 px-4 py-3 font-regal text-xs font-semibold tracking-[0.22em] text-gold-200"
               >
-                Salle du Trône
+                {adminLabel}
               </NavLink>
             )}
           </nav>

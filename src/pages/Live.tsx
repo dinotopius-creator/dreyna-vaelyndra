@@ -11,6 +11,7 @@ import {
   Copy,
   Eye,
   EyeOff,
+  ExternalLink,
   Video,
   Camera,
   RefreshCw,
@@ -20,7 +21,7 @@ import {
   MessageSquareOff,
   SkipForward,
 } from "lucide-react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useStore } from "../contexts/StoreContext";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
@@ -34,7 +35,6 @@ import { LIVE_CATEGORIES, getLiveCategory } from "../data/liveCategories";
 import { SectionHeading } from "../components/SectionHeading";
 import { GiftPanel } from "../components/GiftPanel";
 import { GiftFlight } from "../components/GiftFlight";
-import { LiveAvatarOverlay } from "../components/LiveAvatarOverlay";
 import { LiveChatHistory } from "../components/LiveChatHistory";
 import { LiveChatOverlay } from "../components/LiveChatOverlay";
 import { LiveHeartsOverlay } from "../components/LiveHeartsOverlay";
@@ -49,19 +49,20 @@ import {
   SORT_LEVELS,
   type SortLevel,
 } from "../components/SortDAppelCaster";
-import {
-  AUTO_CHAT_LINES,
-  SEED_CHAT,
-} from "../data/mock";
+import { AUTO_CHAT_LINES, SEED_CHAT } from "../data/mock";
 import type { ChatMessage, Gift, User } from "../types";
 import { generateId } from "../lib/helpers";
 import {
+  apiListLiveChat,
   apiModerateLive,
   apiMyModerationState,
+  apiPostLiveChat,
   type LiveModerationAction,
+  type LiveChatMessageOut,
 } from "../lib/liveApi";
 import { apiGetProfile } from "../lib/api";
 import { gradeBySlug } from "../data/grades";
+import { isNativeScreenShareAvailable } from "../lib/nativeScreenShare";
 import {
   getBotCadence,
   getViewerScale,
@@ -71,13 +72,46 @@ import {
 } from "../lib/liveScaling";
 
 const BOT_AUTHORS = [
-  { id: "user-lyria", name: "Lyria", avatar: "https://i.pravatar.cc/150?u=lyria" },
-  { id: "user-caelum", name: "Caelum", avatar: "https://i.pravatar.cc/150?u=caelum" },
-  { id: "user-aeris", name: "Aëris", avatar: "https://i.pravatar.cc/150?u=aeris" },
-  { id: "user-sylas", name: "Sylas", avatar: "https://i.pravatar.cc/150?u=sylas" },
+  {
+    id: "user-lyria",
+    name: "Lyria",
+    avatar: "https://i.pravatar.cc/150?u=lyria",
+  },
+  {
+    id: "user-caelum",
+    name: "Caelum",
+    avatar: "https://i.pravatar.cc/150?u=caelum",
+  },
+  {
+    id: "user-aeris",
+    name: "Aëris",
+    avatar: "https://i.pravatar.cc/150?u=aeris",
+  },
+  {
+    id: "user-sylas",
+    name: "Sylas",
+    avatar: "https://i.pravatar.cc/150?u=sylas",
+  },
   { id: "user-mira", name: "Mira", avatar: "https://i.pravatar.cc/150?u=mira" },
-  { id: "user-thalia", name: "Thalia", avatar: "https://i.pravatar.cc/150?u=thalia" },
+  {
+    id: "user-thalia",
+    name: "Thalia",
+    avatar: "https://i.pravatar.cc/150?u=thalia",
+  },
 ];
+
+function serverChatToMessage(row: LiveChatMessageOut): ChatMessage {
+  return {
+    id: row.id,
+    authorId: row.author_id,
+    authorName: row.author_name,
+    authorAvatar: row.author_avatar,
+    content: row.content,
+    createdAt: row.created_at,
+    highlight: row.highlight,
+    gradeShort: row.grade_short,
+  };
+}
 
 /** Pseudo-utilisateur "Sort d'appel" pour les annonces système du chat. */
 const SYSTEM_AUTHOR = {
@@ -113,6 +147,11 @@ function extractTwitchChannel(raw: string) {
   const m = v.match(/twitch\.tv\/([A-Za-z0-9_]{3,})/i);
   if (m) return m[1];
   return v.replace(/^@/, "").replace(/[^A-Za-z0-9_]/g, "");
+}
+
+function isDesktopViewport() {
+  if (typeof window === "undefined") return false;
+  return window.matchMedia("(min-width: 1024px)").matches;
 }
 
 function LiveVideoStage({
@@ -288,7 +327,9 @@ function isCameraSupported(): boolean {
 function isLikelyMobile(): boolean {
   if (typeof navigator === "undefined") return false;
   const ua = navigator.userAgent || "";
-  if (/Android|iPhone|iPad|iPod|Mobile|Silk|Opera Mini|SamsungBrowser/i.test(ua)) {
+  if (
+    /Android|iPhone|iPad|iPod|Mobile|Silk|Opera Mini|SamsungBrowser/i.test(ua)
+  ) {
     return true;
   }
   // iPad iOS 13+ se fait passer pour un Mac — on le récupère via le
@@ -356,17 +397,16 @@ function IosStreamingHelp({
       {open && (
         <div className="space-y-3 border-t border-ivory/10 px-4 py-4 text-xs text-ivory/70">
           <p>
-            Sur iPhone et iPad, le partage d'écran direct via navigateur
-            n'est pas supporté (décision d'Apple, rien à voir avec
-            Vaelyndra — toutes les apps de navigateur sur iPad passent
-            obligatoirement par le moteur WebKit, qui bloque
-            {" "}<code>getDisplayMedia</code>). Le chemin officiel pour
-            streamer tes jeux ou apps&nbsp;:
+            Sur iPhone et iPad, le partage d'écran direct via navigateur n'est
+            pas supporté (décision d'Apple, rien à voir avec Vaelyndra — toutes
+            les apps de navigateur sur iPad passent obligatoirement par le
+            moteur WebKit, qui bloque <code>getDisplayMedia</code>). Le chemin
+            officiel pour streamer tes jeux ou apps&nbsp;:
           </p>
           <ol className="list-decimal space-y-2 pl-5">
             <li>
-              Installe <strong className="text-gold-200">Twitch</strong>{" "}
-              depuis l'App Store (gratuit, dispo iPhone et iPad).
+              Installe <strong className="text-gold-200">Twitch</strong> depuis
+              l'App Store (gratuit, dispo iPhone et iPad).
             </li>
             <li>
               Crée un compte Twitch (si pas déjà fait) et connecte-toi dans
@@ -374,9 +414,9 @@ function IosStreamingHelp({
             </li>
             <li>
               Dans l'app Twitch, appuie sur ton avatar →{" "}
-              <strong>Go Live</strong> → <strong>Partager l'écran</strong>.
-              Tu peux streamer n'importe quel jeu ou application ouverte
-              sur ton appareil (iPhone comme iPad).
+              <strong>Go Live</strong> → <strong>Partager l'écran</strong>. Tu
+              peux streamer n'importe quel jeu ou application ouverte sur ton
+              appareil (iPhone comme iPad).
             </li>
             <li>
               Récupère ton <strong>nom de chaîne Twitch</strong> (ex:{" "}
@@ -387,27 +427,25 @@ function IosStreamingHelp({
             </li>
             {isQueen ? (
               <li>
-                Sur Vaelyndra, choisis le mode{" "}
-                <strong>OBS + Twitch</strong> ci-dessus, colle ton nom de
-                chaîne, clique "Annoncer le live Twitch". Vaelyndra embed
-                automatiquement ton flux Twitch.
+                Sur Vaelyndra, choisis le mode <strong>OBS + Twitch</strong>{" "}
+                ci-dessus, colle ton nom de chaîne, clique "Annoncer le live
+                Twitch". Vaelyndra embed automatiquement ton flux Twitch.
               </li>
             ) : (
               <li>
                 Sur Vaelyndra, demande à un <strong>admin/animateur</strong>{" "}
-                d'activer le mode Twitch pour ton compte (bientôt
-                accessible à tous les streamers certifiés — le mode est
-                pour l'instant en beta réservée).
+                d'activer le mode Twitch pour ton compte (bientôt accessible à
+                tous les streamers certifiés — le mode est pour l'instant en
+                beta réservée).
               </li>
             )}
           </ol>
           <p className="text-ivory/50">
-            Sur mobile (Android comme iOS), le mode "Partage d'écran"
-            n'est pas fiable : Chrome Android/Samsung Internet exposent
-            bien l'API mais l'appel échoue ou renvoie une track morte.
-            Utilise donc le mode "Caméra" pour filmer en selfie/arrière,
-            ou passe par OBS + Twitch si tu veux streamer ton écran de
-            jeu mobile.
+            Sur mobile (Android comme iOS), le mode "Partage d'écran" n'est pas
+            fiable : Chrome Android/Samsung Internet exposent bien l'API mais
+            l'appel échoue ou renvoie une track morte. Utilise donc le mode
+            "Caméra" pour filmer en selfie/arrière, ou passe par OBS + Twitch si
+            tu veux streamer ton écran de jeu mobile.
           </p>
         </div>
       )}
@@ -433,12 +471,24 @@ function BroadcasterControls() {
   const screenShareSupported = isScreenShareSupported();
   const cameraSupported = isCameraSupported();
   const isMobile = useMemo(() => isLikelyMobile(), []);
+  const [nativeScreenShareSupported, setNativeScreenShareSupported] =
+    useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    isNativeScreenShareAvailable().then((available) => {
+      if (!cancelled) setNativeScreenShareSupported(available);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   // Le partage d'écran via `getDisplayMedia` n'est pas supporté sur
   // mobile : même si Chrome Android expose parfois l'API, l'appel
   // renvoie une `NotAllowedError` / une track morte. On désactive donc
   // le mode screen sur tous les mobiles, indépendamment du test de
   // capacité API (qui donne de faux positifs sur Samsung Internet).
-  const screenEffectiveSupported = screenShareSupported && !isMobile;
+  const screenEffectiveSupported =
+    (screenShareSupported && !isMobile) || nativeScreenShareSupported;
 
   const isLive = config.status === "live";
 
@@ -478,6 +528,7 @@ function BroadcasterControls() {
   ]);
 
   if (!user) return null;
+  const broadcasterOverlayUserId = user.id;
 
   async function copyKey() {
     try {
@@ -488,23 +539,81 @@ function BroadcasterControls() {
     }
   }
 
+  function overlayUrl() {
+    return `${window.location.origin}/live/overlay/chat/${encodeURIComponent(broadcasterOverlayUserId)}`;
+  }
+
+  function desktopChatUrl() {
+    return `${window.location.origin}/live/popout/chat/${encodeURIComponent(broadcasterOverlayUserId)}`;
+  }
+
+  async function copyOverlayUrl() {
+    try {
+      await navigator.clipboard.writeText(overlayUrl());
+      notify("URL overlay OBS copiÃ©e.", "success");
+    } catch {
+      notify("Impossible de copier l'URL overlay.", "info");
+    }
+  }
+
+  function openOverlayPopout() {
+    window.open(
+      overlayUrl(),
+      "vaelyndra-live-chat-overlay",
+      "popup=yes,width=420,height=720,menubar=no,toolbar=no,location=no,status=no",
+    );
+  }
+
+  function openDesktopChatPopout() {
+    window.open(
+      desktopChatUrl(),
+      "vaelyndra-live-chat-popout",
+      "popup=yes,width=420,height=760,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no",
+    );
+  }
+
+  function prepareDesktopChatWindow() {
+    if (isMobile || !isDesktopViewport()) return null;
+    return window.open(
+      "",
+      "vaelyndra-live-chat-popout",
+      "popup=yes,width=420,height=760,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no",
+    );
+  }
+
   async function goLive() {
     if (!config.title.trim()) {
       notify("Donne un titre à ton live.", "info");
       return;
     }
+    const preparedChatWindow = prepareDesktopChatWindow();
     if (config.mode === "camera") {
       // `facing` par défaut = frontale sur mobile (selfie), seule caméra
       // dispo sur desktop (webcam intégrée).
-      await startCameraShare("user");
+      try {
+        await startCameraShare("user");
+        preparedChatWindow?.location.assign(desktopChatUrl());
+        preparedChatWindow?.focus();
+      } catch (error) {
+        preparedChatWindow?.close();
+        throw error;
+      }
       return;
     }
     if (config.mode === "screen") {
-      await startScreenShare();
+      try {
+        await startScreenShare();
+        preparedChatWindow?.location.assign(desktopChatUrl());
+        preparedChatWindow?.focus();
+      } catch (error) {
+        preparedChatWindow?.close();
+        throw error;
+      }
       return;
     }
     const handle = extractTwitchChannel(config.twitchChannel);
     if (!handle) {
+      preparedChatWindow?.close();
       notify("Renseigne ton nom de chaîne Twitch.", "info");
       return;
     }
@@ -512,15 +621,15 @@ function BroadcasterControls() {
     // On passe explicitement `handle` : updateConfig est batché donc
     // configRef.current lit encore la valeur brute pré-normalisation.
     announceTwitchLive(handle);
+    preparedChatWindow?.location.assign(desktopChatUrl());
+    preparedChatWindow?.focus();
   }
 
   return (
     <section className="card-royal mt-8 p-5 md:p-6">
       <div className="flex items-center gap-2">
         <Video className="h-4 w-4 text-gold-300" />
-        <h3 className="font-display text-lg text-gold-200">
-          Lancer mon live
-        </h3>
+        <h3 className="font-display text-lg text-gold-200">Lancer mon live</h3>
         {isLive && (
           <span className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-rose-400/50 bg-rose-500/20 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-rose-200">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-rose-400" />
@@ -621,9 +730,7 @@ function BroadcasterControls() {
         <legend className="mb-2 font-regal text-[11px] uppercase tracking-[0.22em] text-ivory/60">
           Mode de diffusion
         </legend>
-        <div
-          className="grid gap-3 md:grid-cols-3"
-        >
+        <div className="grid gap-3 md:grid-cols-3">
           <button
             type="button"
             onClick={() =>
@@ -677,12 +784,16 @@ function BroadcasterControls() {
               <p className="font-display text-base text-gold-200">
                 Partage d'écran
                 <span className="ml-2 rounded-full border border-sky-300/40 bg-sky-500/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.2em] text-sky-200">
-                  pc uniquement
+                  {nativeScreenShareSupported
+                    ? "android beta"
+                    : "pc uniquement"}
                 </span>
               </p>
               <p className="mt-1 text-xs text-ivory/60">
                 {screenEffectiveSupported
-                  ? "Stream ton écran (jeu, appli, navigateur…) directement depuis ton PC."
+                  ? nativeScreenShareSupported
+                    ? "Autorise Android à capturer ton écran. Le relais vidéo natif est en cours de raccordement à Vaelyndra Live."
+                    : "Stream ton écran (jeu, appli, navigateur…) directement depuis ton PC."
                   : isMobile
                     ? "Le partage d'écran n'est pas dispo sur téléphone — choisis « Caméra » juste au-dessus (ça marche sur Samsung, iPhone et toutes les tablettes)."
                     : "Ton navigateur ne permet pas le partage d'écran."}
@@ -709,8 +820,7 @@ function BroadcasterControls() {
               </p>
               <p className="mt-1 text-xs text-ivory/60">
                 Tu streames depuis OBS (PC) ou l'app Twitch mobile. Le site
-                embed le lecteur officiel Twitch. Marche sur iPhone et
-                Android.
+                embed le lecteur officiel Twitch. Marche sur iPhone et Android.
               </p>
             </div>
           </button>
@@ -731,15 +841,14 @@ function BroadcasterControls() {
             <input
               type="text"
               value={config.twitchChannel}
-              onChange={(e) =>
-                updateConfig({ twitchChannel: e.target.value })
-              }
+              onChange={(e) => updateConfig({ twitchChannel: e.target.value })}
               placeholder="ton_pseudo_twitch"
               className="input-royal"
               disabled={isLive}
             />
             <span className="mt-1 block text-[10px] text-ivory/45">
-              Nom d'utilisateur Twitch ou URL complète. Nécessite un compte Twitch.
+              Nom d'utilisateur Twitch ou URL complète. Nécessite un compte
+              Twitch.
             </span>
           </label>
 
@@ -842,6 +951,37 @@ function BroadcasterControls() {
             Voir ma page publique
           </Link>
         )}
+        {isLive && (
+          <>
+            <button
+              type="button"
+              onClick={openDesktopChatPopout}
+              className="btn-gold"
+              title="Ouvrir le chat live dans une vraie fenetre PC deplacable"
+            >
+              <MessageSquare className="h-4 w-4" />
+              Chat pop-out
+            </button>
+            <button
+              type="button"
+              onClick={openOverlayPopout}
+              className="btn-ghost"
+              title="Ouvrir le chat Vaelyndra dans une fenÃªtre sÃ©parÃ©e"
+            >
+              <ExternalLink className="h-4 w-4" />
+              Overlay chat
+            </button>
+            <button
+              type="button"
+              onClick={copyOverlayUrl}
+              className="btn-ghost"
+              title="Copier l'URL Ã  ajouter dans OBS comme source navigateur"
+            >
+              <Copy className="h-4 w-4" />
+              URL OBS
+            </button>
+          </>
+        )}
       </div>
     </section>
   );
@@ -851,6 +991,7 @@ export function Live() {
   const { broadcasterId: paramBroadcasterId } = useParams<{
     broadcasterId?: string;
   }>();
+  const location = useLocation();
   const navigate = useNavigate();
   const { lives } = useStore();
   const { user, users } = useAuth();
@@ -898,8 +1039,10 @@ export function Live() {
     (user.id in liveRegistry ||
       config.status === "live" ||
       (!!resumableLive && resumableLive.userId === user.id));
+  const isStudioRoute = location.pathname === "/live/studio";
   const broadcasterId =
     paramBroadcasterId ??
+    (isStudioRoute && user ? user.id : undefined) ??
     (imBroadcastingNow && user ? user.id : undefined) ??
     firstLiveId ??
     user?.id ??
@@ -917,38 +1060,80 @@ export function Live() {
 
   // Rejoindre le flux du broadcaster cible (sauf si on est host).
   const remoteStreamRef = useRef<MediaStream | null>(null);
+  const isConnectingRef = useRef(false);
+  const joinAttemptStartedAtRef = useRef(0);
   remoteStreamRef.current = remoteStream;
+  isConnectingRef.current = isConnecting;
   useEffect(() => {
     if (amBroadcaster) return;
     // Si c'est un live Twitch (pas WebRTC), pas de joinAsViewer à tenter.
     if (registryEntry?.mode === "twitch") return;
-    let cleanup: (() => void) | null = joinAsViewer(broadcasterId);
+    const startJoinAttempt = () => {
+      joinAttemptStartedAtRef.current = Date.now();
+      return joinAsViewer(broadcasterId);
+    };
+    let cleanup: (() => void) | null = startJoinAttempt();
+    const retryMs = registryEntry?.mode === "android-screen" ? 30_000 : 15_000;
     const retry = window.setInterval(() => {
-      if (!remoteStreamRef.current) {
+      if (remoteStreamRef.current) return;
+      const mode = registryEntry?.mode;
+      const maxConnectMs = mode === "android-screen" ? 180_000 : 45_000;
+      const attemptAge = Date.now() - joinAttemptStartedAtRef.current;
+      const shouldRetry =
+        mode === "android-screen"
+          ? attemptAge > maxConnectMs
+          : !isConnectingRef.current || attemptAge > maxConnectMs;
+      if (shouldRetry) {
         cleanup?.();
-        cleanup = joinAsViewer(broadcasterId);
+        cleanup = startJoinAttempt();
       }
-    }, 20000);
+    }, retryMs);
     return () => {
       window.clearInterval(retry);
       cleanup?.();
     };
   }, [amBroadcaster, broadcasterId, joinAsViewer, registryEntry?.mode]);
 
-  const hasRemote = !!remoteStream;
   const twitchChannel = extractTwitchChannel(
     registryEntry?.twitchChannel ?? (amBroadcaster ? config.twitchChannel : ""),
   );
-  const activeMode: "screen" | "camera" | "twitch" =
+  const activeMode: "screen" | "android-screen" | "camera" | "twitch" =
     registryEntry?.mode ??
     viewingMeta?.mode ??
     (amBroadcaster ? config.mode : "screen");
-  const isActiveLive = !!registryEntry || (amBroadcaster && config.status === "live");
+  const isActiveLive =
+    !!registryEntry || (amBroadcaster && config.status === "live");
+  const shouldOfferLiveResume =
+    amBroadcaster &&
+    !localStream &&
+    !!resumableLive &&
+    !!user &&
+    resumableLive.userId === user.id;
+  const [retainedRemoteStream, setRetainedRemoteStream] =
+    useState<MediaStream | null>(null);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setRetainedRemoteStream(null);
+  }, [broadcasterId]);
+
+  useEffect(() => {
+    if (remoteStream) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setRetainedRemoteStream(remoteStream);
+      return;
+    }
+    if (!isActiveLive || amBroadcaster) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setRetainedRemoteStream(null);
+    }
+  }, [amBroadcaster, isActiveLive, remoteStream]);
+
+  const viewerRemoteStream = remoteStream ?? retainedRemoteStream;
+  const hasRemote = !!viewerRemoteStream;
   const showViewer =
     isActiveLive &&
-    (isHost ||
-      hasRemote ||
-      (activeMode === "twitch" && !!twitchChannel));
+    (isHost || hasRemote || (activeMode === "twitch" && !!twitchChannel));
 
   const [messages, setMessages] = useState<ChatMessage[]>(SEED_CHAT);
   // Grade du broadcaster — utilisé pour scaler le compteur de viewers
@@ -982,8 +1167,8 @@ export function Live() {
   // en cours, clé par senderId. Remis à zéro au changement de broadcaster.
   // Pré-seedé avec quelques donations fictives pour ne pas afficher un
   // Top vide en démo.
-  const [tributes, setTributes] = useState<Record<string, TributeEntry>>(
-    () => seedTributes(),
+  const [tributes, setTributes] = useState<Record<string, TributeEntry>>(() =>
+    seedTributes(),
   );
 
   // Optimisation mobile : le cadre vidéo peut passer en plein écran
@@ -994,37 +1179,62 @@ export function Live() {
   // l'élément <video>.
   const playerCardRef = useRef<HTMLDivElement | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isPseudoFullscreen, setIsPseudoFullscreen] = useState(false);
   const [isChatVisible, setIsChatVisible] = useState(true);
+  const fullscreenActive = isFullscreen || isPseudoFullscreen;
 
   useEffect(() => {
     function onFsChange() {
-      setIsFullscreen(
+      const ownsNativeFullscreen =
         !!document.fullscreenElement &&
-          document.fullscreenElement === playerCardRef.current,
-      );
+        document.fullscreenElement === playerCardRef.current;
+      setIsFullscreen(ownsNativeFullscreen);
+      if (ownsNativeFullscreen) setIsPseudoFullscreen(false);
     }
     document.addEventListener("fullscreenchange", onFsChange);
     return () => document.removeEventListener("fullscreenchange", onFsChange);
   }, []);
 
+  useEffect(() => {
+    if (!isPseudoFullscreen) return;
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setIsPseudoFullscreen(false);
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousHtmlOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [isPseudoFullscreen]);
+
   async function toggleFullscreen() {
     const el = playerCardRef.current;
     if (!el) return;
+    if (isPseudoFullscreen) {
+      setIsPseudoFullscreen(false);
+      return;
+    }
     try {
-      if (document.fullscreenElement) {
+      if (document.fullscreenElement === el) {
         await document.exitFullscreen();
+        return;
       } else if (el.requestFullscreen) {
         await el.requestFullscreen();
+        return;
       } else {
-        // iOS Safari ne supporte pas requestFullscreen sur un div : on
-        // informe l'utilisateur plutôt que d'échouer silencieusement.
-        notify(
-          "Le plein écran n'est pas supporté par ton navigateur. Essaie en rotation paysage ou masque le chat pour agrandir la vidéo.",
-          "info",
-        );
+        setIsPseudoFullscreen(true);
+        return;
       }
     } catch {
-      notify("Impossible de passer en plein écran sur ce navigateur.", "info");
+      setIsPseudoFullscreen(true);
+      return;
     }
   }
 
@@ -1065,6 +1275,38 @@ export function Live() {
     });
     return unsubscribe;
   }, [subscribeChatMessages, broadcasterId]);
+
+  useEffect(() => {
+    if (!isActiveLive || !broadcasterId) return;
+    let cancelled = false;
+    let after: string | null = null;
+    const mergeRows = (rows: LiveChatMessageOut[]) => {
+      if (rows.length > 0) after = rows[rows.length - 1].created_at;
+      setMessages((prev) => {
+        let next = prev;
+        for (const row of rows) {
+          if (next.some((m) => m.id === row.id)) continue;
+          next = [...next, serverChatToMessage(row)].slice(-CHAT_BUFFER_MAX);
+        }
+        return next;
+      });
+    };
+    const poll = () => {
+      apiListLiveChat({ broadcasterId, after, limit: 80 })
+        .then((rows) => {
+          if (!cancelled) mergeRows(rows);
+        })
+        .catch(() => {
+          // Le DataChannel WebRTC reste le canal temps réel principal.
+        });
+    };
+    poll();
+    const id = window.setInterval(poll, 2500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [isActiveLive, broadcasterId]);
 
   // Polling de mes éventuelles sanctions (mute/kick) sur le live courant.
   // On n'appelle pas l'endpoint si :
@@ -1138,7 +1380,10 @@ export function Live() {
     const next = others[0];
     if (next) {
       wasLiveOnceRef.current = false;
-      notify(`Le live vient de finir — on passe chez ${next.username}.`, "info");
+      notify(
+        `Le live vient de finir — on passe chez ${next.username}.`,
+        "info",
+      );
       navigate(`/live/${next.userId}`, { replace: true });
     }
   }, [
@@ -1274,7 +1519,8 @@ export function Live() {
               // Les bots adoptent le diminutif du broadcaster (ils
               // "ressemblent" au public du live). Pas d'appel API : on
               // dérive via le slug déjà en main.
-              gradeShort: gradeBySlug(broadcasterGradeSlug ?? "")?.short ?? null,
+              gradeShort:
+                gradeBySlug(broadcasterGradeSlug ?? "")?.short ?? null,
             },
           ].slice(-CHAT_BUFFER_MAX),
         );
@@ -1322,15 +1568,25 @@ export function Live() {
     //  - tous les viewers voient notre message, pas juste nous ;
     //  - on voit les messages des autres viewers (bidirectionnel) ;
     //  - la dédup par id empêche le doublon avec l'écho optimiste.
+    const clientId = generateId("msg");
+    const contentText = content.trim();
     publishChatMessage({
-      id: generateId("msg"),
+      id: clientId,
       authorId: user.id,
       authorName: user.username,
       authorAvatar: user.avatar,
-      content: content.trim(),
+      content: contentText,
       createdAt: new Date().toISOString(),
       highlight: user.role === "queen",
       gradeShort: myGradeShort,
+    });
+    apiPostLiveChat({
+      broadcasterId,
+      content: contentText,
+      clientId,
+      gradeShort: myGradeShort,
+    }).catch(() => {
+      // Le message reste envoyé en WebRTC ; le serveur sert surtout à l'overlay natif.
     });
   }
 
@@ -1381,36 +1637,54 @@ export function Live() {
     void applyModeration("kick", targetUserId, targetName, durationSeconds);
   }
 
-  function pushSystemAnnouncement(content: string) {
+  function pushSystemAnnouncement(
+    content: string,
+    options?: { persistToOverlay?: boolean },
+  ) {
+    const clientId = generateId("sys");
+    const createdAt = new Date().toISOString();
     setMessages((m) =>
       [
         ...m,
         {
-          id: generateId("msg"),
+          id: clientId,
           authorId: SYSTEM_AUTHOR.id,
           authorName: SYSTEM_AUTHOR.name,
           authorAvatar: SYSTEM_AUTHOR.avatar,
           content,
-          createdAt: new Date().toISOString(),
+          createdAt,
           highlight: true,
         },
       ].slice(-CHAT_BUFFER_MAX),
     );
+    const shouldPersistToOverlay =
+      options?.persistToOverlay ??
+      (content.includes("invoque le Sort") || content.includes("a offert"));
+    if (shouldPersistToOverlay && user) {
+      apiPostLiveChat({
+        broadcasterId,
+        content,
+        clientId,
+        gradeShort: myGradeShort,
+      }).catch(() => {
+        // L'annonce reste visible dans le chat web ; le serveur alimente surtout l'overlay natif.
+      });
+    }
   }
 
-  // Repère la dernière annonce cœur envoyée par l'utilisateur courant,
-  // pour regrouper les clics rapprochés dans le chat (anti-spam texte).
-  const lastHeartAnnounceRef = useRef<number>(0);
+  // Une seule annonce texte par viewer et par live : les clics suivants
+  // gardent uniquement l'animation cœur, sans remplir le chat.
+  const announcedHeartKeysRef = useRef<Set<string>>(new Set());
   function shootHeart() {
     const emitterId = user?.id ?? "anon";
     // Position horizontale aléatoire mais bornée pour rester centrée.
     const x = 20 + Math.random() * 60;
     setHeartEvents((h) => [...h.slice(-64), { emitterId, x }]);
     if (!user) return;
-    // On n'annonce qu'un cœur par fenêtre de 1,5 s pour ne pas noyer le chat.
-    const now = Date.now();
-    if (now - lastHeartAnnounceRef.current > 1500) {
-      lastHeartAnnounceRef.current = now;
+    const liveKey = registryEntry?.startedAt ?? config.startedAt ?? "pending";
+    const announceKey = `${broadcasterId}:${liveKey}:${user.id}`;
+    if (!announcedHeartKeysRef.current.has(announceKey)) {
+      announcedHeartKeysRef.current.add(announceKey);
       pushSystemAnnouncement(
         `❤️ ${user.username} envoie un cœur à ${broadcasterProfile?.username ?? "la cour"}`,
       );
@@ -1439,6 +1713,7 @@ export function Live() {
     );
     pushSystemAnnouncement(
       `${glyph} ${user.username} invoque le Sort ${romanSuffix} sur ${broadcasterProfile?.username ?? "la cour"}`,
+      { persistToOverlay: true },
     );
     return true;
   }
@@ -1446,10 +1721,7 @@ export function Live() {
   function onGiftSent(gift: Gift) {
     const id = generateId("gflight");
     setGiftFlights((f) => [...f, { id, gift, x: 10 + Math.random() * 80 }]);
-    setTimeout(
-      () => setGiftFlights((f) => f.filter((x) => x.id !== id)),
-      2800,
-    );
+    setTimeout(() => setGiftFlights((f) => f.filter((x) => x.id !== id)), 2800);
     if (user) {
       pushSystemAnnouncement(
         `🎁 ${user.username} a offert ${gift.name} à ${broadcasterProfile?.username ?? "la cour"}`,
@@ -1494,11 +1766,120 @@ export function Live() {
       ? `Avec ${broadcasterProfile.username} · depuis l'archipel de Vaelyndra`
       : "Depuis l'archipel de Vaelyndra");
 
+  // Bloc d'infos du live : badge "En direct" + catégorie + titre +
+  // description + "avec [streamer]". Rendu à deux endroits différents
+  // selon le mode :
+  //  - Hors fullscreen : SOUS le player (pas d'overlay), pour ne plus
+  //    bouffer le bas de la vidéo. Cf. retour Alexandre : "le truc en
+  //    direct et just chatting du live et le titre du live, il faut les
+  //    mettre en dessous de l'écran du live pendant le live, parce que
+  //    là ça prend trop de place sur l'écran."
+  //  - Fullscreen : on garde une variante overlay compacte avec dégradé,
+  //    parce qu'il n'y a pas de "dessous" exploitable en plein écran.
+  const renderLiveInfo = (asOverlay: boolean) => (
+    <div
+      className={
+        asOverlay
+          ? "pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-night-900/95 via-night-900/40 to-transparent p-6"
+          : "p-4 sm:p-5"
+      }
+    >
+      {/*
+        Mode normal : grille à 2 colonnes desktop ([titre du live
+        | Top soutiens]), pile sur mobile. En plein écran (overlay),
+        on garde la version compacte d'avant — pas la place pour un
+        panneau latéral en surimpression.
+      */}
+      <div
+        className={
+          asOverlay
+            ? ""
+            : "grid gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,18rem)] lg:items-start"
+        }
+      >
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-400/50 bg-rose-500/20 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-rose-200">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-rose-400" />{" "}
+              En direct
+            </span>
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] ${heroCategory.chipClass}`}
+            >
+              <span aria-hidden>{heroCategory.icon}</span>
+              {heroCategory.label}
+            </span>
+          </div>
+          <h3 className="mt-3 font-display text-2xl text-gold-200 md:text-4xl">
+            {heroTitle}
+          </h3>
+          <p className="mt-1 text-sm text-ivory/70">{heroDescription}</p>
+          {broadcasterProfile && (
+            <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-ivory/80">
+              <div className="flex items-center gap-2">
+                <img
+                  src={broadcasterProfile.avatar}
+                  alt=""
+                  className="h-6 w-6 rounded-full border border-gold-400/40 object-cover"
+                />
+                <span>
+                  avec{" "}
+                  <span className="font-display text-gold-200">
+                    {broadcasterProfile.username}
+                  </span>
+                </span>
+              </div>
+              {user && user.id !== broadcasterId && (
+                <ReportButton
+                  targetType="live"
+                  targetId={broadcasterId}
+                  targetLabel={`Live de ${broadcasterProfile.username}`}
+                  targetUrl={`/live/${broadcasterId}`}
+                />
+              )}
+            </div>
+          )}
+          {/*
+            Bandeau « Sur scène » (invités acceptés). Rendu inline ici
+            en mode normal pour ne plus polluer la vidéo. En plein
+            écran, c'est la version overlay qui s'affiche sur le cadre.
+          */}
+          {!asOverlay && isActiveLive && (
+            <div className="mt-3">
+              <LiveGuestsStrip
+                broadcasterId={broadcasterId}
+                variant="panel"
+              />
+            </div>
+          )}
+        </div>
+        {/*
+          Petit coin « Top soutiens » du streamer, sur la droite en
+          desktop, sous le titre en mobile. Rendu uniquement en mode
+          normal — en plein écran on bascule sur l'overlay.
+        */}
+        {!asOverlay && isActiveLive && (
+          <aside className="rounded-2xl border border-gold-400/25 bg-night-900/40 p-4 sm:p-5">
+            <LiveLeaderboardOverlay
+              key={`lb-panel-${broadcasterId}`}
+              entries={Object.values(tributes)}
+              variant="panel"
+            />
+          </aside>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div className="mx-auto max-w-7xl px-3 py-6 sm:px-6 sm:py-12">
       <SectionHeading
         eyebrow="La Salle des Lives"
-        title={<>La cour <span className="text-mystic">en direct</span></>}
+        title={
+          <>
+            La cour <span className="text-mystic">en direct</span>
+          </>
+        }
         subtitle={
           broadcasterProfile
             ? `Vous regardez ${broadcasterProfile.username}. Chaque membre peut lancer son propre live.`
@@ -1517,95 +1898,49 @@ export function Live() {
           */}
           <div
             ref={playerCardRef}
-            className={`card-royal relative overflow-hidden ${
-              isFullscreen ? "bg-night-900" : ""
-            }`}
+            className={`relative overflow-hidden ${
+              isPseudoFullscreen
+                ? "fixed inset-0 z-[120] rounded-none border-0 bg-night-900 shadow-none"
+                : "card-royal"
+            } ${fullscreenActive ? "bg-night-900" : ""}`}
           >
             <div
               className={`relative w-full overflow-hidden bg-night-900 ${
-                isFullscreen ? "h-screen" : "aspect-video"
+                fullscreenActive ? "h-[100dvh]" : "aspect-video"
               }`}
             >
               {showViewer ? (
                 <>
                   {(activeMode === "screen" ||
+                    activeMode === "android-screen" ||
                     activeMode === "camera") && (
                     <LiveVideoStage
                       isHost={isHost}
                       localStream={localStream}
-                      remoteStream={remoteStream}
+                      remoteStream={viewerRemoteStream}
                     />
                   )}
                   {activeMode === "twitch" && (
                     <TwitchEmbed channel={twitchChannel} />
                   )}
                   {/*
-                    Overlay « avatar en live » : médaillon du broadcaster
-                    (avec sa scène + sa parure équipées) en surimpression,
-                    pour que les viewers voient toujours qui ils regardent
-                    même sur un partage d'écran ou un embed Twitch.
+                    Aucun overlay d'identité / métadonnées sur la vidéo,
+                    en mode normal comme en plein écran (cf. retours
+                    Alexandre : « il faut qu'il y ait uniquement le chat
+                    à la limite dessus »). Médaillon avatar, bandeau
+                    « Sur scène », badge En direct + catégorie + titre,
+                    Top soutiens : tous rendus dans le panneau d'infos
+                    sous le player en mode normal. En plein écran, on
+                    ne ré-affiche RIEN par-dessus le flux : seuls le
+                    chat flottant et les contrôles top-right restent
+                    visibles.
                   */}
-                  <LiveAvatarOverlay
-                    broadcasterId={broadcasterId}
-                    broadcasterName={
-                      broadcasterProfile?.username ?? "Vaelyndra"
-                    }
-                    fallbackAvatar={broadcasterProfile?.avatar ?? null}
-                    showControls={amBroadcaster}
-                  />
-                  {/* Bandeau d'invités sur scène (PR H). Positionné en haut
-                      du cadre, juste en-dessous du médaillon avatar. */}
-                  <LiveGuestsStrip broadcasterId={broadcasterId} />
-                  <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-night-900/95 via-night-900/40 to-transparent p-6">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-400/50 bg-rose-500/20 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-rose-200">
-                          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-rose-400" />{" "}
-                          En direct
-                        </span>
-                        <span
-                          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] ${heroCategory.chipClass}`}
-                        >
-                          <span aria-hidden>{heroCategory.icon}</span>
-                          {heroCategory.label}
-                        </span>
-                      </div>
-                      <h3 className="mt-3 font-display text-2xl text-gold-200 md:text-4xl">
-                        {heroTitle}
-                      </h3>
-                      <p className="mt-1 text-sm text-ivory/70">
-                        {heroDescription}
-                      </p>
-                      {broadcasterProfile && (
-                        <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-ivory/80">
-                          <div className="flex items-center gap-2">
-                            <img
-                              src={broadcasterProfile.avatar}
-                              alt=""
-                              className="h-6 w-6 rounded-full border border-gold-400/40 object-cover"
-                            />
-                            <span>
-                              avec{" "}
-                              <span className="font-display text-gold-200">
-                                {broadcasterProfile.username}
-                              </span>
-                            </span>
-                          </div>
-                          {user && user.id !== broadcasterId && (
-                            <ReportButton
-                              targetType="live"
-                              targetId={broadcasterId}
-                              targetLabel={`Live de ${broadcasterProfile.username}`}
-                              targetUrl={`/live/${broadcasterId}`}
-                            />
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
                 </>
-              ) : isActiveLive &&
-                (activeMode === "screen" || activeMode === "camera") ? (
+              ) : !shouldOfferLiveResume &&
+                isActiveLive &&
+                (activeMode === "screen" ||
+                  activeMode === "android-screen" ||
+                  activeMode === "camera") ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-center">
                   {broadcasterProfile?.avatar && (
                     <img
@@ -1617,21 +1952,16 @@ export function Live() {
                   <div className="relative z-10 flex flex-col items-center gap-3">
                     <Radio className="h-10 w-10 animate-pulse text-rose-300" />
                     <p className="font-display text-2xl text-gold-200">
-                      {isConnecting
-                        ? "Connexion au flux…"
-                        : "Le live est annoncé"}
+                      {isConnecting ? "Live en cours" : "Le live est annonce"}
                     </p>
                     <p className="max-w-md text-sm text-ivory/65">
                       {isConnecting
-                        ? "La cour se connecte aux portails de Vaelyndra."
-                        : `${broadcasterProfile?.username ?? "Le broadcaster"} prépare son sortilège. Rafraîchis dans quelques secondes.`}
+                        ? "Stabilisation du flux video mobile."
+                        : `${broadcasterProfile?.username ?? "Le broadcaster"} prepare son flux. Reste ici, la reprise est automatique.`}
                     </p>
                   </div>
                 </div>
-              ) : amBroadcaster &&
-                resumableLive &&
-                user &&
-                resumableLive.userId === user.id ? (
+              ) : shouldOfferLiveResume ? (
                 /*
                  * Post-refresh (F5, pull-to-refresh, crash onglet) d'un
                  * broadcaster qui était en live il y a < 5 min. Le
@@ -1646,9 +1976,9 @@ export function Live() {
                     Reprendre ton live ?
                   </p>
                   <p className="max-w-md text-sm text-ivory/75">
-                    Tu étais en direct juste avant d'actualiser. Ton flux
-                    vidéo a été coupé par le navigateur mais ta config est
-                    sauvegardée — clique pour relancer.
+                    Tu étais en direct juste avant d'actualiser. Ton flux vidéo
+                    a été coupé par le navigateur mais ta config est sauvegardée
+                    — clique pour relancer.
                   </p>
                   <div className="flex flex-wrap items-center justify-center gap-3">
                     <button
@@ -1692,15 +2022,11 @@ export function Live() {
               <LiveHeartsOverlay key={broadcasterId} events={heartEvents} />
               <GiftFlight items={giftFlights} />
 
-              {/* Classement live Top 3 Sylvins. Purgé au changement de
-                  broadcaster via le `key`. Masqué si le live n'est pas
-                  actif (pas de compétition à afficher sur un rideau tiré). */}
-              {isActiveLive && (
-                <LiveLeaderboardOverlay
-                  key={`lb-${broadcasterId}`}
-                  entries={Object.values(tributes)}
-                />
-              )}
+              {/* Top Soutiens : plus de version overlay nulle part —
+                  rendu uniquement dans le panneau d'infos sous le
+                  player en mode normal. En plein écran on accepte de
+                  perdre le classement plutôt que de salir la vidéo
+                  (cf. retour Alexandre). */}
 
               {/* Chat flottant TikTok/Twitch : visible uniquement si un
                   live est effectivement en cours sur ce broadcaster, et
@@ -1770,18 +2096,18 @@ export function Live() {
                   onClick={toggleFullscreen}
                   className="pointer-events-auto inline-flex h-8 w-8 items-center justify-center rounded-full bg-night-900/70 text-ivory/80 backdrop-blur transition hover:bg-night-900/90 hover:text-gold-200"
                   aria-label={
-                    isFullscreen
+                    fullscreenActive
                       ? "Quitter le plein écran"
                       : "Passer en plein écran"
                   }
-                  aria-pressed={isFullscreen}
+                  aria-pressed={fullscreenActive}
                   title={
-                    isFullscreen
+                    fullscreenActive
                       ? "Quitter le plein écran"
                       : "Passer en plein écran"
                   }
                 >
-                  {isFullscreen ? (
+                  {fullscreenActive ? (
                     <Minimize className="h-4 w-4" />
                   ) : (
                     <Maximize className="h-4 w-4" />
@@ -1789,8 +2115,20 @@ export function Live() {
                 </button>
               </div>
             </div>
-            <div className="flex flex-wrap items-center justify-between gap-3 p-4">
-              <div className="flex flex-wrap items-center gap-2">
+            {/* Bloc d'infos du live (badge En direct, catégorie, titre,
+                description, "avec [streamer]") rendu SOUS le player en
+                mode normal pour ne pas bouffer le bas de la vidéo (cf.
+                retour Alexandre). En fullscreen, ce bloc est rendu
+                en overlay compact à l'intérieur du player. */}
+            {!fullscreenActive && showViewer && renderLiveInfo(false)}
+            <div
+              className={
+                fullscreenActive
+                  ? "pointer-events-none absolute bottom-3 left-3 right-3 z-40 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-night-950/75 p-3 shadow-2xl backdrop-blur-md sm:bottom-5 sm:left-5 sm:right-5"
+                  : "flex flex-wrap items-center justify-between gap-3 p-4"
+              }
+            >
+              <div className="pointer-events-auto flex flex-wrap items-center gap-2">
                 <button
                   onClick={shootHeart}
                   className="btn-ghost"
@@ -1800,7 +2138,11 @@ export function Live() {
                 </button>
                 <SortDAppelCaster onCast={castSortDAppel} disabled={!user} />
               </div>
-              <p className="text-xs text-ivory/50">
+              <p
+                className={
+                  fullscreenActive ? "hidden" : "text-xs text-ivory/50"
+                }
+              >
                 {isActiveLive
                   ? "Chat flottant sur le flux. Les Sorts I/II/III ont chacun leur cooldown (10 / 25 / 60 s)."
                   : broadcasterProfile && amBroadcaster
@@ -1843,8 +2185,7 @@ export function Live() {
                             className="inline-flex items-center gap-1 rounded-full border border-gold-400/40 bg-gold-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-gold-200"
                             title={g.name}
                           >
-                            <span aria-hidden>{g.emoji}</span>
-                            [{g.short}]
+                            <span aria-hidden>{g.emoji}</span>[{g.short}]
                           </span>
                         );
                       })()}
@@ -1884,8 +2225,8 @@ export function Live() {
               kick n'empêche pas de voir le flux (on informe simplement). */}
           {isActiveLive && isKicked && (
             <div className="mt-4 rounded-2xl border border-rose-400/40 bg-rose-500/15 p-3 text-sm text-rose-100">
-              🚫 Tu as été expulsé du live. Tu ne peux plus y participer
-              pour l'instant.
+              🚫 Tu as été expulsé du live. Tu ne peux plus y participer pour
+              l'instant.
             </div>
           )}
           {isActiveLive && isMuted && !isKicked && (
@@ -1934,10 +2275,7 @@ export function Live() {
             />
             <div className="mt-6 grid gap-4 md:grid-cols-3">
               {replays.map((l) => (
-                <div
-                  key={l.id}
-                  className="card-royal group overflow-hidden"
-                >
+                <div key={l.id} className="card-royal group overflow-hidden">
                   <div className="relative aspect-video overflow-hidden">
                     <img
                       src={l.cover}
@@ -1969,7 +2307,6 @@ export function Live() {
             </div>
           </section>
         </div>
-
       </div>
     </div>
   );

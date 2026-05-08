@@ -83,6 +83,10 @@ _default_cors = ",".join([
     "https://dist-tsbfgcct.devinapps.com",
     "https://vaelyndra.com",
     "https://www.vaelyndra.com",
+    "capacitor://localhost",
+    "http://localhost",
+    "https://localhost",
+    "ionic://localhost",
 ])
 _cors_origins = os.environ.get("VAELYNDRA_CORS_ORIGINS", _default_cors).split(",")
 
@@ -94,10 +98,6 @@ app.add_middleware(
     # donc ce pattern ne matche QUE les URLs de previews de ce projet.
     allow_origin_regex=r"https://dreyna-vaelyndra(-[a-z0-9-]+)?\.vercel\.app",
     allow_origins=[o.strip() for o in _cors_origins if o.strip()],
-    # Autorise toutes les previews Vercel du projet (dreyna-vaelyndra* et
-    # dreyna-vaelyndra-<hash>.vercel.app). Regex scopée au projet pour ne
-    # pas laisser passer un site attaquant type "dreyna-vaelyndrafaux".
-    allow_origin_regex=r"https://dreyna-vaelyndra(-[a-z0-9-]+)?\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

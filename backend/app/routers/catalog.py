@@ -27,7 +27,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
-from ..auth.dependencies import require_admin, require_auth
+from ..auth.dependencies import (
+    require_admin,
+    require_admin_or_animator,
+    require_auth,
+)
 from ..db import get_session
 from ..models import CatalogArticle, CatalogProduct, UserProfile
 
@@ -209,6 +213,9 @@ class ArticleCommentOut(BaseModel):
     content: str
     createdAt: str
     likes: list[str] = Field(default_factory=list)
+    parentId: Optional[str] = None
+    replyToAuthorId: Optional[str] = None
+    replyToAuthorName: Optional[str] = None
 
 
 class ArticleOut(BaseModel):
@@ -261,7 +268,8 @@ class ArticleIn(BaseModel):
     excerpt: str = Field(default="", max_length=1000)
     content: str = Field(default="", max_length=100_000)
     category: str = Field(default="Lore", max_length=40)
-    cover: str = Field(default="", max_length=1000)
+    # Peut contenir une URL courte ou une data URI générée depuis un import image.
+    cover: str = Field(default="", max_length=8_000_000)
     author: str = Field(default="", max_length=120)
     readingTime: int = Field(default=3, ge=0, le=600)
     tags: list[str] = Field(default_factory=list)
@@ -273,7 +281,7 @@ class ArticlePatch(BaseModel):
     excerpt: Optional[str] = Field(default=None, max_length=1000)
     content: Optional[str] = Field(default=None, max_length=100_000)
     category: Optional[str] = Field(default=None, max_length=40)
-    cover: Optional[str] = Field(default=None, max_length=1000)
+    cover: Optional[str] = Field(default=None, max_length=8_000_000)
     author: Optional[str] = Field(default=None, max_length=120)
     readingTime: Optional[int] = Field(default=None, ge=0, le=600)
     tags: Optional[list[str]] = None
@@ -281,6 +289,7 @@ class ArticlePatch(BaseModel):
 
 class ArticleCommentIn(BaseModel):
     content: str = Field(..., min_length=1, max_length=2000)
+    parentId: Optional[str] = Field(default=None, max_length=80)
 
 
 @router_public.get("/articles", response_model=list[ArticleOut])
@@ -325,6 +334,27 @@ def add_article_comment(
     if article is None:
         raise HTTPException(404, "Article introuvable.")
     comments = _json_list(article.comments_json)
+    parent = None
+    if body.parentId:
+        parent = next(
+            (
+                c
+                for c in comments
+                if isinstance(c, dict) and c.get("id") == body.parentId
+            ),
+            None,
+        )
+        if parent is None:
+            raise HTTPException(404, "Commentaire parent introuvable.")
+        if parent.get("parentId"):
+            parent = next(
+                (
+                    c
+                    for c in comments
+                    if isinstance(c, dict) and c.get("id") == parent.get("parentId")
+                ),
+                parent,
+            )
     comments.append(
         {
             "id": f"c-{uuid.uuid4().hex[:10]}",
@@ -334,6 +364,9 @@ def add_article_comment(
             "content": body.content.strip(),
             "createdAt": _now_iso(),
             "likes": [],
+            "parentId": parent.get("id") if isinstance(parent, dict) else None,
+            "replyToAuthorId": parent.get("authorId") if isinstance(parent, dict) else None,
+            "replyToAuthorName": parent.get("authorName") if isinstance(parent, dict) else None,
         }
     )
     article.comments_json = json.dumps(comments, ensure_ascii=False)
@@ -344,10 +377,88 @@ def add_article_comment(
     return _article_out(article)
 
 
+@router_public.post(
+    "/articles/{article_id}/comments/{comment_id}/like", response_model=ArticleOut
+)
+def toggle_article_comment_like(
+    article_id: str,
+    comment_id: str,
+    me: UserProfile = Depends(require_auth),
+    session: Session = Depends(_session_dep),
+) -> ArticleOut:
+    article = session.get(CatalogArticle, article_id)
+    if article is None:
+        raise HTTPException(404, "Article introuvable.")
+    comments = _json_list(article.comments_json)
+    found = False
+    for c in comments:
+        if not isinstance(c, dict) or c.get("id") != comment_id:
+            continue
+        found = True
+        likes = [x for x in c.get("likes", []) if isinstance(x, str)]
+        if me.id in likes:
+            likes = [uid for uid in likes if uid != me.id]
+        else:
+            likes.append(me.id)
+        c["likes"] = likes
+        break
+    if not found:
+        raise HTTPException(404, "Commentaire introuvable.")
+    article.comments_json = json.dumps(comments, ensure_ascii=False)
+    article.updated_at = _now_iso()
+    session.add(article)
+    session.commit()
+    session.refresh(article)
+    return _article_out(article)
+
+
+@router_public.delete(
+    "/articles/{article_id}/comments/{comment_id}", response_model=ArticleOut
+)
+def delete_article_comment(
+    article_id: str,
+    comment_id: str,
+    me: UserProfile = Depends(require_auth),
+    session: Session = Depends(_session_dep),
+) -> ArticleOut:
+    article = session.get(CatalogArticle, article_id)
+    if article is None:
+        raise HTTPException(404, "Article introuvable.")
+    comments = _json_list(article.comments_json)
+    target = next(
+        (
+            c
+            for c in comments
+            if isinstance(c, dict) and c.get("id") == comment_id
+        ),
+        None,
+    )
+    if target is None:
+        raise HTTPException(404, "Commentaire introuvable.")
+    can_delete = target.get("authorId") == me.id or me.role in {"admin", "animator"}
+    if not can_delete:
+        raise HTTPException(403, "Suppression refusée.")
+    removed_ids = {comment_id}
+    for c in comments:
+        if isinstance(c, dict) and c.get("parentId") == comment_id:
+            removed_ids.add(str(c.get("id")))
+    kept = [
+        c
+        for c in comments
+        if not (isinstance(c, dict) and str(c.get("id")) in removed_ids)
+    ]
+    article.comments_json = json.dumps(kept, ensure_ascii=False)
+    article.updated_at = _now_iso()
+    session.add(article)
+    session.commit()
+    session.refresh(article)
+    return _article_out(article)
+
+
 @router_admin.post("/articles", response_model=ArticleOut)
 def create_article(
     body: ArticleIn,
-    admin: UserProfile = Depends(require_admin),
+    editor: UserProfile = Depends(require_admin_or_animator),
     session: Session = Depends(_session_dep),
 ) -> ArticleOut:
     aid = body.id or f"art-{uuid.uuid4().hex[:10]}"
@@ -380,7 +491,7 @@ def create_article(
 def update_article(
     article_id: str,
     body: ArticlePatch,
-    admin: UserProfile = Depends(require_admin),
+    editor: UserProfile = Depends(require_admin_or_animator),
     session: Session = Depends(_session_dep),
 ) -> ArticleOut:
     article = session.get(CatalogArticle, article_id)
@@ -404,7 +515,7 @@ def update_article(
 @router_admin.delete("/articles/{article_id}")
 def delete_article(
     article_id: str,
-    admin: UserProfile = Depends(require_admin),
+    editor: UserProfile = Depends(require_admin_or_animator),
     session: Session = Depends(_session_dep),
 ) -> dict:
     article = session.get(CatalogArticle, article_id)

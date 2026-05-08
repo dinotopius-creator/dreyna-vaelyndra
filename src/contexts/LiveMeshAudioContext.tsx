@@ -431,9 +431,35 @@ export function LiveMeshAudioProvider({ children }: { children: ReactNode }) {
       }
     }
     connsRef.current.set(remoteUserId, conn);
+    const clearRetry = () => {
+      const existing = retryTimersRef.current.get(remoteUserId);
+      if (existing) {
+        window.clearTimeout(existing);
+        retryTimersRef.current.delete(remoteUserId);
+      }
+    };
+    clearRetry();
+    const noStreamTimeout = window.setTimeout(() => {
+      if (gen !== generationRef.current) return;
+      if (connsRef.current.get(remoteUserId) !== conn) return;
+      const stillWanted = sceneRef.current?.participants.includes(remoteUserId);
+      if (!stillWanted) return;
+      try {
+        conn.close();
+      } catch {
+        // ignore
+      }
+      if (connsRef.current.get(remoteUserId) === conn) {
+        connsRef.current.delete(remoteUserId);
+      }
+      if (shouldInitiateCallRef.current(remoteUserId)) {
+        scheduleRetry(remoteUserId, stream, gen);
+      }
+    }, 3500);
 
     conn.on("stream", (remote) => {
       if (gen !== generationRef.current) return;
+      window.clearTimeout(noStreamTimeout);
       setRemoteAudios((prev) => {
         const without = prev.filter((r) => r.userId !== remoteUserId);
         return [...without, { userId: remoteUserId, stream: remote }];
@@ -441,6 +467,7 @@ export function LiveMeshAudioProvider({ children }: { children: ReactNode }) {
     });
 
     conn.on("close", () => {
+      window.clearTimeout(noStreamTimeout);
       if (connsRef.current.get(remoteUserId) === conn) {
         connsRef.current.delete(remoteUserId);
       }
@@ -457,6 +484,7 @@ export function LiveMeshAudioProvider({ children }: { children: ReactNode }) {
     });
 
     conn.on("error", () => {
+      window.clearTimeout(noStreamTimeout);
       if (connsRef.current.get(remoteUserId) === conn) {
         connsRef.current.delete(remoteUserId);
       }

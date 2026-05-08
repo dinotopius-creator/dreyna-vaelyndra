@@ -12,6 +12,7 @@ import {
   Heart,
 } from "lucide-react";
 import { useStore } from "../contexts/StoreContext";
+import { useAuth } from "../contexts/AuthContext";
 import { TOP_FANS } from "../data/mock";
 import { formatNumber } from "../lib/helpers";
 import { SectionHeading } from "../components/SectionHeading";
@@ -19,24 +20,32 @@ import { RuneDivider } from "../components/RuneDivider";
 
 export function Home() {
   const { articles, products, isLiveOn } = useStore();
+  const { user } = useAuth();
+  const isRegistered = Boolean(user);
   const featuredArticle = articles[0];
   const topProducts = products.filter((p) => p.featured).slice(0, 3);
 
   return (
     <div>
-      <Hero isLiveOn={isLiveOn} />
+      <Hero isLiveOn={isLiveOn} isRegistered={isRegistered} />
       <StatsBar />
       <RuneDivider label="✦ Les portes de Vaelyndra ✦" />
       <Pillars />
       <FeaturedArticle article={featuredArticle} />
       <ShopShowcase products={topProducts} />
-      <CommunityTeaser />
-      <CTA />
+      <CommunityTeaser isRegistered={isRegistered} />
+      <CTA isRegistered={isRegistered} />
     </div>
   );
 }
 
-function Hero({ isLiveOn }: { isLiveOn: boolean }) {
+function Hero({
+  isLiveOn,
+  isRegistered,
+}: {
+  isLiveOn: boolean;
+  isRegistered: boolean;
+}) {
   return (
     <section className="relative overflow-hidden pb-24 pt-14 md:pt-24">
       <div className="mx-auto grid max-w-7xl items-center gap-12 px-6 lg:grid-cols-2">
@@ -45,19 +54,31 @@ function Hero({ isLiveOn }: { isLiveOn: boolean }) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.9, ease: "easeOut" }}
         >
-          <span className="tag-gold"><Crown className="h-3 w-3" /> Mini réseau social</span>
+          <span className="tag-gold">
+            <Crown className="h-3 w-3" /> Mini réseau social
+          </span>
           <h1 className="heading-gold mt-6 text-5xl leading-[1.05] md:text-7xl">
-            Bienvenue à<br />Vaelyndra
+            Bienvenue à<br />
+            Vaelyndra
           </h1>
           <p className="mt-6 max-w-xl text-lg text-ivory/80 md:text-xl">
-            Le mini-réseau social magique où <span className="text-mystic font-semibold">chacun peut percer</span>{" "}
-            — lance tes lives, poste, tisse des liens d'âme, grimpe dans les 6 grades de streamer.
-            Ton histoire commence ici.
+            Le mini-réseau social magique où{" "}
+            <span className="text-mystic font-semibold">
+              chacun peut percer
+            </span>{" "}
+            — lance tes lives, poste, tisse des liens d'âme, grimpe dans les 6
+            grades de streamer. Ton histoire commence ici.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
-            <Link to="/inscription" className="btn-gold">
-              <Crown className="h-4 w-4" /> Créer mon compte
-            </Link>
+            {isRegistered ? (
+              <Link to="/compte" className="btn-gold">
+                <Crown className="h-4 w-4" /> Mon compte
+              </Link>
+            ) : (
+              <Link to="/inscription" className="btn-gold">
+                <Crown className="h-4 w-4" /> Créer mon compte
+              </Link>
+            )}
             <Link to="/live" className="btn-royal">
               <Radio className="h-4 w-4" /> Rejoindre les lives
               {isLiveOn && (
@@ -210,7 +231,11 @@ function Pillars() {
     <section className="mx-auto max-w-7xl px-6 pt-16">
       <SectionHeading
         eyebrow="Explore Vaelyndra"
-        title={<>Quatre espaces pour <span className="text-mystic">percer</span></>}
+        title={
+          <>
+            Quatre espaces pour <span className="text-mystic">percer</span>
+          </>
+        }
         subtitle="Choisis ton chemin. Chacun mène à une part du réseau."
       />
       <div className="mt-12 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
@@ -226,7 +251,9 @@ function Pillars() {
               to={c.to}
               className="card-royal group relative block h-full p-6 transition hover:-translate-y-1"
             >
-              <div className={`absolute inset-0 bg-gradient-to-br ${c.tint} opacity-0 transition group-hover:opacity-100`} />
+              <div
+                className={`absolute inset-0 bg-gradient-to-br ${c.tint} opacity-0 transition group-hover:opacity-100`}
+              />
               <div className="relative">
                 <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-night-900/70 text-gold-300 shadow-glow-violet">
                   {c.icon}
@@ -247,7 +274,11 @@ function Pillars() {
   );
 }
 
-function FeaturedArticle({ article }: { article?: (typeof import("../data/mock").INITIAL_ARTICLES)[number] }) {
+function FeaturedArticle({
+  article,
+}: {
+  article?: (typeof import("../data/mock").INITIAL_ARTICLES)[number];
+}) {
   if (!article) return null;
   return (
     <section className="mx-auto max-w-7xl px-6 pt-24">
@@ -272,7 +303,9 @@ function FeaturedArticle({ article }: { article?: (typeof import("../data/mock")
                 className="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-105"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-night-900 via-night-900/40 to-transparent" />
-              <span className="absolute left-5 top-5 tag-gold">{article.category}</span>
+              <span className="absolute left-5 top-5 tag-gold">
+                {article.category}
+              </span>
             </div>
             <div className="p-6">
               <h3 className="font-display text-2xl text-gold-200 md:text-3xl">
@@ -299,18 +332,22 @@ function FeaturedArticle({ article }: { article?: (typeof import("../data/mock")
                 ✦ Saga du royaume
               </p>
               <h4 className="mt-2 font-display text-lg text-gold-200">
-                {[
-                  "Les chevaliers d'argent de la Cour",
-                  "Rituel de la Nuit d'Elennor",
-                  "La Prophétie de l'Aube",
-                ][i - 1]}
+                {
+                  [
+                    "Les chevaliers d'argent de la Cour",
+                    "Rituel de la Nuit d'Elennor",
+                    "La Prophétie de l'Aube",
+                  ][i - 1]
+                }
               </h4>
               <p className="mt-1 text-sm text-ivory/65">
-                {[
-                  "Portrait de celles et ceux qui veillent à vos côtés.",
-                  "Pourquoi la lumière d'Elennor change tout.",
-                  "Un chapitre secret, révélé lors du prochain live.",
-                ][i - 1]}
+                {
+                  [
+                    "Portrait de celles et ceux qui veillent à vos côtés.",
+                    "Pourquoi la lumière d'Elennor change tout.",
+                    "Un chapitre secret, révélé lors du prochain live.",
+                  ][i - 1]
+                }
               </p>
             </motion.div>
           ))}
@@ -323,7 +360,11 @@ function FeaturedArticle({ article }: { article?: (typeof import("../data/mock")
   );
 }
 
-function ShopShowcase({ products }: { products: ReturnType<typeof useStore>["products"] }) {
+function ShopShowcase({
+  products,
+}: {
+  products: ReturnType<typeof useStore>["products"];
+}) {
   return (
     <section className="mx-auto max-w-7xl px-6 pt-24">
       <SectionHeading
@@ -379,7 +420,7 @@ function ShopShowcase({ products }: { products: ReturnType<typeof useStore>["pro
   );
 }
 
-function CommunityTeaser() {
+function CommunityTeaser({ isRegistered }: { isRegistered: boolean }) {
   return (
     <section className="mx-auto max-w-7xl px-6 pt-24">
       <div className="card-royal relative overflow-hidden p-10 md:p-14">
@@ -388,13 +429,23 @@ function CommunityTeaser() {
             <SectionHeading
               align="left"
               eyebrow="Communauté Vaelyndra"
-              title={<>Rejoins la <span className="text-mystic">communauté</span></>}
+              title={
+                <>
+                  Rejoins la <span className="text-mystic">communauté</span>
+                </>
+              }
               subtitle="Publie, réagis, suis tes streamers préférés, débloque des badges et monte dans les 6 grades."
             />
             <div className="mt-6 flex gap-3">
-              <Link to="/inscription" className="btn-gold">
-                Créer mon compte
-              </Link>
+              {isRegistered ? (
+                <Link to="/compte" className="btn-gold">
+                  Mon compte
+                </Link>
+              ) : (
+                <Link to="/inscription" className="btn-gold">
+                  Créer mon compte
+                </Link>
+              )}
               <Link to="/communaute" className="btn-ghost">
                 Voir le fil
               </Link>
@@ -430,7 +481,7 @@ function CommunityTeaser() {
   );
 }
 
-function CTA() {
+function CTA({ isRegistered }: { isRegistered: boolean }) {
   return (
     <section className="mx-auto max-w-4xl px-6 pt-24 text-center">
       <motion.div
@@ -443,13 +494,26 @@ function CTA() {
         <h2 className="heading-gold mt-4 text-3xl md:text-5xl">
           Ta place est ici
         </h2>
-        <p className="mt-4 text-ivory/75 md:text-lg">
-          Crée ton compte, choisis ta créature, lance ton premier live.
-        </p>
+        {isRegistered ? (
+          <p className="mt-4 text-ivory/75 md:text-lg">
+            Reprends ta place dans le royaume, lance un live ou retrouve la
+            communauté.
+          </p>
+        ) : (
+          <p className="mt-4 text-ivory/75 md:text-lg">
+            Crée ton compte, choisis ta créature, lance ton premier live.
+          </p>
+        )}
         <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-          <Link to="/inscription" className="btn-gold">
-            Créer mon compte
-          </Link>
+          {isRegistered ? (
+            <Link to="/compte" className="btn-gold">
+              Mon compte
+            </Link>
+          ) : (
+            <Link to="/inscription" className="btn-gold">
+              Créer mon compte
+            </Link>
+          )}
           <Link to="/communaute" className="btn-royal">
             Voir la communauté
           </Link>
