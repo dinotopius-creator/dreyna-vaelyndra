@@ -224,3 +224,10 @@ export interface LiveGiftEvent {
   senderAvatar?: string;
   createdAt: string;
 }
+
+export interface LiveViewerSummary {
+  userId: string;
+  username: string;
+  avatar: string;
+  joinedAt: string;
+}

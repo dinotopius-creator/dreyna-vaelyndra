@@ -1,15 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Crown, MessageCircle, Send } from "lucide-react";
+import { Crown, MessageCircle, Send, Users } from "lucide-react";
 import { useParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { apiGetProfile } from "../lib/api";
 import { generateId } from "../lib/helpers";
-import { subscribeCrossWindowLiveChat } from "../lib/liveChatBus";
+import {
+  subscribeCrossWindowLiveChat,
+  subscribeCrossWindowLiveViewers,
+} from "../lib/liveChatBus";
 import {
   apiListLiveChat,
   apiPostLiveChat,
   type LiveChatMessageOut,
 } from "../lib/liveApi";
+import type { LiveViewerSummary } from "../types";
 
 const MAX_MESSAGES = 120;
 const POLL_MS = 1_500;
@@ -36,9 +40,12 @@ export function LiveDesktopChatPopout() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [myGradeShort, setMyGradeShort] = useState<string | null>(null);
+  const [viewers, setViewers] = useState<LiveViewerSummary[]>([]);
+  const [isViewerListOpen, setIsViewerListOpen] = useState(false);
   const lastCreatedAtRef = useRef<string | null>(null);
   const seenIdsRef = useRef<Set<string>>(new Set());
   const listRef = useRef<HTMLDivElement | null>(null);
+  const isStreamerPopout = !!user?.id && user.id === broadcasterId;
 
   useEffect(() => {
     document.title = "Vaelyndra Live Chat";
@@ -128,6 +135,23 @@ export function LiveDesktopChatPopout() {
   }, [broadcasterId]);
 
   useEffect(() => {
+    if (!broadcasterId || !isStreamerPopout) {
+      setViewers([]);
+      setIsViewerListOpen(false);
+      return;
+    }
+    const unsubscribe = subscribeCrossWindowLiveViewers(
+      broadcasterId,
+      (payload) => {
+        setViewers(payload.viewers);
+      },
+    );
+    return () => {
+      unsubscribe?.();
+    };
+  }, [broadcasterId, isStreamerPopout]);
+
+  useEffect(() => {
     const node = listRef.current;
     if (!node) return;
     node.scrollTop = node.scrollHeight;
@@ -176,6 +200,23 @@ export function LiveDesktopChatPopout() {
             Fenetre pop-out PC
           </p>
         </div>
+        {isStreamerPopout ? (
+          <button
+            type="button"
+            onClick={() => setIsViewerListOpen((open) => !open)}
+            className="inline-flex items-center gap-2 rounded-full border border-ivory/10 bg-night-900/55 px-3 py-1.5 text-xs text-ivory/80 transition hover:border-gold-300/40 hover:text-gold-200"
+            aria-label={
+              isViewerListOpen
+                ? "Masquer les spectateurs du live"
+                : "Afficher les spectateurs du live"
+            }
+            aria-pressed={isViewerListOpen}
+            title="Voir qui regarde le live"
+          >
+            <Users className="h-3.5 w-3.5 text-gold-300" />
+            {viewers.length}
+          </button>
+        ) : null}
         <span
           className={`inline-flex h-2.5 w-2.5 rounded-full ${
             status === "ready" ? "bg-emerald-400" : "bg-amber-300"
@@ -184,6 +225,39 @@ export function LiveDesktopChatPopout() {
           title={status === "ready" ? "Connecte" : "En attente"}
         />
       </header>
+
+      {isStreamerPopout && isViewerListOpen ? (
+        <div className="border-b border-gold-400/15 bg-night-950/70 px-3 py-3 backdrop-blur-md">
+          {viewers.length === 0 ? (
+            <p className="rounded-xl border border-ivory/10 bg-night-900/55 px-3 py-3 text-xs text-ivory/60">
+              Aucun viewer humain connecté pour le moment.
+            </p>
+          ) : (
+            <div className="max-h-44 space-y-2 overflow-y-auto">
+              {viewers.map((viewer) => (
+                <div
+                  key={viewer.userId}
+                  className="flex items-center gap-3 rounded-xl border border-ivory/10 bg-night-900/55 px-3 py-2"
+                >
+                  <img
+                    src={viewer.avatar}
+                    alt=""
+                    className="h-8 w-8 rounded-full border border-gold-300/25 object-cover"
+                  />
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-gold-100">
+                      {viewer.username}
+                    </p>
+                    <p className="text-[10px] uppercase tracking-[0.14em] text-ivory/45">
+                      Regarde le live
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : null}
 
       <div
         ref={listRef}
