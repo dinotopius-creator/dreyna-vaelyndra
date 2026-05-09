@@ -37,6 +37,7 @@ from __future__ import annotations
 import logging
 import os
 from datetime import datetime, timezone
+from decimal import Decimal, ROUND_DOWN
 from typing import Any, Optional
 
 import stripe
@@ -46,13 +47,25 @@ from sqlalchemy import update as sa_update
 from sqlmodel import Session
 
 from ..auth.dependencies import require_auth
+from ..auth.models import Credential
 from ..db import get_session
-from ..models import CatalogProduct, StripePayment, UserProfile
+from ..models import CatalogProduct, StripePayment, StripePayout, UserProfile
+from ..schemas import (
+    StripeConnectLinkOut,
+    StripeConnectStatusOut,
+    StripePayoutOut,
+    UserProfileOut,
+)
+from .users import _to_out
 
 
 log = logging.getLogger("vaelyndra.stripe")
 
 router = APIRouter(prefix="/stripe", tags=["stripe"])
+
+SYLVIN_TO_EUR = Decimal("1.99") / Decimal("100")
+NET_RATIO = Decimal("0.70")
+MIN_PAYOUT_EUR = Decimal("20.00")
 
 
 def _session_dep():
@@ -81,6 +94,194 @@ def _frontend_base_url() -> str:
     """
     return os.environ.get("VAELYNDRA_FRONTEND_URL", "https://www.vaelyndra.com").rstrip(
         "/"
+    )
+
+
+def _connect_country() -> str:
+    return os.environ.get("STRIPE_CONNECT_COUNTRY", "FR").strip().upper() or "FR"
+
+
+def _net_payout_cents(sylvins: int) -> int:
+    if sylvins <= 0:
+        return 0
+    value = (
+        Decimal(sylvins) * SYLVIN_TO_EUR * NET_RATIO * Decimal("100")
+    ).quantize(Decimal("1"), rounding=ROUND_DOWN)
+    return int(value)
+
+
+def _status_from_account(account: Any, account_id: str | None) -> StripeConnectStatusOut:
+    return StripeConnectStatusOut(
+        accountId=account_id,
+        onboardingComplete=bool(_sg(account, "details_submitted")),
+        payoutsEnabled=bool(_sg(account, "payouts_enabled")),
+        detailsSubmitted=bool(_sg(account, "details_submitted")),
+    )
+
+
+def _ensure_connect_account(
+    session: Session,
+    user: UserProfile,
+) -> tuple[UserProfile, str]:
+    profile = session.get(UserProfile, user.id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="Profil introuvable.")
+    if profile.stripe_connect_account_id:
+        return profile, profile.stripe_connect_account_id
+
+    credential = session.get(Credential, user.id)
+    account = stripe.Account.create(
+        type="express",
+        country=_connect_country(),
+        capabilities={"transfers": {"requested": True}},
+        business_type="individual",
+        email=credential.email if credential else None,
+        metadata={"user_id": user.id},
+    )
+    profile.stripe_connect_account_id = account.id
+    profile.updated_at = _now_iso()
+    session.add(profile)
+    session.commit()
+    session.refresh(profile)
+    return profile, account.id
+
+
+def _account_link(account_id: str) -> StripeConnectLinkOut:
+    frontend = _frontend_base_url()
+    link = stripe.AccountLink.create(
+        account=account_id,
+        refresh_url=f"{frontend}/moi?stripe_connect=refresh",
+        return_url=f"{frontend}/moi?stripe_connect=return",
+        type="account_onboarding",
+    )
+    return StripeConnectLinkOut(url=link.url, accountId=account_id)
+
+
+@router.get("/connect/status", response_model=StripeConnectStatusOut)
+def get_connect_status(
+    user: UserProfile = Depends(require_auth),
+    session: Session = Depends(_session_dep),
+) -> StripeConnectStatusOut:
+    stripe.api_key = _stripe_secret()
+    profile = session.get(UserProfile, user.id)
+    if profile is None or not profile.stripe_connect_account_id:
+        return StripeConnectStatusOut()
+
+    account = stripe.Account.retrieve(profile.stripe_connect_account_id)
+    if _sg(account, "details_submitted") and not profile.stripe_connect_onboarded_at:
+        profile.stripe_connect_onboarded_at = _now_iso()
+        profile.updated_at = _now_iso()
+        session.add(profile)
+        session.commit()
+        session.refresh(profile)
+    return _status_from_account(account, profile.stripe_connect_account_id)
+
+
+@router.post("/connect/onboarding", response_model=StripeConnectLinkOut)
+def create_connect_onboarding_link(
+    user: UserProfile = Depends(require_auth),
+    session: Session = Depends(_session_dep),
+) -> StripeConnectLinkOut:
+    stripe.api_key = _stripe_secret()
+    _, account_id = _ensure_connect_account(session, user)
+    return _account_link(account_id)
+
+
+@router.post("/connect/dashboard", response_model=StripeConnectLinkOut)
+def create_connect_dashboard_link(
+    user: UserProfile = Depends(require_auth),
+    session: Session = Depends(_session_dep),
+) -> StripeConnectLinkOut:
+    stripe.api_key = _stripe_secret()
+    profile, account_id = _ensure_connect_account(session, user)
+    account = stripe.Account.retrieve(account_id)
+    if not _sg(account, "details_submitted"):
+        return _account_link(account_id)
+    link = stripe.Account.create_login_link(account_id)
+    if not profile.stripe_connect_onboarded_at:
+        profile.stripe_connect_onboarded_at = _now_iso()
+        profile.updated_at = _now_iso()
+        session.add(profile)
+        session.commit()
+    return StripeConnectLinkOut(url=link.url, accountId=account_id)
+
+
+@router.post("/payouts/withdraw", response_model=StripePayoutOut)
+def withdraw_streamer_earnings(
+    user: UserProfile = Depends(require_auth),
+    session: Session = Depends(_session_dep),
+) -> StripePayoutOut:
+    stripe.api_key = _stripe_secret()
+    profile, account_id = _ensure_connect_account(session, user)
+
+    account = stripe.Account.retrieve(account_id)
+    details_submitted = bool(_sg(account, "details_submitted"))
+    payouts_enabled = bool(_sg(account, "payouts_enabled"))
+    if not details_submitted or not payouts_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Complétez d'abord votre compte Stripe Express pour recevoir des virements.",
+        )
+
+    paid = int(profile.earnings_paid or 0)
+    if paid <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Aucun revenu retirable disponible.",
+        )
+    amount_cents = _net_payout_cents(paid)
+    if amount_cents <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Montant trop faible pour un retrait en euros.",
+        )
+    if Decimal(amount_cents) / Decimal("100") < MIN_PAYOUT_EUR:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Seuil de retrait non atteint ({MIN_PAYOUT_EUR} € minimum).",
+        )
+
+    try:
+        transfer = stripe.Transfer.create(
+            amount=amount_cents,
+            currency="eur",
+            destination=account_id,
+            metadata={
+                "user_id": profile.id,
+                "earnings_paid_sylvins": str(paid),
+            },
+        )
+    except stripe.error.StripeError as exc:  # pragma: no cover - network/rare
+        log.exception("stripe_payout_failed user=%s account=%s", profile.id, account_id)
+        raise HTTPException(
+            status_code=502,
+            detail=exc.user_message or "Le retrait Stripe a échoué.",
+        ) from exc
+
+    profile.earnings_paid = 0
+    profile.updated_at = _now_iso()
+    if details_submitted and not profile.stripe_connect_onboarded_at:
+        profile.stripe_connect_onboarded_at = _now_iso()
+    session.add(profile)
+    session.add(
+        StripePayout(
+            id=transfer.id,
+            user_id=profile.id,
+            stripe_account_id=account_id,
+            earnings_paid_amount=paid,
+            amount_cents=amount_cents,
+            currency="eur",
+            status="paid",
+        )
+    )
+    session.commit()
+    session.refresh(profile)
+
+    return StripePayoutOut(
+        transferId=transfer.id,
+        amountCents=amount_cents,
+        earningsPaidConsumed=paid,
+        profile=_to_out(profile, session),
     )
 
 

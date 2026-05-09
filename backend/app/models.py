@@ -112,6 +112,8 @@ class UserProfile(SQLModel, table=True):
     sylvins_earnings: int = Field(default=0)
     sylvins_paid: int = Field(default=0)
     earnings_paid: int = Field(default=0)
+    stripe_connect_account_id: Optional[str] = Field(default=None, index=True)
+    stripe_connect_onboarded_at: Optional[str] = None
     last_daily_at: Optional[str] = None
     # Créature choisie à l'inscription (Elfe, Dragon, Fée…). Catalogue figé
     # côté code dans `creatures.py` — on stocke juste l'id ici pour pouvoir
@@ -449,6 +451,24 @@ class StripePayment(SQLModel, table=True):
     status: str = Field(default="pending", index=True)
     created_at: str = Field(default_factory=_now_iso, index=True)
     completed_at: Optional[str] = None
+
+
+class StripePayout(SQLModel, table=True):
+    """Journal des retraits streamer vers Stripe Connect.
+
+    - `id` = `transfer_id` Stripe, unique et suffisant pour l'audit.
+    - `earnings_paid_amount` garde le montant débité en Sylvins retirable.
+    - `amount_cents` garde le net réellement transféré au compte Connect.
+    """
+
+    id: str = Field(primary_key=True)  # transfer_id Stripe
+    user_id: str = Field(index=True)
+    stripe_account_id: str = Field(index=True)
+    earnings_paid_amount: int
+    amount_cents: int
+    currency: str = "eur"
+    status: str = Field(default="paid", index=True)
+    created_at: str = Field(default_factory=_now_iso, index=True)
 
 
 class DirectMessage(SQLModel, table=True):

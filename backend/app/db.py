@@ -54,6 +54,8 @@ def _apply_migrations() -> None:
         "userprofile": [
             ("sylvins_paid", "INTEGER NOT NULL DEFAULT 0"),
             ("earnings_paid", "INTEGER NOT NULL DEFAULT 0"),
+            ("stripe_connect_account_id", "TEXT"),
+            ("stripe_connect_onboarded_at", "TEXT"),
             # PR A — créatures + rôles officiels.
             ("creature_id", "TEXT"),
             ("role", "TEXT NOT NULL DEFAULT 'user'"),

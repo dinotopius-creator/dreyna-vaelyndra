@@ -281,6 +281,25 @@ class UserProfileOut(BaseModel):
     updatedAt: str
 
 
+class StripeConnectStatusOut(BaseModel):
+    accountId: Optional[str] = None
+    onboardingComplete: bool = False
+    payoutsEnabled: bool = False
+    detailsSubmitted: bool = False
+
+
+class StripeConnectLinkOut(BaseModel):
+    url: str
+    accountId: str
+
+
+class StripePayoutOut(BaseModel):
+    transferId: str
+    amountCents: int
+    earningsPaidConsumed: int
+    profile: UserProfileOut
+
+
 class GradeOverridePayload(BaseModel):
     """Admin override du grade d'un streamer (slug figé, ou None pour retirer)."""
 
