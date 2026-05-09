@@ -26,6 +26,7 @@ import StreamerGradeBadge from "../components/StreamerGradeBadge";
 import { CreaturePickerModal } from "../components/CreaturePickerModal";
 import SoulBondsModal from "../components/SoulBondsModal";
 import { WishlistSection } from "../components/WishlistSection";
+import { ApiError } from "../lib/api";
 import { formatDate, formatPrice, resizeImageToDataUrl } from "../lib/helpers";
 import { roleLabel, roleLabelWithIcon } from "../lib/roleLabel";
 import {
@@ -177,7 +178,12 @@ export function Me() {
       window.location.href = link.url;
     } catch (err) {
       console.warn(err);
-      notify("Impossible d'ouvrir Stripe pour le moment.", "error");
+      notify(
+        err instanceof ApiError && err.message
+          ? err.message
+          : "Impossible d'ouvrir Stripe pour le moment.",
+        "error",
+      );
     } finally {
       setConnectLoading(false);
     }
