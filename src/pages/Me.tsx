@@ -35,14 +35,22 @@ import {
   formatSylvins,
   sylvinsToNetEur,
 } from "../lib/sylvins";
+import {
+  apiCreateStripeConnectDashboardLink,
+  apiCreateStripeConnectOnboardingLink,
+  apiGetStripeConnectStatus,
+  apiWithdrawStripeEarnings,
+  type StripeConnectStatusDto,
+} from "../lib/stripeApi";
 
 export function Me() {
   const { user, updateProfile, backendMe, refreshBackendMe } = useAuth();
   const { articles, orders, products, myWallet } = useStore();
-  const { profile: serverProfile } = useProfile();
+  const { profile: serverProfile, refresh: refreshProfile } = useProfile();
   const { notify } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const paymentStatus = searchParams.get("payment");
+  const stripeConnectStatus = searchParams.get("stripe_connect");
 
   /**
    * Au retour d'un paiement Stripe, le flag `?payment=success` reste dans
@@ -94,7 +102,48 @@ export function Me() {
   const [bondsTab, setBondsTab] = useState<"followers" | "following" | null>(
     null,
   );
+  const [connectStatus, setConnectStatus] =
+    useState<StripeConnectStatusDto | null>(null);
+  const [connectLoading, setConnectLoading] = useState(false);
+  const [withdrawLoading, setWithdrawLoading] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    setConnectLoading(true);
+    apiGetStripeConnectStatus()
+      .then((status) => {
+        if (!cancelled) setConnectStatus(status);
+      })
+      .catch((err) => {
+        console.warn("Statut Stripe Connect indisponible :", err);
+        if (!cancelled) setConnectStatus(null);
+      })
+      .finally(() => {
+        if (!cancelled) setConnectLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  useEffect(() => {
+    if (!stripeConnectStatus) return;
+    if (stripeConnectStatus !== "return" && stripeConnectStatus !== "refresh") {
+      return;
+    }
+    void refreshProfile();
+    void apiGetStripeConnectStatus()
+      .then((status) => setConnectStatus(status))
+      .catch((err) => console.warn("Refresh Stripe Connect KO :", err));
+    const next = new URLSearchParams(searchParams);
+    next.delete("stripe_connect");
+    setSearchParams(next, { replace: true });
+    if (stripeConnectStatus === "return") {
+      notify("Compte Stripe mis à jour.", "success");
+    }
+  }, [notify, refreshProfile, searchParams, setSearchParams, stripeConnectStatus]);
 
   if (!user) return null;
 
@@ -117,6 +166,44 @@ export function Me() {
     }
     setEditingAvatar(false);
     notify("Votre profil a été scellé aux archives ✨");
+  }
+
+  async function openStripeOnboarding() {
+    try {
+      setConnectLoading(true);
+      const link = connectStatus?.onboardingComplete
+        ? await apiCreateStripeConnectDashboardLink()
+        : await apiCreateStripeConnectOnboardingLink();
+      window.location.href = link.url;
+    } catch (err) {
+      console.warn(err);
+      notify("Impossible d'ouvrir Stripe pour le moment.", "error");
+    } finally {
+      setConnectLoading(false);
+    }
+  }
+
+  async function withdrawEarnings() {
+    try {
+      setWithdrawLoading(true);
+      const payout = await apiWithdrawStripeEarnings();
+      await refreshProfile();
+      setConnectStatus(await apiGetStripeConnectStatus().catch(() => connectStatus));
+      notify(
+        `Retrait lancé : ${formatEur(payout.amountCents / 100)} envoyés vers Stripe Express.`,
+        "success",
+      );
+    } catch (err) {
+      console.warn(err);
+      notify(
+        err instanceof Error && err.message
+          ? err.message
+          : "Le retrait a échoué.",
+        "error",
+      );
+    } finally {
+      setWithdrawLoading(false);
+    }
   }
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -443,6 +530,15 @@ export function Me() {
               const promo =
                 serverProfile?.earningsPromo ?? myWallet.earnings;
               const retirableNetEur = sylvinsToNetEur(paid);
+              const connectReady =
+                !!connectStatus?.accountId &&
+                connectStatus.onboardingComplete &&
+                connectStatus.payoutsEnabled;
+              const canWithdraw =
+                connectReady &&
+                retirableNetEur >= MIN_PAYOUT_EUR &&
+                paid > 0 &&
+                !withdrawLoading;
               return (
                 <>
                   <p className="mt-3 font-display text-3xl text-gold-200">
@@ -499,14 +595,37 @@ export function Me() {
                     Seuil de retrait : {formatEur(MIN_PAYOUT_EUR)} (calculé
                     sur le pot "Retirables").
                   </p>
-                  <button
-                    type="button"
-                    className="btn-royal mt-4 inline-flex disabled:cursor-not-allowed disabled:opacity-50"
-                    disabled
-                    title="Branchement Stripe Connect en cours — disponible après mise en ligne du VPS."
-                  >
-                    <Banknote className="h-4 w-4" /> Retirer en € (bientôt)
-                  </button>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="btn-royal inline-flex disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={!canWithdraw}
+                      onClick={withdrawEarnings}
+                      title={
+                        !connectReady
+                          ? "Configurez Stripe Express d'abord."
+                          : retirableNetEur < MIN_PAYOUT_EUR
+                            ? `Seuil minimum ${formatEur(MIN_PAYOUT_EUR)} non atteint.`
+                            : ""
+                      }
+                    >
+                      <Banknote className="h-4 w-4" />{" "}
+                      {withdrawLoading ? "Retrait en cours…" : "Retirer en €"}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-gold inline-flex disabled:cursor-not-allowed disabled:opacity-50"
+                      onClick={openStripeOnboarding}
+                      disabled={connectLoading || withdrawLoading}
+                    >
+                      <LinkIcon className="h-4 w-4" />{" "}
+                      {connectLoading
+                        ? "Connexion Stripe…"
+                        : connectReady
+                          ? "Ouvrir Stripe Express"
+                          : "Configurer mes retraits"}
+                    </button>
+                  </div>
                 </>
               );
             })()}
