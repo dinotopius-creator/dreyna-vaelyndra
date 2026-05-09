@@ -50,7 +50,12 @@ import {
   SORT_LEVELS,
   type SortLevel,
 } from "../components/SortDAppelCaster";
-import { AUTO_CHAT_LINES, GIFT_CATALOGUE, SEED_CHAT } from "../data/mock";
+import {
+  AUTO_CHAT_LINES,
+  GIFT_CATALOGUE,
+  INITIAL_LIVES,
+  SEED_CHAT,
+} from "../data/mock";
 import type {
   ChatMessage,
   Gift,
@@ -1639,7 +1644,10 @@ export function Live() {
     };
   }, [isActiveLive, broadcasterGradeSlug]);
 
-  const replays = useMemo(() => lives, [lives]);
+  const replays = useMemo(() => {
+    const seededReplayIds = new Set(INITIAL_LIVES.map((live) => live.id));
+    return lives.filter((live) => live.replay && !seededReplayIds.has(live.id));
+  }, [lives]);
 
   function sendMessage(content: string) {
     if (!content.trim()) return;
@@ -2459,46 +2467,48 @@ export function Live() {
 
           <BroadcasterControls />
 
-          <section className="mt-12">
-            <SectionHeading
-              align="left"
-              eyebrow="Archives des rituels"
-              title="Lives passés"
-              subtitle="Revivez les moments marquants de la cour."
-            />
-            <div className="mt-6 grid gap-4 md:grid-cols-3">
-              {replays.map((l) => (
-                <div key={l.id} className="card-royal group overflow-hidden">
-                  <div className="relative aspect-video overflow-hidden">
-                    <img
-                      src={l.cover}
-                      alt={l.title}
-                      className="h-full w-full object-cover transition duration-700 group-hover:scale-110"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-night-900 via-night-900/30 to-transparent" />
-                    <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-night-900/70 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-gold-300">
-                      <Archive className="h-3 w-3" /> Replay
-                    </span>
-                    <span className="absolute bottom-3 right-3 inline-flex items-center gap-1 rounded-full bg-night-900/80 px-2 py-0.5 text-xs text-ivory/80">
-                      <Users className="h-3 w-3 text-gold-300" />{" "}
-                      {l.peakViewers}
-                    </span>
-                    <button className="absolute inset-0 m-auto flex h-12 w-12 items-center justify-center rounded-full bg-gold-shine text-night-900 opacity-0 shadow-glow-gold transition group-hover:opacity-100">
-                      <Play className="h-5 w-5" />
-                    </button>
-                  </div>
-                  <div className="p-4">
-                    <h4 className="font-display text-lg text-gold-200">
-                      {l.title}
-                    </h4>
-                    <p className="mt-2 line-clamp-2 text-xs text-ivory/60">
-                      {l.description}
-                    </p>
-                  </div>
+            {replays.length > 0 ? (
+              <section className="mt-12">
+                <SectionHeading
+                  align="left"
+                  eyebrow="Archives des rituels"
+                  title="Lives passés"
+                  subtitle="Revivez les moments marquants de la cour."
+                />
+                <div className="mt-6 grid gap-4 md:grid-cols-3">
+                  {replays.map((l) => (
+                    <div key={l.id} className="card-royal group overflow-hidden">
+                      <div className="relative aspect-video overflow-hidden">
+                        <img
+                          src={l.cover}
+                          alt={l.title}
+                          className="h-full w-full object-cover transition duration-700 group-hover:scale-110"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-night-900 via-night-900/30 to-transparent" />
+                        <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-night-900/70 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-gold-300">
+                          <Archive className="h-3 w-3" /> Replay
+                        </span>
+                        <span className="absolute bottom-3 right-3 inline-flex items-center gap-1 rounded-full bg-night-900/80 px-2 py-0.5 text-xs text-ivory/80">
+                          <Users className="h-3 w-3 text-gold-300" />{" "}
+                          {l.peakViewers}
+                        </span>
+                        <button className="absolute inset-0 m-auto flex h-12 w-12 items-center justify-center rounded-full bg-gold-shine text-night-900 opacity-0 shadow-glow-gold transition group-hover:opacity-100">
+                          <Play className="h-5 w-5" />
+                        </button>
+                      </div>
+                      <div className="p-4">
+                        <h4 className="font-display text-lg text-gold-200">
+                          {l.title}
+                        </h4>
+                        <p className="mt-2 line-clamp-2 text-xs text-ivory/60">
+                          {l.description}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </section>
+              </section>
+            ) : null}
         </div>
       </div>
     </div>
