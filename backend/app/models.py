@@ -47,6 +47,22 @@ class Reaction(SQLModel, table=True):
     created_at: str = Field(default_factory=_now_iso)
 
 
+class CommunityActivityReward(SQLModel, table=True):
+    """Récompense hebdo du classement communauté.
+
+    Une ligne = un gain de Lueurs déjà attribué pour une semaine donnée.
+    Sert de garde-fou idempotent : si le cron/endpoint de sync est rejoué,
+    on ne recrédite jamais deux fois les mêmes gagnants.
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    week_start_iso: str = Field(index=True)
+    user_id: str = Field(index=True)
+    rank: int = Field(index=True)
+    reward_lueurs: int = 0
+    awarded_at: str = Field(default_factory=_now_iso, index=True)
+
+
 class UserProfile(SQLModel, table=True):
     """Profil serveur d'un utilisateur : avatar, inventaire et bourses.
 

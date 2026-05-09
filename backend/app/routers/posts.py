@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import uuid
 from collections import defaultdict
+from datetime import UTC, datetime, timedelta
 from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -20,10 +21,18 @@ _QUEEN_IDS = {
 
 
 from ..db import get_session  # noqa: E402
-from ..models import Comment, Post, Reaction, UserProfile  # noqa: E402
+from ..models import (  # noqa: E402
+    Comment,
+    CommunityActivityReward,
+    Post,
+    Reaction,
+    UserProfile,
+)
 from ..schemas import (  # noqa: E402
     CommentCreate,
     CommentOut,
+    CommunityActivityRewardOut,
+    CommunityActivityRewardSyncOut,
     PostCreate,
     PostOut,
     ReactionToggle,
@@ -35,6 +44,15 @@ from ..schemas import (  # noqa: E402
 # ne propulse un compte dans les grades supérieurs. Le gros du XP vient des
 # Sylvins reçus (=engagement) et des nouveaux liens d'âme.
 XP_PER_POST = 10
+COMMUNITY_REWARD_BY_RANK = {1: 600, 2: 450, 3: 300}
+MOCK_COMMUNITY_USER_IDS = {
+    "user-lyria",
+    "user-caelum",
+    "user-mira",
+    "user-aeris",
+    "user-sylas",
+    "user-thalia",
+}
 
 
 def _is_queen(user_id: str) -> bool:
@@ -86,6 +104,196 @@ def _sanitize_avatar(raw: str) -> str:
     if len(raw) > 512:
         return ""
     return raw
+
+
+def _parse_iso(raw: str | None) -> datetime | None:
+    if not raw:
+        return None
+    try:
+        value = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
+def _week_start(date: datetime | None = None) -> datetime:
+    now = (date or datetime.now(UTC)).astimezone(UTC)
+    return datetime(now.year, now.month, now.day, tzinfo=UTC) - timedelta(
+        days=now.weekday()
+    )
+
+
+def _serialize_reward(row: CommunityActivityReward) -> CommunityActivityRewardOut:
+    return CommunityActivityRewardOut(
+        weekStartIso=row.week_start_iso,
+        userId=row.user_id,
+        rank=row.rank,
+        rewardLueurs=row.reward_lueurs,
+        awardedAt=row.awarded_at,
+    )
+
+
+def _community_activity_rows(
+    session: Session,
+    week_start: datetime,
+) -> list[dict]:
+    week_end = week_start + timedelta(days=7)
+    week_start_iso = week_start.isoformat()
+    week_end_iso = week_end.isoformat()
+
+    posts = session.exec(
+        select(Post)
+        .where(Post.created_at >= week_start_iso)
+        .where(Post.created_at < week_end_iso)
+        .order_by(Post.created_at.desc())
+    ).all()
+    if not posts:
+        return []
+
+    post_ids = [post.id for post in posts]
+    post_ids_set = set(post_ids)
+    profiles = {
+        p.id: p
+        for p in session.exec(select(UserProfile)).all()
+        if p.id not in MOCK_COMMUNITY_USER_IDS and p.banned_at is None
+    }
+
+    stats: dict[str, dict] = {}
+
+    def ensure_member(user_id: str, username: str = "", avatar: str = "") -> dict | None:
+        if not user_id or user_id in MOCK_COMMUNITY_USER_IDS:
+            return None
+        profile = profiles.get(user_id)
+        if profile is None:
+            return None
+        current = stats.get(user_id)
+        if current is None:
+            current = {
+                "id": user_id,
+                "username": profile.username or username,
+                "handle": profile.handle,
+                "avatarImageUrl": profile.avatar_image_url or avatar,
+                "postCount": 0,
+                "commentCount": 0,
+                "reactionCount": 0,
+                "score": 0,
+                "latestActivity": "",
+            }
+            stats[user_id] = current
+        return current
+
+    for post in posts:
+        member = ensure_member(post.author_id, post.author_name, post.author_avatar)
+        if member is None:
+            continue
+        member["postCount"] += 1
+        created_at = _parse_iso(post.created_at)
+        if created_at is not None:
+            member["latestActivity"] = max(
+                member["latestActivity"], created_at.isoformat()
+            )
+
+    comments = session.exec(
+        select(Comment)
+        .where(Comment.post_id.in_(post_ids))
+        .where(Comment.created_at >= week_start_iso)
+        .where(Comment.created_at < week_end_iso)
+    ).all()
+    for comment in comments:
+        member = ensure_member(
+            comment.author_id, comment.author_name, comment.author_avatar
+        )
+        if member is None:
+            continue
+        member["commentCount"] += 1
+        created_at = _parse_iso(comment.created_at)
+        if created_at is not None:
+            member["latestActivity"] = max(
+                member["latestActivity"], created_at.isoformat()
+            )
+
+    reactions = session.exec(
+        select(Reaction)
+        .where(Reaction.post_id.in_(post_ids))
+        .where(Reaction.created_at >= week_start_iso)
+        .where(Reaction.created_at < week_end_iso)
+    ).all()
+    post_author_by_id = {post.id: post.author_id for post in posts}
+    for reaction in reactions:
+        author_id = post_author_by_id.get(reaction.post_id)
+        if not author_id:
+            continue
+        member = ensure_member(author_id)
+        if member is None:
+            continue
+        member["reactionCount"] += 1
+
+    rows = []
+    for member in stats.values():
+        if member["postCount"] < 1:
+            continue
+        member["score"] = (
+            member["postCount"] * 12
+            + member["commentCount"] * 4
+            + member["reactionCount"]
+        )
+        rows.append(member)
+
+    rows.sort(
+        key=lambda row: (
+            -row["score"],
+            -row["postCount"],
+            -row["commentCount"],
+            -row["reactionCount"],
+            row["latestActivity"],
+            row["username"].lower(),
+        )
+    )
+    return rows
+
+
+def _sync_previous_week_rewards(
+    session: Session,
+) -> tuple[str, list[CommunityActivityReward], list[CommunityActivityReward]]:
+    previous_week = _week_start() - timedelta(days=7)
+    week_start_iso = previous_week.isoformat()
+    existing = session.exec(
+        select(CommunityActivityReward).where(
+            CommunityActivityReward.week_start_iso == week_start_iso
+        )
+    ).all()
+    if existing:
+        return week_start_iso, [], existing
+
+    leaderboard = _community_activity_rows(session, previous_week)
+    awarded: list[CommunityActivityReward] = []
+    for rank, row in enumerate(leaderboard[:3], start=1):
+        reward = COMMUNITY_REWARD_BY_RANK.get(rank, 0)
+        if reward <= 0:
+            continue
+        winner = session.get(UserProfile, row["id"])
+        if winner is None or winner.banned_at is not None:
+            continue
+        winner.lueurs += reward
+        entry = CommunityActivityReward(
+            week_start_iso=week_start_iso,
+            user_id=winner.id,
+            rank=rank,
+            reward_lueurs=reward,
+        )
+        session.add(entry)
+        awarded.append(entry)
+
+    if awarded:
+        session.commit()
+        for entry in awarded:
+            session.refresh(entry)
+        return week_start_iso, awarded, []
+
+    session.rollback()
+    return week_start_iso, [], []
 
 
 def _resolve_handles(
@@ -182,6 +390,22 @@ def list_posts(session: Session = Depends(_session_dep)) -> List[PostOut]:
         )
         for p in posts
     ]
+
+
+@router.post(
+    "/activity-rewards/sync", response_model=CommunityActivityRewardSyncOut
+)
+def sync_community_activity_rewards(
+    session: Session = Depends(_session_dep),
+) -> CommunityActivityRewardSyncOut:
+    week_start_iso, newly_awarded, already_awarded = _sync_previous_week_rewards(
+        session
+    )
+    return CommunityActivityRewardSyncOut(
+        weekStartIso=week_start_iso,
+        newlyAwarded=[_serialize_reward(row) for row in newly_awarded],
+        alreadyAwarded=[_serialize_reward(row) for row in already_awarded],
+    )
 
 
 @router.post("", response_model=PostOut, status_code=status.HTTP_201_CREATED)

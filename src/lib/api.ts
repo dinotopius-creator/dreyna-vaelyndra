@@ -126,6 +126,27 @@ export async function apiDeleteComment(
   );
 }
 
+export interface CommunityActivityRewardDto {
+  weekStartIso: string;
+  userId: string;
+  rank: number;
+  rewardLueurs: number;
+  awardedAt: string;
+}
+
+export interface CommunityActivityRewardSyncDto {
+  weekStartIso: string;
+  newlyAwarded: CommunityActivityRewardDto[];
+  alreadyAwarded: CommunityActivityRewardDto[];
+}
+
+export async function apiSyncCommunityActivityRewards(): Promise<CommunityActivityRewardSyncDto> {
+  return (await request<CommunityActivityRewardSyncDto>(
+    "/posts/activity-rewards/sync",
+    { method: "POST" },
+  )) as CommunityActivityRewardSyncDto;
+}
+
 // --- Profils utilisateur (avatar, inventaire, bourses) --------------------
 
 /**

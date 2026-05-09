@@ -11,7 +11,8 @@
  * Les auteurs du contenu signalé ne voient jamais ces reports : seuls
  * les admins les consultent via `/admin → Signalements`.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Flag, X } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
@@ -57,6 +58,11 @@ export function ReportButton({
   const [reason, setReason] = useState<ReportReason>("spam");
   const [description, setDescription] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [portalReady, setPortalReady] = useState(false);
+
+  useEffect(() => {
+    setPortalReady(true);
+  }, []);
 
   // Pas de bouton pour les non-connectés — on évite de proposer une action
   // qui échouerait immédiatement avec un 401.
@@ -104,13 +110,14 @@ export function ReportButton({
         {!compact && <span>Signaler</span>}
       </button>
 
-      {open && (
+      {open && portalReady
+        ? createPortal(
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-midnight/80 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[160] flex items-center justify-center bg-midnight/80 p-4 backdrop-blur-sm"
           onClick={() => !submitting && setOpen(false)}
         >
           <div
-            className="w-full max-w-md rounded-2xl border border-gold-400/30 bg-royal-900/95 p-6 shadow-2xl"
+            className="relative z-[161] w-full max-w-md rounded-2xl border border-gold-400/30 bg-royal-900/95 p-6 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between">
@@ -186,8 +193,10 @@ export function ReportButton({
               </div>
             </form>
           </div>
-        </div>
-      )}
+        </div>,
+        document.body,
+      )
+        : null}
     </>
   );
 }

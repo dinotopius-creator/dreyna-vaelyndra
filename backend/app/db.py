@@ -111,6 +111,14 @@ def _apply_migrations() -> None:
             "CREATE INDEX IF NOT EXISTS giftledger_receiver_sender "
             "ON giftledger (receiver_id, sender_id)"
         )
+        conn.exec_driver_sql(
+            "CREATE UNIQUE INDEX IF NOT EXISTS communityreward_week_user_unique "
+            "ON communityactivityreward (week_start_iso, user_id)"
+        )
+        conn.exec_driver_sql(
+            "CREATE UNIQUE INDEX IF NOT EXISTS communityreward_week_rank_unique "
+            "ON communityactivityreward (week_start_iso, rank)"
+        )
 
         # One-shot : reset du wallet de Dreyna (dé-Dreyna-isation du site).
         # Son compte devient un profil normal d'animatrice ; on purge les
