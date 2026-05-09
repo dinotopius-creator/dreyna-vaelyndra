@@ -198,7 +198,14 @@ export function Avatar() {
             <AvatarEditor
               initialAvatarUrl={profile?.avatarUrl ?? null}
               defaultSeed={user.username}
-              ownedItemIds={profile?.inventory ?? []}
+              equippedFrameId={profile?.equipped?.[EQUIP_SLOT.Frame] ?? null}
+              equippedSceneId={profile?.equipped?.[EQUIP_SLOT.Scene] ?? null}
+              equippedOutfit3DId={
+                profile?.equipped?.[EQUIP_SLOT.Outfit3D] ?? null
+              }
+              equippedAccessory3DId={
+                profile?.equipped?.[EQUIP_SLOT.Accessory3D] ?? null
+              }
               onExport={(exp) => {
                 setDraft(exp);
                 notify(

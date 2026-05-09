@@ -23,7 +23,10 @@ interface Props {
   onExport: (input: { avatarUrl: string; avatarImageUrl: string }) => void;
   onClose?: () => void;
   className?: string;
-  ownedItemIds?: readonly string[];
+  equippedFrameId?: string | null;
+  equippedSceneId?: string | null;
+  equippedOutfit3DId?: string | null;
+  equippedAccessory3DId?: string | null;
 }
 
 const FACE_SHAPES: { id: Avatar3DFaceShape; label: string; note: string }[] = [
@@ -78,7 +81,10 @@ export function AvatarEditor({
   onExport,
   onClose,
   className,
-  ownedItemIds = [],
+  equippedFrameId = null,
+  equippedSceneId = null,
+  equippedOutfit3DId = null,
+  equippedAccessory3DId = null,
 }: Props) {
   const [config, setConfig] = useState<Avatar3DConfig>(() => {
     const parsed = decodeAvatar3DUrl(initialAvatarUrl);
@@ -94,11 +100,6 @@ export function AvatarEditor({
             : "bob",
     };
   });
-
-  const equippedOutfit3DId =
-    ownedItemIds.find((id) => id.startsWith("outfit3d-")) ?? null;
-  const equippedAccessory3DId =
-    ownedItemIds.find((id) => id.startsWith("accessory3d-")) ?? null;
 
   function update<K extends keyof Avatar3DConfig>(
     key: K,
@@ -158,10 +159,10 @@ export function AvatarEditor({
             alt="Aperçu de l'avatar 3D"
             size="portrait"
             framing="body"
+            equippedFrameId={equippedFrameId}
+            equippedSceneId={equippedSceneId}
             equippedOutfit3DId={equippedOutfit3DId}
             equippedAccessory3DId={equippedAccessory3DId}
-            equippedSceneId={null}
-            equippedFrameId={null}
           />
           <p className="text-center text-[11px] text-ivory/45">
             Faites glisser l’avatar pour le tourner en 360°.
