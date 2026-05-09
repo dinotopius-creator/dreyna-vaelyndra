@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   ExternalLink,
@@ -22,7 +22,12 @@ import { MemberSearch } from "../components/MemberSearch";
 import { AvatarImage } from "../components/AvatarImage";
 import { getOfficial } from "../data/officials";
 import { formatRelative, parseVideoUrl } from "../lib/helpers";
-import { apiCreatePost, apiDeletePost, apiToggleReaction } from "../lib/api";
+import {
+  apiCreatePost,
+  apiDeletePost,
+  apiGetProfile,
+  apiToggleReaction,
+} from "../lib/api";
 
 const MOCK_COMMUNITY_USER_IDS = new Set([
   "user-lyria",
@@ -64,6 +69,9 @@ export function Community() {
   const [imageUrl, setImageUrl] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
   const [openComments, setOpenComments] = useState<Record<string, boolean>>({});
+  const [profileAvatars, setProfileAvatars] = useState<Record<string, string>>(
+    {},
+  );
 
   const sorted = useMemo(
     () =>
@@ -126,6 +134,40 @@ export function Community() {
       })
       .slice(0, 6);
   }, [posts, user?.id, usersById]);
+
+  useEffect(() => {
+    const authorIds = new Set<string>();
+    posts.forEach((post) => {
+      if (post.authorId) authorIds.add(post.authorId);
+      post.comments.forEach((comment) => {
+        if (comment.authorId) authorIds.add(comment.authorId);
+      });
+    });
+    const missingIds = Array.from(authorIds).filter(
+      (userId) => !profileAvatars[userId],
+    );
+    if (missingIds.length === 0) return;
+
+    let cancelled = false;
+    Promise.allSettled(missingIds.map((userId) => apiGetProfile(userId))).then(
+      (results) => {
+        if (cancelled) return;
+        const next: Record<string, string> = {};
+        results.forEach((result, index) => {
+          if (result.status !== "fulfilled") return;
+          const avatar = result.value.avatarImageUrl?.trim();
+          if (!avatar) return;
+          next[missingIds[index]] = avatar;
+        });
+        if (Object.keys(next).length === 0) return;
+        setProfileAvatars((current) => ({ ...current, ...next }));
+      },
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [posts, profileAvatars]);
 
   async function publish(e: React.FormEvent) {
     e.preventDefault();
@@ -281,12 +323,16 @@ export function Community() {
                     to={profileHref(p.authorId)}
                     className="shrink-0"
                     title={`Voir le profil de ${p.authorName}`}
-                  >
-                    <AvatarImage
-                      candidates={[usersById.get(p.authorId)?.avatar, p.authorAvatar]}
-                      fallbackSeed={p.authorId || p.authorName}
-                      alt={p.authorName}
-                      className="h-10 w-10 rounded-full object-cover ring-2 ring-royal-500/40 transition hover:ring-gold-400/70"
+                    >
+                      <AvatarImage
+                        candidates={[
+                          profileAvatars[p.authorId],
+                          usersById.get(p.authorId)?.avatar,
+                          p.authorAvatar,
+                        ]}
+                        fallbackSeed={p.authorId || p.authorName}
+                        alt={p.authorName}
+                        className="h-10 w-10 rounded-full object-cover ring-2 ring-royal-500/40 transition hover:ring-gold-400/70"
                     />
                   </Link>
                   <div className="flex-1">
@@ -393,6 +439,7 @@ export function Community() {
                     postId={p.id}
                     comments={p.comments}
                     postAuthorId={p.authorId}
+                    avatarOverrides={profileAvatars}
                   />
                 )}
               </motion.li>
@@ -426,7 +473,7 @@ export function Community() {
                       className="group flex items-center gap-3 rounded-2xl border border-royal-500/25 bg-night-900/45 p-3 transition hover:border-gold-400/50"
                     >
                       <AvatarImage
-                        candidates={[member.avatar]}
+                        candidates={[profileAvatars[member.id], member.avatar]}
                         fallbackSeed={member.id}
                         alt={member.username}
                         className="h-10 w-10 rounded-full object-cover ring-2 ring-gold-400/35"
