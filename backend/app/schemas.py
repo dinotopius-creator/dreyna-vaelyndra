@@ -67,6 +67,20 @@ class PostOut(BaseModel):
     comments: List[CommentOut] = []
 
 
+class CommunityActivityRewardOut(BaseModel):
+    weekStartIso: str
+    userId: str
+    rank: int
+    rewardLueurs: int
+    awardedAt: str
+
+
+class CommunityActivityRewardSyncOut(BaseModel):
+    weekStartIso: str
+    newlyAwarded: List[CommunityActivityRewardOut] = []
+    alreadyAwarded: List[CommunityActivityRewardOut] = []
+
+
 # --- Profils utilisateur ---------------------------------------------------
 
 
