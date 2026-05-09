@@ -455,6 +455,10 @@ export function Me() {
               framing="face"
               equippedFrameId={serverProfile?.equipped?.frame ?? null}
               equippedSceneId={serverProfile?.equipped?.scene ?? null}
+              equippedOutfit3DId={serverProfile?.equipped?.outfit3d ?? null}
+              equippedAccessory3DId={
+                serverProfile?.equipped?.accessory3d ?? null
+              }
             />
           </div>
           <div className="card-royal flex flex-col justify-between gap-5 p-6">
@@ -463,14 +467,14 @@ export function Me() {
                 ✦ Personnalisez votre avatar
               </p>
               <p className="mt-2 text-sm text-ivory/75">
-                Six styles d'illustration, des milliers de combinaisons via les
-                dés. Votre avatar est sauvegardé sur le serveur et vous retrouve
-                sur tous vos appareils.
+                Avatar 3D debout, rotation 360, rendu unifié sur le profil,
+                les lives et le fil communautaire. Il est sauvegardé sur le
+                serveur et vous retrouve sur tous vos appareils.
               </p>
               <ul className="mt-4 space-y-1.5 text-xs text-ivory/65">
-                <li>• Choix du style, du seed et de la couleur de fond</li>
-                <li>• Aperçu instantané, enregistrement en un clic</li>
-                <li>• Prêt pour la boutique d'items et les lives</li>
+                <li>• Choix du corps, du visage, des cheveux et des couleurs</li>
+                <li>• Aperçu 360 instantané, enregistrement en un clic</li>
+                <li>• Prêt pour les tenues et accessoires 3D de la boutique</li>
               </ul>
             </div>
             <Link

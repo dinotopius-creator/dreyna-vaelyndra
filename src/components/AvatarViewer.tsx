@@ -21,6 +21,8 @@ import {
 import clsx from "clsx";
 import { isFlatImageUrl } from "../lib/dicebear";
 import { CATALOG_BY_ID, type SceneId } from "../lib/avatarShop";
+import { decodeAvatar3DUrl, isAvatar3DUrl } from "../lib/avatar3d";
+import { Avatar3DModel } from "./Avatar3DModel";
 
 /**
  * `<model-viewer>` est un web component chargé dynamiquement via CDN : on
@@ -118,6 +120,8 @@ interface Props {
    * centré pour que la scène joue le rôle de halo illustré.
    */
   equippedSceneId?: string | null;
+  equippedOutfit3DId?: string | null;
+  equippedAccessory3DId?: string | null;
 }
 
 function FrameOverlay({ itemId }: { itemId: string }) {
@@ -170,9 +174,13 @@ export function AvatarViewer({
   framing = "face",
   equippedFrameId,
   equippedSceneId,
+  equippedOutfit3DId,
+  equippedAccessory3DId,
 }: Props) {
   const sceneItem = equippedSceneId ? CATALOG_BY_ID[equippedSceneId] : null;
   const sceneId = sceneItem?.sceneId ?? null;
+  const isLocal3D = isAvatar3DUrl(src);
+  const shouldBootModelViewer = !!src && !isLocal3D && !isFlatImageUrl(src);
   const [ready, setReady] = useState(
     typeof window !== "undefined" && !!customElements.get("model-viewer"),
   );
@@ -181,7 +189,7 @@ export function AvatarViewer({
 
   useEffect(() => {
     mountedRef.current = true;
-    if (ready) return undefined;
+    if (!shouldBootModelViewer || ready) return undefined;
     ensureModelViewer()
       .then(() => {
         if (mountedRef.current) setReady(true);
@@ -193,7 +201,7 @@ export function AvatarViewer({
     return () => {
       mountedRef.current = false;
     };
-  }, [ready]);
+  }, [ready, shouldBootModelViewer]);
 
   const sizeClass = {
     square: "aspect-square",
@@ -208,6 +216,47 @@ export function AvatarViewer({
   // Cas principal depuis le retrait de RPM : avatars 2D (SVG DiceBear,
   // PNG, JPG). On rend directement avec un <img> — pas besoin du CE 3D.
   const flat = isFlatImageUrl(src);
+  const avatar3dConfig = decodeAvatar3DUrl(src);
+  const outfitTheme =
+    equippedOutfit3DId && CATALOG_BY_ID[equippedOutfit3DId]?.wearableThemeId
+      ? (CATALOG_BY_ID[equippedOutfit3DId]!.wearableThemeId as
+          | "royal"
+          | "battle"
+          | "mystic"
+          | "shadow")
+      : "royal";
+  const accessoryTheme =
+    equippedAccessory3DId && CATALOG_BY_ID[equippedAccessory3DId]?.wearableThemeId
+      ? (CATALOG_BY_ID[equippedAccessory3DId]!.wearableThemeId as
+          | "crown"
+          | "halo"
+          | "horns")
+      : null;
+  if (avatar3dConfig) {
+    return (
+      <div
+        className={clsx(
+          "relative overflow-hidden rounded-2xl border border-gold-400/30 bg-night-900/60",
+          sizeClass,
+          className,
+        )}
+      >
+        {sceneId && <SceneBackground sceneId={sceneId} />}
+        <Avatar3DModel
+          config={avatar3dConfig}
+          size={size}
+          autoRotate={autoRotate}
+          outfit={outfitTheme}
+          accessory={accessoryTheme}
+          className={clsx(
+            sceneId &&
+              "absolute left-1/2 top-1/2 h-[82%] w-[82%] -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-gold-400/60 shadow-[0_0_18px_rgba(250,204,21,0.35)]",
+          )}
+        />
+        {equippedFrameId && <FrameOverlay itemId={equippedFrameId} />}
+      </div>
+    );
+  }
   if (src && flat) {
     return (
       <div
@@ -238,7 +287,7 @@ export function AvatarViewer({
   }
 
   // Fallback 2D lorsque pas de src, chargement GLB KO, ou pendant le boot du CE.
-  if (!src || errored || !ready) {
+  if (!src || errored || (shouldBootModelViewer && !ready)) {
     return (
       <div
         className={clsx(
@@ -258,7 +307,7 @@ export function AvatarViewer({
             Avatar en attente
           </div>
         )}
-        {src && !errored && !ready && (
+        {src && shouldBootModelViewer && !errored && !ready && (
           <div className="absolute inset-x-0 bottom-0 bg-night-900/70 px-3 py-1.5 text-center text-[10px] uppercase tracking-[0.22em] text-gold-300">
             Chargement du rendu 3D…
           </div>
