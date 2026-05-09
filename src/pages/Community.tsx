@@ -323,16 +323,16 @@ export function Community() {
                     to={profileHref(p.authorId)}
                     className="shrink-0"
                     title={`Voir le profil de ${p.authorName}`}
-                  >
-                    <AvatarImage
-                      candidates={[
-                        profileAvatars[p.authorId],
-                        usersById.get(p.authorId)?.avatar,
-                        p.authorAvatar,
-                      ]}
-                      fallbackSeed={p.authorId || p.authorName}
-                      alt={p.authorName}
-                      className="h-10 w-10 rounded-full object-cover ring-2 ring-royal-500/40 transition hover:ring-gold-400/70"
+                    >
+                      <AvatarImage
+                        candidates={[
+                          profileAvatars[p.authorId],
+                          usersById.get(p.authorId)?.avatar,
+                          p.authorAvatar,
+                        ]}
+                        fallbackSeed={p.authorId || p.authorName}
+                        alt={p.authorName}
+                        className="h-10 w-10 rounded-full object-cover ring-2 ring-royal-500/40 transition hover:ring-gold-400/70"
                     />
                   </Link>
                   <div className="flex-1">
