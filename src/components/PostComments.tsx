@@ -9,6 +9,7 @@ import { apiAddComment, apiDeleteComment } from "../lib/api";
 import type { Comment } from "../types";
 import { Handle } from "./Handle";
 import { ReportButton } from "./ReportButton";
+import { AvatarImage } from "./AvatarImage";
 
 interface Props {
   postId: string;
@@ -70,15 +71,14 @@ export function PostComments({ postId, comments, postAuthorId }: Props) {
     <div className="mt-4 border-t border-royal-500/15 pt-4">
       <ul className="space-y-3">
         {comments.map((c) => {
-          const authorAvatar =
-            usersById.get(c.authorId)?.avatar || c.authorAvatar;
           const canDelete =
             isQueen || user?.id === c.authorId || user?.id === postAuthorId;
           return (
             <li key={c.id} className="flex items-start gap-3">
               <Link to={profileHref(c.authorId)} className="shrink-0">
-                <img
-                  src={authorAvatar}
+                <AvatarImage
+                  candidates={[usersById.get(c.authorId)?.avatar, c.authorAvatar]}
+                  fallbackSeed={c.authorId || c.authorName}
                   alt={c.authorName}
                   className="h-8 w-8 rounded-full object-cover ring-2 ring-royal-500/30 transition hover:ring-gold-400/60"
                 />
@@ -132,8 +132,9 @@ export function PostComments({ postId, comments, postAuthorId }: Props) {
         })}
       </ul>
       <form onSubmit={submit} className="mt-3 flex items-start gap-3">
-        <img
-          src={user?.avatar ?? "https://i.pravatar.cc/150?u=anon"}
+        <AvatarImage
+          candidates={[user?.avatar]}
+          fallbackSeed={user?.id ?? "anon"}
           alt="Vous"
           className="h-8 w-8 rounded-full object-cover ring-2 ring-royal-500/30"
         />
