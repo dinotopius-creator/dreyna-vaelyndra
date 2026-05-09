@@ -23,7 +23,13 @@
  * par slot. Un seul item peut être équipé par slot.
  */
 
-export type ShopCategory = "style" | "background" | "frame" | "scene";
+export type ShopCategory =
+  | "style"
+  | "background"
+  | "frame"
+  | "scene"
+  | "outfit3d"
+  | "accessory3d";
 export type ShopCurrency = "lueurs" | "sylvins";
 
 /**
@@ -63,12 +69,16 @@ export interface ShopItem {
    * sélectionner un rendu de fond dédié (dégradé animé, particules…).
    */
   sceneId?: SceneId;
+  /** Pour les wearables 3D : identifiant de thème exploité par AvatarViewer. */
+  wearableThemeId?: string;
 }
 
 /** Slots d'équipement reconnus côté profil. */
 export const EQUIP_SLOT = {
   Frame: "frame",
   Scene: "scene",
+  Outfit3D: "outfit3d",
+  Accessory3D: "accessory3d",
 } as const;
 
 /**
@@ -509,6 +519,78 @@ export const SHOP_CATALOG: ShopItem[] = [
     currency: "sylvins",
     price: 400,
     frameGlyph: "🦅",
+  },
+  // --- Tenues 3D ----------------------------------------------------
+  {
+    id: "outfit3d-royal",
+    category: "outfit3d",
+    name: "Tenue royale",
+    description: "Corsage noble et étoffes de cour pour les apparitions officielles.",
+    icon: "👗",
+    currency: "lueurs",
+    price: 180,
+    wearableThemeId: "royal",
+  },
+  {
+    id: "outfit3d-battle",
+    category: "outfit3d",
+    name: "Veste de bataille",
+    description: "Silhouette plus vive, épaules renforcées et accents dorés.",
+    icon: "🛡️",
+    currency: "sylvins",
+    price: 90,
+    wearableThemeId: "battle",
+  },
+  {
+    id: "outfit3d-mystic",
+    category: "outfit3d",
+    name: "Robe mystique",
+    description: "Grande robe arcane pour un profil 3D plus cérémoniel.",
+    icon: "🔮",
+    currency: "sylvins",
+    price: 120,
+    wearableThemeId: "mystic",
+  },
+  {
+    id: "outfit3d-shadow",
+    category: "outfit3d",
+    name: "Armure d’ombre",
+    description: "Palette sombre, élégante et plus tranchante.",
+    icon: "🖤",
+    currency: "sylvins",
+    price: 140,
+    wearableThemeId: "shadow",
+  },
+  // --- Accessoires 3D ----------------------------------------------
+  {
+    id: "accessory3d-crown",
+    category: "accessory3d",
+    name: "Couronne sculptée",
+    description: "Couronne 3D portée directement sur la tête.",
+    icon: "👑",
+    currency: "sylvins",
+    price: 110,
+    wearableThemeId: "crown",
+  },
+  {
+    id: "accessory3d-halo",
+    category: "accessory3d",
+    name: "Halo solaire",
+    description: "Halo flottant au-dessus de la tête, visible à 360°.",
+    icon: "☀️",
+    currency: "sylvins",
+    price: 140,
+    wearableThemeId: "halo",
+  },
+  {
+    id: "accessory3d-horns",
+    category: "accessory3d",
+    name: "Cornes draconiques",
+    description: "Ornement cornu pour un profil plus féroce.",
+    icon: "🐉",
+    currency: "sylvins",
+    price: 170,
+    wearableThemeId: "horns",
   },
 ];
 

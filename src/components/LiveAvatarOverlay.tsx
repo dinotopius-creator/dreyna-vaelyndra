@@ -162,6 +162,10 @@ export function LiveAvatarOverlay({
           autoRotate={false}
           equippedFrameId={serverProfile?.equipped?.frame ?? null}
           equippedSceneId={serverProfile?.equipped?.scene ?? null}
+          equippedOutfit3DId={serverProfile?.equipped?.outfit3d ?? null}
+          equippedAccessory3DId={
+            serverProfile?.equipped?.accessory3d ?? null
+          }
           className="shadow-[0_8px_24px_rgba(0,0,0,0.55)]"
         />
 

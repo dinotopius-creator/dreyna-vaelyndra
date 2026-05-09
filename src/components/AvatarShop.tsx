@@ -21,23 +21,25 @@ const CATEGORY_LABEL: Record<ShopCategory, string> = {
   background: "Fond",
   frame: "Parure",
   scene: "Scène",
+  outfit3d: "Tenue 3D",
+  accessory3d: "Accessoire 3D",
 };
 
 const TABS: { id: ShopCategory; label: string; hint: string }[] = [
   {
-    id: "style",
-    label: "Styles",
-    hint: "Débloquez de nouveaux styles pour l'atelier.",
+    id: "outfit3d",
+    label: "Tenues 3D",
+    hint: "Habillez votre avatar 3D avec des silhouettes premium.",
   },
   {
-    id: "background",
-    label: "Fonds",
-    hint: "Couleurs exclusives en arrière-plan.",
+    id: "accessory3d",
+    label: "Accessoires 3D",
+    hint: "Couronnes, halos et ornements visibles à 360°.",
   },
   {
     id: "frame",
     label: "Parures",
-    hint: "Accessoires posés au-dessus de votre avatar.",
+    hint: "Effets de surimpression pour les cartes et portraits.",
   },
   {
     id: "scene",
@@ -49,7 +51,7 @@ const TABS: { id: ShopCategory; label: string; hint: string }[] = [
 export function AvatarShop() {
   const { profile, buyItem, addToWishlist, removeFromWishlist } = useProfile();
   const { notify } = useToast();
-  const [tab, setTab] = useState<ShopCategory>("style");
+  const [tab, setTab] = useState<ShopCategory>("outfit3d");
   const [busyId, setBusyId] = useState<string | null>(null);
   // Pendant un toggle wishlist on empêche les clics répétés sur le même
   // cœur (latence réseau). Les autres items restent interactifs.
@@ -130,8 +132,9 @@ export function AvatarShop() {
             Parez votre double
           </h3>
           <p className="mt-1 text-sm text-ivory/60">
-            Utilisez vos Lueurs et vos Sylvins pour débloquer des styles, des
-            fonds ou des parures. Rien n'expire, tout est cumulable.
+            Utilisez vos Lueurs et vos Sylvins pour débloquer tenues,
+            accessoires et effets de scène pour votre avatar 3D. Rien
+            n'expire, tout est cumulable.
           </p>
         </div>
         {profile && (

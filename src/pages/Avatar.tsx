@@ -1,16 +1,15 @@
 /**
- * Page `/avatar` — atelier d'avatar 2D « paper-doll » (DiceBear).
+ * Page `/avatar` — studio d'avatar 3D local.
  *
- * Depuis la fermeture de Ready Player Me en janvier 2026, on génère
- * l'avatar côté front via l'API publique DiceBear : le style + la graine
- * produisent un SVG déterministe que l'on persiste directement en base
- * (aucun fichier lourd à héberger).
+ * On persiste maintenant une configuration `vaelyndra3d:` compacte :
+ * silhouette, visage, cheveux et couleurs. Le rendu 3D est reconstruit
+ * côté front et une vignette SVG est aussi générée pour les zones qui
+ * consomment encore une image simple (chat, petites cartes, listes).
  *
  * Affiche :
  *   1. un aperçu de l'avatar actuel
- *   2. un atelier plié/déplié qui laisse l'utilisateur choisir style,
- *      seed et fond
- *   3. un bouton « Enregistrer mon avatar » qui persiste l'URL DiceBear
+ *   2. un atelier plié/déplié qui laisse l'utilisateur sculpter son avatar
+ *   3. un bouton « Enregistrer mon avatar » qui persiste le rendu 3D
  *      côté serveur via l'API backend.
  *
  * Le profil est rechargé via ProfileContext après sauvegarde pour que le
@@ -115,7 +114,7 @@ export function Avatar() {
       <SectionHeading
         eyebrow="Atelier d'avatar"
         title="Composez votre double magique"
-        subtitle="Choisissez un style d'illustration, lancez les dés pour varier coiffure et tenue, puis scellez. Votre avatar vous suit sur tous vos appareils."
+        subtitle="Créez votre avatar 3D debout, faites-le tourner en 360°, puis scellez-le sur votre compte. Vos tenues et accessoires 3D s'y greffent ensuite partout sur Vaelyndra."
       />
 
       <div className="mt-10 grid gap-8 lg:grid-cols-[minmax(0,360px)_1fr]">
@@ -132,6 +131,12 @@ export function Avatar() {
             framing="face"
             equippedFrameId={profile?.equipped?.[EQUIP_SLOT.Frame] ?? null}
             equippedSceneId={profile?.equipped?.[EQUIP_SLOT.Scene] ?? null}
+            equippedOutfit3DId={
+              profile?.equipped?.[EQUIP_SLOT.Outfit3D] ?? null
+            }
+            equippedAccessory3DId={
+              profile?.equipped?.[EQUIP_SLOT.Accessory3D] ?? null
+            }
           />
 
           <div>
@@ -139,8 +144,8 @@ export function Avatar() {
               ✦ Aperçu
             </p>
             <p className="mt-1 text-sm text-ivory/70">
-              Voilà la vignette qu'afficheront vos posts, vos commentaires et
-              vos lives. Ouvrez l'atelier pour la refaire entièrement.
+              Voilà votre avatar 3D principal. La vignette profil, les posts,
+              les commentaires et les lives s’alignent dessus automatiquement.
             </p>
           </div>
 
@@ -211,11 +216,11 @@ export function Avatar() {
               <ol className="mx-auto max-w-md space-y-3 text-left text-sm text-ivory/70">
                 <li>
                   1. <strong className="text-gold-200">Ouvrez l'atelier</strong>{" "}
-                  pour choisir un style d'illustration.
+                  pour choisir silhouette, visage et coiffure.
                 </li>
                 <li>
-                  2. <strong className="text-gold-200">Lancez les dés</strong>{" "}
-                  pour varier coiffures, tenues et accessoires.
+                  2. <strong className="text-gold-200">Tournez l’avatar</strong>{" "}
+                  en 360° pour vérifier son rendu sous tous les angles.
                 </li>
                 <li>
                   3.{" "}
@@ -233,9 +238,9 @@ export function Avatar() {
                 </li>
               </ol>
               <p className="mt-3 text-xs text-ivory/50">
-                Illustrations générées via DiceBear (SVG libre, MIT). Ajoutez
-                styles, fonds et parures à votre collection via la boutique
-                avatar ci-dessous.
+                Le rendu 3D est local au site. Ajoutez ensuite tenues,
+                accessoires, cadres et scènes à votre collection via la
+                boutique avatar ci-dessous.
               </p>
             </div>
           )}

@@ -95,17 +95,38 @@ export function InventoryPanel() {
 
   const equippedFrame = profile?.equipped?.[EQUIP_SLOT.Frame] ?? null;
   const equippedScene = profile?.equipped?.[EQUIP_SLOT.Scene] ?? null;
+  const equippedOutfit3D = profile?.equipped?.[EQUIP_SLOT.Outfit3D] ?? null;
+  const equippedAccessory3D =
+    profile?.equipped?.[EQUIP_SLOT.Accessory3D] ?? null;
 
   async function toggleSlot(
-    slot: typeof EQUIP_SLOT.Frame | typeof EQUIP_SLOT.Scene,
+    slot:
+      | typeof EQUIP_SLOT.Frame
+      | typeof EQUIP_SLOT.Scene
+      | typeof EQUIP_SLOT.Outfit3D
+      | typeof EQUIP_SLOT.Accessory3D,
     itemId: string,
   ) {
     setBusy(itemId);
     try {
-      const current = slot === EQUIP_SLOT.Frame ? equippedFrame : equippedScene;
+      const current =
+        slot === EQUIP_SLOT.Frame
+          ? equippedFrame
+          : slot === EQUIP_SLOT.Scene
+            ? equippedScene
+            : slot === EQUIP_SLOT.Outfit3D
+              ? equippedOutfit3D
+              : equippedAccessory3D;
       const next = current === itemId ? null : itemId;
       await setEquipped(slot, next);
-      const label = slot === EQUIP_SLOT.Frame ? "Parure" : "Scène";
+      const label =
+        slot === EQUIP_SLOT.Frame
+          ? "Parure"
+          : slot === EQUIP_SLOT.Scene
+            ? "Scène"
+            : slot === EQUIP_SLOT.Outfit3D
+              ? "Tenue 3D"
+              : "Accessoire 3D";
       notify(
         next
           ? `${CATALOG_BY_ID[itemId]?.name ?? label} équipée ✨`
@@ -123,8 +144,14 @@ export function InventoryPanel() {
 
   const frames = owned.filter((i) => i.category === "frame");
   const scenes = owned.filter((i) => i.category === "scene");
+  const outfits3D = owned.filter((i) => i.category === "outfit3d");
+  const accessories3D = owned.filter((i) => i.category === "accessory3d");
   const stylesOrBgs = owned.filter(
-    (i) => i.category !== "frame" && i.category !== "scene",
+    (i) =>
+      i.category !== "frame" &&
+      i.category !== "scene" &&
+      i.category !== "outfit3d" &&
+      i.category !== "accessory3d",
   );
 
   return (
@@ -137,10 +164,30 @@ export function InventoryPanel() {
           Vos trouvailles ({owned.length})
         </h3>
         <p className="mt-1 text-sm text-ivory/60">
-          Équipez une seule parure à la fois — elle se superpose à votre avatar
-          partout sur le site.
+          Équipez vos tenues, accessoires et effets — votre avatar 3D reste
+          cohérent partout sur le site.
         </p>
       </div>
+
+      {outfits3D.length > 0 && (
+        <EquipSlotGrid
+          title="Tenues 3D"
+          items={outfits3D}
+          equippedId={equippedOutfit3D}
+          busy={busy}
+          onToggle={(id) => toggleSlot(EQUIP_SLOT.Outfit3D, id)}
+        />
+      )}
+
+      {accessories3D.length > 0 && (
+        <EquipSlotGrid
+          title="Accessoires 3D"
+          items={accessories3D}
+          equippedId={equippedAccessory3D}
+          busy={busy}
+          onToggle={(id) => toggleSlot(EQUIP_SLOT.Accessory3D, id)}
+        />
+      )}
 
       {frames.length > 0 && (
         <EquipSlotGrid

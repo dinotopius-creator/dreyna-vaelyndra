@@ -169,6 +169,10 @@ export function UserProfile() {
                 framing="face"
                 equippedFrameId={serverProfile.equipped?.frame ?? null}
                 equippedSceneId={serverProfile.equipped?.scene ?? null}
+                equippedOutfit3DId={serverProfile.equipped?.outfit3d ?? null}
+                equippedAccessory3DId={
+                  serverProfile.equipped?.accessory3d ?? null
+                }
               />
             </div>
           ) : (
