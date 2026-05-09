@@ -895,6 +895,35 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const sanitizeIncomingViewerList = useCallback(
+    (payload: unknown): LiveViewerSummary[] | null => {
+      if (typeof payload !== "object" || payload === null) return null;
+      const p = payload as Record<string, unknown>;
+      if (p.type !== "viewer-list") return null;
+      if (!Array.isArray(p.viewers)) return null;
+      const next: LiveViewerSummary[] = [];
+      for (const item of p.viewers) {
+        if (typeof item !== "object" || item === null) continue;
+        const viewer = item as Record<string, unknown>;
+        const userId =
+          typeof viewer.userId === "string" ? viewer.userId : null;
+        const username =
+          typeof viewer.username === "string"
+            ? viewer.username.slice(0, 40)
+            : null;
+        const avatar =
+          typeof viewer.avatar === "string" ? viewer.avatar : null;
+        const joinedAt =
+          typeof viewer.joinedAt === "string"
+            ? viewer.joinedAt
+            : new Date().toISOString();
+        if (!userId || !username || !avatar) continue;
+        next.push({ userId, username, avatar, joinedAt });
+      }
+      return next;
+    },
+    [],
+  );
   const syncConnectedViewers = useCallback(() => {
     const deduped = new Map<string, LiveViewerSummary>();
     hostViewerPresenceRef.current.forEach((viewer) => {
@@ -907,6 +936,14 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       a.username.localeCompare(b.username, "fr", { sensitivity: "base" }),
     );
     setConnectedViewers(next);
+    hostDataConnectionsRef.current.forEach((dc) => {
+      if (!dc.open) return;
+      try {
+        dc.send({ type: "viewer-list", viewers: next });
+      } catch {
+        // ignore
+      }
+    });
   }, []);
 
   /**
@@ -1301,6 +1338,10 @@ export function LiveProvider({ children }: { children: ReactNode }) {
                 title: configRef.current.title,
                 description: configRef.current.description,
                 mode,
+              });
+              dataConn.send({
+                type: "viewer-list",
+                viewers: connectedViewers,
               });
             } catch {
               // ignore
@@ -1999,6 +2040,9 @@ export function LiveProvider({ children }: { children: ReactNode }) {
                 // lui-même). Le host a déjà validé l'event.
                 const event = sanitizeIncomingGift(payload);
                 if (event) deliverGiftLocally(event);
+              } else if (type === "viewer-list") {
+                const next = sanitizeIncomingViewerList(payload);
+                if (next) setConnectedViewers(next);
               }
             });
             data.on("close", () => {
