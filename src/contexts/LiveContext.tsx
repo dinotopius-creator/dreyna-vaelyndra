@@ -924,7 +924,6 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     },
     [],
   );
-
   const syncConnectedViewers = useCallback(() => {
     const deduped = new Map<string, LiveViewerSummary>();
     hostViewerPresenceRef.current.forEach((viewer) => {
