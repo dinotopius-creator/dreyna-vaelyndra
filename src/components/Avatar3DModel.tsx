@@ -284,6 +284,13 @@ export function Avatar3DModel({
           color={config.hairColor}
           transform="translate3d(0,-84px,0)"
         />
+        <Cuboid
+          width={54 * faceScale}
+          height={42}
+          depth={20}
+          color={config.hairColor}
+          transform="translate3d(0,-66px,-24px)"
+        />
         {config.hairStyle === "wave" && (
           <>
             <Cuboid
@@ -299,6 +306,13 @@ export function Avatar3DModel({
               depth={20}
               color={config.hairColor}
               transform="translate3d(28px,-40px,-8px) rotateZ(-8deg)"
+            />
+            <Cuboid
+              width={52}
+              height={58}
+              depth={18}
+              color={config.hairColor}
+              transform="translate3d(0,-38px,-28px)"
             />
           </>
         )}
@@ -318,6 +332,31 @@ export function Avatar3DModel({
               color={config.hairColor}
               transform="translate3d(28px,-48px,0)"
             />
+            <Cuboid
+              width={56}
+              height={34}
+              depth={18}
+              color={config.hairColor}
+              transform="translate3d(0,-42px,-24px)"
+            />
+          </>
+        )}
+        {config.hairStyle === "fade" && (
+          <>
+            <Cuboid
+              width={52}
+              height={18}
+              depth={12}
+              color={config.hairColor}
+              transform="translate3d(0,-88px,-18px)"
+            />
+            <Cuboid
+              width={48}
+              height={22}
+              depth={12}
+              color={shade(config.hairColor, 0.92)}
+              transform="translate3d(0,-62px,-20px)"
+            />
           </>
         )}
         {config.hairStyle === "braids" && (
@@ -336,8 +375,22 @@ export function Avatar3DModel({
               color={config.hairColor}
               transform="translate3d(30px,-22px,8px)"
             />
+            <Cuboid
+              width={54}
+              height={48}
+              depth={18}
+              color={config.hairColor}
+              transform="translate3d(0,-52px,-26px)"
+            />
           </>
         )}
+        <Cuboid
+          width={10}
+          height={12}
+          depth={16}
+          color={shade(config.skinTone, 0.96)}
+          transform="translate3d(0,-52px,26px)"
+        />
         <Cuboid
           width={body.shoulders}
           height={body.torsoH}
