@@ -19,6 +19,7 @@ import { ReportButton } from "../components/ReportButton";
 import { UserBadges } from "../components/UserBadges";
 import { Handle } from "../components/Handle";
 import { MemberSearch } from "../components/MemberSearch";
+import { AvatarImage } from "../components/AvatarImage";
 import { getOfficial } from "../data/officials";
 import { formatRelative, parseVideoUrl } from "../lib/helpers";
 import { apiCreatePost, apiDeletePost, apiToggleReaction } from "../lib/api";
@@ -221,8 +222,9 @@ export function Community() {
         <div>
           <form onSubmit={publish} className="card-royal p-5">
             <div className="flex gap-3">
-              <img
-                src={user?.avatar ?? "https://i.pravatar.cc/150?u=anon"}
+              <AvatarImage
+                candidates={[user?.avatar]}
+                fallbackSeed={user?.id ?? "anon"}
                 alt="Vous"
                 className="h-10 w-10 rounded-full object-cover ring-2 ring-royal-500/40"
               />
@@ -280,8 +282,9 @@ export function Community() {
                     className="shrink-0"
                     title={`Voir le profil de ${p.authorName}`}
                   >
-                    <img
-                      src={usersById.get(p.authorId)?.avatar || p.authorAvatar}
+                    <AvatarImage
+                      candidates={[usersById.get(p.authorId)?.avatar, p.authorAvatar]}
+                      fallbackSeed={p.authorId || p.authorName}
                       alt={p.authorName}
                       className="h-10 w-10 rounded-full object-cover ring-2 ring-royal-500/40 transition hover:ring-gold-400/70"
                     />
@@ -422,11 +425,9 @@ export function Community() {
                       to={profileHref(member.id)}
                       className="group flex items-center gap-3 rounded-2xl border border-royal-500/25 bg-night-900/45 p-3 transition hover:border-gold-400/50"
                     >
-                      <img
-                        src={
-                          member.avatar ||
-                          `https://i.pravatar.cc/150?u=${member.id}`
-                        }
+                      <AvatarImage
+                        candidates={[member.avatar]}
+                        fallbackSeed={member.id}
                         alt={member.username}
                         className="h-10 w-10 rounded-full object-cover ring-2 ring-gold-400/35"
                       />
