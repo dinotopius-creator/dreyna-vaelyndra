@@ -16,9 +16,15 @@ interface Props {
   comments: Comment[];
   /** Auteur du post : seul lui (ou la reine) peut supprimer un commentaire. */
   postAuthorId: string;
+  avatarOverrides?: Record<string, string>;
 }
 
-export function PostComments({ postId, comments, postAuthorId }: Props) {
+export function PostComments({
+  postId,
+  comments,
+  postAuthorId,
+  avatarOverrides = {},
+}: Props) {
   const { user, users, isQueen } = useAuth();
   const { dispatch } = useStore();
   const { notify } = useToast();
@@ -77,7 +83,11 @@ export function PostComments({ postId, comments, postAuthorId }: Props) {
             <li key={c.id} className="flex items-start gap-3">
               <Link to={profileHref(c.authorId)} className="shrink-0">
                 <AvatarImage
-                  candidates={[usersById.get(c.authorId)?.avatar, c.authorAvatar]}
+                  candidates={[
+                    avatarOverrides[c.authorId],
+                    usersById.get(c.authorId)?.avatar,
+                    c.authorAvatar,
+                  ]}
                   fallbackSeed={c.authorId || c.authorName}
                   alt={c.authorName}
                   className="h-8 w-8 rounded-full object-cover ring-2 ring-royal-500/30 transition hover:ring-gold-400/60"
