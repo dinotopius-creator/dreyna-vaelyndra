@@ -146,6 +146,9 @@ export function InventoryPanel() {
   const scenes = owned.filter((i) => i.category === "scene");
   const outfits3D = owned.filter((i) => i.category === "outfit3d");
   const accessories3D = owned.filter((i) => i.category === "accessory3d");
+  const accessoryFamilies = new Set(
+    accessories3D.map((item) => item.wearableFamily).filter(Boolean),
+  );
   const stylesOrBgs = owned.filter(
     (i) =>
       i.category !== "frame" &&
@@ -181,7 +184,11 @@ export function InventoryPanel() {
 
       {accessories3D.length > 0 && (
         <EquipSlotGrid
-          title="Accessoires 3D"
+          title={
+            accessoryFamilies.size > 0
+              ? `Accessoires 3D (${[...accessoryFamilies].join(" • ")})`
+              : "Accessoires 3D"
+          }
           items={accessories3D}
           equippedId={equippedAccessory3D}
           busy={busy}

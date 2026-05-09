@@ -71,6 +71,8 @@ export interface ShopItem {
   sceneId?: SceneId;
   /** Pour les wearables 3D : identifiant de thème exploité par AvatarViewer. */
   wearableThemeId?: string;
+  /** Sous-famille d’item pour l’UI boutique/inventaire. */
+  wearableFamily?: string;
 }
 
 /** Slots d'équipement reconnus côté profil. */
@@ -571,6 +573,7 @@ export const SHOP_CATALOG: ShopItem[] = [
     currency: "sylvins",
     price: 110,
     wearableThemeId: "crown",
+    wearableFamily: "Couronnes",
   },
   {
     id: "accessory3d-halo",
@@ -581,6 +584,7 @@ export const SHOP_CATALOG: ShopItem[] = [
     currency: "sylvins",
     price: 140,
     wearableThemeId: "halo",
+    wearableFamily: "Halos",
   },
   {
     id: "accessory3d-horns",
@@ -591,6 +595,62 @@ export const SHOP_CATALOG: ShopItem[] = [
     currency: "sylvins",
     price: 170,
     wearableThemeId: "horns",
+    wearableFamily: "Cornes",
+  },
+  {
+    id: "accessory3d-elf-ears",
+    category: "accessory3d",
+    name: "Oreilles d’elfe",
+    description: "Longues oreilles fines visibles de face comme de profil.",
+    icon: "🧝",
+    currency: "sylvins",
+    price: 95,
+    wearableThemeId: "elf-ears",
+    wearableFamily: "Oreilles",
+  },
+  {
+    id: "accessory3d-fae-ears",
+    category: "accessory3d",
+    name: "Oreilles féeriques",
+    description: "Version plus courte et plus douce, très lumineuse.",
+    icon: "🪽",
+    currency: "lueurs",
+    price: 180,
+    wearableThemeId: "fae-ears",
+    wearableFamily: "Oreilles",
+  },
+  {
+    id: "accessory3d-antlers",
+    category: "accessory3d",
+    name: "Bois sacrés",
+    description: "Ramures mystiques pour une présence sylvestre.",
+    icon: "🦌",
+    currency: "sylvins",
+    price: 180,
+    wearableThemeId: "antlers",
+    wearableFamily: "Bois",
+  },
+  {
+    id: "accessory3d-circlet",
+    category: "accessory3d",
+    name: "Diadème lunaire",
+    description: "Fin cercle frontal serti d’un éclat céleste.",
+    icon: "🌙",
+    currency: "sylvins",
+    price: 120,
+    wearableThemeId: "circlet",
+    wearableFamily: "Couronnes",
+  },
+  {
+    id: "accessory3d-gem",
+    category: "accessory3d",
+    name: "Gemme frontale",
+    description: "Cristal suspendu au centre du visage, très mystique.",
+    icon: "🔷",
+    currency: "sylvins",
+    price: 130,
+    wearableThemeId: "gem",
+    wearableFamily: "Ornements",
   },
 ];
 

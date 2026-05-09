@@ -22,7 +22,11 @@ import clsx from "clsx";
 import { isFlatImageUrl } from "../lib/dicebear";
 import { CATALOG_BY_ID, type SceneId } from "../lib/avatarShop";
 import { decodeAvatar3DUrl, isAvatar3DUrl } from "../lib/avatar3d";
-import { Avatar3DModel } from "./Avatar3DModel";
+import {
+  Avatar3DModel,
+  type AccessoryTheme,
+  type OutfitTheme,
+} from "./Avatar3DModel";
 
 /**
  * `<model-viewer>` est un web component chargé dynamiquement via CDN : on
@@ -219,18 +223,11 @@ export function AvatarViewer({
   const avatar3dConfig = decodeAvatar3DUrl(src);
   const outfitTheme =
     equippedOutfit3DId && CATALOG_BY_ID[equippedOutfit3DId]?.wearableThemeId
-      ? (CATALOG_BY_ID[equippedOutfit3DId]!.wearableThemeId as
-          | "royal"
-          | "battle"
-          | "mystic"
-          | "shadow")
+      ? (CATALOG_BY_ID[equippedOutfit3DId]!.wearableThemeId as OutfitTheme)
       : "royal";
   const accessoryTheme =
     equippedAccessory3DId && CATALOG_BY_ID[equippedAccessory3DId]?.wearableThemeId
-      ? (CATALOG_BY_ID[equippedAccessory3DId]!.wearableThemeId as
-          | "crown"
-          | "halo"
-          | "horns")
+      ? (CATALOG_BY_ID[equippedAccessory3DId]!.wearableThemeId as AccessoryTheme)
       : null;
   if (avatar3dConfig) {
     return (

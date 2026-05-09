@@ -67,6 +67,17 @@ export function AvatarShop() {
   );
 
   const items = SHOP_CATALOG.filter((item) => item.category === tab);
+  const groupedAccessories = useMemo(() => {
+    if (tab !== "accessory3d") return [];
+    const map = new Map<string, ShopItem[]>();
+    for (const item of items) {
+      const key = item.wearableFamily ?? "Autres";
+      const list = map.get(key) ?? [];
+      list.push(item);
+      map.set(key, list);
+    }
+    return [...map.entries()];
+  }, [items, tab]);
 
   async function handleBuy(item: ShopItem) {
     if (!profile) {
@@ -173,6 +184,116 @@ export function AvatarShop() {
         </p>
       </div>
 
+      {tab === "accessory3d" ? (
+        <div className="space-y-5">
+          {groupedAccessories.map(([family, familyItems]) => (
+            <div key={family}>
+              <p className="mb-3 text-[11px] uppercase tracking-[0.22em] text-ivory/50">
+                {family}
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {familyItems.map((item) => {
+                  const owned = ownedIds.has(item.id);
+                  const wished = wishlistIds.has(item.id);
+                  const balance =
+                    profile?.[item.currency === "lueurs" ? "lueurs" : "sylvins"] ?? 0;
+                  const canAfford = balance >= item.price;
+                  const busy = busyId === item.id;
+                  const wishlistBusy = wishlistBusyId === item.id;
+                  return (
+                    <article
+                      key={item.id}
+                      className={clsx(
+                        "flex h-full flex-col rounded-2xl border p-4 transition",
+                        owned
+                          ? "border-gold-400/60 bg-gold-500/10"
+                          : "border-royal-500/30 bg-night-950/60 hover:border-gold-400/40",
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="text-3xl" aria-hidden>
+                          {item.icon}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] uppercase tracking-[0.22em] text-ivory/50">
+                            {CATEGORY_LABEL[item.category]}
+                          </span>
+                          {!owned && (
+                            <button
+                              type="button"
+                              onClick={() => handleToggleWishlist(item)}
+                              disabled={wishlistBusy || !profile}
+                              aria-pressed={wished}
+                              aria-label={
+                                wished
+                                  ? "Retirer de ma liste de souhaits"
+                                  : "Ajouter à ma liste de souhaits"
+                              }
+                              title={
+                                wished
+                                  ? "Retirer de ma liste de souhaits"
+                                  : "Ajouter à ma liste de souhaits"
+                              }
+                              className={clsx(
+                                "inline-flex h-7 w-7 items-center justify-center rounded-full border transition",
+                                wished
+                                  ? "border-rose-400/60 bg-rose-500/20 text-rose-200 hover:bg-rose-500/30"
+                                  : "border-royal-500/40 text-ivory/55 hover:border-rose-300/60 hover:text-rose-200",
+                                wishlistBusy && "opacity-60",
+                              )}
+                            >
+                              <Heart
+                                className="h-3.5 w-3.5"
+                                fill={wished ? "currentColor" : "none"}
+                                strokeWidth={1.8}
+                              />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <h4 className="mt-3 font-display text-lg text-ivory">
+                        {item.name}
+                      </h4>
+                      <p className="mt-1 text-[12px] text-ivory/65">
+                        {item.description}
+                      </p>
+                      <div className="mt-auto pt-4">
+                        {owned ? (
+                          <span className="inline-flex items-center gap-2 rounded-full border border-gold-400/50 bg-gold-500/15 px-3 py-1.5 text-[11px] font-semibold text-gold-200">
+                            <Check className="h-3.5 w-3.5" /> Débloqué
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleBuy(item)}
+                            disabled={busy || !canAfford}
+                            className={clsx(
+                              "inline-flex items-center gap-2 rounded-full px-3 py-1.5 font-regal text-[11px] tracking-[0.16em] transition",
+                              canAfford
+                                ? "bg-gold-shine text-night-900 hover:brightness-110"
+                                : "border border-royal-500/40 text-ivory/50",
+                              busy && "opacity-60",
+                            )}
+                          >
+                            {canAfford ? (
+                              <Sparkles className="h-3.5 w-3.5" />
+                            ) : (
+                              <Lock className="h-3.5 w-3.5" />
+                            )}
+                            {busy
+                              ? "Achat…"
+                              : `${item.price} ${item.currency === "lueurs" ? "Lueurs" : "Sylvins"}`}
+                          </button>
+                        )}
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {items.map((item) => {
           const owned = ownedIds.has(item.id);
@@ -272,6 +393,7 @@ export function AvatarShop() {
           );
         })}
       </div>
+      )}
     </section>
   );
 }

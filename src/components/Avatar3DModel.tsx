@@ -2,8 +2,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import type { Avatar3DConfig } from "../lib/avatar3d";
 
-type OutfitTheme = "royal" | "battle" | "mystic" | "shadow";
-type AccessoryTheme = "crown" | "halo" | "horns" | null;
+export type OutfitTheme = "royal" | "battle" | "mystic" | "shadow";
+export type AccessoryTheme =
+  | "crown"
+  | "halo"
+  | "horns"
+  | "elf-ears"
+  | "fae-ears"
+  | "antlers"
+  | "circlet"
+  | "gem"
+  | null;
 
 interface Props {
   config: Avatar3DConfig;
@@ -439,6 +448,110 @@ export function Avatar3DModel({
           <>
             <Cuboid width={12} height={30} depth={10} color="#d4a94a" transform="translate3d(-24px,-128px,-4px) rotateZ(-28deg)" />
             <Cuboid width={12} height={30} depth={10} color="#d4a94a" transform="translate3d(24px,-128px,-4px) rotateZ(28deg)" />
+          </>
+        )}
+        {accessory === "elf-ears" && (
+          <>
+            <Cuboid
+              width={10}
+              height={28}
+              depth={8}
+              color={config.skinTone}
+              transform="translate3d(-36px,-60px,0) rotateZ(-28deg)"
+            />
+            <Cuboid
+              width={10}
+              height={28}
+              depth={8}
+              color={config.skinTone}
+              transform="translate3d(36px,-60px,0) rotateZ(28deg)"
+            />
+          </>
+        )}
+        {accessory === "fae-ears" && (
+          <>
+            <Cuboid
+              width={12}
+              height={22}
+              depth={8}
+              color="#f5d7c8"
+              transform="translate3d(-35px,-60px,4px) rotateZ(-22deg)"
+            />
+            <Cuboid
+              width={12}
+              height={22}
+              depth={8}
+              color="#f5d7c8"
+              transform="translate3d(35px,-60px,4px) rotateZ(22deg)"
+            />
+          </>
+        )}
+        {accessory === "antlers" && (
+          <>
+            <Cuboid
+              width={10}
+              height={42}
+              depth={10}
+              color="#8b5e34"
+              transform="translate3d(-24px,-136px,-2px) rotateZ(-18deg)"
+            />
+            <Cuboid
+              width={10}
+              height={42}
+              depth={10}
+              color="#8b5e34"
+              transform="translate3d(24px,-136px,-2px) rotateZ(18deg)"
+            />
+            <Cuboid
+              width={20}
+              height={8}
+              depth={8}
+              color="#9a6a3d"
+              transform="translate3d(-36px,-148px,0) rotateZ(-30deg)"
+            />
+            <Cuboid
+              width={20}
+              height={8}
+              depth={8}
+              color="#9a6a3d"
+              transform="translate3d(36px,-148px,0) rotateZ(30deg)"
+            />
+          </>
+        )}
+        {accessory === "circlet" && (
+          <>
+            <Cuboid
+              width={64}
+              height={8}
+              depth={40}
+              color="#f4cf74"
+              transform="translate3d(0,-92px,6px)"
+            />
+            <Cuboid
+              width={10}
+              height={10}
+              depth={10}
+              color="#c4b5fd"
+              transform="translate3d(0,-90px,26px)"
+            />
+          </>
+        )}
+        {accessory === "gem" && (
+          <>
+            <Cuboid
+              width={8}
+              height={18}
+              depth={6}
+              color="#f4cf74"
+              transform="translate3d(0,-94px,18px)"
+            />
+            <Cuboid
+              width={12}
+              height={12}
+              depth={12}
+              color="#60a5fa"
+              transform="translate3d(0,-78px,24px) rotateZ(45deg)"
+            />
           </>
         )}
         <div
