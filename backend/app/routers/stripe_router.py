@@ -148,12 +148,20 @@ def _ensure_connect_account(
 
 def _account_link(account_id: str) -> StripeConnectLinkOut:
     frontend = _frontend_base_url()
-    link = stripe.AccountLink.create(
-        account=account_id,
-        refresh_url=f"{frontend}/moi?stripe_connect=refresh",
-        return_url=f"{frontend}/moi?stripe_connect=return",
-        type="account_onboarding",
-    )
+    try:
+        link = stripe.AccountLink.create(
+            account=account_id,
+            refresh_url=f"{frontend}/moi?stripe_connect=refresh",
+            return_url=f"{frontend}/moi?stripe_connect=return",
+            type="account_onboarding",
+        )
+    except stripe.error.StripeError as exc:
+        log.exception("stripe_connect_account_link_failed account=%s", account_id)
+        raise HTTPException(
+            status_code=502,
+            detail=exc.user_message
+            or "Impossible de préparer le formulaire Stripe Express.",
+        ) from exc
     return StripeConnectLinkOut(url=link.url, accountId=account_id)
 
 
@@ -183,7 +191,15 @@ def create_connect_onboarding_link(
     session: Session = Depends(_session_dep),
 ) -> StripeConnectLinkOut:
     stripe.api_key = _stripe_secret()
-    _, account_id = _ensure_connect_account(session, user)
+    try:
+        _, account_id = _ensure_connect_account(session, user)
+    except stripe.error.StripeError as exc:
+        log.exception("stripe_connect_account_create_failed user=%s", user.id)
+        raise HTTPException(
+            status_code=502,
+            detail=exc.user_message
+            or "Impossible de créer votre compte Stripe Express.",
+        ) from exc
     return _account_link(account_id)
 
 
@@ -193,11 +209,27 @@ def create_connect_dashboard_link(
     session: Session = Depends(_session_dep),
 ) -> StripeConnectLinkOut:
     stripe.api_key = _stripe_secret()
-    profile, account_id = _ensure_connect_account(session, user)
-    account = stripe.Account.retrieve(account_id)
+    try:
+        profile, account_id = _ensure_connect_account(session, user)
+        account = stripe.Account.retrieve(account_id)
+    except stripe.error.StripeError as exc:
+        log.exception("stripe_connect_dashboard_prepare_failed user=%s", user.id)
+        raise HTTPException(
+            status_code=502,
+            detail=exc.user_message
+            or "Impossible d'ouvrir votre espace Stripe Express.",
+        ) from exc
     if not _sg(account, "details_submitted"):
         return _account_link(account_id)
-    link = stripe.Account.create_login_link(account_id)
+    try:
+        link = stripe.Account.create_login_link(account_id)
+    except stripe.error.StripeError:
+        log.warning(
+            "stripe_connect_login_link_failed_fallback account=%s user=%s",
+            account_id,
+            user.id,
+        )
+        return _account_link(account_id)
     if not profile.stripe_connect_onboarded_at:
         profile.stripe_connect_onboarded_at = _now_iso()
         profile.updated_at = _now_iso()
