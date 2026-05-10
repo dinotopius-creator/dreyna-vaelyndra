@@ -96,7 +96,7 @@ export const SHOP_CATALOG: ShopItem[] = [
     description: "Rendu 8 bits rétro, parfait pour les lives arcade.",
     icon: "🕹️",
     currency: "lueurs",
-    price: 120,
+    price: 280,
     styleId: "pixel-art",
   },
   {
@@ -106,7 +106,7 @@ export const SHOP_CATALOG: ShopItem[] = [
     description: "Robots mascottes, un poil steampunk.",
     icon: "🤖",
     currency: "lueurs",
-    price: 120,
+    price: 280,
     styleId: "bottts-neutral",
   },
   {
@@ -116,7 +116,7 @@ export const SHOP_CATALOG: ShopItem[] = [
     description: "Style avataaars, portraits très sociaux.",
     icon: "👤",
     currency: "lueurs",
-    price: 180,
+    price: 420,
     styleId: "avataaars",
   },
   {
@@ -146,7 +146,7 @@ export const SHOP_CATALOG: ShopItem[] = [
     description: "Portraits flat design, très épurés.",
     icon: "🎨",
     currency: "lueurs",
-    price: 140,
+    price: 320,
     styleId: "micah",
   },
   {
@@ -156,7 +156,7 @@ export const SHOP_CATALOG: ShopItem[] = [
     description: "Micro-avatars stylés façon badge.",
     icon: "🔖",
     currency: "lueurs",
-    price: 140,
+    price: 320,
     styleId: "miniavs",
   },
   {
@@ -166,7 +166,7 @@ export const SHOP_CATALOG: ShopItem[] = [
     description: "Doodles joueurs dessinés à la main.",
     icon: "✏️",
     currency: "lueurs",
-    price: 160,
+    price: 360,
     styleId: "croodles",
   },
   {
@@ -176,7 +176,7 @@ export const SHOP_CATALOG: ShopItem[] = [
     description: "Grandes bouilles expressives pour le live.",
     icon: "😄",
     currency: "lueurs",
-    price: 160,
+    price: 360,
     styleId: "fun-emoji",
   },
   {
@@ -227,7 +227,7 @@ export const SHOP_CATALOG: ShopItem[] = [
     description: "Fond doré chaud pour les portraits officiels.",
     icon: "👑",
     currency: "lueurs",
-    price: 60,
+    price: 150,
     backgroundHex: "b45309",
   },
   {
@@ -237,7 +237,7 @@ export const SHOP_CATALOG: ShopItem[] = [
     description: "Vert profond, l'écho des forêts de Vaelyndra.",
     icon: "🌲",
     currency: "lueurs",
-    price: 60,
+    price: 150,
     backgroundHex: "065f46",
   },
   {
@@ -267,7 +267,7 @@ export const SHOP_CATALOG: ShopItem[] = [
     description: "Turquoise glacé, éclats d'aurore boréale.",
     icon: "🧊",
     currency: "lueurs",
-    price: 80,
+    price: 190,
     backgroundHex: "0ea5e9",
   },
   {
@@ -277,7 +277,7 @@ export const SHOP_CATALOG: ShopItem[] = [
     description: "Bleu d'encre profond, nuit sans lune.",
     icon: "🌙",
     currency: "lueurs",
-    price: 80,
+    price: 190,
     backgroundHex: "1e1b4b",
   },
   {
@@ -287,7 +287,7 @@ export const SHOP_CATALOG: ShopItem[] = [
     description: "Vert mousse doux, sous-bois de Vaelyndra.",
     icon: "🍃",
     currency: "lueurs",
-    price: 60,
+    price: 145,
     backgroundHex: "4d7c0f",
   },
   {
@@ -297,7 +297,7 @@ export const SHOP_CATALOG: ShopItem[] = [
     description: "Rose pêché, parfait pour les portraits vifs.",
     icon: "🍑",
     currency: "lueurs",
-    price: 60,
+    price: 145,
     backgroundHex: "fb7185",
   },
   {
@@ -459,7 +459,7 @@ export const SHOP_CATALOG: ShopItem[] = [
     description: "Une étoile éclatante — parfait pour les débuts de live.",
     icon: "⭐",
     currency: "lueurs",
-    price: 80,
+    price: 210,
     frameGlyph: "⭐",
   },
   {
@@ -469,7 +469,7 @@ export const SHOP_CATALOG: ShopItem[] = [
     description: "Un croissant qui veille discrètement.",
     icon: "🌙",
     currency: "lueurs",
-    price: 90,
+    price: 230,
     frameGlyph: "🌙",
   },
   {
@@ -479,7 +479,7 @@ export const SHOP_CATALOG: ShopItem[] = [
     description: "Feuille d'érable elfique, naturelle et douce.",
     icon: "🍁",
     currency: "lueurs",
-    price: 70,
+    price: 180,
     frameGlyph: "🍁",
   },
   {
@@ -489,7 +489,7 @@ export const SHOP_CATALOG: ShopItem[] = [
     description: "Une volée d'étincelles magiques.",
     icon: "✨",
     currency: "lueurs",
-    price: 100,
+    price: 260,
     frameGlyph: "💫",
   },
   {
@@ -530,7 +530,7 @@ export const SHOP_CATALOG: ShopItem[] = [
     description: "Corsage noble et étoffes de cour pour les apparitions officielles.",
     icon: "👗",
     currency: "lueurs",
-    price: 180,
+    price: 480,
     wearableThemeId: "royal",
   },
   {
@@ -615,7 +615,7 @@ export const SHOP_CATALOG: ShopItem[] = [
     description: "Version plus courte et plus douce, très lumineuse.",
     icon: "🪽",
     currency: "lueurs",
-    price: 180,
+    price: 420,
     wearableThemeId: "fae-ears",
     wearableFamily: "Oreilles",
   },
