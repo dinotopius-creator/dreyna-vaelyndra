@@ -63,6 +63,23 @@ class CommunityActivityReward(SQLModel, table=True):
     awarded_at: str = Field(default_factory=_now_iso, index=True)
 
 
+class OracleGameSession(SQLModel, table=True):
+    """Historique serveur du mini-jeu Oracle des Runes.
+
+    Une ligne = une tentative. Le résultat est figé côté serveur pour éviter
+    toute triche front : le client envoie uniquement la rune choisie.
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: str = Field(index=True)
+    day_key: str = Field(index=True)
+    rune_key: str = Field(max_length=32)
+    reward_currency: str = Field(default="none", index=True, max_length=16)
+    reward_amount: int = Field(default=0)
+    reward_label: str = Field(default="", max_length=64)
+    created_at: str = Field(default_factory=_now_iso, index=True)
+
+
 class UserProfile(SQLModel, table=True):
     """Profil serveur d'un utilisateur : avatar, inventaire et bourses.
 

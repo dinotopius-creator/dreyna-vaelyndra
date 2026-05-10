@@ -172,6 +172,56 @@ export async function apiSyncCommunityActivityRewards(): Promise<CommunityActivi
   )) as CommunityActivityRewardSyncDto;
 }
 
+export interface OracleRewardDto {
+  currency: "lueurs" | "sylvins" | "none";
+  amount: number;
+  label: string;
+  tone: "soft" | "bright" | "epic" | "legend" | "void";
+}
+
+export interface OracleHistoryEntryDto {
+  id: number;
+  runeKey: string;
+  reward: OracleRewardDto;
+  createdAt: string;
+}
+
+export interface OracleStatusDto {
+  dayKey: string;
+  playsUsedToday: number;
+  playsLeftToday: number;
+  maxDailyPlays: number;
+  canPlay: boolean;
+  recentHistory: OracleHistoryEntryDto[];
+}
+
+export interface OraclePlayDto extends OracleStatusDto {
+  reward: OracleRewardDto;
+  profileLueurs: number;
+  profileSylvinsPromo: number;
+}
+
+export async function apiGetOracleStatus(
+  userId: string,
+): Promise<OracleStatusDto> {
+  return (await request<OracleStatusDto>(
+    `/oracle/status?user_id=${encodeURIComponent(userId)}`,
+  )) as OracleStatusDto;
+}
+
+export async function apiPlayOracle(input: {
+  userId: string;
+  runeKey: string;
+}): Promise<OraclePlayDto> {
+  return (await request<OraclePlayDto>("/oracle/play", {
+    method: "POST",
+    body: JSON.stringify({
+      user_id: input.userId,
+      rune_key: input.runeKey,
+    }),
+  })) as OraclePlayDto;
+}
+
 // --- Profils utilisateur (avatar, inventaire, bourses) --------------------
 
 /**

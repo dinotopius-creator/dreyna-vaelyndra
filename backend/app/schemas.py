@@ -98,6 +98,44 @@ class CommunityActivityLeaderboardOut(BaseModel):
     entries: List[CommunityActivityEntryOut] = []
 
 
+class OraclePlayIn(BaseModel):
+    user_id: str = Field(..., min_length=1, max_length=128)
+    rune_key: str = Field(..., min_length=1, max_length=32)
+
+
+class OracleRewardOut(BaseModel):
+    currency: str
+    amount: int
+    label: str
+    tone: str
+
+
+class OracleHistoryEntryOut(BaseModel):
+    id: int
+    runeKey: str
+    reward: OracleRewardOut
+    createdAt: str
+
+
+class OracleStatusOut(BaseModel):
+    dayKey: str
+    playsUsedToday: int
+    playsLeftToday: int
+    maxDailyPlays: int
+    canPlay: bool
+    recentHistory: List[OracleHistoryEntryOut] = []
+
+
+class OraclePlayOut(BaseModel):
+    dayKey: str
+    playsUsedToday: int
+    playsLeftToday: int
+    reward: OracleRewardOut
+    profileLueurs: int
+    profileSylvinsPromo: int
+    recentHistory: List[OracleHistoryEntryOut] = []
+
+
 # --- Profils utilisateur ---------------------------------------------------
 
 

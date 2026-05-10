@@ -47,6 +47,10 @@ const Community = lazy(async () => {
   const mod = await import("./pages/Community");
   return { default: mod.Community };
 });
+const Oracle = lazy(async () => {
+  const mod = await import("./pages/Oracle");
+  return { default: mod.Oracle };
+});
 const Login = lazy(async () => {
   const mod = await import("./pages/Login");
   return { default: mod.Login };
@@ -169,6 +173,7 @@ function AnimatedRoutes() {
             />
             <Route path="/live/:broadcasterId" element={<Live />} />
             <Route path="/communaute" element={<Community />} />
+            <Route path="/oracle" element={<Oracle />} />
             <Route path="/u/:userId" element={<UserProfile />} />
             <Route path="/connexion" element={<Login />} />
             <Route path="/inscription" element={<Register />} />
