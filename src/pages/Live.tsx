@@ -1182,7 +1182,7 @@ export function Live() {
   // Compteur viewers fake — initialisé au tiers bas de la fourchette
   // correspondant au grade du broadcaster, puis mis à jour toutes les
   // ~N secondes avec un léger biais positif pour mimer l'arrivée des gens.
-  const [viewers, setViewers] = useState(() =>
+  const [, setViewers] = useState(() =>
     pickInitialViewers(getViewerScale(null)),
   );
   // Modération (PR Q) : sanctions actives reçues depuis le backend pour le
@@ -1222,7 +1222,7 @@ export function Live() {
     ? amBroadcaster
       ? realViewers.length
       : connectedViewers.length
-    : viewers;
+    : 0;
 
   useEffect(() => {
     if (!isActiveLive) setIsOfferingOpen(false);
