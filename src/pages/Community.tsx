@@ -8,8 +8,10 @@ import {
   Image,
   MessageCircle,
   Send,
+  Sparkles,
   Trash2,
   Trophy,
+  Wand2,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useStore } from "../contexts/StoreContext";
@@ -449,6 +451,39 @@ export function Community() {
         </div>
 
         <aside className="space-y-6">
+          <section className="card-royal overflow-hidden p-5">
+            <div className="relative rounded-[26px] border border-gold-400/20 bg-night-950/85 p-5">
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(214,170,70,0.22),_transparent_44%),radial-gradient(circle_at_bottom_left,_rgba(74,52,122,0.28),_transparent_42%)]" />
+              <div className="relative">
+                <div className="inline-flex items-center gap-2 rounded-full border border-gold-400/20 bg-gold-500/10 px-3 py-1 text-[11px] uppercase tracking-[0.3em] text-gold-200">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Rituel du jour
+                </div>
+                <h3 className="mt-4 font-display text-2xl text-gold-100">
+                  Oracle des Runes
+                </h3>
+                <p className="mt-2 text-sm text-ivory/72">
+                  Un mini-jeu mystique avec 3 tentatives par jour, des Lueurs
+                  frequentes et 1 Sylvin presque introuvable.
+                </p>
+                <div className="mt-4 flex items-center gap-2 text-xs text-gold-300/90">
+                  <span className="rounded-full border border-sky-400/25 bg-sky-500/10 px-2.5 py-1">
+                    Lueurs frequentes
+                  </span>
+                  <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2.5 py-1">
+                    1 Sylvin tres rare
+                  </span>
+                </div>
+                <Link
+                  to="/oracle"
+                  className="btn-gold mt-5 inline-flex items-center"
+                >
+                  <Wand2 className="h-4 w-4" /> Jouer maintenant
+                </Link>
+              </div>
+            </div>
+          </section>
+
           <section className="card-royal p-5">
             <div className="flex items-center gap-2">
               <Trophy className="h-4 w-4 text-gold-300" />

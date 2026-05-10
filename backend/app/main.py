@@ -24,6 +24,7 @@ from .routers import (
     catalog,
     live,
     messages,
+    oracle,
     posts,
     reports,
     streamers,
@@ -300,6 +301,7 @@ app.include_router(admin.router)
 app.include_router(reports.router)
 app.include_router(live.router)
 app.include_router(messages.router)
+app.include_router(oracle.router)
 app.include_router(catalog.router_public)
 app.include_router(catalog.router_admin)
 app.include_router(stripe_router.router)
