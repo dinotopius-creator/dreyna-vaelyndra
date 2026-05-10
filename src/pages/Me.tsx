@@ -172,7 +172,8 @@ export function Me() {
   async function openStripeOnboarding() {
     try {
       setConnectLoading(true);
-      const link = connectStatus?.onboardingComplete
+      const link =
+        connectStatus?.onboardingComplete && connectStatus?.payoutsEnabled
         ? await apiCreateStripeConnectDashboardLink()
         : await apiCreateStripeConnectOnboardingLink();
       window.location.href = link.url;
