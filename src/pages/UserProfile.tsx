@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { Link, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Banknote, Coins, ArrowLeft, MessageCircle } from "lucide-react";
+import { Banknote, Coins, ArrowLeft, MessageCircle, Sparkles } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useStore } from "../contexts/StoreContext";
 import { SectionHeading } from "../components/SectionHeading";
@@ -281,7 +281,31 @@ export function UserProfile() {
         />
       </section>
 
-      <section className="mt-10 grid gap-4 md:grid-cols-2">
+      <section className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="card-royal p-5">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-gold-300" />
+            <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
+              Lueurs possedees
+            </p>
+          </div>
+          <p className="mt-3 font-display text-2xl text-gold-200">
+            {serverProfile
+              ? serverProfile.lueurs.toLocaleString("fr-FR")
+              : "—"}
+          </p>
+        </div>
+        <div className="card-royal p-5">
+          <div className="flex items-center gap-2">
+            <Coins className="h-5 w-5 text-gold-300" />
+            <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
+              Sylvins possedes
+            </p>
+          </div>
+          <p className="mt-3 font-display text-2xl text-gold-200">
+            {serverProfile ? formatSylvins(serverProfile.sylvins) : "—"}
+          </p>
+        </div>
         <div className="card-royal p-5">
           <div className="flex items-center gap-2">
             <Coins className="h-5 w-5 text-gold-300" />
