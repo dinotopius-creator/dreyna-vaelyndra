@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1500" role="img" aria-labelledby="title desc">
+  <title id="title">Bannière astrale</title>
+  <desc id="desc">Illustration d'une bannière céleste aux constellations dorées.</desc>
+  <defs>
+    <linearGradient id="bg3" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#041226"/>
+      <stop offset="45%" stop-color="#10345e"/>
+      <stop offset="100%" stop-color="#08101d"/>
+    </linearGradient>
+    <linearGradient id="cloth" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#153d74"/>
+      <stop offset="100%" stop-color="#245ea8"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="1500" fill="url(#bg3)"/>
+  <g opacity="0.95">
+    <circle cx="250" cy="260" r="8" fill="#fff6bd"/>
+    <circle cx="930" cy="300" r="10" fill="#fff6bd"/>
+    <circle cx="860" cy="560" r="7" fill="#d9efff"/>
+    <circle cx="320" cy="620" r="12" fill="#fff6bd"/>
+    <circle cx="620" cy="170" r="6" fill="#fff6bd"/>
+  </g>
+  <g transform="translate(270 210)">
+    <rect x="10" y="0" width="28" height="920" rx="14" fill="#d7b15f"/>
+    <circle cx="24" cy="28" r="24" fill="#f9dc83"/>
+    <path d="M76 70h540c18 0 32 14 32 32v560c0 18-14 32-32 32H76z" fill="url(#cloth)" stroke="#f0cf7d" stroke-width="16"/>
+    <path d="M76 662h540l-96 168-90-66-89 66-89-66-90 66z" fill="#18457f" stroke="#f0cf7d" stroke-width="16"/>
+    <circle cx="346" cy="320" r="126" fill="none" stroke="#f7de8c" stroke-width="18"/>
+    <path d="M346 190l43 84 93 14-68 65 16 92-84-45-84 45 16-92-68-65 93-14z" fill="#f7de8c"/>
+    <path d="M208 518c84-28 176-27 278 0" fill="none" stroke="#c1e6ff" stroke-width="14" stroke-linecap="round" opacity="0.85"/>
+    <path d="M212 560h270" stroke="#f7de8c" stroke-width="10" stroke-linecap="round" opacity="0.7"/>
+  </g>
+  <text x="600" y="1265" text-anchor="middle" font-family="Georgia, serif" font-size="70" fill="#f7df88">Bannière astrale</text>
+  <text x="600" y="1338" text-anchor="middle" font-family="Georgia, serif" font-size="34" fill="#d1e8ff">Étendard du royaume • 480 Lueurs</text>
+</svg>

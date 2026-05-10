@@ -493,6 +493,7 @@ function ProductsAdmin() {
         tagline: form.tagline.trim() || "Nouvelle relique",
         description: form.description.trim(),
         price: Number(form.price),
+        currency: form.category === "Lueurs" ? "Lueurs" : "€",
         image:
           form.image.trim() ||
           "https://images.unsplash.com/photo-1470813740244-df37b8c1edcb?w=900&auto=format&fit=crop&q=80",
@@ -577,6 +578,7 @@ function ProductsAdmin() {
             })
           }
         >
+          <option>Lueurs</option>
           <option>Sylvins</option>
           <option>Merch</option>
           <option>Digital</option>
@@ -607,7 +609,11 @@ function ProductsAdmin() {
                 {p.category} · stock {p.stock}
               </p>
               <h4 className="font-display text-base text-gold-200">{p.name}</h4>
-              <p className="text-sm text-ivory/70">{p.price}€</p>
+              <p className="text-sm text-ivory/70">
+                {p.currency === "Lueurs"
+                  ? `${Math.round(p.price)} Lueurs`
+                  : `${p.price}€`}
+              </p>
             </div>
             <button
               onClick={async () => {

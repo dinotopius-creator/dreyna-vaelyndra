@@ -69,9 +69,9 @@ export interface Product {
   tagline: string;
   description: string;
   price: number;
-  currency: "€";
+  currency: "€" | "Lueurs";
   image: string;
-  category: "Merch" | "Digital" | "VIP" | "Exclusif" | "Sylvins";
+  category: "Merch" | "Digital" | "VIP" | "Exclusif" | "Sylvins" | "Lueurs";
   /**
    * Amount of Sylvins (virtual currency) granted when this product is purchased.
    * Only set on products of category "Sylvins".

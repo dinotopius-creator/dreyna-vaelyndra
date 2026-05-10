@@ -504,26 +504,54 @@ export function Me() {
         <SectionHeading
           align="left"
           eyebrow="Trésorerie"
-          title={<>Votre bourse de <span className="text-mystic">Sylvins</span></>}
-          subtitle="Achetez des Sylvins pour soutenir les streamers, recevez-en en retour de vos lives. Les recettes de streamer sont converties en € au retrait."
+          title={<>Vos <span className="text-mystic">bourses</span></>}
+          subtitle="Gardez un oeil sur vos Lueurs et vos Sylvins. Les Sylvins servent aux cadeaux live, les Lueurs servent aux achats dédiés en boutique."
         />
         <div className="mt-6 grid gap-4 lg:grid-cols-[1fr,1fr]">
           <div className="card-royal p-5">
             <div className="flex items-center gap-2">
               <Coins className="h-5 w-5 text-gold-300" />
               <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
-                Solde à dépenser
+                Soldes à dépenser
               </p>
             </div>
-            <p className="mt-3 font-display text-3xl text-gold-200">
-              {formatSylvins(myWallet.balance)} Sylvins
-            </p>
-            <p className="mt-1 text-xs text-ivory/60">
-              Utilisables dans les lives pour offrir des cadeaux animés.
-            </p>
-            <Link to="/boutique" className="btn-gold mt-4 inline-flex">
-              <Sparkles className="h-4 w-4" /> Recharger
-            </Link>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-lg border border-gold-400/30 bg-night-900/40 p-3">
+                <p className="font-regal text-[10px] uppercase tracking-[0.22em] text-gold-300">
+                  Sylvins
+                </p>
+                <p className="mt-1 font-display text-2xl text-gold-200">
+                  {formatSylvins(
+                    serverProfile
+                      ? serverProfile.sylvinsPaid + serverProfile.sylvinsPromo
+                      : myWallet.balance,
+                  )}{" "}
+                  Sylvins
+                </p>
+                <p className="mt-1 text-[11px] text-ivory/55">
+                  Utilisables dans les lives pour offrir des cadeaux animés.
+                </p>
+              </div>
+              <div className="rounded-lg border border-sky-400/30 bg-sky-500/10 p-3">
+                <p className="font-regal text-[10px] uppercase tracking-[0.22em] text-sky-200">
+                  Lueurs
+                </p>
+                <p className="mt-1 font-display text-2xl text-sky-100">
+                  {new Intl.NumberFormat("fr-FR").format(serverProfile?.lueurs ?? 0)}
+                </p>
+                <p className="mt-1 text-[11px] text-ivory/55">
+                  Utilisables dans la boutique pour les produits réservés aux Lueurs.
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Link to="/boutique" className="btn-gold inline-flex">
+                <Sparkles className="h-4 w-4" /> Voir la boutique
+              </Link>
+              <Link to="/boutique" className="btn-royal inline-flex">
+                <Coins className="h-4 w-4" /> Recharger les Sylvins
+              </Link>
+            </div>
           </div>
           <div className="card-royal p-5">
             <div className="flex items-center gap-2">

@@ -82,6 +82,7 @@ type Action =
   | { type: "updateCartQty"; productId: string; quantity: number }
   | { type: "clearCart" }
   | { type: "checkout"; order: Order }
+  | { type: "addOrder"; order: Order }
   | { type: "setPosts"; posts: CommunityPost[] }
   | { type: "replacePost"; post: CommunityPost }
   | { type: "addPost"; post: CommunityPost }
@@ -220,6 +221,8 @@ function reducer(state: StoreState, action: Action): StoreState {
       return { ...state, cart: [] };
     case "checkout":
       return { ...state, cart: [], orders: [action.order, ...state.orders] };
+    case "addOrder":
+      return { ...state, orders: [action.order, ...state.orders] };
     case "setPosts":
       return { ...state, posts: action.posts };
     case "replacePost":

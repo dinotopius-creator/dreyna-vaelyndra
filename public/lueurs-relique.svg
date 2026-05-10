@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1500" role="img" aria-labelledby="title desc">
+  <title id="title">Relique du veilleur</title>
+  <desc id="desc">Illustration d'une relique dorée de prestige baignée de lumière.</desc>
+  <defs>
+    <linearGradient id="bg4" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#120d09"/>
+      <stop offset="45%" stop-color="#3d2412"/>
+      <stop offset="100%" stop-color="#0a0e16"/>
+    </linearGradient>
+    <radialGradient id="core" cx="50%" cy="40%" r="42%">
+      <stop offset="0%" stop-color="#fff1b5" stop-opacity="0.96"/>
+      <stop offset="48%" stop-color="#f6b84f" stop-opacity="0.48"/>
+      <stop offset="100%" stop-color="#f6b84f" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="1500" fill="url(#bg4)"/>
+  <circle cx="600" cy="520" r="300" fill="url(#core)"/>
+  <g transform="translate(240 210)">
+    <path d="M360 10l88 128 154 36-103 119 16 154-155-62-156 62 17-154-104-119 155-36z" fill="#f1c15f" opacity="0.94"/>
+    <path d="M360 148l53 77 93 22-62 71 9 91-93-37-93 37 9-91-62-71 93-22z" fill="#fff0bf"/>
+    <path d="M360 320l54 90 102 0-51 88 51 88H414l-54 90-53-90H205l51-88-51-88h102z" fill="#d68a2c" opacity="0.88"/>
+    <rect x="325" y="640" width="70" height="202" rx="26" fill="#f1c15f"/>
+    <path d="M208 868c98-44 202-44 304 0" fill="none" stroke="#f1c15f" stroke-width="16" stroke-linecap="round"/>
+    <path d="M234 926h252" stroke="#fff0bf" stroke-width="10" stroke-linecap="round" opacity="0.85"/>
+  </g>
+  <text x="600" y="1265" text-anchor="middle" font-family="Georgia, serif" font-size="70" fill="#f7df88">Relique du veilleur</text>
+  <text x="600" y="1338" text-anchor="middle" font-family="Georgia, serif" font-size="34" fill="#ffe1a3">Artefact majeur • 900 Lueurs</text>
+</svg>
