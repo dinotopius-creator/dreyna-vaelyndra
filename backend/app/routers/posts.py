@@ -30,6 +30,8 @@ from ..models import (  # noqa: E402
 )
 from ..schemas import (  # noqa: E402
     CommentCreate,
+    CommunityActivityEntryOut,
+    CommunityActivityLeaderboardOut,
     CommentOut,
     CommunityActivityRewardOut,
     CommunityActivityRewardSyncOut,
@@ -142,18 +144,6 @@ def _community_activity_rows(
     week_end = week_start + timedelta(days=7)
     week_start_iso = week_start.isoformat()
     week_end_iso = week_end.isoformat()
-
-    posts = session.exec(
-        select(Post)
-        .where(Post.created_at >= week_start_iso)
-        .where(Post.created_at < week_end_iso)
-        .order_by(Post.created_at.desc())
-    ).all()
-    if not posts:
-        return []
-
-    post_ids = [post.id for post in posts]
-    post_ids_set = set(post_ids)
     profiles = {
         p.id: p
         for p in session.exec(select(UserProfile)).all()
@@ -166,15 +156,13 @@ def _community_activity_rows(
         if not user_id or user_id in MOCK_COMMUNITY_USER_IDS:
             return None
         profile = profiles.get(user_id)
-        if profile is None:
-            return None
         current = stats.get(user_id)
         if current is None:
             current = {
                 "id": user_id,
-                "username": profile.username or username,
-                "handle": profile.handle,
-                "avatarImageUrl": profile.avatar_image_url or avatar,
+                "username": (profile.username if profile else "") or username or user_id,
+                "handle": profile.handle if profile else None,
+                "avatarImageUrl": (profile.avatar_image_url if profile else "") or avatar,
                 "postCount": 0,
                 "commentCount": 0,
                 "reactionCount": 0,
@@ -182,8 +170,25 @@ def _community_activity_rows(
                 "latestActivity": "",
             }
             stats[user_id] = current
+        else:
+            if profile is not None:
+                current["username"] = profile.username or current["username"]
+                current["handle"] = profile.handle or current["handle"]
+                current["avatarImageUrl"] = (
+                    profile.avatar_image_url or current["avatarImageUrl"]
+                )
+            if username and current["username"] == user_id:
+                current["username"] = username
+            if avatar and not current["avatarImageUrl"]:
+                current["avatarImageUrl"] = avatar
         return current
 
+    posts = session.exec(
+        select(Post)
+        .where(Post.created_at >= week_start_iso)
+        .where(Post.created_at < week_end_iso)
+        .order_by(Post.created_at.desc())
+    ).all()
     for post in posts:
         member = ensure_member(post.author_id, post.author_name, post.author_avatar)
         if member is None:
@@ -197,7 +202,6 @@ def _community_activity_rows(
 
     comments = session.exec(
         select(Comment)
-        .where(Comment.post_id.in_(post_ids))
         .where(Comment.created_at >= week_start_iso)
         .where(Comment.created_at < week_end_iso)
     ).all()
@@ -216,28 +220,32 @@ def _community_activity_rows(
 
     reactions = session.exec(
         select(Reaction)
-        .where(Reaction.post_id.in_(post_ids))
         .where(Reaction.created_at >= week_start_iso)
         .where(Reaction.created_at < week_end_iso)
     ).all()
-    post_author_by_id = {post.id: post.author_id for post in posts}
     for reaction in reactions:
-        author_id = post_author_by_id.get(reaction.post_id)
-        if not author_id:
-            continue
-        member = ensure_member(author_id)
+        member = ensure_member(reaction.user_id)
         if member is None:
             continue
         member["reactionCount"] += 1
+        created_at = _parse_iso(reaction.created_at)
+        if created_at is not None:
+            member["latestActivity"] = max(
+                member["latestActivity"], created_at.isoformat()
+            )
 
     rows = []
     for member in stats.values():
-        if member["postCount"] < 1:
+        if (
+            member["postCount"] <= 0
+            and member["commentCount"] <= 0
+            and member["reactionCount"] <= 0
+        ):
             continue
         member["score"] = (
             member["postCount"] * 12
             + member["commentCount"] * 4
-            + member["reactionCount"]
+            + member["reactionCount"] * 2
         )
         rows.append(member)
 
@@ -247,11 +255,25 @@ def _community_activity_rows(
             -row["postCount"],
             -row["commentCount"],
             -row["reactionCount"],
-            row["latestActivity"],
+            -int((_parse_iso(row["latestActivity"]) or week_start).timestamp()),
             row["username"].lower(),
         )
     )
     return rows
+
+
+def _serialize_activity_entry(row: dict) -> CommunityActivityEntryOut:
+    return CommunityActivityEntryOut(
+        id=row["id"],
+        username=row["username"],
+        handle=row.get("handle"),
+        avatarImageUrl=row.get("avatarImageUrl") or "",
+        postCount=int(row.get("postCount") or 0),
+        commentCount=int(row.get("commentCount") or 0),
+        reactionCount=int(row.get("reactionCount") or 0),
+        score=int(row.get("score") or 0),
+        latestActivity=row.get("latestActivity") or None,
+    )
 
 
 def _sync_previous_week_rewards(
@@ -390,6 +412,22 @@ def list_posts(session: Session = Depends(_session_dep)) -> List[PostOut]:
         )
         for p in posts
     ]
+
+
+@router.get(
+    "/activity-leaderboard", response_model=CommunityActivityLeaderboardOut
+)
+def community_activity_leaderboard(
+    limit: int = 5,
+    session: Session = Depends(_session_dep),
+) -> CommunityActivityLeaderboardOut:
+    safe_limit = max(1, min(int(limit or 5), 10))
+    week_start = _week_start()
+    rows = _community_activity_rows(session, week_start)[:safe_limit]
+    return CommunityActivityLeaderboardOut(
+        weekStartIso=week_start.isoformat(),
+        entries=[_serialize_activity_entry(row) for row in rows],
+    )
 
 
 @router.post(

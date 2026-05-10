@@ -81,6 +81,23 @@ class CommunityActivityRewardSyncOut(BaseModel):
     alreadyAwarded: List[CommunityActivityRewardOut] = []
 
 
+class CommunityActivityEntryOut(BaseModel):
+    id: str
+    username: str
+    handle: Optional[str] = None
+    avatarImageUrl: str = ""
+    postCount: int = 0
+    commentCount: int = 0
+    reactionCount: int = 0
+    score: int = 0
+    latestActivity: Optional[str] = None
+
+
+class CommunityActivityLeaderboardOut(BaseModel):
+    weekStartIso: str
+    entries: List[CommunityActivityEntryOut] = []
+
+
 # --- Profils utilisateur ---------------------------------------------------
 
 
