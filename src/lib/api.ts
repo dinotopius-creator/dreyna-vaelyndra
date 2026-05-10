@@ -140,6 +140,31 @@ export interface CommunityActivityRewardSyncDto {
   alreadyAwarded: CommunityActivityRewardDto[];
 }
 
+export interface CommunityActivityEntryDto {
+  id: string;
+  username: string;
+  handle: string | null;
+  avatarImageUrl: string;
+  postCount: number;
+  commentCount: number;
+  reactionCount: number;
+  score: number;
+  latestActivity: string | null;
+}
+
+export interface CommunityActivityLeaderboardDto {
+  weekStartIso: string;
+  entries: CommunityActivityEntryDto[];
+}
+
+export async function apiGetCommunityActivityLeaderboard(
+  limit = 5,
+): Promise<CommunityActivityLeaderboardDto> {
+  return (await request<CommunityActivityLeaderboardDto>(
+    `/posts/activity-leaderboard?limit=${limit}`,
+  )) as CommunityActivityLeaderboardDto;
+}
+
 export async function apiSyncCommunityActivityRewards(): Promise<CommunityActivityRewardSyncDto> {
   return (await request<CommunityActivityRewardSyncDto>(
     "/posts/activity-rewards/sync",

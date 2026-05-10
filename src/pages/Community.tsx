@@ -28,44 +28,18 @@ import { formatRelative, parseVideoUrl } from "../lib/helpers";
 import {
   apiCreatePost,
   apiDeletePost,
+  apiGetCommunityActivityLeaderboard,
   apiGetProfile,
   apiSyncCommunityActivityRewards,
   apiToggleReaction,
 } from "../lib/api";
 
-const MOCK_COMMUNITY_USER_IDS = new Set([
-  "user-lyria",
-  "user-caelum",
-  "user-mira",
-  "user-aeris",
-  "user-sylas",
-  "user-thalia",
-]);
 
 const QUICK_EMOJIS = ["✨", "👑", "🌿", "⚔️", "🌙", "🔮"];
 const COMMUNITY_REWARD_BY_RANK: Record<number, number> = {
   1: 600,
   2: 450,
   3: 300,
-};
-
-function startOfCurrentWeek(date = new Date()) {
-  const weekStart = new Date(date);
-  weekStart.setHours(0, 0, 0, 0);
-  weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
-  return weekStart;
-}
-
-type ActivityMember = {
-  id: string;
-  username: string;
-  handle?: string;
-  avatar: string;
-  postCount: number;
-  commentCount: number;
-  reactionCount: number;
-  score: number;
-  latestActivity: number;
 };
 
 export function Community() {
@@ -84,6 +58,18 @@ export function Community() {
   const [profileAvatars, setProfileAvatars] = useState<Record<string, string>>(
     {},
   );
+  const [activityLeaderboard, setActivityLeaderboard] = useState<
+    Array<{
+      id: string;
+      username: string;
+      handle: string | null;
+      avatarImageUrl: string;
+      postCount: number;
+      commentCount: number;
+      reactionCount: number;
+      score: number;
+    }>
+  >([]);
 
   const sorted = useMemo(
     () =>
@@ -93,97 +79,6 @@ export function Community() {
       ),
     [posts],
   );
-
-  const activityLeaderboard = useMemo(() => {
-    const weekStart = startOfCurrentWeek().getTime();
-    const byUser = new Map<string, ActivityMember>();
-
-    function isRealCandidate(userId: string) {
-      return Boolean(userId) && !MOCK_COMMUNITY_USER_IDS.has(userId);
-    }
-
-    function upsertMember(input: {
-      userId: string;
-      username: string;
-      handle?: string | null;
-      avatar: string;
-      latestActivity: number;
-      addPost?: number;
-      addComment?: number;
-      addReaction?: number;
-    }) {
-      if (!isRealCandidate(input.userId)) return;
-      const profile = usersById.get(input.userId);
-      const current = byUser.get(input.userId);
-      byUser.set(input.userId, {
-        id: input.userId,
-        username: current?.username || input.username,
-        handle:
-          current?.handle ?? profile?.handle ?? input.handle ?? undefined,
-        avatar: current?.avatar || profile?.avatar || input.avatar,
-        postCount: (current?.postCount ?? 0) + (input.addPost ?? 0),
-        commentCount: (current?.commentCount ?? 0) + (input.addComment ?? 0),
-        reactionCount:
-          (current?.reactionCount ?? 0) + (input.addReaction ?? 0),
-        score: 0,
-        latestActivity: Math.max(
-          current?.latestActivity ?? 0,
-          input.latestActivity,
-        ),
-      });
-    }
-
-    for (const post of posts) {
-      const postTime = new Date(post.createdAt).getTime();
-      if (!Number.isNaN(postTime) && postTime >= weekStart) {
-        upsertMember({
-          userId: post.authorId,
-          username: post.authorName,
-          handle: post.authorHandle,
-          avatar: post.authorAvatar,
-          latestActivity: postTime,
-          addPost: 1,
-          addReaction: Object.values(post.reactions).reduce(
-            (sum, userIds) => sum + userIds.length,
-            0,
-          ),
-        });
-      }
-
-      for (const comment of post.comments) {
-        const commentTime = new Date(comment.createdAt).getTime();
-        if (Number.isNaN(commentTime) || commentTime < weekStart) continue;
-        upsertMember({
-          userId: comment.authorId,
-          username: comment.authorName,
-          handle: comment.authorHandle,
-          avatar: comment.authorAvatar,
-          latestActivity: commentTime,
-          addComment: 1,
-        });
-      }
-    }
-
-    return [...byUser.values()]
-      .filter((member) => member.postCount >= 1)
-      .map((member) => ({
-        ...member,
-        score:
-          member.postCount * 12 +
-          member.commentCount * 4 +
-          member.reactionCount,
-      }))
-      .sort((a, b) => {
-        return (
-          b.score - a.score ||
-          b.postCount - a.postCount ||
-          b.commentCount - a.commentCount ||
-          b.reactionCount - a.reactionCount ||
-          b.latestActivity - a.latestActivity
-        );
-      })
-      .slice(0, 5);
-  }, [posts, usersById]);
 
   useEffect(() => {
     const authorIds = new Set<string>();
@@ -218,6 +113,22 @@ export function Community() {
       cancelled = true;
     };
   }, [posts, profileAvatars]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void apiGetCommunityActivityLeaderboard(5)
+      .then((result) => {
+        if (cancelled) return;
+        setActivityLeaderboard(result.entries);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setActivityLeaderboard([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [posts]);
 
   useEffect(() => {
     let cancelled = false;
@@ -560,7 +471,10 @@ export function Community() {
                       {index + 1}
                     </div>
                     <AvatarImage
-                      candidates={[profileAvatars[member.id], member.avatar]}
+                      candidates={[
+                        profileAvatars[member.id],
+                        member.avatarImageUrl,
+                      ]}
                       fallbackSeed={member.id}
                       alt={member.username}
                       className="h-10 w-10 rounded-full object-cover ring-2 ring-gold-400/35"
