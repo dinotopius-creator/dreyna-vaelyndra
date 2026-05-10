@@ -71,7 +71,7 @@ function toProduct(p: BackendProduct): Product {
     tagline: p.tagline,
     description: p.description,
     price: p.price,
-    currency: "€",
+    currency: (p.currency as Product["currency"]) ?? "€",
     image: p.image,
     category: (p.category as Product["category"]) ?? "Merch",
     rating: p.rating,

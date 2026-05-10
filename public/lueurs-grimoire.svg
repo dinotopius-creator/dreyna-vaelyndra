@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1500" role="img" aria-labelledby="title desc">
+  <title id="title">Grimoire d'éclats</title>
+  <desc id="desc">Illustration d'un grimoire runique illuminé de lueurs.</desc>
+  <defs>
+    <linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#110a1d"/>
+      <stop offset="50%" stop-color="#2a1847"/>
+      <stop offset="100%" stop-color="#0b0f1a"/>
+    </linearGradient>
+    <radialGradient id="runes" cx="50%" cy="38%" r="40%">
+      <stop offset="0%" stop-color="#ffe8a6" stop-opacity="0.9"/>
+      <stop offset="45%" stop-color="#c9a0ff" stop-opacity="0.36"/>
+      <stop offset="100%" stop-color="#c9a0ff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="1500" fill="url(#bg2)"/>
+  <circle cx="600" cy="480" r="280" fill="url(#runes)"/>
+  <g transform="translate(250 270)">
+    <rect x="80" y="90" width="540" height="760" rx="34" fill="#3d215d" stroke="#dcb76b" stroke-width="18"/>
+    <rect x="126" y="138" width="450" height="664" rx="16" fill="#221330" stroke="#6f4ea0" stroke-width="8"/>
+    <path d="M215 126h44v688h-44c-29 0-52-23-52-52V178c0-29 23-52 52-52z" fill="#dcb76b"/>
+    <circle cx="352" cy="364" r="108" fill="none" stroke="#ffe28a" stroke-width="16"/>
+    <path d="M352 270l38 67 75 13-53 52 12 75-72-38-72 38 13-75-54-52 75-13z" fill="#ffe28a"/>
+    <path d="M314 555l41-48 38 49 58-20-20 58 48 42-63 11-23 60-34-54-62-5 42-45z" fill="#b99cff" opacity="0.82"/>
+    <path d="M300 694c61-33 118-33 173 0" fill="none" stroke="#ffe28a" stroke-width="14" stroke-linecap="round"/>
+    <path d="M288 734h198" stroke="#8e70b9" stroke-width="10" stroke-linecap="round"/>
+  </g>
+  <text x="600" y="1265" text-anchor="middle" font-family="Georgia, serif" font-size="70" fill="#f7df88">Grimoire d'éclats</text>
+  <text x="600" y="1338" text-anchor="middle" font-family="Georgia, serif" font-size="34" fill="#ddd2ff">Edition runique • 260 Lueurs</text>
+</svg>

@@ -1,17 +1,21 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ShoppingBag, Sparkles, Star } from "lucide-react";
+import { useAuth } from "../contexts/AuthContext";
+import { useProfile } from "../contexts/ProfileContext";
 import { useStore } from "../contexts/StoreContext";
 import { useToast } from "../contexts/ToastContext";
 import { SectionHeading } from "../components/SectionHeading";
-import { formatPrice } from "../lib/helpers";
+import { formatPrice, generateId } from "../lib/helpers";
+import { apiApplyWalletDelta } from "../lib/api";
 import clsx from "clsx";
 import type { Product } from "../types";
 
 type CategoryFilter = "Tous" | Product["category"];
 const CATEGORIES: CategoryFilter[] = [
   "Tous",
+  "Lueurs",
   "Sylvins",
   "Merch",
   "Digital",
@@ -21,8 +25,12 @@ const CATEGORIES: CategoryFilter[] = [
 
 export function Shop() {
   const { products, dispatch, cartCount, cartTotal } = useStore();
+  const { user } = useAuth();
+  const { profile, refresh: refreshProfile } = useProfile();
   const { notify } = useToast();
+  const navigate = useNavigate();
   const [category, setCategory] = useState<CategoryFilter>("Tous");
+  const [buyingLueursId, setBuyingLueursId] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     return products.filter(
@@ -35,6 +43,56 @@ export function Shop() {
   function addToCart(p: Product) {
     dispatch({ type: "addToCart", productId: p.id });
     notify(`${p.name} ajouté à votre panier royal`);
+  }
+
+  async function buyWithLueurs(product: Product) {
+    if (!user) {
+      notify("Connecte-toi pour acheter avec tes Lueurs.", "info");
+      navigate("/connexion", { state: { from: "/boutique" } });
+      return;
+    }
+    if (!profile) {
+      notify("Ta bourse n'est pas disponible pour le moment.", "error");
+      return;
+    }
+    if (profile.lueurs < product.price) {
+      notify("Pas assez de Lueurs pour cet achat.", "error");
+      return;
+    }
+    setBuyingLueursId(product.id);
+    try {
+      await apiApplyWalletDelta(user.id, {
+        lueurs: -Math.round(product.price),
+        reason: `shop:${product.id}`,
+      });
+      dispatch({
+        type: "addOrder",
+        order: {
+          id: generateId("order"),
+          userId: user.id,
+          items: [
+            {
+              productId: product.id,
+              quantity: 1,
+              priceAtPurchase: product.price,
+            },
+          ],
+          total: product.price,
+          createdAt: new Date().toISOString(),
+          status: "paid",
+        },
+      });
+      await refreshProfile();
+      notify(
+        `${product.name} acheté avec ${Math.round(product.price)} Lueurs ✨`,
+        "success",
+      );
+    } catch (err) {
+      console.warn(err);
+      notify("Achat en Lueurs impossible pour le moment.", "error");
+    } finally {
+      setBuyingLueursId(null);
+    }
   }
 
   return (
@@ -75,9 +133,22 @@ export function Shop() {
               <span className="font-display text-3xl text-ivory">
                 {formatPrice(featured.price, featured.currency)}
               </span>
-              <button onClick={() => addToCart(featured)} className="btn-gold">
-                <ShoppingBag className="h-4 w-4" /> Ajouter
-              </button>
+              {featured.category === "Lueurs" ? (
+                <button
+                  onClick={() => buyWithLueurs(featured)}
+                  disabled={buyingLueursId === featured.id}
+                  className="btn-gold"
+                >
+                  <Sparkles className="h-4 w-4" />{" "}
+                  {buyingLueursId === featured.id
+                    ? "Achat..."
+                    : "Acheter en Lueurs"}
+                </button>
+              ) : (
+                <button onClick={() => addToCart(featured)} className="btn-gold">
+                  <ShoppingBag className="h-4 w-4" /> Ajouter
+                </button>
+              )}
             </div>
           </div>
         </motion.div>
@@ -145,9 +216,20 @@ export function Shop() {
                 <span className="font-display text-xl text-ivory">
                   {formatPrice(p.price, p.currency)}
                 </span>
-                <button onClick={() => addToCart(p)} className="btn-ghost">
-                  <ShoppingBag className="h-3.5 w-3.5" /> Ajouter
-                </button>
+                {p.category === "Lueurs" ? (
+                  <button
+                    onClick={() => buyWithLueurs(p)}
+                    disabled={buyingLueursId === p.id}
+                    className="btn-ghost"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />{" "}
+                    {buyingLueursId === p.id ? "Achat..." : "Acheter"}
+                  </button>
+                ) : (
+                  <button onClick={() => addToCart(p)} className="btn-ghost">
+                    <ShoppingBag className="h-3.5 w-3.5" /> Ajouter
+                  </button>
+                )}
               </div>
               {p.stock < 20 && (
                 <p className="mt-3 text-xs text-rose-300/80">

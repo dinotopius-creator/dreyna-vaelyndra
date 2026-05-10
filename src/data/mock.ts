@@ -343,6 +343,62 @@ export const INITIAL_PRODUCTS: Product[] = [
     tags: ["sylvins", "monnaie virtuelle", "mécène"],
     sylvins: 10000,
   },
+  {
+    id: "prod-lueurs-fiole",
+    name: "Fiole de lucioles",
+    tagline: "Collection lumineuse · 120 Lueurs",
+    description:
+      "Objet numérique collector inspiré des lucioles sacrées de Vaelyndra. Achat immédiat avec tes Lueurs.",
+    price: 120,
+    currency: "Lueurs",
+    image: "/lueurs-fiole.svg",
+    category: "Lueurs",
+    rating: 4.8,
+    stock: 9999,
+    tags: ["lueurs", "collector", "digital"],
+  },
+  {
+    id: "prod-lueurs-grimoire",
+    name: "Grimoire d'éclats",
+    tagline: "Edition runique · 260 Lueurs",
+    description:
+      "Une relique numérique de bibliothèque mystique, réservée aux membres qui dépensent leurs Lueurs.",
+    price: 260,
+    currency: "Lueurs",
+    image: "/lueurs-grimoire.svg",
+    category: "Lueurs",
+    rating: 4.9,
+    stock: 9999,
+    tags: ["lueurs", "grimoire", "digital"],
+  },
+  {
+    id: "prod-lueurs-banniere",
+    name: "Bannière astrale",
+    tagline: "Étendard du royaume · 480 Lueurs",
+    description:
+      "Grande bannière cosmique de collection, pensée comme un trésor premium à débloquer avec les Lueurs du jeu.",
+    price: 480,
+    currency: "Lueurs",
+    image: "/lueurs-banniere.svg",
+    category: "Lueurs",
+    rating: 5,
+    stock: 9999,
+    tags: ["lueurs", "astral", "collector"],
+  },
+  {
+    id: "prod-lueurs-relique",
+    name: "Relique du veilleur",
+    tagline: "Artefact majeur · 900 Lueurs",
+    description:
+      "Une grande pièce de prestige pour les membres les plus actifs de la plateforme. Achetable uniquement en Lueurs.",
+    price: 900,
+    currency: "Lueurs",
+    image: "/lueurs-relique.svg",
+    category: "Lueurs",
+    rating: 5,
+    stock: 9999,
+    tags: ["lueurs", "prestige", "relique"],
+  },
 ];
 
 export const INITIAL_COMMUNITY_POSTS: CommunityPost[] = [

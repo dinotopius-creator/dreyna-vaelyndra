@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1500" role="img" aria-labelledby="title desc">
+  <title id="title">Fiole de lucioles</title>
+  <desc id="desc">Illustration mystique d'une fiole de lueurs dorées.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#07111f"/>
+      <stop offset="55%" stop-color="#1b2f52"/>
+      <stop offset="100%" stop-color="#0e1728"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="50%" cy="36%" r="42%">
+      <stop offset="0%" stop-color="#fff7bf" stop-opacity="0.95"/>
+      <stop offset="45%" stop-color="#f9d866" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="#f9d866" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#b8ecff" stop-opacity="0.48"/>
+      <stop offset="100%" stop-color="#6db6ff" stop-opacity="0.14"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="1500" fill="url(#bg)"/>
+  <circle cx="600" cy="520" r="300" fill="url(#halo)"/>
+  <g opacity="0.9">
+    <circle cx="380" cy="250" r="8" fill="#ffe28a"/>
+    <circle cx="820" cy="290" r="12" fill="#ffe28a"/>
+    <circle cx="920" cy="470" r="10" fill="#ffefb0"/>
+    <circle cx="270" cy="560" r="9" fill="#ffefb0"/>
+    <circle cx="720" cy="180" r="7" fill="#fff3c6"/>
+  </g>
+  <g transform="translate(300 250)">
+    <path d="M220 0h160c18 0 32 14 32 32v108l88 110c20 25 31 56 31 88v336c0 82-67 149-149 149H218c-82 0-149-67-149-149V338c0-32 11-63 31-88l88-110V32c0-18 14-32 32-32z" fill="url(#glass)" stroke="#c9efff" stroke-width="16"/>
+    <path d="M260 62h80v76h-80z" fill="#f9d866" opacity="0.7"/>
+    <path d="M178 318c0-23 9-44 24-61l68-75h60l67 75c16 17 25 39 25 61v312c0 44-36 80-80 80H258c-44 0-80-36-80-80z" fill="#ffda61" opacity="0.88"/>
+    <path d="M220 410c48 36 105 55 170 56 42 0 82-8 122-24v149c0 65-53 118-118 118H248c-65 0-118-53-118-118V430c27-4 56-11 90-20z" fill="#f2b63d" opacity="0.4"/>
+    <path d="M205 326c56 36 119 53 189 53 41 0 80-6 118-18" fill="none" stroke="#fff8d4" stroke-width="14" stroke-linecap="round" opacity="0.7"/>
+  </g>
+  <text x="600" y="1265" text-anchor="middle" font-family="Georgia, serif" font-size="70" fill="#f7df88">Fiole de lucioles</text>
+  <text x="600" y="1338" text-anchor="middle" font-family="Georgia, serif" font-size="34" fill="#d5deef">Collection lumineuse • 120 Lueurs</text>
+</svg>
