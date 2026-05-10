@@ -156,15 +156,13 @@ def _community_activity_rows(
         if not user_id or user_id in MOCK_COMMUNITY_USER_IDS:
             return None
         profile = profiles.get(user_id)
-        if profile is None:
-            return None
         current = stats.get(user_id)
         if current is None:
             current = {
                 "id": user_id,
-                "username": profile.username or username,
-                "handle": profile.handle,
-                "avatarImageUrl": profile.avatar_image_url or avatar,
+                "username": (profile.username if profile else "") or username or user_id,
+                "handle": profile.handle if profile else None,
+                "avatarImageUrl": (profile.avatar_image_url if profile else "") or avatar,
                 "postCount": 0,
                 "commentCount": 0,
                 "reactionCount": 0,
@@ -172,6 +170,17 @@ def _community_activity_rows(
                 "latestActivity": "",
             }
             stats[user_id] = current
+        else:
+            if profile is not None:
+                current["username"] = profile.username or current["username"]
+                current["handle"] = profile.handle or current["handle"]
+                current["avatarImageUrl"] = (
+                    profile.avatar_image_url or current["avatarImageUrl"]
+                )
+            if username and current["username"] == user_id:
+                current["username"] = username
+            if avatar and not current["avatarImageUrl"]:
+                current["avatarImageUrl"] = avatar
         return current
 
     posts = session.exec(

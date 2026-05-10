@@ -71,6 +71,20 @@ export function Community() {
     }>
   >([]);
 
+  const displayLeaderboard = useMemo(
+    () =>
+      activityLeaderboard.map((member) => {
+        const knownUser = usersById.get(member.id);
+        return {
+          ...member,
+          username: knownUser?.username || member.username,
+          handle: knownUser?.handle ?? member.handle,
+          avatarImageUrl: knownUser?.avatar || member.avatarImageUrl,
+        };
+      }),
+    [activityLeaderboard, usersById],
+  );
+
   const sorted = useMemo(
     () =>
       [...posts].sort(
@@ -87,6 +101,9 @@ export function Community() {
       post.comments.forEach((comment) => {
         if (comment.authorId) authorIds.add(comment.authorId);
       });
+    });
+    activityLeaderboard.forEach((member) => {
+      if (member.id) authorIds.add(member.id);
     });
     const missingIds = Array.from(authorIds).filter(
       (userId) => !profileAvatars[userId],
@@ -112,7 +129,7 @@ export function Community() {
     return () => {
       cancelled = true;
     };
-  }, [posts, profileAvatars]);
+  }, [activityLeaderboard, posts, profileAvatars]);
 
   useEffect(() => {
     let cancelled = false;
@@ -461,7 +478,7 @@ export function Community() {
               </div>
             </div>
             <ul className="mt-4 space-y-3">
-              {activityLeaderboard.map((member, index) => (
+              {displayLeaderboard.map((member, index) => (
                 <li key={member.id}>
                   <Link
                     to={profileHref(member.id)}
@@ -507,7 +524,7 @@ export function Community() {
                   </Link>
                 </li>
               ))}
-              {activityLeaderboard.length === 0 && (
+              {displayLeaderboard.length === 0 && (
                 <li className="rounded-2xl border border-dashed border-royal-500/25 px-4 py-5 text-center text-sm text-ivory/55">
                   Aucun membre n'a encore poste cette semaine.
                 </li>
