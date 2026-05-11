@@ -77,6 +77,14 @@ WALLET_POTS: set[str] = {
 }
 ROLES: set[str] = {"user", "animator", "admin"}
 
+# Sentinel posé sur les lignes qui référencent un compte hard-delete
+# (`GiftLedger.sender_id`, `DirectMessage.sender_id` / `recipient_id`,
+# etc.). Voir le bloc de doc plus bas autour de la définition complète
+# pour le rationnel. Constante exposée ici parce qu'elle est utilisée
+# dès `_hard_delete_user` (déclaré ~ligne 700) et que les imports
+# Python doivent suivre l'ordre d'évaluation du module.
+DELETED_USER_SENTINEL_ID = "user-deleted"
+
 
 def _user_or_404(session: Session, user_id: str) -> UserProfile:
     user = session.get(UserProfile, user_id)
@@ -756,15 +764,27 @@ def _hard_delete_user(
     ).all():
         session.delete(jr)
 
-    # Messages privés (envoyés ET reçus)
+    # Messages privés (envoyés ET reçus) — on NE SUPPRIME PAS les lignes,
+    # on remplace juste l'identité de la partie supprimée par le sentinel
+    # `DELETED_USER_SENTINEL_ID`. L'autre membre garde donc son historique
+    # de conversation intact même quand son correspondant est supprimé
+    # (sinon les joueurs voient soudainement disparaître des conversations
+    # entières — cf. ticket "messages privés se sont supprimés").
+    #
+    # `conversation_key` reste figée sur l'ancien couple (min|max d'ids).
+    # On n'écrira plus jamais dans ce fil côté routeur (`messages.py`
+    # refuse d'envoyer à un user-deleted), donc l'historique est gelé et
+    # cohérent : lecture OK, écriture KO.
     for dm in session.exec(
         select(DirectMessage).where(DirectMessage.sender_id == uid)
     ).all():
-        session.delete(dm)
+        dm.sender_id = DELETED_USER_SENTINEL_ID
+        session.add(dm)
     for dm in session.exec(
         select(DirectMessage).where(DirectMessage.recipient_id == uid)
     ).all():
-        session.delete(dm)
+        dm.recipient_id = DELETED_USER_SENTINEL_ID
+        session.add(dm)
 
     # Gifts — on garde les lignes *envoyées* par ce user (le streamer
     # qui les a reçues compte toujours dessus pour son classement hebdo
@@ -782,6 +802,25 @@ def _hard_delete_user(
         select(GiftLedger).where(GiftLedger.receiver_id == uid)
     ).all():
         session.delete(g)
+
+    # WalletLedger + ShopOrder — on garde l'historique des mouvements
+    # wallet et des achats boutique (audit comptable global du site),
+    # on anonymise juste le user_id. Sans ça, la somme des deltas par
+    # pot deviendrait incohérente à chaque suppression de compte. Import
+    # local pour éviter le cycle admin ↔ users via models.
+    from ..models import ShopOrder as _ShopOrder
+    from ..models import WalletLedger as _WalletLedger
+
+    for wl in session.exec(
+        select(_WalletLedger).where(_WalletLedger.user_id == uid)
+    ).all():
+        wl.user_id = DELETED_USER_SENTINEL_ID
+        session.add(wl)
+    for so in session.exec(
+        select(_ShopOrder).where(_ShopOrder.user_id == uid)
+    ).all():
+        so.user_id = DELETED_USER_SENTINEL_ID
+        session.add(so)
 
     # Signalements posés par le user (les signalements *contre* lui
     # restent — ils ont une valeur historique pour la modération).
@@ -983,12 +1022,15 @@ PROTECTED_USER_IDS: set[str] = {
     "user-roi-des-zems",
 }
 
-# Sentinel posé sur `GiftLedger.sender_id` quand le compte émetteur est
-# hard-delete. On ne supprime pas la ligne (sinon le total reçu du
-# streamer côté classement hebdo + BFF baisse silencieusement, ce qui
-# casse l'invariant "earnings_paid/promo du receiver == SUM ledger du
-# receiver"). On anonymise juste le lien vers le compte disparu.
-GIFT_DELETED_SENDER_ID = "user-deleted"
+# Alias rétro-compat — la constante "officielle" est
+# `DELETED_USER_SENTINEL_ID` (définie tout en haut du module pour pouvoir
+# être référencée dès `_hard_delete_user`). Le même sentinel est posé
+# sur :
+#   - `GiftLedger.sender_id` (le total reçu du streamer côté classement
+#     hebdo / BFF ne doit pas baisser quand on supprime le payeur)
+#   - `DirectMessage.sender_id` / `recipient_id` (les messages restent
+#     visibles à l'autre partie même quand son correspondant est supprimé)
+GIFT_DELETED_SENDER_ID = DELETED_USER_SENTINEL_ID
 
 
 class UnverifiedAccountOut(BaseModel):

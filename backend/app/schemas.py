@@ -119,6 +119,10 @@ class OracleHistoryEntryOut(BaseModel):
 
 class OracleStatusOut(BaseModel):
     dayKey: str
+    # ISO 8601 UTC du prochain réveil des rituels (minuit UTC du lendemain).
+    # Sert au frontend pour afficher un compte-à-rebours "Prochain rituel
+    # dans HH:MM:SS" tant que les 3 tentatives du jour sont épuisées.
+    nextResetAt: str
     playsUsedToday: int
     playsLeftToday: int
     maxDailyPlays: int
@@ -128,8 +132,10 @@ class OracleStatusOut(BaseModel):
 
 class OraclePlayOut(BaseModel):
     dayKey: str
+    nextResetAt: str
     playsUsedToday: int
     playsLeftToday: int
+    maxDailyPlays: int = 3
     reward: OracleRewardOut
     profileLueurs: int
     profileSylvinsPromo: int

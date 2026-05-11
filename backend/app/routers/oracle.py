@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import secrets
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -41,6 +41,21 @@ def _session_dep():
 def _day_key(now: Optional[datetime] = None) -> str:
     current = (now or datetime.now(UTC)).astimezone(UTC)
     return current.strftime("%Y-%m-%d")
+
+
+def _next_reset_iso(now: Optional[datetime] = None) -> str:
+    """Renvoie l'ISO UTC du prochain réveil des rituels = minuit UTC du
+    lendemain.
+
+    Le compteur de tentatives est basé sur le `day_key` au format
+    YYYY-MM-DD (UTC). Donc tant qu'on n'a pas passé 00:00:00 UTC, les 3
+    tentatives restent les mêmes. Le frontend utilise cette valeur pour
+    afficher un compte-à-rebours "Prochain rituel dans HH:MM:SS"."""
+    current = (now or datetime.now(UTC)).astimezone(UTC)
+    midnight = (current + timedelta(days=1)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    return midnight.isoformat()
 
 
 def _roll_reward() -> OracleRewardOut:
@@ -117,6 +132,7 @@ def get_oracle_status(
     plays_left = max(0, MAX_DAILY_PLAYS - used_today)
     return OracleStatusOut(
         dayKey=day_key,
+        nextResetAt=_next_reset_iso(),
         playsUsedToday=used_today,
         playsLeftToday=plays_left,
         maxDailyPlays=MAX_DAILY_PLAYS,
@@ -157,6 +173,8 @@ def play_oracle(
         )
 
     reward = _roll_reward()
+    lueurs_before = profile.lueurs
+    sylvins_before = profile.sylvins
     if reward.currency == "lueurs":
         profile.lueurs += reward.amount
     elif reward.currency == "sylvins":
@@ -173,6 +191,33 @@ def play_oracle(
     )
     session.add(entry)
     session.add(profile)
+    # Trace WalletLedger pour audit (cf. plainte "j'ai perdu mes Lueurs"
+    # → on doit pouvoir auditer chaque crédit). Import différé pour
+    # éviter le cycle oracle ↔ models au boot.
+    from ..models import WalletLedger
+
+    if reward.currency == "lueurs" and profile.lueurs != lueurs_before:
+        session.add(
+            WalletLedger(
+                user_id=profile.id,
+                pot="lueurs",
+                delta=profile.lueurs - lueurs_before,
+                balance_after=profile.lueurs,
+                reason="oracle:reward",
+                reference_id=f"{day_key}:{payload.rune_key}",
+            )
+        )
+    if reward.currency == "sylvins" and profile.sylvins != sylvins_before:
+        session.add(
+            WalletLedger(
+                user_id=profile.id,
+                pot="sylvins_promo",
+                delta=profile.sylvins - sylvins_before,
+                balance_after=profile.sylvins,
+                reason="oracle:reward",
+                reference_id=f"{day_key}:{payload.rune_key}",
+            )
+        )
     session.commit()
     session.refresh(entry)
     session.refresh(profile)
@@ -181,8 +226,10 @@ def play_oracle(
     plays_left = max(0, MAX_DAILY_PLAYS - plays_used)
     return OraclePlayOut(
         dayKey=day_key,
+        nextResetAt=_next_reset_iso(),
         playsUsedToday=plays_used,
         playsLeftToday=plays_left,
+        maxDailyPlays=MAX_DAILY_PLAYS,
         reward=reward,
         profileLueurs=profile.lueurs,
         profileSylvinsPromo=profile.sylvins,

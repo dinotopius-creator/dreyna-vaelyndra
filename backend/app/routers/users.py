@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
@@ -27,7 +28,7 @@ from ..handles import (
     slugify_handle,
     suggest_unique_handle,
 )
-from ..models import Follow, GiftLedger, UserProfile
+from ..models import Follow, GiftLedger, ShopOrder, UserProfile, WalletLedger
 from .messages import (
     DIRECT_MESSAGE_LEGEND_SACRE,
     DREYNA_USER_ID,
@@ -199,6 +200,82 @@ def _to_out(p: UserProfile, session: Session | None = None) -> UserProfileOut:
 
 def _touch(p: UserProfile) -> None:
     p.updated_at = _now().isoformat()
+
+
+# Pots wallet trackés par le WalletLedger. Doit rester aligné sur
+# `admin.WALLET_POTS`. On préfère dupliquer la constante (au lieu d'un
+# import depuis admin) pour éviter le cycle d'import users ↔ admin.
+WALLET_POTS = (
+    "lueurs",
+    "sylvins_promo",
+    "sylvins_paid",
+    "earnings_promo",
+    "earnings_paid",
+)
+
+
+def _wallet_diffs(
+    before: UserProfile, after: UserProfile
+) -> list[tuple[str, int, int]]:
+    """Renvoie la liste `(pot, delta, balance_after)` des pots modifiés.
+
+    Lit l'état AVANT et APRÈS dans deux instances `UserProfile`. On
+    s'appuie uniquement sur les 5 colonnes `lueurs / sylvins (= promo)
+    / sylvins_paid / sylvins_earnings (= earnings_promo) / earnings_paid`
+    : pas d'effort de mapping ailleurs, juste un diff numérique."""
+    pairs = (
+        ("lueurs", before.lueurs, after.lueurs),
+        ("sylvins_promo", before.sylvins, after.sylvins),
+        ("sylvins_paid", before.sylvins_paid, after.sylvins_paid),
+        ("earnings_promo", before.sylvins_earnings, after.sylvins_earnings),
+        ("earnings_paid", before.earnings_paid, after.earnings_paid),
+    )
+    out: list[tuple[str, int, int]] = []
+    for pot, prev, curr in pairs:
+        delta = curr - prev
+        if delta != 0:
+            out.append((pot, delta, curr))
+    return out
+
+
+def _record_wallet_movements(
+    session: Session,
+    user_id: str,
+    *,
+    before: UserProfile,
+    after: UserProfile,
+    reason: str,
+    reference_id: str | None = None,
+) -> None:
+    """Append-only : enregistre un mouvement par pot modifié.
+
+    Doit être appelé AVANT `session.commit()` sur la même session que
+    l'update profil pour que tout soit atomique. Si aucun pot ne bouge,
+    n'écrit rien (donc safe à appeler systématiquement)."""
+    for pot, delta, balance_after in _wallet_diffs(before, after):
+        session.add(
+            WalletLedger(
+                user_id=user_id,
+                pot=pot,
+                delta=delta,
+                balance_after=balance_after,
+                reason=reason,
+                reference_id=reference_id,
+            )
+        )
+
+
+def _snapshot_wallet(p: UserProfile) -> UserProfile:
+    """Clone des 5 pots wallet pour pouvoir diff plus tard."""
+    return UserProfile(
+        id=p.id,
+        username=p.username,
+        lueurs=p.lueurs,
+        sylvins=p.sylvins,
+        sylvins_earnings=p.sylvins_earnings,
+        sylvins_paid=p.sylvins_paid,
+        earnings_paid=p.earnings_paid,
+    )
 
 
 @router.get("", response_model=List[UserProfileOut])
@@ -712,12 +789,23 @@ def apply_wallet_delta(
             detail="Solde insuffisant.",
         )
 
+    before = _snapshot_wallet(p)
     p.lueurs = new_lueurs
     p.sylvins = draft.sylvins
     p.sylvins_earnings = draft.sylvins_earnings
     p.sylvins_paid = draft.sylvins_paid
     p.earnings_paid = draft.earnings_paid
     _touch(p)
+    # Trace systématique des mouvements wallet pour audit. Le `reason`
+    # est libre côté client ; on accepte n'importe quelle chaîne courte
+    # ("daily-claim", "shop:prod-xxx", "admin:adj", "stripe:cs_test_…").
+    _record_wallet_movements(
+        session,
+        p.id,
+        before=before,
+        after=p,
+        reason=(payload.reason or "wallet-delta")[:120],
+    )
     session.commit()
     session.refresh(p)
     return _to_out(p, session)
@@ -769,6 +857,8 @@ def gift_sylvins(
     take_promo = min(amount, max(0, sender.sylvins))
     take_paid = amount - take_promo
 
+    sender_before = _snapshot_wallet(sender)
+    receiver_before = _snapshot_wallet(receiver)
     sender.sylvins -= take_promo
     sender.sylvins_paid -= take_paid
     receiver.sylvins_earnings += take_promo  # = earnings_promo (colonne legacy)
@@ -788,6 +878,20 @@ def gift_sylvins(
             amount_promo=take_promo,
             week_start_iso=iso_week_start().isoformat(),
         )
+    )
+    _record_wallet_movements(
+        session,
+        sender.id,
+        before=sender_before,
+        after=sender,
+        reason=f"gift-sylvins:to:{receiver.id}",
+    )
+    _record_wallet_movements(
+        session,
+        receiver.id,
+        before=receiver_before,
+        after=receiver,
+        reason=f"gift-sylvins:from:{sender.id}",
     )
     # PR M — crédit d'XP au streamer qui reçoit le cadeau : chaque Sylvin
     # reçu vaut 1 XP. Le solde d'XP est monotone croissant (jamais débité
@@ -850,6 +954,7 @@ def gift_item(
             detail="Le destinataire possède déjà cet item.",
         )
 
+    sender_before = _snapshot_wallet(sender)
     take_promo = 0
     take_paid = 0
     if payload.currency == "lueurs":
@@ -886,6 +991,14 @@ def gift_item(
 
     _touch(sender)
     _touch(receiver)
+    _record_wallet_movements(
+        session,
+        sender.id,
+        before=sender_before,
+        after=sender,
+        reason=f"gift-item:{payload.item_id}:to:{receiver.id}",
+        reference_id=payload.item_id,
+    )
     session.commit()
     session.refresh(sender)
     session.refresh(receiver)
@@ -895,6 +1008,95 @@ def gift_item(
         consumed_promo=take_promo,
         consumed_paid=take_paid,
     )
+
+
+# --- Shop atomic purchase -------------------------------------------------
+
+
+class ShopPurchaseLueursPayload(BaseModel):
+    """Achat boutique payé en Lueurs.
+
+    Le serveur tranche tout en une transaction :
+      1. Vérifie que le solde Lueurs est ≥ `price`.
+      2. Refuse si l'item est déjà dans l'inventaire du user.
+      3. Débite `price` Lueurs.
+      4. Ajoute `item_id` à l'inventaire.
+      5. Écrit une ligne `ShopOrder` (status="paid").
+      6. Écrit une ligne `WalletLedger` (delta=-price, raison="shop:…").
+
+    L'`item_id` est libre — c'est la valeur que le frontend stocke
+    dans son catalogue produit. Aucune validation côté catalogue, parce
+    que le catalogue boutique a déjà été migré en DB et peut être
+    enrichi par les admins via UI.
+    """
+
+    item_id: str = Field(..., min_length=1, max_length=128)
+    price: int = Field(..., gt=0)
+
+
+@router.post("/{user_id}/shop/purchase-lueurs", response_model=UserProfileOut)
+def purchase_with_lueurs(
+    user_id: str,
+    payload: ShopPurchaseLueursPayload,
+    session: Session = Depends(_session_dep),
+) -> UserProfileOut:
+    """Achat atomique boutique en Lueurs.
+
+    Avant cette endpoint, le frontend faisait :
+      - `apiApplyWalletDelta({ lueurs: -price })` (débite serveur)
+      - `dispatch addOrder` (ajoute order en LOCAL state)
+    → Si le user vidait son cache navigateur, l'order local
+    disparaissait et l'item n'était jamais dans son inventaire DB,
+    donnant l'impression que les Lueurs s'étaient "perdues".
+
+    On atomise les deux étapes côté serveur pour qu'on ait toujours :
+    débit Lueurs ⇔ ligne `ShopOrder` ⇔ item dans `inventory_json`.
+    """
+    p = session.get(UserProfile, user_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Profil introuvable.")
+    if p.lueurs < payload.price:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Solde Lueurs insuffisant.",
+        )
+    inventory = json.loads(p.inventory_json or "[]")
+    if payload.item_id in inventory:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tu possèdes déjà cet item.",
+        )
+
+    before = _snapshot_wallet(p)
+    p.lueurs -= payload.price
+    inventory.append(payload.item_id)
+    p.inventory_json = json.dumps(inventory)
+    _touch(p)
+
+    order_id = f"order-{int(_now().timestamp() * 1000)}-{user_id[-6:]}"
+    session.add(
+        ShopOrder(
+            id=order_id,
+            user_id=user_id,
+            product_id=payload.item_id,
+            quantity=1,
+            unit_price=payload.price,
+            total_price=payload.price,
+            currency="Lueurs",
+            status="paid",
+        )
+    )
+    _record_wallet_movements(
+        session,
+        p.id,
+        before=before,
+        after=p,
+        reason=f"shop:{payload.item_id}",
+        reference_id=order_id,
+    )
+    session.commit()
+    session.refresh(p)
+    return _to_out(p, session)
 
 
 @router.post("/{user_id}/daily-claim", response_model=DailyClaimOut)
@@ -914,9 +1116,13 @@ def daily_claim(
             return DailyClaimOut(
                 granted=0, already_claimed=True, profile=_to_out(p, session)
             )
+    before = _snapshot_wallet(p)
     p.lueurs += DAILY_REWARD_LUEURS
     p.last_daily_at = now.isoformat()
     _touch(p)
+    _record_wallet_movements(
+        session, p.id, before=before, after=p, reason="daily-claim"
+    )
     session.commit()
     session.refresh(p)
     return DailyClaimOut(

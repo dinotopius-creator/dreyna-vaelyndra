@@ -49,7 +49,7 @@ from sqlmodel import Session
 from ..auth.dependencies import require_auth
 from ..auth.models import Credential
 from ..db import get_session
-from ..models import CatalogProduct, StripePayment, StripePayout, UserProfile
+from ..models import CatalogProduct, StripePayment, StripePayout, UserProfile, WalletLedger
 from ..schemas import (
     StripeConnectLinkOut,
     StripeConnectStatusOut,
@@ -636,6 +636,22 @@ def _apply_paid_checkout(
     profile.sylvins_paid = UserProfile.sylvins_paid + record.sylvins_amount
     profile.updated_at = _now_iso()
     session.add(profile)
+    # Trace WalletLedger pour audit. On enregistre le delta brut + le
+    # balance_after qu'on déduit en flush+refresh APRÈS l'UPDATE
+    # atomique (sinon `profile.sylvins_paid` contient encore l'expression
+    # SQLAlchemy non résolue, pas une valeur Python).
+    session.flush()
+    session.refresh(profile)
+    session.add(
+        WalletLedger(
+            user_id=profile.id,
+            pot="sylvins_paid",
+            delta=record.sylvins_amount,
+            balance_after=profile.sylvins_paid,
+            reason="stripe:checkout",
+            reference_id=checkout_id,
+        )
+    )
     session.commit()
 
     log.info(
