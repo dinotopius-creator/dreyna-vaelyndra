@@ -52,6 +52,32 @@ SEND_COOLDOWN_S = 1.0
 # 500 msgs/h/sender = ~8/min = largement suffisant pour du chat humain.
 HOURLY_SEND_LIMIT = 500
 
+# Sentinel posé sur les DMs dont le correspondant a été hard-delete
+# (cf. `admin._hard_delete_user`). On garde les messages en base mais on
+# anonymise l'identité de la partie disparue ; côté UI, on affiche
+# "Compte supprimé". Doit rester égal à `admin.DELETED_USER_SENTINEL_ID`
+# — on dupliqué la constante ici pour éviter un import circulaire admin
+# ↔ messages.
+DELETED_USER_SENTINEL_ID = "user-deleted"
+DELETED_USER_DISPLAY_NAME = "Compte supprimé"
+
+
+def _other_id_from_conversation_key(conv_key: str, me_id: str) -> Optional[str]:
+    """Extrait l'id de l'autre membre depuis la clé canonique `a|b`.
+
+    On préfère cette fonction à `last.sender_id != me_id ? ... : ...`
+    parce qu'après un hard-delete, le `sender_id` / `recipient_id` peut
+    être remplacé par le sentinel `user-deleted`, et on perdrait alors la
+    capacité de différencier deux fils avec deux comptes supprimés
+    distincts (ils auraient le même `other_id`). La conversation_key est
+    figée à l'insertion sur les ids ORIGINAUX, donc elle conserve
+    l'identité même après tombstone.
+    """
+    parts = conv_key.split("|")
+    if len(parts) != 2:
+        return None
+    return parts[0] if parts[1] == me_id else parts[1]
+
 
 class MessageOut(BaseModel):
     id: int
@@ -233,6 +259,20 @@ def _assert_other_exists(
     return other
 
 
+def _has_messages_with(session: Session, other_id: str, me_id: str) -> bool:
+    """Return True si une `conversation_key` existe entre ces deux ids.
+
+    Utilisé pour autoriser la lecture d'un fil dont le correspondant a
+    été hard-delete : `UserProfile` n'existe plus mais les DM peuvent
+    subsister (tombstoned). On donne l'accès en lecture si et seulement
+    si on a déjà au moins un message dans la conversation_key dédiée."""
+    conv_key = _conversation_key(me_id, other_id)
+    existing = session.exec(
+        select(DirectMessage.id).where(DirectMessage.conversation_key == conv_key).limit(1)
+    ).first()
+    return existing is not None
+
+
 def _assert_other(session: Session, other_id: str, me_id: str) -> UserProfile:
     """Même vérifs + interdit d'écrire à un user suspendu. Réservé aux
     endpoints d'écriture (send_message)."""
@@ -276,11 +316,21 @@ def list_conversations(
                 unread_by_conv.get(m.conversation_key, 0) + 1
             )
 
+    # Récupère l'id original de l'autre via la conversation_key
+    # (résiste au tombstoning sender/recipient quand le correspondant a
+    # été hard-delete).
+    other_by_conv: Dict[str, str] = {}
+    for conv_key, last in last_by_conv.items():
+        other_id = _other_id_from_conversation_key(conv_key, me.id)
+        if other_id is None:
+            # Garde un fallback défensif sur l'ancien comportement.
+            other_id = (
+                last.sender_id if last.sender_id != me.id else last.recipient_id
+            )
+        other_by_conv[conv_key] = other_id
+
     # Hydrate les profils des correspondants en un seul SELECT.
-    other_ids = {
-        (m.sender_id if m.sender_id != me.id else m.recipient_id)
-        for m in last_by_conv.values()
-    }
+    other_ids = {oid for oid in other_by_conv.values() if oid != DELETED_USER_SENTINEL_ID}
     profiles: Dict[str, UserProfile] = {}
     if other_ids:
         for p in session.exec(
@@ -290,16 +340,25 @@ def list_conversations(
 
     out: List[ConversationOut] = []
     for conv_key, last in last_by_conv.items():
-        other_id = last.sender_id if last.sender_id != me.id else last.recipient_id
+        other_id = other_by_conv[conv_key]
         profile = profiles.get(other_id)
-        if not profile:
-            # Correspondant supprimé : on masque le fil.
-            continue
+        if profile is not None:
+            display_name = profile.username
+            avatar = profile.avatar_image_url or ""
+        else:
+            # Correspondant supprimé (hard-delete admin) — on conserve le
+            # fil pour ne pas faire disparaître l'historique de l'user
+            # courant. L'UI verra "Compte supprimé" et l'envoi sera bloqué
+            # côté `send_message` (404 sur l'autre profil). On garde
+            # `other_user_id` = id original (pas le sentinel) pour que
+            # `GET /messages/{other_id}` retrouve la `conversation_key`.
+            display_name = DELETED_USER_DISPLAY_NAME
+            avatar = ""
         out.append(
             ConversationOut(
                 other_user_id=other_id,
-                other_username=profile.username,
-                other_avatar=profile.avatar_image_url or "",
+                other_username=display_name,
+                other_avatar=avatar,
                 last_message=_serialize(last),
                 unread_count=unread_by_conv.get(conv_key, 0),
             )
@@ -338,7 +397,18 @@ def get_thread(
     """
     # Read-only : on autorise même si l'autre est banni, pour que l'user
     # puisse relire l'historique et faire baisser son badge non-lu.
-    _assert_other_exists(session, other_user_id, me.id)
+    # Si l'autre user a été hard-delete, son profil n'existe plus mais
+    # ses anciens DMs sont conservés (tombstoned) : on autorise la
+    # lecture du fil tant qu'au moins un message existe sur la
+    # `conversation_key` dédiée. Sinon, on garde le 404 historique
+    # (empêche de découvrir l'existence d'un user random via DM list).
+    if other_user_id == me.id:
+        raise HTTPException(
+            status_code=400, detail="Impossible de s'envoyer un message à soi-même."
+        )
+    if session.get(UserProfile, other_user_id) is None:
+        if not _has_messages_with(session, other_user_id, me.id):
+            raise HTTPException(status_code=404, detail="Utilisateur introuvable.")
     conv_key = _conversation_key(me.id, other_user_id)
     limit = max(1, min(limit, 500))
 

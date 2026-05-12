@@ -62,6 +62,13 @@ export function Oracle() {
   const [loading, setLoading] = useState(false);
   const [playingKey, setPlayingKey] = useState<string | null>(null);
   const [lastReward, setLastReward] = useState<OracleRewardDto | null>(null);
+  // Tick toutes les secondes pour rafraîchir le compte-à-rebours jusqu'au
+  // prochain réveil des rituels (minuit UTC).
+  const [now, setNow] = useState<number>(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
 
   useEffect(() => {
     if (!user) {
@@ -97,6 +104,46 @@ export function Oracle() {
     return `Gain credite : ${lastReward.amount} lueurs.`;
   }, [lastReward]);
 
+  // Compte-à-rebours jusqu'au prochain réveil des rituels (minuit UTC).
+  // Quand le serveur renvoie un `nextResetAt` dans le passé (la machine du
+  // user a son horloge en avance, ou on a chargé la page juste avant
+  // minuit UTC et passé l'heure), on retombe sur "bientôt" pour éviter
+  // d'afficher un négatif. Quand il en reste, on auto-refresh à l'arrivée
+  // à 0 pour récupérer le nouveau quota côté serveur.
+  const resetCountdown = useMemo(() => {
+    if (!status?.nextResetAt) return null;
+    const reset = Date.parse(status.nextResetAt);
+    if (Number.isNaN(reset)) return null;
+    const remaining = Math.max(0, reset - now);
+    const totalSeconds = Math.floor(remaining / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    const pad = (n: number) => n.toString().padStart(2, "0");
+    return {
+      remaining,
+      label: `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`,
+    };
+  }, [status?.nextResetAt, now]);
+
+  // Quand le compte-à-rebours tombe à zéro, on resync le statut serveur
+  // pour récupérer les 3 nouvelles tentatives. On guard sur `playsLeftToday`
+  // à 0 pour ne pas spammer l'endpoint quand l'user a encore des tentatives.
+  useEffect(() => {
+    if (!user) return;
+    if (!resetCountdown) return;
+    if (resetCountdown.remaining > 0) return;
+    if ((status?.playsLeftToday ?? 0) > 0) return;
+    let cancelled = false;
+    void apiGetOracleStatus(user.id).then((next) => {
+      if (cancelled) return;
+      setStatus(next);
+    }).catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [resetCountdown, status?.playsLeftToday, user]);
+
   async function play(runeKey: string) {
     if (!user) {
       notify("Connecte-toi pour tenter le rituel.", "info");
@@ -111,6 +158,7 @@ export function Oracle() {
       const result = await apiPlayOracle({ userId: user.id, runeKey });
       setStatus({
         dayKey: result.dayKey,
+        nextResetAt: result.nextResetAt,
         playsUsedToday: result.playsUsedToday,
         playsLeftToday: result.playsLeftToday,
         maxDailyPlays: result.maxDailyPlays,
@@ -174,6 +222,11 @@ export function Oracle() {
                 <p className="mt-1 font-display text-2xl text-gold-100">
                   {user ? status?.playsLeftToday ?? "..." : "3"} / 3
                 </p>
+                {resetCountdown && (
+                  <p className="mt-1 text-[10px] uppercase tracking-[0.18em] text-gold-300/70">
+                    Reveil dans <span className="font-mono">{resetCountdown.label}</span>
+                  </p>
+                )}
               </div>
             </div>
 
@@ -319,6 +372,18 @@ export function Oracle() {
                     ? "Le portail est encore ouvert pour toi aujourd'hui."
                     : "Tes runes du jour sont deja toutes utilisees."}
                 </p>
+                {resetCountdown && (
+                  <div className="mt-3 rounded-xl border border-gold-400/25 bg-night-950/60 px-3 py-2">
+                    <p className="text-[10px] uppercase tracking-[0.22em] text-gold-300/85">
+                      {status?.canPlay
+                        ? "Prochain reset complet"
+                        : "Prochain rituel dans"}
+                    </p>
+                    <p className="mt-1 font-mono text-xl text-gold-100">
+                      {resetCountdown.label}
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </section>

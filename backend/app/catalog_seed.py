@@ -357,10 +357,9 @@ def seed_catalog() -> None:
                     )
                 )
         else:
-            existing_ids = {
-                row[0]
-                for row in session.exec(select(CatalogProduct.id)).all()
-            }
+            existing_ids = set(
+                session.exec(select(CatalogProduct.id)).all()
+            )
             now = _now_iso()
             for p in SEED_PRODUCTS:
                 if p["id"] not in BACKFILL_PRODUCT_IDS or p["id"] in existing_ids:

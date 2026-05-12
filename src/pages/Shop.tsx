@@ -8,7 +8,7 @@ import { useStore } from "../contexts/StoreContext";
 import { useToast } from "../contexts/ToastContext";
 import { SectionHeading } from "../components/SectionHeading";
 import { formatPrice, generateId } from "../lib/helpers";
-import { apiApplyWalletDelta } from "../lib/api";
+import { apiShopPurchaseLueurs } from "../lib/api";
 import clsx from "clsx";
 import type { Product } from "../types";
 
@@ -61,10 +61,18 @@ export function Shop() {
     }
     setBuyingLueursId(product.id);
     try {
-      await apiApplyWalletDelta(user.id, {
-        lueurs: -Math.round(product.price),
-        reason: `shop:${product.id}`,
+      // Achat atomique côté serveur (débit Lueurs + livraison item +
+      // ShopOrder + WalletLedger en une seule transaction). Avant cet
+      // appel, on faisait deux étapes (débit côté serveur, ajout d'order
+      // côté state local) qui pouvaient se désynchroniser au vidage du
+      // cache navigateur, donnant l'impression d'avoir "perdu" ses Lueurs.
+      await apiShopPurchaseLueurs(user.id, {
+        item_id: product.id,
+        price: Math.round(product.price),
       });
+      // L'order reste aussi en state local pour que l'historique
+      // s'affiche immédiatement sans recharger ; côté DB il y a une
+      // ligne `ShopOrder` qui sert d'archive durable.
       dispatch({
         type: "addOrder",
         order: {
@@ -89,7 +97,11 @@ export function Shop() {
       );
     } catch (err) {
       console.warn(err);
-      notify("Achat en Lueurs impossible pour le moment.", "error");
+      const msg =
+        err instanceof Error && err.message
+          ? err.message
+          : "Achat en Lueurs impossible pour le moment.";
+      notify(msg, "error");
     } finally {
       setBuyingLueursId(null);
     }

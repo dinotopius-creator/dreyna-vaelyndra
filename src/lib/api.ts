@@ -188,6 +188,8 @@ export interface OracleHistoryEntryDto {
 
 export interface OracleStatusDto {
   dayKey: string;
+  /** ISO 8601 UTC du prochain réveil des rituels (minuit UTC du lendemain). */
+  nextResetAt: string;
   playsUsedToday: number;
   playsLeftToday: number;
   maxDailyPlays: number;
@@ -511,6 +513,31 @@ export async function apiApplyWalletDelta(
   return (await request<UserProfileDto>(
     `/users/${encodeURIComponent(userId)}/wallet`,
     { method: "POST", body: JSON.stringify(delta) },
+  )) as UserProfileDto;
+}
+
+/**
+ * Achat boutique atomique payé en Lueurs.
+ *
+ * Le serveur fait, en une seule transaction :
+ *   - vérifie le solde Lueurs,
+ *   - débite `price`,
+ *   - ajoute `itemId` à l'inventaire,
+ *   - écrit une ligne `ShopOrder` (history persistant côté DB),
+ *   - écrit une ligne `WalletLedger` (audit du débit Lueurs).
+ *
+ * Sans cet endpoint, le frontend faisait :
+ *   `apiApplyWalletDelta({ lueurs: -price })` puis `dispatch addOrder`
+ *   en LOCAL → la commande disparaissait au vidage du cache
+ *   navigateur, donnant l'impression d'avoir "perdu" des Lueurs.
+ */
+export async function apiShopPurchaseLueurs(
+  userId: string,
+  body: { item_id: string; price: number },
+): Promise<UserProfileDto> {
+  return (await request<UserProfileDto>(
+    `/users/${encodeURIComponent(userId)}/shop/purchase-lueurs`,
+    { method: "POST", body: JSON.stringify(body) },
   )) as UserProfileDto;
 }
 

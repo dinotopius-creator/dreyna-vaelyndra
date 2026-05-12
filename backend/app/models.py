@@ -521,3 +521,77 @@ class DirectMessage(SQLModel, table=True):
     content: str
     created_at: str = Field(default_factory=_now_iso, index=True)
     read_at: Optional[str] = Field(default=None, index=True)
+
+
+class WalletLedger(SQLModel, table=True):
+    """Journal append-only de chaque mouvement sur les pots wallet d'un
+    user (Lueurs / Sylvins promo / Sylvins paid / earnings promo /
+    earnings paid).
+
+    Une ligne par mouvement, écrite dans la même transaction que la
+    modification du `UserProfile` correspondant. Permet :
+
+    1. **Auditer** une plainte "j'ai perdu mes Lueurs" : on retrouve la
+       chronologie exacte (10 Lueurs au daily, +120 à l'Oracle, -120
+       achat boutique, etc.) et on identifie le bug ou la fraude.
+    2. **Restaurer** un solde perdu en rejouant ou en compensant.
+    3. **Détecter** des anomalies : un débit sans contrepartie d'item
+       livré, deux débits identiques à 1ms d'intervalle (double-click),
+       etc.
+
+    Schéma volontairement plat pour pouvoir indexer / agréger en SQL :
+    - `pot` ∈ {"lueurs", "sylvins_promo", "sylvins_paid",
+       "earnings_promo", "earnings_paid"}
+    - `delta` : entier signé (positif = crédit, négatif = débit)
+    - `balance_after` : valeur du pot juste après l'écriture, pour
+       repérer un saut inexpliqué (ex. balance_after - balance_before
+       != delta) sans avoir à recalculer.
+    - `reason` : tag textuel court ("oracle:reward", "shop:prod-xxx",
+       "stripe:cs_test_...", "daily-claim", "admin:user-yyy:adj", etc.)
+    - `reference_id` : id externe optionnel (gift id, checkout session
+       id, order id, …). Permet de joindre WalletLedger ↔ autre table
+       côté analytics.
+
+    On ne supprime JAMAIS de ligne, même quand un user est hard-delete
+    (cf. `admin._hard_delete_user`). Le sentinel `"user-deleted"` est
+    posé sur `user_id` à la place. Sans ça l'audit comptable global du
+    site (somme des deltas par pot) deviendrait incohérent à chaque
+    suppression."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: str = Field(index=True)
+    pot: str = Field(index=True)
+    delta: int
+    balance_after: int
+    reason: str = Field(default="", index=True)
+    reference_id: Optional[str] = Field(default=None, index=True)
+    created_at: str = Field(default_factory=_now_iso, index=True)
+
+
+class ShopOrder(SQLModel, table=True):
+    """Commandes boutique payées en Lueurs (ou autre monnaie interne).
+
+    Crée un enregistrement persistent pour chaque achat fait dans
+    `/boutique` avec des Lueurs, afin que :
+
+    1. Le user retrouve son historique d'achats même après vidage du
+       cache navigateur (avant cette table, les "orders" étaient en
+       localStorage et disparaissaient à chaque clear, donnant
+       l'impression d'avoir "perdu" ses Lueurs sans rien acheter en
+       échange).
+    2. L'item acheté soit livré atomiquement à l'inventaire dans la
+       même transaction que le débit des Lueurs (impossible d'avoir un
+       débit sans livraison ou inversement).
+
+    `status` ∈ {"paid", "refunded"}. On ne fait pas encore de refund
+    automatique mais le champ est là pour un futur SAV admin."""
+
+    id: str = Field(primary_key=True)
+    user_id: str = Field(index=True)
+    product_id: str = Field(index=True)
+    quantity: int = Field(default=1)
+    unit_price: int
+    total_price: int
+    currency: str = Field(default="Lueurs")
+    status: str = Field(default="paid", index=True)
+    created_at: str = Field(default_factory=_now_iso, index=True)
