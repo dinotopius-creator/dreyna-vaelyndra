@@ -12,10 +12,11 @@ import { API_BASE, ApiError } from "./api";
 async function authRequest<T>(
   path: string,
   init: RequestInit = {},
+  options: { credentials?: RequestCredentials } = {},
 ): Promise<T | null> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
-    credentials: "include",
+    credentials: options.credentials ?? "include",
     headers: {
       "Content-Type": "application/json",
       ...(init.headers ?? {}),
@@ -112,6 +113,7 @@ export async function authRegister(input: {
         creature_id: input.creatureId,
       }),
     },
+    { credentials: "omit" },
   )) as { status: string; message: string };
 }
 
@@ -121,6 +123,7 @@ export async function authVerifyEmail(
   return (await authRequest<{ status: string; message: string }>(
     "/auth/verify-email",
     { method: "POST", body: JSON.stringify({ token }) },
+    { credentials: "omit" },
   )) as { status: string; message: string };
 }
 
@@ -128,7 +131,7 @@ export async function authResendVerification(email: string): Promise<void> {
   await authRequest<null>("/auth/resend-verification", {
     method: "POST",
     body: JSON.stringify({ email }),
-  });
+  }, { credentials: "omit" });
 }
 
 export async function authLogin(input: {
@@ -201,7 +204,7 @@ export async function authRequestPasswordReset(email: string): Promise<void> {
   await authRequest<null>("/auth/request-password-reset", {
     method: "POST",
     body: JSON.stringify({ email }),
-  });
+  }, { credentials: "omit" });
 }
 
 export async function authResetPassword(input: {
@@ -214,7 +217,7 @@ export async function authResetPassword(input: {
       token: input.token,
       new_password: input.newPassword,
     }),
-  });
+  }, { credentials: "omit" });
 }
 
 export async function authListSessions(): Promise<AuthSessionDto[]> {
