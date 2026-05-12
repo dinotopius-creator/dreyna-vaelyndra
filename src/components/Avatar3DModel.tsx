@@ -223,11 +223,11 @@ export function Avatar3DModel({
   const layout =
     framing === "face"
       ? size === "portrait"
-        ? { top: "72%", scale: 0.98 }
-        : { top: "62%", scale: 1.06 }
+        ? { top: "78%", scale: 0.92 }
+        : { top: "64%", scale: 1.02 }
       : size === "portrait"
-        ? { top: "63%", scale: 0.9 }
-        : { top: "56%", scale: 0.96 };
+        ? { top: "66%", scale: 0.86 }
+        : { top: "58%", scale: 0.94 };
 
   function onPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     dragRef.current = {
