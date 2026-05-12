@@ -131,7 +131,7 @@ export function AvatarEditor({
             Sculptez votre présence
           </h3>
           <p className="mt-1 max-w-2xl text-sm text-ivory/60">
-            Avatar debout, rotation 360, rendu live et profil unifié. Les
+            Avatar debout, rotation à 360°, rendu live et profil unifié. Les
             tenues et accessoires 3D de la boutique se greffent ensuite dessus.
           </p>
         </div>
@@ -165,7 +165,7 @@ export function AvatarEditor({
             equippedAccessory3DId={equippedAccessory3DId}
           />
           <p className="text-center text-[11px] text-ivory/45">
-            Faites glisser l’avatar pour le tourner en 360°.
+            Faites glisser l’avatar pour le faire pivoter à 360°.
           </p>
         </motion.div>
 

@@ -444,7 +444,7 @@ export function Me() {
           align="left"
           eyebrow="Avatar"
           title={<>Ton <span className="text-mystic">avatar</span></>}
-          subtitle="Composé dans l'atelier paper-doll, visible partout sur le site : header, fil communautaire, chat, lives."
+          subtitle="Composé dans l’atelier paper-doll, visible partout sur le site : header, fil communautaire, chat, lives."
         />
         <div className="mt-6 grid gap-6 md:grid-cols-[260px_1fr]">
           <div className="card-royal p-4">
@@ -468,13 +468,13 @@ export function Me() {
                 ✦ Personnalisez votre avatar
               </p>
               <p className="mt-2 text-sm text-ivory/75">
-                Avatar 3D debout, rotation 360, rendu unifié sur le profil,
+                Avatar 3D debout, rotation à 360°, rendu unifié sur le profil,
                 les lives et le fil communautaire. Il est sauvegardé sur le
-                serveur et vous retrouve sur tous vos appareils.
+                serveur et vous suit sur tous vos appareils.
               </p>
               <ul className="mt-4 space-y-1.5 text-xs text-ivory/65">
                 <li>• Choix du corps, du visage, des cheveux et des couleurs</li>
-                <li>• Aperçu 360 instantané, enregistrement en un clic</li>
+                <li>• Aperçu à 360° instantané, enregistrement en un clic</li>
                 <li>• Prêt pour les tenues et accessoires 3D de la boutique</li>
               </ul>
             </div>
@@ -506,7 +506,7 @@ export function Me() {
           align="left"
           eyebrow="Trésorerie"
           title={<>Vos <span className="text-mystic">bourses</span></>}
-          subtitle="Gardez un oeil sur vos Lueurs et vos Sylvins. Les Sylvins servent aux cadeaux live, les Lueurs servent aux achats dédiés en boutique."
+          subtitle="Gardez un œil sur vos Lueurs et vos Sylvins. Les Sylvins servent aux cadeaux live, les Lueurs servent aux achats dédiés en boutique."
         />
         <div className="mt-6 grid gap-4 lg:grid-cols-[1fr,1fr]">
           <div className="card-royal p-5">

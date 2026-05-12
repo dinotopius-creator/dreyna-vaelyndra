@@ -242,6 +242,7 @@ export function AvatarViewer({
         <Avatar3DModel
           config={avatar3dConfig}
           size={size}
+          framing={framing}
           autoRotate={autoRotate}
           outfit={outfitTheme}
           accessory={accessoryTheme}

@@ -114,7 +114,7 @@ export function Avatar() {
       <SectionHeading
         eyebrow="Atelier d'avatar"
         title="Composez votre double magique"
-        subtitle="Créez votre avatar 3D debout, faites-le tourner en 360°, puis scellez-le sur votre compte. Vos tenues et accessoires 3D s'y greffent ensuite partout sur Vaelyndra."
+        subtitle="Créez votre avatar 3D debout, faites-le pivoter à 360°, puis scellez-le sur votre compte. Vos tenues et accessoires 3D s’y greffent ensuite partout sur Vaelyndra."
       />
 
       <div className="mt-10 grid gap-8 lg:grid-cols-[minmax(0,360px)_1fr]">
@@ -144,7 +144,7 @@ export function Avatar() {
               ✦ Aperçu
             </p>
             <p className="mt-1 text-sm text-ivory/70">
-              Voilà votre avatar 3D principal. La vignette profil, les posts,
+              Voilà votre avatar 3D principal. La vignette de profil, les posts,
               les commentaires et les lives s’alignent dessus automatiquement.
             </p>
           </div>

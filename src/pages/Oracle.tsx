@@ -99,9 +99,9 @@ export function Oracle() {
 
   const rewardSummary = useMemo(() => {
     if (!lastReward) return null;
-    if (lastReward.currency === "none") return "Le voile n'a rien livre cette fois.";
-    if (lastReward.currency === "sylvins") return "Le jackpot rare est tombe.";
-    return `Gain credite : ${lastReward.amount} lueurs.`;
+    if (lastReward.currency === "none") return "Le voile n’a rien livré cette fois.";
+    if (lastReward.currency === "sylvins") return "Le jackpot rare est tombé.";
+    return `Gain crédité : ${lastReward.amount} lueurs.`;
   }, [lastReward]);
 
   // Compte-à-rebours jusqu'au prochain réveil des rituels (minuit UTC).
@@ -150,7 +150,7 @@ export function Oracle() {
       return;
     }
     if (!status?.canPlay) {
-      notify("Tes tentatives du jour sont deja epuisees.", "info");
+      notify("Tes tentatives du jour sont déjà épuisées.", "info");
       return;
     }
     setPlayingKey(runeKey);
@@ -168,17 +168,17 @@ export function Oracle() {
       setLastReward(result.reward);
       await refreshProfile();
       if (result.reward.currency === "sylvins") {
-        notify("Oracle : 1 Sylvin ancestral credite.", "success");
+        notify("Oracle : 1 Sylvin ancestral crédité.", "success");
       } else if (result.reward.currency === "lueurs") {
-        notify(`Oracle : +${result.reward.amount} lueurs creditees.`, "success");
+        notify(`Oracle : +${result.reward.amount} lueurs créditées.`, "success");
       } else {
-        notify("Le rituel s'est referme sans recompense.", "info");
+        notify("Le rituel s'est refermé sans récompense.", "info");
       }
     } catch (err) {
       console.warn(err);
       const message =
         err instanceof ApiError && err.status === 429
-          ? "Tes 3 rituels du jour sont deja utilises."
+          ? "Tes 3 rituels du jour sont déjà utilisés."
           : "Le rituel n'a pas pu aboutir pour le moment.";
       notify(message, "error");
     } finally {
@@ -211,8 +211,8 @@ export function Oracle() {
                   Choisis une rune
                 </h3>
                 <p className="mt-2 max-w-2xl text-sm text-ivory/70">
-                  Chaque tirage est decide par le serveur, enregistre en base et
-                  credite directement ton profil.
+                  Chaque tirage est décidé par le serveur, enregistré en base et
+                  crédité directement sur ton profil.
                 </p>
               </div>
               <div className="rounded-2xl border border-gold-400/20 bg-gold-500/10 px-4 py-3 text-right">
@@ -224,7 +224,7 @@ export function Oracle() {
                 </p>
                 {resetCountdown && (
                   <p className="mt-1 text-[10px] uppercase tracking-[0.18em] text-gold-300/70">
-                    Reveil dans <span className="font-mono">{resetCountdown.label}</span>
+                    Réveil dans <span className="font-mono">{resetCountdown.label}</span>
                   </p>
                 )}
               </div>
@@ -285,10 +285,10 @@ export function Oracle() {
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
                 <div className="rounded-2xl border border-sky-400/20 bg-sky-500/8 p-4">
                   <p className="text-xs uppercase tracking-[0.24em] text-sky-200/80">
-                    Frequent
+                    Fréquent
                   </p>
                   <p className="mt-2 font-display text-xl text-sky-100">
-                    15 a 40 L
+                    15 à 40 L
                   </p>
                 </div>
                 <div className="rounded-2xl border border-gold-400/20 bg-gold-500/8 p-4">
@@ -296,12 +296,12 @@ export function Oracle() {
                     Rare
                   </p>
                   <p className="mt-2 font-display text-xl text-gold-100">
-                    70 a 120 L
+                    70 à 120 L
                   </p>
                 </div>
                 <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/8 p-4">
                   <p className="text-xs uppercase tracking-[0.24em] text-emerald-200/80">
-                    Tres rare
+                    Très rare
                   </p>
                   <p className="mt-2 font-display text-xl text-emerald-100">
                     1 Sylvin
@@ -341,9 +341,9 @@ export function Oracle() {
             </h3>
             <ul className="mt-4 space-y-3 text-sm text-ivory/75">
               <li>3 tentatives maximum par jour et par membre.</li>
-              <li>Les gains sont decides cote serveur puis credites en base.</li>
+              <li>Les gains sont décidés côté serveur puis crédités en base.</li>
               <li>
-                Le Sylvin gagne ici tombe dans le pot promo : il reste depensable
+                Le Sylvin gagné ici tombe dans le pot promo : il reste dépensable
                 sur la plateforme, mais non retirable en euros.
               </li>
             </ul>
@@ -370,7 +370,7 @@ export function Oracle() {
                 <p className="mt-2 text-sm text-ivory/70">
                   {status?.canPlay
                     ? "Le portail est encore ouvert pour toi aujourd'hui."
-                    : "Tes runes du jour sont deja toutes utilisees."}
+                    : "Tes runes du jour sont déjà toutes utilisées."}
                 </p>
                 {resetCountdown && (
                   <div className="mt-3 rounded-xl border border-gold-400/25 bg-night-950/60 px-3 py-2">
