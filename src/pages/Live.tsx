@@ -971,7 +971,7 @@ function BroadcasterControls() {
               type="button"
               onClick={openDesktopChatPopout}
               className="btn-gold"
-              title="Ouvrir le chat live dans une vraie fenetre PC deplacable"
+              title="Ouvrir le chat live dans une vraie fenêtre PC déplaçable"
             >
               <MessageSquare className="h-4 w-4" />
               Chat pop-out

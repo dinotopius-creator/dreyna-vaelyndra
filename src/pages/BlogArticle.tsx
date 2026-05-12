@@ -90,12 +90,12 @@ export function BlogArticle() {
       setReplyTo(null);
       notify(
         replyTo
-          ? `Reponse envoyee a ${replyTo.authorName}.`
+          ? `Réponse envoyée à ${replyTo.authorName}.`
           : "Votre parole est inscrite sur le grimoire.",
       );
     } catch (err) {
       console.warn(err);
-      notify("Le commentaire n'a pas pu etre sauvegarde. Reessaie.", "error");
+      notify("Le commentaire n'a pas pu être sauvegardé. Réessaie.", "error");
     } finally {
       setPosting(false);
     }
@@ -103,7 +103,7 @@ export function BlogArticle() {
 
   async function toggleLike() {
     if (!user) {
-      notify("Connectez-vous pour offrir votre coeur a Dreyna.", "info");
+      notify("Connectez-vous pour offrir votre cœur à Dreyna.", "info");
       navigate("/connexion");
       return;
     }
@@ -124,7 +124,7 @@ export function BlogArticle() {
         articleId: currentArticle.id,
         userId: user.id,
       });
-      notify("Le coeur n'a pas pu etre sauvegarde. Reessaie.", "error");
+      notify("Le cœur n'a pas pu être sauvegardé. Réessaie.", "error");
     } finally {
       setLiking(false);
     }
@@ -148,7 +148,7 @@ export function BlogArticle() {
       dispatch({ type: "updateArticle", article: fresh });
     } catch (err) {
       console.warn(err);
-      notify("Le like du commentaire n'a pas pu etre sauvegarde.", "error");
+      notify("Le like du commentaire n'a pas pu être sauvegardé.", "error");
     } finally {
       setBusyCommentId(null);
     }

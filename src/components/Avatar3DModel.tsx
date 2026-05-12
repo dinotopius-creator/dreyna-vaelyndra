@@ -17,6 +17,7 @@ export type AccessoryTheme =
 interface Props {
   config: Avatar3DConfig;
   size?: "square" | "portrait" | "wide";
+  framing?: "face" | "body";
   outfit?: OutfitTheme;
   accessory?: AccessoryTheme;
   autoRotate?: boolean;
@@ -179,6 +180,7 @@ function outfitPalette(theme: OutfitTheme) {
 export function Avatar3DModel({
   config,
   size = "portrait",
+  framing = "body",
   outfit = "royal",
   accessory = null,
   autoRotate = true,
@@ -218,6 +220,14 @@ export function Avatar3DModel({
       : size === "wide"
         ? "aspect-[16/10]"
         : "aspect-[3/4]";
+  const layout =
+    framing === "face"
+      ? size === "portrait"
+        ? { top: "60%", scale: 1.32 }
+        : { top: "58%", scale: 1.18 }
+      : size === "portrait"
+        ? { top: "56%", scale: 1.02 }
+        : { top: "54%", scale: 1 };
 
   function onPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     dragRef.current = {
@@ -256,11 +266,11 @@ export function Avatar3DModel({
         style={{
           position: "absolute",
           left: "50%",
-          top: "54%",
+          top: layout.top,
           width: 0,
           height: 0,
           transformStyle: "preserve-3d",
-          transform: `translate3d(0,0,0) rotateX(${pitch}deg) rotateY(${yaw}deg)`,
+          transform: `translate3d(0,0,0) scale(${layout.scale}) rotateX(${pitch}deg) rotateY(${yaw}deg)`,
         }}
       >
         <Cuboid

@@ -204,16 +204,16 @@ export function Community() {
       setDraft("");
       setImageUrl("");
       setVideoUrl("");
-      notify("Publication envoyee ✨");
+      notify("Publication envoyée ✨");
     } catch (err) {
       console.warn(err);
-      notify("La publication n'a pas pu etre envoyee. Reessaie.", "error");
+      notify("La publication n'a pas pu être envoyée. Réessaie.", "error");
     }
   }
 
   async function react(postId: string, emoji: string) {
     if (!user) {
-      notify("Connecte-toi pour reagir.", "info");
+      notify("Connecte-toi pour réagir.", "info");
       return;
     }
     dispatch({ type: "reactPost", postId, emoji, userId: user.id });
@@ -223,7 +223,7 @@ export function Community() {
     } catch (err) {
       console.warn(err);
       dispatch({ type: "reactPost", postId, emoji, userId: user.id });
-      notify("Reaction perdue en route. Reessaie.", "error");
+      notify("Réaction perdue en route. Réessaie.", "error");
     }
   }
 
