@@ -523,10 +523,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { ok: false, error: "Ton pseudo est trop court." };
       if (!/^\S+@\S+\.\S+$/.test(email))
         return { ok: false, error: "Un mail valide est requis." };
-      if (password.length < 8)
+      if (password.length < 10)
         return {
           ok: false,
-          error: "Le sortilège doit faire 8 caractères minimum.",
+          error: "Le sortilège doit faire 10 caractères minimum.",
+        };
+      if (!/[A-Za-z]/.test(password) || !/\d/.test(password))
+        return {
+          ok: false,
+          error: "Le sortilège doit contenir au moins une lettre et un chiffre.",
         };
       if (!creatureId)
         return {
