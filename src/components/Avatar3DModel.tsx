@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import type { Avatar3DConfig } from "../lib/avatar3d";
 
-export type OutfitTheme = "royal" | "battle" | "mystic" | "shadow";
+export type OutfitTheme = "base" | "royal" | "battle" | "mystic" | "shadow";
 export type AccessoryTheme =
   | "crown"
   | "halo"
@@ -166,6 +166,8 @@ function Cuboid({
 
 function outfitPalette(theme: OutfitTheme) {
   switch (theme) {
+    case "base":
+      return { top: "#475569", bottom: "#1e293b", accent: "#94a3b8" };
     case "battle":
       return { top: "#334155", bottom: "#0f172a", accent: "#d4a94a" };
     case "mystic":
@@ -181,7 +183,7 @@ export function Avatar3DModel({
   config,
   size = "portrait",
   framing = "body",
-  outfit = "royal",
+  outfit = "base",
   accessory = null,
   autoRotate = true,
   className = "",
