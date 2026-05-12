@@ -37,6 +37,7 @@ import {
   type GiftItemDto,
   type UserProfileDto,
 } from "../lib/api";
+import { CATALOG_BY_ID, EQUIP_SLOT } from "../lib/avatarShop";
 import { useAuth } from "./AuthContext";
 
 interface ProfileCtx {
@@ -241,6 +242,24 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         const updated = await apiUpdateInventory(user.id, {
           inventory: [...currentInventory, input.itemId],
         });
+        const purchasedItem = CATALOG_BY_ID[input.itemId];
+        if (
+          purchasedItem?.category === "outfit3d" ||
+          purchasedItem?.category === "accessory3d"
+        ) {
+          const slot =
+            purchasedItem.category === "outfit3d"
+              ? EQUIP_SLOT.Outfit3D
+              : EQUIP_SLOT.Accessory3D;
+          const equipped = await apiUpdateInventory(user.id, {
+            equipped: {
+              ...(updated.equipped ?? {}),
+              [slot]: input.itemId,
+            },
+          });
+          setProfile(equipped);
+          return equipped;
+        }
         setProfile(updated);
         return updated;
       } catch (err) {

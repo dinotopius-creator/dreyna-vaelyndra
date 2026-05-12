@@ -224,7 +224,7 @@ export function AvatarViewer({
   const outfitTheme =
     equippedOutfit3DId && CATALOG_BY_ID[equippedOutfit3DId]?.wearableThemeId
       ? (CATALOG_BY_ID[equippedOutfit3DId]!.wearableThemeId as OutfitTheme)
-      : "royal";
+      : "base";
   const accessoryTheme =
     equippedAccessory3DId && CATALOG_BY_ID[equippedAccessory3DId]?.wearableThemeId
       ? (CATALOG_BY_ID[equippedAccessory3DId]!.wearableThemeId as AccessoryTheme)
