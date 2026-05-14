@@ -22,6 +22,7 @@ from .models import UserProfile
 from .routers import (
     admin,
     catalog,
+    familiars,
     live,
     messages,
     oracle,
@@ -305,3 +306,5 @@ app.include_router(oracle.router)
 app.include_router(catalog.router_public)
 app.include_router(catalog.router_admin)
 app.include_router(stripe_router.router)
+app.include_router(familiars.router)
+app.include_router(familiars.user_router)

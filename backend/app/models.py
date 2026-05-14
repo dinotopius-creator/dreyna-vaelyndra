@@ -595,3 +595,84 @@ class ShopOrder(SQLModel, table=True):
     currency: str = Field(default="Lueurs")
     status: str = Field(default="paid", index=True)
     created_at: str = Field(default_factory=_now_iso, index=True)
+
+
+class UserFamiliar(SQLModel, table=True):
+    """Familier possédé par un membre.
+
+    Une ligne par (user, familier). Au max un seul `is_active=True` par
+    user (garanti par un index partiel côté DB + une logique anti-double
+    activation côté routeur dans la même transaction que le switch).
+
+    - `familiar_id` : slug du catalogue figé (`app.familiars.FAMILIARS_BY_ID`).
+    - `xp` : XP cumulé sur ce familier — converti en niveau via
+      `app.familiars.level_from_xp`. **L'XP n'est PAS partagé entre les
+      familiers d'un même user** : chaque familier a sa propre courbe de
+      niveau. Au "switch" (changement de familier actif), on TRANSFÈRE
+      l'XP courant du familier sortant vers le familier entrant pour
+      respecter la promesse produit "le familier neuf récupère la
+      progression" — cf. la logique du routeur.
+    - `nickname` : surnom donné par le user (optionnel).
+    - `acquired_at` : ISO timestamp d'acquisition.
+    - `last_active_at` : dernier ISO où ce familier a été l'actif. Sert
+      à afficher l'historique sur la page collection.
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: str = Field(index=True)
+    familiar_id: str = Field(index=True)
+    xp: int = Field(default=0)
+    nickname: Optional[str] = Field(default=None, max_length=40)
+    is_active: bool = Field(default=False, index=True)
+    acquired_at: str = Field(default_factory=_now_iso, index=True)
+    last_active_at: Optional[str] = Field(default=None)
+
+
+class FamiliarSwitchLedger(SQLModel, table=True):
+    """Journal append-only des changements de familier actif.
+
+    Une ligne par switch. Utile pour :
+    1. Auditer la règle "1er switch gratuit, suivants payants" :
+       en comptant les lignes pour un user on sait combien de switchs il
+       a déjà faits.
+    2. Tracer la consommation Sylvins liée aux switchs (la ligne pointe
+       sur la `WalletLedger` correspondante via `reference_id`).
+    3. Détecter de l'abus (trop de switchs très rapprochés = sans doute
+       un bug client qui spam le bouton).
+
+    `from_familiar_id` est `None` au tout premier switch (familier
+    d'onboarding choisi sans rien posséder avant).
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: str = Field(index=True)
+    from_familiar_id: Optional[str] = None
+    to_familiar_id: str = Field(index=True)
+    sylvins_cost: int = Field(default=0)
+    reason: str = Field(default="switch", index=True)
+    reference_id: Optional[str] = Field(default=None, index=True)
+    created_at: str = Field(default_factory=_now_iso, index=True)
+
+
+class FamiliarXPLedger(SQLModel, table=True):
+    """Journal append-only des gains d'XP du familier actif d'un membre.
+
+    Utile pour :
+    1. Limiter les farms (un seul gain "post" par jour, etc.) en
+       comptant les lignes récentes avec un `reason` donné.
+    2. Auditer les pertes / contestations XP.
+
+    Chaque ligne pointe sur le `UserFamiliar.id` de la cible (donc on
+    sait toujours QUEL familier a effectivement encaissé les XP au
+    moment du gain — un user qui switch plus tard ne perd pas la trace).
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: str = Field(index=True)
+    user_familiar_id: int = Field(index=True)
+    familiar_id: str = Field(index=True)
+    delta_xp: int
+    xp_after: int
+    reason: str = Field(default="", index=True)
+    reference_id: Optional[str] = Field(default=None, index=True)
+    created_at: str = Field(default_factory=_now_iso, index=True)
