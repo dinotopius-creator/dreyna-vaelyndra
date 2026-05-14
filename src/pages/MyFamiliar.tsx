@@ -267,7 +267,7 @@ export function MyFamiliar() {
         </div>
 
         <div className="relative mt-8">
-          <div className="mb-3 flex items-baseline justify-between gap-3">
+          <div className="mb-3 space-y-1">
             <h3 className="text-xs uppercase tracking-[0.3em] text-ivory/50">
               Caractéristiques
             </h3>
