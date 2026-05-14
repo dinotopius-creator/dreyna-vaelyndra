@@ -21,6 +21,7 @@ _QUEEN_IDS = {
 
 
 from ..db import get_session  # noqa: E402
+from ..familiars_xp import grant_social_xp  # noqa: E402
 from ..models import (  # noqa: E402
     Comment,
     CommunityActivityReward,
@@ -467,6 +468,10 @@ def create_post(
     author = session.get(UserProfile, payload.author_id)
     if author is not None:
         author.streamer_xp = (author.streamer_xp or 0) + XP_PER_POST
+    # PR familiers#2 — XP au familier actif de l'auteur (capé/jour).
+    grant_social_xp(
+        session, payload.author_id, "social:post:created", reference_id=post.id
+    )
     session.commit()
     session.refresh(post)
     handles = _resolve_handles(session, [post.author_id])
@@ -523,6 +528,15 @@ def toggle_reaction(
                 emoji=payload.emoji,
             )
         )
+        # PR familiers#2 — XP au familier actif du réacteur (capé/jour).
+        # On grant uniquement à l'ajout (toggle ON), pas au retrait, sinon
+        # un user pourrait farmer en cliquant en boucle.
+        grant_social_xp(
+            session,
+            payload.user_id,
+            "social:reaction:given",
+            reference_id=post_id,
+        )
     session.commit()
 
     reactions = session.exec(
@@ -564,6 +578,13 @@ def add_comment(
         content=payload.content,
     )
     session.add(comment)
+    # PR familiers#2 — XP au familier actif de l'auteur du commentaire.
+    grant_social_xp(
+        session,
+        payload.author_id,
+        "social:comment:created",
+        reference_id=comment.id,
+    )
     session.commit()
     session.refresh(comment)
     handles = _resolve_handles(session, [comment.author_id])

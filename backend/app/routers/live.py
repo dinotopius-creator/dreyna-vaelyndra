@@ -28,6 +28,7 @@ from sqlmodel import Session, select
 
 from ..auth.dependencies import optional_user, require_auth
 from ..db import get_session
+from ..familiars_xp import grant_social_xp
 from ..models import (
     LiveJoinRequest,
     LiveChatMessage,
@@ -157,6 +158,14 @@ def heartbeat(
                 last_heartbeat_at=now,
             )
             session.add(existing)
+            # PR familiers#2 — XP au familier actif au démarrage du live.
+            # Capé/jour (50 XP) pour empêcher de relancer 10 fois.
+            grant_social_xp(
+                session,
+                user.id,
+                "live:started",
+                reference_id=f"live:{user.id}:{now}",
+            )
         else:
             # Refresh du profil (pseudo/avatar peuvent changer pendant
             # le live) + des méta-données modifiables en vol.
@@ -589,6 +598,13 @@ def native_heartbeat(request: Request) -> LiveSessionOut:
                 last_heartbeat_at=now,
             )
             session.add(existing)
+            # PR familiers#2 — XP au familier actif au démarrage du live natif.
+            grant_social_xp(
+                session,
+                user.id,
+                "live:started",
+                reference_id=f"live:{user.id}:{now}",
+            )
         else:
             existing.broadcaster_name = user.username
             existing.broadcaster_avatar = user.avatar_image_url
