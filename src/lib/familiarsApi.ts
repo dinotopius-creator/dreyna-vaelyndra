@@ -141,35 +141,37 @@ export const EVOLUTION_TIERS: Record<string, { label: string; emoji: string }> =
     "tier-4-celestial": { label: "Céleste", emoji: "🪽" },
   };
 
-/** Libellés FR pour les stats cosmétiques. */
+/** Libellés FR pour les stats cosmétiques. Les clés correspondent
+ *  aux champs retournés par `FamiliarStats` côté backend (cf.
+ *  `backend/app/familiars.py`). */
 export const STAT_LABELS: Record<
   string,
   { label: string; emoji: string; help: string }
 > = {
-  aura_sociale: {
+  aura: {
     label: "Aura Sociale",
     emoji: "✨",
-    help: "Améliore légèrement ta visibilité sociale.",
+    help: "Tes interactions sociales (likes, follows, commentaires) gagnent un léger halo lumineux. Plus l'Aura est haute, plus ton passage se voit.",
   },
-  energie_live: {
+  energy: {
     label: "Énergie Live",
     emoji: "🔥",
-    help: "Anime tes lives d'effets bonus.",
+    help: "Pendant tes lives, ton familier réagit plus fort aux cadeaux et aux cœurs (sauts, particules, glow). L'écran du live est plus vivant pour tes viewers.",
   },
-  recolte_lueurs: {
+  harvest: {
     label: "Récolte de Lueurs",
     emoji: "🌙",
-    help: "Petits bonus de Lueurs à la moisson quotidienne.",
+    help: "Mini bonus pourcentuel sur ta moisson quotidienne de Lueurs (le daily-claim). Plus la stat est haute, plus tu grattes de Lueurs par jour.",
   },
-  affinite_sylvaine: {
+  affinity: {
     label: "Affinité Sylvaine",
     emoji: "💎",
-    help: "Petits effets cosmétiques premium.",
+    help: "Confère de petits effets cosmétiques premium (halo doré autour de ton avatar, particules sur ton profil) qui montrent ton lien aux Sylvains.",
   },
-  charisme: {
+  charisma: {
     label: "Charisme",
     emoji: "🪽",
-    help: "Effets visuels qui rayonnent autour de toi.",
+    help: "Effets visuels sociaux qui rayonnent autour de toi : aura colorée sur ton pseudo, plumets sur tes posts, signature lors d'un message.",
   },
 };
 
