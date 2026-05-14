@@ -321,6 +321,52 @@ def progress_in_level(xp: int) -> tuple[int, int, int]:
     return (level, max(0, xp - base), next_total - base)
 
 
+# --- Gains XP : sources sociales --------------------------------------------
+#
+# Tableau central des sources d'XP du familier. Chaque ligne mappe une
+# "raison" (clé déposée dans `FamiliarXPLedger.reason`) à un montant *de base*
+# et un plafond quotidien (en XP, pas en occurrences) pour empêcher le farm.
+#
+# Calibrage indicatif (cf. xp_required_for_level) :
+# - ~120-150 XP/jour pour un membre raisonnablement actif → niveau 10 en 2 sem.
+# - ~250-300 XP/jour pour un streamer très actif → niveau 25 en ~6 sem.
+#
+# Les caps sont volontairement *lâches* sur les sources difficiles à farmer
+# (cadeaux reçus, nouveaux liens d'âme) et *serrés* sur les sources faciles
+# (réactions, commentaires).
+SOCIAL_XP_RULES: Dict[str, Dict[str, int]] = {
+    # Postage de contenu : +20 XP par post, capé à 100 XP/jour (5 posts utiles).
+    "social:post:created": {"amount": 20, "daily_cap": 100},
+    # Commentaire : +5 XP, capé 50 XP/jour.
+    "social:comment:created": {"amount": 5, "daily_cap": 50},
+    # Réaction donnée : +2 XP, capé 30 XP/jour (anti-spam).
+    "social:reaction:given": {"amount": 2, "daily_cap": 30},
+    # Nouveau lien d'âme reçu : +25 XP, capé 200 XP/jour (≈ 8 followers/jour).
+    "social:follow:received": {"amount": 25, "daily_cap": 200},
+    # Live démarré : +50 XP, capé 50 XP/jour (1 fois par jour, pas exploitable
+    # en relançant 10 fois).
+    "live:started": {"amount": 50, "daily_cap": 50},
+}
+
+# Cadeau Sylvins reçu : XP = amount * 1, capé 1000 XP/jour (gros donateurs
+# autorisés). Pas de ligne dans SOCIAL_XP_RULES car le montant est dynamique.
+GIFT_RECEIVED_DAILY_CAP = 1000
+GIFT_SENT_DAILY_CAP = 200
+
+
+def gift_received_xp(amount_sylvins: int) -> int:
+    """XP gagné côté receiver pour un gift Sylvins ou item."""
+    return max(0, int(amount_sylvins))
+
+
+def gift_sent_xp(amount_sylvins: int) -> int:
+    """XP gagné côté sender pour avoir offert. Encourage la générosité.
+
+    1 XP tous les 3 Sylvins offerts (arrondi inférieur).
+    """
+    return max(0, int(amount_sylvins) // 3)
+
+
 def compute_familiar_stats(familiar_id: str | None, xp: int) -> FamiliarStats:
     """Retourne les stats effectives d'un familier (base + bonus de niveau).
 

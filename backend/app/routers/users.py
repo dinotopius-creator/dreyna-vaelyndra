@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -16,6 +16,11 @@ logger = logging.getLogger(__name__)
 from ..auth.dependencies import require_auth
 from ..creatures import CREATURES, get_creature
 from ..db import get_session
+from ..familiars_xp import (
+    grant_gift_received_xp,
+    grant_gift_sent_xp,
+    grant_social_xp,
+)
 from ..grades import (
     LEGEND_SLUG,
     grade_by_slug,
@@ -28,7 +33,20 @@ from ..handles import (
     slugify_handle,
     suggest_unique_handle,
 )
-from ..models import Follow, GiftLedger, ShopOrder, UserProfile, WalletLedger
+from ..familiars import (
+    evolution_for_level,
+    get_familiar,
+    progress_in_level,
+)
+from ..models import (
+    Follow,
+    GiftLedger,
+    ShopOrder,
+    UserFamiliar,
+    UserProfile,
+    WalletLedger,
+)
+from ..schemas import ActiveFamiliarSummary
 from .messages import (
     DIRECT_MESSAGE_LEGEND_SACRE,
     DREYNA_USER_ID,
@@ -103,6 +121,44 @@ def _creature_out(creature_id: str | None) -> CreatureOut | None:
     return CreatureOut(**c)
 
 
+def _active_familiar_summary(
+    session: Session, user_id: str
+) -> Optional[ActiveFamiliarSummary]:
+    """Retourne un résumé du familier actif d'un user, ou None.
+
+    Sert à embarquer le familier dans `UserProfileOut` sans rond-aller-
+    retour. Si l'utilisateur n'a pas encore choisi de familier (cas avant
+    onboarding obligatoire de PR 3), retourne None.
+    """
+    row = session.exec(
+        select(UserFamiliar)
+        .where(UserFamiliar.user_id == user_id)
+        .where(UserFamiliar.is_active == True)  # noqa: E712
+    ).first()
+    if row is None:
+        return None
+    fam = get_familiar(row.familiar_id)
+    if fam is None:
+        return None
+    level, xp_into, xp_to_next = progress_in_level(row.xp or 0)
+    evo = evolution_for_level(level)
+    return ActiveFamiliarSummary(
+        familiarId=row.familiar_id,
+        name=fam["name"],
+        icon=fam["icon"],
+        color=fam["color"],
+        tier=fam["tier"],
+        rarity=fam["rarity"],
+        level=level,
+        xp=row.xp or 0,
+        xpIntoLevel=xp_into,
+        xpToNextLevel=xp_to_next,
+        evolutionId=evo["id"],
+        evolutionName=evo["name"],
+        nickname=row.nickname,
+    )
+
+
 def _count_follows(session: Session, user_id: str) -> tuple[int, int]:
     """Compte (followers, following) pour un user en 2 requêtes SQL."""
     followers = session.exec(
@@ -168,8 +224,10 @@ def _to_out(p: UserProfile, session: Session | None = None) -> UserProfileOut:
     # DTO pour rester rétro-compatible.)
     followers_count = 0
     following_count = 0
+    familiar_summary = None
     if session is not None:
         followers_count, following_count = _count_follows(session, p.id)
+        familiar_summary = _active_familiar_summary(session, p.id)
     return UserProfileOut(
         id=p.id,
         username=p.username,
@@ -193,6 +251,7 @@ def _to_out(p: UserProfile, session: Session | None = None) -> UserProfileOut:
         followersCount=followers_count,
         followingCount=following_count,
         grade=_grade_out(p),
+        familiar=familiar_summary,
         createdAt=p.created_at,
         updatedAt=p.updated_at,
     )
@@ -898,6 +957,11 @@ def gift_sylvins(
     # automatiquement ; un admin peut ajuster via `/admin/users/{id}/xp-adjust`
     # si besoin de modérer).
     receiver.streamer_xp = (receiver.streamer_xp or 0) + amount * XP_PER_SYLVIN_RECEIVED
+    # PR familiers#2 — XP au familier du receiver (proportionnel) + au
+    # familier du sender (générosité, ratio 1/3).
+    gift_ref = f"gift:{sender.id}->{receiver.id}:{amount}"
+    grant_gift_received_xp(session, receiver.id, amount, reference_id=gift_ref)
+    grant_gift_sent_xp(session, sender.id, amount, reference_id=gift_ref)
     session.commit()
     session.refresh(sender)
     session.refresh(receiver)
@@ -987,6 +1051,14 @@ def gift_item(
     if payload.currency == "sylvins":
         receiver.streamer_xp = (
             (receiver.streamer_xp or 0) + payload.price * XP_PER_SYLVIN_RECEIVED
+        )
+        # PR familiers#2 — XP au familier des deux parties (sylvins only).
+        item_ref = f"gift-item:{sender.id}->{receiver.id}:{payload.item_id}"
+        grant_gift_received_xp(
+            session, receiver.id, payload.price, reference_id=item_ref
+        )
+        grant_gift_sent_xp(
+            session, sender.id, payload.price, reference_id=item_ref
         )
 
     _touch(sender)
@@ -1182,6 +1254,15 @@ def follow_user(
         # retire pas d'XP sur unfollow (pour éviter les guerres de trolls) —
         # l'XP est une mesure cumulative de l'activité, pas du solde réel.
         target.streamer_xp = (target.streamer_xp or 0) + XP_PER_SUBSCRIBER
+        # PR familiers#2 — XP au familier de la cible pour un nouveau lien
+        # d'âme. Capé/jour (cf. SOCIAL_XP_RULES) pour empêcher un raid de
+        # follow/unfollow d'un compte unique de faire monter le familier.
+        grant_social_xp(
+            session,
+            target_id,
+            "social:follow:received",
+            reference_id=f"follow:{follower_id}",
+        )
         session.commit()
     return _to_out(target, session)
 

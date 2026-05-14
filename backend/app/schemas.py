@@ -197,6 +197,31 @@ class CreatureOut(BaseModel):
     description: str
 
 
+class ActiveFamiliarSummary(BaseModel):
+    """Résumé du familier actif d'un membre, embarqué sur `UserProfileOut`.
+
+    Suffisant pour afficher partout dans l'app (header, profil, post card,
+    overlay live) le sticker + niveau + palier du familier de quelqu'un
+    sans appel supplémentaire. Pour la page Mon Familier détaillée, on
+    appelle `GET /users/{id}/familiers` qui donne la collection complète
+    + stats détaillées par familier.
+    """
+
+    familiarId: str
+    name: str
+    icon: str
+    color: str
+    tier: str
+    rarity: str
+    level: int
+    xp: int
+    xpIntoLevel: int
+    xpToNextLevel: int
+    evolutionId: str
+    evolutionName: str
+    nickname: Optional[str] = None
+
+
 class FollowerOut(BaseModel):
     """Extrait d'un profil utilisé pour afficher follower/following lists."""
 
@@ -352,6 +377,9 @@ class UserProfileOut(BaseModel):
     followingCount: int = 0
     # PR M — grade spirituel dérivé de streamer_xp (+ override admin).
     grade: Optional[StreamerGradeOut] = None
+    # PR familiers#2 — résumé du familier actif (None tant que le membre
+    # n'a pas fait son onboarding obligatoire de PR 3).
+    familiar: Optional["ActiveFamiliarSummary"] = None
     createdAt: str
     updatedAt: str
 
