@@ -220,6 +220,11 @@ class ActiveFamiliarSummary(BaseModel):
     evolutionId: str
     evolutionName: str
     nickname: Optional[str] = None
+    # Caractéristiques effectives (cf. backend/app/familiars.py).
+    # Câblées sur le site : `harvest` bonifie le daily-claim,
+    # `energy` densifie les réactions live, `aura` / `charisma` /
+    # `affinity` augmentent les effets visuels autour du membre.
+    stats: dict[str, int] = {}
 
 
 class FollowerOut(BaseModel):
@@ -420,6 +425,9 @@ class DailyClaimOut(BaseModel):
     granted: int
     already_claimed: bool = False
     profile: UserProfileOut
+    # Bonus apporté par la stat `harvest` (Récolte de Lueurs) du familier
+    # actif. 0 si pas de familier ou stat à 0.
+    harvest_bonus: int = 0
 
 
 class UserSearchHitOut(BaseModel):

@@ -34,6 +34,7 @@ from ..handles import (
     suggest_unique_handle,
 )
 from ..familiars import (
+    compute_familiar_stats,
     evolution_for_level,
     get_familiar,
     progress_in_level,
@@ -156,6 +157,7 @@ def _active_familiar_summary(
         evolutionId=evo["id"],
         evolutionName=evo["name"],
         nickname=row.nickname,
+        stats=dict(compute_familiar_stats(row.familiar_id, row.xp or 0)),
     )
 
 
@@ -1188,17 +1190,40 @@ def daily_claim(
             return DailyClaimOut(
                 granted=0, already_claimed=True, profile=_to_out(p, session)
             )
+    # Bonus de moisson : la stat `harvest` du familier actif (0..99)
+    # ajoute jusqu'à ~24 Lueurs supplémentaires (harvest // 4).
+    harvest_bonus = 0
+    active = session.exec(
+        select(UserFamiliar)
+        .where(UserFamiliar.user_id == p.id)
+        .where(UserFamiliar.is_active == True)  # noqa: E712
+    ).first()
+    if active is not None:
+        stats = compute_familiar_stats(active.familiar_id, active.xp or 0)
+        harvest_bonus = stats.get("harvest", 0) // 4
+    granted = DAILY_REWARD_LUEURS + harvest_bonus
     before = _snapshot_wallet(p)
-    p.lueurs += DAILY_REWARD_LUEURS
+    p.lueurs += granted
     p.last_daily_at = now.isoformat()
     _touch(p)
     _record_wallet_movements(
-        session, p.id, before=before, after=p, reason="daily-claim"
+        session,
+        p.id,
+        before=before,
+        after=p,
+        reason=(
+            f"daily-claim+harvest:{harvest_bonus}"
+            if harvest_bonus
+            else "daily-claim"
+        ),
     )
     session.commit()
     session.refresh(p)
     return DailyClaimOut(
-        granted=DAILY_REWARD_LUEURS, already_claimed=False, profile=_to_out(p, session)
+        granted=granted,
+        already_claimed=False,
+        profile=_to_out(p, session),
+        harvest_bonus=harvest_bonus,
     )
 
 

@@ -331,6 +331,8 @@ export interface DailyClaimDto {
   granted: number;
   already_claimed: boolean;
   profile: UserProfileDto;
+  /** Bonus apporté par la stat `harvest` du familier actif (0 sinon). */
+  harvest_bonus?: number;
 }
 
 export async function apiUpsertProfile(input: {

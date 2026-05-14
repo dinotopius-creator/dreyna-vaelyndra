@@ -74,21 +74,29 @@ export function LiveFamiliarOverlay({
     };
   }, [broadcasterId]);
 
-  // Burst sur cadeau reçu : rebond + jet de 6 particules.
+  // Burst sur cadeau reçu : rebond + jet de particules.
+  // La densité est conditionnée par la stat `energy` du familier :
+  //   energy = 0   → 4 particules
+  //   energy = 50  → ~8 particules
+  //   energy = 99  → ~12 particules
   useEffect(() => {
     if (!familiar) return;
     if (giftTick === lastGiftSeen.current) return;
     lastGiftSeen.current = giftTick;
     setReactionKey((k) => k + 1);
     const tint = lastGiftColor ?? familiar.color;
+    const energy = familiar.stats?.energy ?? 0;
+    const particleCount = 4 + Math.floor(energy / 12); // 4..12
     const now = Date.now();
-    const next: Particle[] = Array.from({ length: 6 }).map((_, i) => ({
-      id: `${now}-${i}`,
-      dx: (i - 2.5) * 18 + (Math.random() - 0.5) * 12,
-      dy: -60 - Math.random() * 30,
-      emoji:
-        REACTION_EMOJIS[Math.floor(Math.random() * REACTION_EMOJIS.length)],
-    }));
+    const next: Particle[] = Array.from({ length: particleCount }).map(
+      (_, i) => ({
+        id: `${now}-${i}`,
+        dx: (i - (particleCount - 1) / 2) * 18 + (Math.random() - 0.5) * 12,
+        dy: -60 - Math.random() * 30,
+        emoji:
+          REACTION_EMOJIS[Math.floor(Math.random() * REACTION_EMOJIS.length)],
+      }),
+    );
     setParticles((p) => [...p, ...next]);
     const toClean = next.map((n) => n.id);
     const t = window.setTimeout(() => {
