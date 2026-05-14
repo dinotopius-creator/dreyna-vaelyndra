@@ -266,35 +266,57 @@ export function MyFamiliar() {
           </div>
         </div>
 
-        <div className="relative mt-8 grid grid-cols-2 gap-3 sm:grid-cols-5">
-          {Object.entries(active.stats).map(([key, value]) => {
-            const meta = STAT_LABELS[key] ?? {
-              label: key,
-              emoji: "✨",
-              help: "",
-            };
-            const pct = Math.min(100, Math.max(0, value));
-            return (
-              <div
-                key={key}
-                className="rounded-2xl border border-ivory/10 bg-night-800/50 p-3"
-                title={meta.help}
-              >
-                <div className="flex items-center justify-between text-[11px] uppercase tracking-widest text-ivory/50">
-                  <span>
-                    {meta.emoji} {meta.label}
-                  </span>
-                  <span className="text-ivory">{value}</span>
+        <div className="relative mt-8">
+          <div className="mb-3 flex items-baseline justify-between gap-3">
+            <h3 className="text-xs uppercase tracking-[0.3em] text-ivory/50">
+              Caractéristiques
+            </h3>
+            <p className="text-[11px] text-ivory/40">
+              Notées sur 100 — montent avec le niveau de ton familier
+            </p>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {Object.entries(active.stats).map(([key, value]) => {
+              const meta = STAT_LABELS[key] ?? {
+                label: key,
+                emoji: "✨",
+                help: "",
+              };
+              const pct = Math.min(100, Math.max(0, value));
+              return (
+                <div
+                  key={key}
+                  className="flex flex-col gap-2 rounded-2xl border border-ivory/10 bg-night-800/50 p-3"
+                >
+                  <div className="flex items-center justify-between text-[11px] uppercase tracking-widest text-ivory/60">
+                    <span className="flex items-center gap-1.5 text-ivory/80">
+                      <span aria-hidden>{meta.emoji}</span>
+                      {meta.label}
+                    </span>
+                    <span className="text-sm font-semibold text-ivory">
+                      {value}
+                    </span>
+                  </div>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-night-900/80">
+                    <div
+                      className="h-full bg-gradient-to-r from-violet-400 via-fuchsia-300 to-gold-300"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  {meta.help && (
+                    <p className="text-[11px] leading-snug text-ivory/55">
+                      {meta.help}
+                    </p>
+                  )}
                 </div>
-                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-night-900/80">
-                  <div
-                    className="h-full bg-gradient-to-r from-violet-400 via-fuchsia-300 to-gold-300"
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
+          <p className="mt-3 text-[11px] text-ivory/45">
+            Les caractéristiques sont purement cosmétiques et conviviales —
+            aucun avantage de jeu. Plus elles montent, plus tes interactions
+            sociales et tes lives sont visuellement enrichis.
+          </p>
         </div>
       </motion.div>
 

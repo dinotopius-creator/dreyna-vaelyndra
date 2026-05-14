@@ -14,6 +14,7 @@ import { Loader2, Sparkles } from "lucide-react";
 import {
   fetchFamiliarsCatalog,
   chooseFirstFamiliar,
+  STAT_LABELS,
   type FamiliarCatalogItem,
 } from "../lib/familiarsApi";
 import { useToast } from "../contexts/ToastContext";
@@ -137,6 +138,32 @@ export function FamiliarOnboardingModal({ userId, open, onChosen }: Props) {
 
             {catalog && (
               <div className="-mx-2 mt-4 flex-1 overflow-y-auto overscroll-contain px-2 pb-2 sm:mt-6">
+                <details className="group mb-4 rounded-2xl border border-ivory/10 bg-night-800/40 p-3 open:bg-night-800/60">
+                  <summary className="flex cursor-pointer list-none items-center justify-between text-xs uppercase tracking-widest text-ivory/60">
+                    <span>Comprendre les caractéristiques</span>
+                    <span className="text-ivory/40 transition group-open:rotate-180">
+                      ⌄
+                    </span>
+                  </summary>
+                  <ul className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {Object.entries(STAT_LABELS).map(([key, meta]) => (
+                      <li
+                        key={key}
+                        className="rounded-xl bg-night-900/60 p-2 text-[11px] leading-snug text-ivory/70"
+                      >
+                        <span className="font-semibold text-ivory">
+                          {meta.emoji} {meta.label}
+                        </span>
+                        <span className="block text-ivory/55">{meta.help}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-2 text-[10px] text-ivory/40">
+                    Toutes les caractéristiques sont cosmétiques — aucun
+                    avantage de jeu. Ton familier les fait monter en gagnant
+                    de l'XP au fil de tes interactions.
+                  </p>
+                </details>
                 <div className="">
                   <h3 className="text-xs uppercase tracking-widest text-ivory/50">
                     Familiers d'éveil — gratuits
@@ -207,6 +234,35 @@ export function FamiliarOnboardingModal({ userId, open, onChosen }: Props) {
   );
 }
 
+interface StatsPreviewProps {
+  baseStats: Record<string, number>;
+}
+
+function FamiliarStatsPreview({ baseStats }: StatsPreviewProps) {
+  const top = Object.entries(baseStats)
+    .map(([key, value]) => ({
+      key,
+      value,
+      meta: STAT_LABELS[key],
+    }))
+    .filter((entry) => entry.meta)
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 2);
+  if (top.length === 0) return null;
+  return (
+    <ul className="mt-1 w-full space-y-1 text-left text-[10px] text-ivory/55">
+      {top.map((entry) => (
+        <li key={entry.key} className="flex items-center justify-between gap-2">
+          <span className="truncate" title={entry.meta!.help}>
+            {entry.meta!.emoji} {entry.meta!.label}
+          </span>
+          <span className="tabular-nums text-ivory/70">{entry.value}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 interface ChoiceCardProps {
   familiar: FamiliarCatalogItem;
   selected: boolean;
@@ -255,6 +311,7 @@ function FamiliarChoiceCard({
       <span className="text-[11px] leading-snug text-ivory/60">
         {familiar.tagline}
       </span>
+      <FamiliarStatsPreview baseStats={familiar.baseStats} />
       {locked && (
         <span className="mt-1 rounded-full bg-night-900/80 px-2 py-0.5 text-[10px] uppercase tracking-wider text-gold-300/80">
           {familiar.priceSylvins} Sylvins
