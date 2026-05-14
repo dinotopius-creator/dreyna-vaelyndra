@@ -36,6 +36,7 @@ import { LIVE_CATEGORIES, getLiveCategory } from "../data/liveCategories";
 import { SectionHeading } from "../components/SectionHeading";
 import { GiftPanel } from "../components/GiftPanel";
 import { GiftFlight, type GiftFlightItem } from "../components/GiftFlight";
+import { LiveFamiliarOverlay } from "../components/LiveFamiliarOverlay";
 import { LiveChatHistory } from "../components/LiveChatHistory";
 import { LiveChatOverlay } from "../components/LiveChatOverlay";
 import { LiveHeartsOverlay } from "../components/LiveHeartsOverlay";
@@ -84,6 +85,16 @@ import {
   pickInitialViewers,
   pickNextBotDelay,
 } from "../lib/liveScaling";
+
+// PR familiers#5 — couleur d'ambiance par rareté pour teinter les
+// réactions du familier (overlay) à chaque cadeau reçu.
+const GIFT_RARITY_COLORS: Record<string, string> = {
+  commun: "#9ca3af",
+  rare: "#60a5fa",
+  epique: "#a78bfa",
+  legendaire: "#fbbf24",
+  mythique: "#f472b6",
+};
 
 const BOT_AUTHORS = [
   {
@@ -1196,6 +1207,12 @@ export function Live() {
     { emitterId: string; x: number }[]
   >([]);
   const [giftFlights, setGiftFlights] = useState<GiftFlightItem[]>([]);
+  // PR familiers#5 — compteurs monotones pour déclencher les réactions
+  // du familier du broadcaster (cf. <LiveFamiliarOverlay/>). On évite
+  // de tirer la dépendance sur le flux complet : un simple "tick" suffit.
+  const [giftTick, setGiftTick] = useState(0);
+  const [lastGiftColor, setLastGiftColor] = useState<string | null>(null);
+  const [heartTick, setHeartTick] = useState(0);
   // Agrégat des Sylvins offerts au broadcaster courant pendant la
   // séance en cours, clé par senderId. Alimenté UNIQUEMENT par les
   // vrais cadeaux reçus via le canal `gift-event` du WebRTC — plus
@@ -1358,6 +1375,11 @@ export function Live() {
         () => setGiftFlights((f) => f.filter((x) => x.id !== flightId)),
         5400,
       );
+
+      // PR familiers#5 — déclenche la réaction du familier du
+      // broadcaster (saut + particules teintées par la rareté du don).
+      setLastGiftColor(GIFT_RARITY_COLORS[gift.rarity] ?? null);
+      setGiftTick((t) => t + 1);
 
       // 2. Son procédural par rarété.
       playGiftSound(gift.rarity);
@@ -1794,6 +1816,7 @@ export function Live() {
     // Position horizontale aléatoire mais bornée pour rester centrée.
     const x = 20 + Math.random() * 60;
     setHeartEvents((h) => [...h.slice(-64), { emitterId, x }]);
+    setHeartTick((t) => t + 1);
     if (!user) return;
     const liveKey = registryEntry?.startedAt ?? config.startedAt ?? "pending";
     const announceKey = `${broadcasterId}:${liveKey}:${user.id}`;
@@ -2141,6 +2164,20 @@ export function Live() {
                   mémoire du `Set` accumulateur. */}
               <LiveHeartsOverlay key={broadcasterId} events={heartEvents} />
               <GiftFlight items={giftFlights} />
+
+              {/* PR familiers#5 — familier du broadcaster en bas-gauche
+                  du player. Réagit aux cadeaux (saut + particules
+                  teintées) et aux cœurs (micro-rebond). Toujours visible
+                  côté host ET viewers via le même flux WebRTC. */}
+              {broadcasterId && (
+                <LiveFamiliarOverlay
+                  key={broadcasterId}
+                  broadcasterId={broadcasterId}
+                  giftTick={giftTick}
+                  lastGiftColor={lastGiftColor}
+                  heartTick={heartTick}
+                />
+              )}
 
               {/* Top Soutiens : plus de version overlay nulle part —
                   rendu uniquement dans le panneau d'infos sous le
