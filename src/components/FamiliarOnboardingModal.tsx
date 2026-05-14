@@ -86,7 +86,7 @@ export function FamiliarOnboardingModal({ userId, open, onChosen }: Props) {
     <AnimatePresence>
       {open && (
         <motion.div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-night-900/90 p-4 backdrop-blur-md"
+          className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto overscroll-contain bg-night-900/90 p-3 backdrop-blur-md sm:items-center sm:p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="familiar-onboarding-title"
@@ -96,7 +96,7 @@ export function FamiliarOnboardingModal({ userId, open, onChosen }: Props) {
           onClick={(e) => e.stopPropagation()}
         >
           <motion.div
-            className="card-royal relative w-full max-w-3xl overflow-hidden p-6 sm:p-8"
+            className="card-royal relative my-auto flex max-h-[calc(100dvh-1.5rem)] w-full max-w-3xl flex-col overflow-hidden p-5 sm:max-h-[calc(100dvh-2rem)] sm:p-8"
             initial={{ scale: 0.92, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.92, opacity: 0 }}
@@ -136,8 +136,8 @@ export function FamiliarOnboardingModal({ userId, open, onChosen }: Props) {
             )}
 
             {catalog && (
-              <>
-                <div className="mt-6">
+              <div className="-mx-2 mt-4 flex-1 overflow-y-auto overscroll-contain px-2 pb-2 sm:mt-6">
+                <div className="">
                   <h3 className="text-xs uppercase tracking-widest text-ivory/50">
                     Familiers d'éveil — gratuits
                   </h3>
@@ -176,27 +176,29 @@ export function FamiliarOnboardingModal({ userId, open, onChosen }: Props) {
                     </div>
                   </div>
                 )}
+              </div>
+            )}
 
-                <div className="mt-8 flex flex-col items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={confirm}
-                    disabled={!selected || confirming}
-                    className="btn-gold w-full max-w-xs justify-center disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {confirming ? (
-                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                    ) : (
-                      "Sceller le pacte"
-                    )}
-                  </button>
-                  <p className="text-[11px] text-ivory/50">
-                    Tu pourras changer plus tard depuis la page Mon Familier
-                    (1er changement gratuit, puis 300 Sylvins). Ta progression
-                    suivra ton nouveau familier.
-                  </p>
-                </div>
-              </>
+            {catalog && (
+              <div className="mt-4 flex flex-col items-center gap-2 border-t border-ivory/10 pt-4">
+                <button
+                  type="button"
+                  onClick={confirm}
+                  disabled={!selected || confirming}
+                  className="btn-gold w-full max-w-xs justify-center disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {confirming ? (
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  ) : (
+                    "Sceller le pacte"
+                  )}
+                </button>
+                <p className="text-center text-[11px] text-ivory/50">
+                  Tu pourras changer plus tard depuis la page Mon Familier
+                  (1er changement gratuit, puis 300 Sylvins). Ta progression
+                  suivra ton nouveau familier.
+                </p>
+              </div>
             )}
           </motion.div>
         </motion.div>
