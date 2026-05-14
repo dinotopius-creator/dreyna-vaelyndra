@@ -492,6 +492,27 @@ export function Me() {
       </section>
 
       <section className="mt-12">
+        <SectionHeading
+          align="left"
+          eyebrow="Familier"
+          title={<>Ton <span className="text-mystic">familier</span></>}
+          subtitle="Compagnon de chemin unique pour chaque membre. Il gagne de l’XP à mesure que tu postes, commentes, lances des lives ou reçois des cadeaux."
+        />
+        <div className="mt-6 card-royal flex flex-col items-start gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-ivory/75">
+            Niveau, palier d’évolution, statistiques cosmétiques et collection
+            de familiers : tout est dans ta page dédiée.
+          </p>
+          <Link
+            to="/familier"
+            className="inline-flex items-center gap-2 self-start rounded-full bg-gold-shine px-5 py-3 font-regal text-[11px] tracking-[0.22em] text-night-900 transition hover:brightness-110"
+          >
+            ✨ Aller à Mon Familier
+          </Link>
+        </div>
+      </section>
+
+      <section className="mt-12">
         <WishlistSection
           wishlist={serverProfile?.wishlist ?? []}
           ownedIds={serverProfile?.inventory ?? []}

@@ -10,6 +10,7 @@ import { Guarded } from "./components/Guarded";
 import { EasterEggs } from "./components/EasterEggs";
 import { CookieBanner } from "./components/CookieBanner";
 import { FloatingLiveChat } from "./components/FloatingLiveChat";
+import { FamiliarOnboardingGate } from "./components/FamiliarOnboardingGate";
 
 const BlogList = lazy(async () => {
   const mod = await import("./pages/BlogList");
@@ -119,6 +120,10 @@ const Avatar = lazy(async () => {
   const mod = await import("./pages/Avatar");
   return { default: mod.Avatar };
 });
+const MyFamiliar = lazy(async () => {
+  const mod = await import("./pages/MyFamiliar");
+  return { default: mod.MyFamiliar };
+});
 const Messages = lazy(async () => {
   const mod = await import("./pages/Messages");
   return { default: mod.Messages };
@@ -210,6 +215,14 @@ function AnimatedRoutes() {
               }
             />
             <Route
+              path="/familier"
+              element={
+                <Guarded>
+                  <MyFamiliar />
+                </Guarded>
+              }
+            />
+            <Route
               path="/messages"
               element={
                 <Guarded>
@@ -292,6 +305,7 @@ function App() {
       <Footer />
       <CookieBanner />
       <FloatingLiveChat />
+      <FamiliarOnboardingGate />
     </div>
   );
 }
