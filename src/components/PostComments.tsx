@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Send, Trash2 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
+import { useProfile } from "../contexts/ProfileContext";
 import { useStore } from "../contexts/StoreContext";
 import { useToast } from "../contexts/ToastContext";
 import { formatRelative } from "../lib/helpers";
@@ -26,6 +27,7 @@ export function PostComments({
   avatarOverrides = {},
 }: Props) {
   const { user, users, isQueen } = useAuth();
+  const { refresh: refreshProfile } = useProfile();
   const { dispatch } = useStore();
   const { notify } = useToast();
   const [draft, setDraft] = useState("");
@@ -56,6 +58,9 @@ export function PostComments({
       });
       dispatch({ type: "addPostComment", postId, comment });
       setDraft("");
+      // Rafraîchit le profil pour afficher +5 XP gagnés par le familier
+      // (le backend cape à 50 XP/jour pour les commentaires).
+      void refreshProfile();
     } catch (err) {
       console.warn(err);
       notify("Commentaire perdu en route.", "error");

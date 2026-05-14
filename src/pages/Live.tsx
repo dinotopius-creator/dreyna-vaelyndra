@@ -25,6 +25,7 @@ import {
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useStore } from "../contexts/StoreContext";
 import { useAuth } from "../contexts/AuthContext";
+import { useProfile } from "../contexts/ProfileContext";
 import { useToast } from "../contexts/ToastContext";
 import {
   LIVE_DESCRIPTION_MAX,
@@ -516,10 +517,19 @@ function BroadcasterControls() {
     (screenShareSupported && !isMobile) || nativeScreenShareSupported;
 
   const isLive = config.status === "live";
+  const { refresh: refreshProfile } = useProfile();
 
   useEffect(() => {
     if (lastError) notify(lastError, "info");
   }, [lastError, notify]);
+
+  // Au démarrage d'un live, le backend grant +50 XP au familier du
+  // streamer (capé 1×/jour). On rafraîchit le profil pour que la barre
+  // de progression et le palier soient à jour côté UI.
+  useEffect(() => {
+    if (!isLive) return;
+    void refreshProfile();
+  }, [isLive, refreshProfile]);
 
   // Le mode "twitch" est désormais accessible à tous les streamers (pas
   // seulement aux reines — cf. PR #81). Un utilisateur mobile qui streame

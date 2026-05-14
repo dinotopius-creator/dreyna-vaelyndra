@@ -205,6 +205,9 @@ export function Community() {
       setImageUrl("");
       setVideoUrl("");
       notify("Publication envoyée ✨");
+      // Rafraîchit le profil pour afficher l'XP gagné par le familier
+      // (le backend a grant +20 XP au familier actif côté API).
+      void refreshProfile();
     } catch (err) {
       console.warn(err);
       notify("La publication n'a pas pu être envoyée. Réessaie.", "error");
@@ -220,6 +223,9 @@ export function Community() {
     try {
       const fresh = await apiToggleReaction(postId, user.id, emoji);
       dispatch({ type: "replacePost", post: fresh });
+      // Rafraîchit le profil pour refléter +2 XP au familier à chaque
+      // réaction ajoutée (le backend cape à 30 XP/jour).
+      void refreshProfile();
     } catch (err) {
       console.warn(err);
       dispatch({ type: "reactPost", postId, emoji, userId: user.id });
