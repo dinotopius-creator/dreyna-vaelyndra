@@ -119,6 +119,18 @@ def _apply_migrations() -> None:
             "CREATE UNIQUE INDEX IF NOT EXISTS communityreward_week_rank_unique "
             "ON communityactivityreward (week_start_iso, rank)"
         )
+        # Système de familiers (PR familiers#1).
+        # Un seul familier actif par user — index partiel pour bloquer la
+        # double activation au niveau SQL (en plus de la garde transaction).
+        conn.exec_driver_sql(
+            "CREATE UNIQUE INDEX IF NOT EXISTS userfamiliar_active_per_user "
+            "ON userfamiliar (user_id) WHERE is_active = 1"
+        )
+        # Un user ne peut posséder qu'une seule fois le même familier.
+        conn.exec_driver_sql(
+            "CREATE UNIQUE INDEX IF NOT EXISTS userfamiliar_user_familiar_unique "
+            "ON userfamiliar (user_id, familiar_id)"
+        )
 
         # One-shot : reset du wallet de Dreyna (dé-Dreyna-isation du site).
         # Son compte devient un profil normal d'animatrice ; on purge les
