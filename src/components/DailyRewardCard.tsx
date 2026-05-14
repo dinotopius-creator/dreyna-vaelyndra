@@ -54,7 +54,12 @@ export function DailyRewardCard({ className }: { className?: string }) {
       if (res.already_claimed) {
         notify("Récompense déjà réclamée — revenez plus tard.", "info");
       } else {
-        notify(`+${res.granted} Lueurs ajoutés à votre bourse ✨`);
+        const bonus = res.harvest_bonus ?? 0;
+        const suffix =
+          bonus > 0
+            ? ` (dont +${bonus} grâce à ta Récolte de Lueurs 🌙)`
+            : "";
+        notify(`+${res.granted} Lueurs ajoutés à ta bourse ✨${suffix}`);
       }
     } catch {
       notify("Impossible de réclamer la récompense. Réessayez.", "error");

@@ -361,21 +361,52 @@ interface StickerProps {
 
 function FamiliarSticker({ familiar, size = "sm" }: StickerProps) {
   const dim = size === "lg" ? "h-32 w-32 text-7xl" : "h-16 w-16 text-3xl";
+  // Les caractéristiques cosmétiques scalent les effets visuels :
+  //   aura → intensité du halo,
+  //   charisma → anneau pulsant autour du familier,
+  //   affinity → étincelle premium en haut à droite.
+  const aura = familiar.stats?.aura ?? 0;
+  const charisma = familiar.stats?.charisma ?? 0;
+  const affinity = familiar.stats?.affinity ?? 0;
+  const haloPx = 18 + Math.round((aura / 99) * 30); // 18..48
+  const haloAlpha = Math.min(0.85, 0.25 + aura / 200);
+  const ringOpacity = Math.min(0.8, charisma / 140);
   return (
     <motion.div
       className={`relative flex shrink-0 items-center justify-center rounded-3xl border ${dim}`}
       style={{
-        background: `radial-gradient(circle at 50% 40%, ${familiar.color}33, ${familiar.color}11 60%, transparent)`,
+        background: `radial-gradient(circle at 50% 40%, ${familiar.color}${Math.round(haloAlpha * 80).toString(16).padStart(2, "0")}, ${familiar.color}11 60%, transparent)`,
         borderColor: `${familiar.color}55`,
-        boxShadow: `0 0 30px -8px ${familiar.color}`,
+        boxShadow: `0 0 ${haloPx}px -8px ${familiar.color}`,
       }}
       animate={{ y: [0, -4, 0] }}
       transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
       aria-hidden
     >
+      {ringOpacity > 0.05 && (
+        <motion.span
+          className="pointer-events-none absolute inset-[-6px] rounded-3xl"
+          style={{
+            border: `1px solid ${familiar.color}`,
+            opacity: ringOpacity,
+          }}
+          animate={{ scale: [1, 1.06, 1], opacity: [ringOpacity, ringOpacity * 0.4, ringOpacity] }}
+          transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
+        />
+      )}
       <span style={{ filter: `drop-shadow(0 0 10px ${familiar.color})` }}>
         {familiar.icon}
       </span>
+      {affinity >= 22 && (
+        <motion.span
+          className="pointer-events-none absolute -right-1 -top-1 text-xs"
+          style={{ filter: `drop-shadow(0 0 4px ${familiar.color})` }}
+          animate={{ opacity: [0.4, 1, 0.4], scale: [0.9, 1.1, 0.9] }}
+          transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+        >
+          ✦
+        </motion.span>
+      )}
     </motion.div>
   );
 }
