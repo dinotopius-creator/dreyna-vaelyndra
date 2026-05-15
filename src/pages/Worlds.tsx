@@ -215,7 +215,7 @@ export function Worlds() {
     }
 
     void refreshPresence();
-    const timer = window.setInterval(refreshPresence, 5000);
+    const timer = window.setInterval(refreshPresence, 1200); // poll more frequently for smoother movement
     return () => {
       cancelled = true;
       window.clearInterval(timer);
