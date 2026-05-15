@@ -154,6 +154,40 @@ export function Worlds() {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const rafRef = useRef<number | null>(null);
 
+  const mapRef = useRef<HTMLDivElement | null>(null);
+  const pointerDownRef = useRef(false);
+
+  function setPositionFromClient(clientX: number, clientY: number) {
+    const rect = mapRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const x = ((clientX - rect.left) / rect.width) * 100;
+    const y = ((clientY - rect.top) / rect.height) * 100;
+    const newX = clamp(x, 10, 88);
+    const newY = clamp(y, 18, 84);
+    setPosition({ x: newX, y: newY });
+    try {
+      window.dispatchEvent(new CustomEvent("vaelyndra:position-change", { detail: { x: newX, y: newY } }));
+    } catch {
+      // ignore
+    }
+  }
+
+  function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    pointerDownRef.current = true;
+    try { (e.target as Element).setPointerCapture?.(e.pointerId); } catch {}
+    setPositionFromClient(e.clientX, e.clientY);
+  }
+
+  function handlePointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!pointerDownRef.current) return;
+    setPositionFromClient(e.clientX, e.clientY);
+  }
+
+  function handlePointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    pointerDownRef.current = false;
+    try { (e.target as Element).releasePointerCapture?.(e.pointerId); } catch {}
+  }
+
   const selectedDistrict = useMemo(
     () => DISTRICTS.find((entry) => entry.id === district) ?? DISTRICTS[0],
     [district],
@@ -522,6 +556,11 @@ export function Worlds() {
 
           <div className="relative overflow-hidden p-5">
             <div
+              ref={mapRef}
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerCancel={handlePointerUp}
               className={`relative min-h-[360px] sm:min-h-[520px] md:min-h-[620px] overflow-hidden rounded-[30px] border border-white/10 bg-gradient-to-br ${selectedDistrict.accent}`}
             >
               <DistrictBackdrop district={district} />
