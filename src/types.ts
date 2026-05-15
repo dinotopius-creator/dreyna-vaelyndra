@@ -231,3 +231,17 @@ export interface LiveViewerSummary {
   avatar: string;
   joinedAt: string;
 }
+
+/**
+ * Pièce jointe dans un message privé.
+ * Stockée comme base64 dans le contenu du message pour persistence.
+ */
+export interface MessageAttachment {
+  id: string;
+  filename: string;
+  mimeType: string;
+  size: number; // bytes
+  base64Data: string;
+  createdAt: string;
+  flagged?: boolean; // true si contenu potentiellement problématique
+}
