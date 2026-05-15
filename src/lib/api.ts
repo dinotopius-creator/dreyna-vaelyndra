@@ -327,6 +327,20 @@ export interface UserSearchHitDto {
   role: string;
 }
 
+export interface WorldPresenceDto {
+  userId: string;
+  username: string;
+  handle: string | null;
+  avatarImageUrl: string;
+  avatarUrl: string | null;
+  role: string;
+  district: string;
+  posX: number;
+  posY: number;
+  voiceEnabled: boolean;
+  lastSeenAt: string;
+}
+
 export interface DailyClaimDto {
   granted: number;
   already_claimed: boolean;
@@ -443,6 +457,63 @@ export async function apiSearchUsers(
     (await request<UserSearchHitDto[]>(`/users/search?${params.toString()}`)) ??
     []
   );
+}
+
+async function sessionRequest<T>(
+  path: string,
+  init: RequestInit = {},
+): Promise<T | null> {
+  const res = await fetch(`${BASE}${path}`, {
+    ...init,
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      ...(init.headers ?? {}),
+    },
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new ApiError(
+      res.status,
+      `API ${init.method ?? "GET"} ${path} → ${res.status} ${text}`,
+    );
+  }
+  if (res.status === 204) return null;
+  return (await res.json()) as T;
+}
+
+export async function apiListWorldPresence(
+  worldId: string,
+): Promise<WorldPresenceDto[]> {
+  return (
+    (await request<WorldPresenceDto[]>(
+      `/worlds/${encodeURIComponent(worldId)}/presence`,
+    )) ?? []
+  );
+}
+
+export async function apiHeartbeatWorldPresence(
+  worldId: string,
+  payload: {
+    district: string;
+    posX: number;
+    posY: number;
+    voiceEnabled: boolean;
+  },
+): Promise<WorldPresenceDto> {
+  return (await sessionRequest<WorldPresenceDto>(
+    `/worlds/${encodeURIComponent(worldId)}/presence/me`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  )) as WorldPresenceDto;
+}
+
+export async function apiLeaveWorldPresence(worldId: string): Promise<void> {
+  await sessionRequest<null>(`/worlds/${encodeURIComponent(worldId)}/presence/me`, {
+    method: "DELETE",
+  });
 }
 
 /**

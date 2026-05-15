@@ -131,6 +131,10 @@ def _apply_migrations() -> None:
             "CREATE UNIQUE INDEX IF NOT EXISTS userfamiliar_user_familiar_unique "
             "ON userfamiliar (user_id, familiar_id)"
         )
+        conn.exec_driver_sql(
+            "CREATE UNIQUE INDEX IF NOT EXISTS worldpresence_world_user_unique "
+            "ON worldpresence (world_id, user_id)"
+        )
 
         # One-shot : reset du wallet de Dreyna (dé-Dreyna-isation du site).
         # Son compte devient un profil normal d'animatrice ; on purge les
