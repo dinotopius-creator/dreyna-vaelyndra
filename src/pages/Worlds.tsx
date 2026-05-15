@@ -143,6 +143,9 @@ export function Worlds() {
   const [district, setDistrict] = useState<DistrictId>("place");
   const [position, setPosition] = useState({ x: 49, y: 62 });
   const [activeFamiliar, setActiveFamiliar] = useState<OwnedFamiliar | null>(null);
+  // Cache of other users' active familiars shown on the map
+  const [otherFamiliars, setOtherFamiliars] = useState<Record<string, OwnedFamiliar | null>>({});
+  const familiarsLoadingRef = useRef<Record<string, boolean>>({});
   const [chatMessages, setChatMessages] = useState<WorldChatMessage[]>(BASE_CHAT);
   const [chatInput, setChatInput] = useState("");
   const [worldMembers, setWorldMembers] = useState<WorldPresenceDto[]>([]);
@@ -267,17 +270,52 @@ export function Worlds() {
         if (cancelled) return;
         const active =
           collection.owned.find(
-            (entry) => entry.familiarId === collection.activeFamiliarId,
+            (entry) => entry.id === collection.activeUserFamiliarId || entry.familiarId === collection.activeFamiliarId,
           ) ?? null;
         setActiveFamiliar(active);
       })
       .catch(() => {
         if (!cancelled) setActiveFamiliar(null);
       });
+
     return () => {
       cancelled = true;
     };
   }, [user]);
+
+  // Fetch other members' active familiars so players can see companions of others
+  useEffect(() => {
+    if (!user) return;
+    // Collect visible members in current district
+    const visible = worldMembers.filter((m) => m.district === district && m.userId !== user.id);
+    const toFetch = visible
+      .map((m) => m.userId)
+      .filter((id) => !(id in otherFamiliars) && !familiarsLoadingRef.current[id])
+      .slice(0, 16); // limit concurrent fetches
+
+    if (!toFetch.length) return;
+
+    toFetch.forEach((id) => {
+      familiarsLoadingRef.current[id] = true;
+    });
+
+    (async () => {
+      await Promise.all(
+        toFetch.map(async (id) => {
+          try {
+            const col = await fetchUserFamiliars(id);
+            const active =
+              col.owned.find((entry) => entry.id === col.activeUserFamiliarId || entry.familiarId === col.activeFamiliarId) ?? null;
+            setOtherFamiliars((prev) => ({ ...prev, [id]: active }));
+          } catch {
+            setOtherFamiliars((prev) => ({ ...prev, [id]: null }));
+          } finally {
+            familiarsLoadingRef.current[id] = false;
+          }
+        }),
+      );
+    })();
+  }, [worldMembers, district, user]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -576,7 +614,7 @@ export function Worlds() {
                   animate={{ y: [0, -5, 0] }}
                   transition={{ duration: 4.6, repeat: Infinity, ease: "easeInOut" }}
                 >
-                  <div className="rounded-[24px] border border-white/15 bg-night-950/75 p-1.5 backdrop-blur">
+                  <div className="rounded-[24px] border border-white/15 bg-night-950/75 p-1.5 backdrop-blur relative">
                     {member.avatarUrl ? (
                       <div className="w-10 md:w-12 overflow-hidden rounded-[18px]">
                         <AvatarViewer
@@ -595,6 +633,20 @@ export function Worlds() {
                         alt={member.username}
                         className="h-10 w-10 md:h-12 md:w-12 rounded-[18px] object-cover"
                       />
+                    )}
+
+                    {/* Other member's active familiar (if available) */}
+                    {otherFamiliars[member.id] && (
+                      <div
+                        className="absolute -bottom-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full border border-white/12 bg-night-950/80 text-xs shadow-sm"
+                        style={{
+                          background: `${otherFamiliars[member.id]?.color ?? "#ffffff"}22`,
+                          borderColor: `${otherFamiliars[member.id]?.color ?? "#ffffff"}66`,
+                        }}
+                        title={otherFamiliars[member.id]?.nickname ?? otherFamiliars[member.id]?.name}
+                      >
+                        <span className="text-[14px]">{otherFamiliars[member.id]?.icon}</span>
+                      </div>
                     )}
                   </div>
                   <div className="mt-2 rounded-full border border-white/10 bg-night-950/80 px-2.5 py-1 text-center text-[10px] uppercase tracking-[0.18em] text-ivory/80">
