@@ -6,6 +6,7 @@ import uuid
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 from typing import Dict, List
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
@@ -55,6 +56,15 @@ MOCK_COMMUNITY_USER_IDS = {
     "user-aeris",
     "user-sylas",
     "user-thalia",
+}
+_UNSUPPORTED_IMAGE_PAGE_HOSTS = {
+    "instagram.com",
+    "tiktok.com",
+    "youtube.com",
+    "youtu.be",
+    "twitter.com",
+    "x.com",
+    "facebook.com",
 }
 
 
@@ -107,6 +117,42 @@ def _sanitize_avatar(raw: str) -> str:
     if len(raw) > 512:
         return ""
     return raw
+
+
+def _sanitize_post_image_url(raw: str | None) -> str | None:
+    """Accepte uniquement des images directement affichables.
+
+    Le champ `image_url` sert au `<img>` du fil communautaire. Un lien de post
+    Instagram/TikTok/YouTube pointe vers une page HTML, pas vers une image ;
+    on le refuse donc explicitement pour éviter les publications "cassées".
+    """
+    if raw is None:
+        return None
+    value = raw.strip()
+    if not value:
+        return None
+    if value.startswith("data:image/"):
+        return value
+
+    parsed = urlparse(value)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise HTTPException(
+            status_code=422,
+            detail="image_url doit etre une URL http(s) d'image valide.",
+        )
+
+    hostname = parsed.netloc.lower()
+    if hostname.startswith("www."):
+        hostname = hostname[4:]
+    if hostname in _UNSUPPORTED_IMAGE_PAGE_HOSTS:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "image_url doit etre une image directe, pas un lien de post "
+                "Instagram/TikTok/YouTube."
+            ),
+        )
+    return value
 
 
 def _parse_iso(raw: str | None) -> datetime | None:
@@ -457,7 +503,7 @@ def create_post(
         author_name=payload.author_name,
         author_avatar=_sanitize_avatar(payload.author_avatar),
         content=payload.content,
-        image_url=payload.image_url,
+        image_url=_sanitize_post_image_url(payload.image_url),
         video_url=payload.video_url,
     )
     session.add(post)

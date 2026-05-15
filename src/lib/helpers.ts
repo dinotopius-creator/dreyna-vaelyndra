@@ -111,6 +111,94 @@ export type VideoEmbed =
   | { kind: "file"; src: string; originalUrl: string }
   | { kind: "unknown"; originalUrl: string };
 
+const UNSUPPORTED_POST_IMAGE_HOSTS = new Set([
+  "instagram.com",
+  "tiktok.com",
+  "youtube.com",
+  "youtu.be",
+  "twitter.com",
+  "x.com",
+  "facebook.com",
+]);
+
+function normalizeHostname(hostname: string) {
+  return hostname.trim().toLowerCase().replace(/^www\./, "");
+}
+
+function isDataImageUrl(value: string) {
+  return /^data:image\/[a-z0-9.+-]+;base64,/i.test(value);
+}
+
+export type PostImageSource =
+  | { kind: "image"; src: string }
+  | { kind: "external"; url: string; hostname: string }
+  | { kind: "invalid"; url: string };
+
+export function parsePostImageUrl(raw: string): PostImageSource | null {
+  const value = raw.trim();
+  if (!value) return null;
+  if (isDataImageUrl(value)) {
+    return { kind: "image", src: value };
+  }
+
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return { kind: "invalid", url: value };
+    }
+    const hostname = normalizeHostname(url.hostname);
+    if (UNSUPPORTED_POST_IMAGE_HOSTS.has(hostname)) {
+      return { kind: "external", url: value, hostname };
+    }
+    return { kind: "image", src: value };
+  } catch {
+    return { kind: "invalid", url: value };
+  }
+}
+
+function preloadImage(src: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(true);
+    img.onerror = () => resolve(false);
+    img.src = src;
+  });
+}
+
+export async function validatePostImageUrl(raw: string): Promise<
+  | { ok: true; normalized: string }
+  | { ok: false; message: string }
+> {
+  const parsed = parsePostImageUrl(raw);
+  if (!parsed) {
+    return { ok: false, message: "Ajoute une URL d'image valide." };
+  }
+  if (parsed.kind === "invalid") {
+    return {
+      ok: false,
+      message: "L'URL d'image est invalide. Utilise un lien http(s) direct.",
+    };
+  }
+  if (parsed.kind === "external") {
+    return {
+      ok: false,
+      message:
+        "Ce lien pointe vers une page sociale, pas vers une image directe. Utilise une vraie image .jpg, .png ou .webp.",
+    };
+  }
+
+  const loads = await preloadImage(parsed.src);
+  if (!loads) {
+    return {
+      ok: false,
+      message:
+        "Cette URL ne charge pas comme une image. Utilise une image directe accessible publiquement.",
+    };
+  }
+
+  return { ok: true, normalized: parsed.src };
+}
+
 export function parseVideoUrl(raw: string): VideoEmbed | null {
   const url = raw.trim();
   if (!url) return null;

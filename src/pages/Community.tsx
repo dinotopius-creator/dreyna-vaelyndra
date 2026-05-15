@@ -26,7 +26,12 @@ import { Handle } from "../components/Handle";
 import { MemberSearch } from "../components/MemberSearch";
 import { AvatarImage } from "../components/AvatarImage";
 import { getOfficial } from "../data/officials";
-import { formatRelative, parseVideoUrl } from "../lib/helpers";
+import {
+  formatRelative,
+  parsePostImageUrl,
+  parseVideoUrl,
+  validatePostImageUrl,
+} from "../lib/helpers";
 import {
   apiCreatePost,
   apiDeletePost,
@@ -57,6 +62,7 @@ export function Community() {
   const [imageUrl, setImageUrl] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
   const [openComments, setOpenComments] = useState<Record<string, boolean>>({});
+  const [brokenImages, setBrokenImages] = useState<Record<string, boolean>>({});
   const [profileAvatars, setProfileAvatars] = useState<Record<string, string>>(
     {},
   );
@@ -189,6 +195,14 @@ export function Community() {
         return;
       }
     }
+    const cleanedImage = imageUrl.trim();
+    if (cleanedImage) {
+      const checkedImage = await validatePostImageUrl(cleanedImage);
+      if (!checkedImage.ok) {
+        notify(checkedImage.message, "error");
+        return;
+      }
+    }
     try {
       const post = await apiCreatePost({
         author: {
@@ -197,7 +211,7 @@ export function Community() {
           author_avatar: user.avatar,
         },
         content: draft.trim(),
-        imageUrl: imageUrl.trim() || undefined,
+        imageUrl: cleanedImage || undefined,
         videoUrl: cleanedVideo || undefined,
       });
       dispatch({ type: "addPost", post });
@@ -292,7 +306,7 @@ export function Community() {
                     <input
                       value={imageUrl}
                       onChange={(e) => setImageUrl(e.target.value)}
-                      placeholder="URL d'image (optionnel)"
+                      placeholder="URL directe d'image (.jpg, .png, .webp)"
                       className="glass-input pl-9"
                     />
                   </div>
@@ -391,13 +405,17 @@ export function Community() {
                     )}
                   </div>
                 </header>
-                {post.imageUrl && (
-                  <img
-                    src={post.imageUrl}
-                    alt="Illustration du post"
-                    className="mt-4 max-h-[400px] w-full rounded-xl object-cover"
-                  />
-                )}
+                <PostImageAttachment
+                  postId={post.id}
+                  imageUrl={post.imageUrl}
+                  failed={Boolean(brokenImages[post.id])}
+                  onError={() =>
+                    setBrokenImages((current) => ({
+                      ...current,
+                      [post.id]: true,
+                    }))
+                  }
+                />
                 {post.videoUrl && <PostVideo url={post.videoUrl} />}
                 <div className="mt-4 flex flex-wrap items-center gap-2">
                   {QUICK_EMOJIS.map((emoji) => {
@@ -586,6 +604,54 @@ export function Community() {
         </aside>
       </div>
     </div>
+  );
+}
+
+function PostImageAttachment({
+  postId,
+  imageUrl,
+  failed,
+  onError,
+}: {
+  postId: string;
+  imageUrl?: string;
+  failed: boolean;
+  onError: () => void;
+}) {
+  if (!imageUrl) return null;
+
+  const parsed = parsePostImageUrl(imageUrl);
+  if (!parsed || parsed.kind === "invalid") {
+    return null;
+  }
+
+  if (parsed.kind === "external" || failed) {
+    return (
+      <div className="mt-4 rounded-2xl border border-royal-500/30 bg-night-900/60 p-4 text-sm text-ivory/75">
+        <p className="font-medium text-ivory/90">
+          Cette publication contient un lien externe, pas une image affichable.
+        </p>
+        <a
+          href={imageUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-2 inline-flex items-center gap-2 text-gold-200 transition hover:text-gold-100"
+        >
+          <ExternalLink className="h-4 w-4" />
+          Ouvrir le lien joint
+        </a>
+      </div>
+    );
+  }
+
+  return (
+    <img
+      key={postId}
+      src={parsed.src}
+      alt="Illustration du post"
+      className="mt-4 max-h-[400px] w-full rounded-xl object-cover"
+      onError={onError}
+    />
   );
 }
 
