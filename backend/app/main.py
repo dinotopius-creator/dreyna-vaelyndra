@@ -31,6 +31,7 @@ from .routers import (
     streamers,
     stripe_router,
     users,
+    worlds,
 )
 
 app = FastAPI(title="Vaelyndra API", version="0.1.0")
@@ -308,3 +309,4 @@ app.include_router(catalog.router_admin)
 app.include_router(stripe_router.router)
 app.include_router(familiars.router)
 app.include_router(familiars.user_router)
+app.include_router(worlds.router)

@@ -20,6 +20,12 @@ import { useLive } from "../contexts/LiveContext";
 import { useProfile } from "../contexts/ProfileContext";
 import { useToast } from "../contexts/ToastContext";
 import {
+  apiHeartbeatWorldPresence,
+  apiLeaveWorldPresence,
+  apiListWorldPresence,
+  type WorldPresenceDto,
+} from "../lib/api";
+import {
   fetchUserFamiliars,
   type OwnedFamiliar,
 } from "../lib/familiarsApi";
@@ -33,6 +39,7 @@ interface District {
   accent: string;
   description: string;
   center: { x: number; y: number };
+  mood: string;
 }
 
 interface WorldChatMessage {
@@ -41,6 +48,7 @@ interface WorldChatMessage {
   handle?: string | null;
   content: string;
   tone?: "system" | "member";
+  district?: DistrictId;
   createdAt: string;
 }
 
@@ -48,12 +56,16 @@ interface StageMember {
   id: string;
   username: string;
   handle?: string | null;
-  avatar: string;
+  avatarImageUrl: string;
+  avatarUrl?: string | null;
   x: number;
   y: number;
   status: string;
   aura: string;
+  voiceEnabled: boolean;
 }
+
+const WORLD_ID = "main";
 
 const DISTRICTS: District[] = [
   {
@@ -62,6 +74,7 @@ const DISTRICTS: District[] = [
     accent: "from-gold-400/30 via-amber-300/10 to-rose-300/10",
     description: "Le coeur du royaume, entre rencontres spontanées et passages de familiers.",
     center: { x: 49, y: 62 },
+    mood: "Agora dorée, fontaine centrale et rondes de familiers.",
   },
   {
     id: "arcades",
@@ -69,6 +82,7 @@ const DISTRICTS: District[] = [
     accent: "from-cyan-300/25 via-sky-400/10 to-indigo-400/10",
     description: "Un couloir social pensé pour les vitrines d'avatars, fan arts et mini événements.",
     center: { x: 30, y: 50 },
+    mood: "Galeries néon, cadres flottants et stands de créations.",
   },
   {
     id: "observatory",
@@ -76,6 +90,7 @@ const DISTRICTS: District[] = [
     accent: "from-fuchsia-400/25 via-purple-400/10 to-rose-300/10",
     description: "Le balcon d'où l'on regarde les streamers en direct et les happenings du soir.",
     center: { x: 72, y: 42 },
+    mood: "Dôme céleste, écrans live suspendus et vue sur le royaume.",
   },
 ];
 
@@ -106,6 +121,7 @@ const BASE_CHAT: WorldChatMessage[] = [
     author: "Système",
     content: "Le portail des Mondes est ouvert. Approchez de la place publique pour croiser la cour.",
     tone: "system",
+    district: "place",
     createdAt: new Date(Date.now() - 1000 * 60 * 12).toISOString(),
   },
   {
@@ -114,12 +130,13 @@ const BASE_CHAT: WorldChatMessage[] = [
     handle: "dreyna",
     content: "Les streamers visibles ici peuvent être rejoints instantanément depuis l'observatoire.",
     tone: "member",
+    district: "observatory",
     createdAt: new Date(Date.now() - 1000 * 60 * 6).toISOString(),
   },
 ];
 
 export function Worlds() {
-  const { user, users } = useAuth();
+  const { user } = useAuth();
   const { profile } = useProfile();
   const { liveRegistry } = useLive();
   const { notify } = useToast();
@@ -128,6 +145,7 @@ export function Worlds() {
   const [activeFamiliar, setActiveFamiliar] = useState<OwnedFamiliar | null>(null);
   const [chatMessages, setChatMessages] = useState<WorldChatMessage[]>(BASE_CHAT);
   const [chatInput, setChatInput] = useState("");
+  const [worldMembers, setWorldMembers] = useState<WorldPresenceDto[]>([]);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [voiceLoading, setVoiceLoading] = useState(false);
   const [voiceLevel, setVoiceLevel] = useState(0);
@@ -157,40 +175,52 @@ export function Worlds() {
       "shadow-[0_0_35px_rgba(244,114,182,0.25)]",
       "shadow-[0_0_35px_rgba(52,211,153,0.25)]",
     ];
-    const base = users
-      .filter((entry) => entry.id !== user?.id)
-      .slice(0, 5)
-      .map((entry, index) => ({
-        id: entry.id,
-        username: entry.username,
-        handle: entry.handle ?? null,
-        avatar: entry.avatar,
-        x: 18 + ((index * 17) % 60),
-        y: 32 + ((index * 11) % 28),
-        status: index % 2 === 0 ? "discute" : "explore",
-        aura: palette[index % palette.length],
-      }));
-
-    const livePeople = liveEntries
-      .filter((entry) => entry.userId !== user?.id)
-      .slice(0, 3)
-      .map((entry, index) => ({
-        id: `live-${entry.userId}`,
-        username: entry.username,
-        handle: entry.userId,
-        avatar: entry.avatar,
-        x: 62 + index * 9,
-        y: 24 + index * 8,
-        status: "en live",
-        aura: "shadow-[0_0_38px_rgba(244,63,94,0.32)]",
-      }));
-
-    return [...base, ...livePeople];
-  }, [liveEntries, user?.id, users]);
+    return worldMembers
+      .filter(
+        (entry) => entry.userId !== user?.id && entry.district === district,
+      )
+      .map((entry, index) => {
+        const liveMatch = liveEntries.find((live) => live.userId === entry.userId);
+        return {
+          id: entry.userId,
+          username: entry.username,
+          handle: entry.handle ?? null,
+          avatarImageUrl: entry.avatarImageUrl,
+          avatarUrl: entry.avatarUrl,
+          x: entry.posX,
+          y: entry.posY,
+          status: liveMatch ? "en live" : entry.district === "observatory" ? "observe" : "dans le monde",
+          aura: liveMatch
+            ? "shadow-[0_0_38px_rgba(244,63,94,0.32)]"
+            : palette[index % palette.length],
+          voiceEnabled: entry.voiceEnabled,
+        };
+      });
+  }, [district, liveEntries, user?.id, worldMembers]);
 
   useEffect(() => {
     setPosition(selectedDistrict.center);
   }, [selectedDistrict]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function refreshPresence() {
+      try {
+        const entries = await apiListWorldPresence(WORLD_ID);
+        if (!cancelled) setWorldMembers(entries);
+      } catch {
+        if (!cancelled) setWorldMembers([]);
+      }
+    }
+
+    void refreshPresence();
+    const timer = window.setInterval(refreshPresence, 5000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, []);
 
   useEffect(() => {
     if (!user) {
@@ -252,6 +282,7 @@ export function Worlds() {
         author: "Signal live",
         content: `${firstLive.username} diffuse maintenant depuis l'observatoire.`,
         tone: "system",
+        district: "observatory",
         createdAt: new Date().toISOString(),
       };
       return [nextMessage, ...current].slice(0, 12);
@@ -263,6 +294,34 @@ export function Worlds() {
       stopVoicePreview();
     };
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+
+    async function heartbeat() {
+      try {
+        await apiHeartbeatWorldPresence(WORLD_ID, {
+          district,
+          posX: Math.round(position.x),
+          posY: Math.round(position.y),
+          voiceEnabled,
+        });
+        const entries = await apiListWorldPresence(WORLD_ID);
+        if (!cancelled) setWorldMembers(entries);
+      } catch {
+        /* best effort */
+      }
+    }
+
+    void heartbeat();
+    const timer = window.setInterval(heartbeat, 8000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      void apiLeaveWorldPresence(WORLD_ID).catch(() => undefined);
+    };
+  }, [district, position.x, position.y, user, voiceEnabled]);
 
   async function startVoicePreview() {
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -349,6 +408,7 @@ export function Worlds() {
         handle: user?.handle ?? null,
         content: cleaned,
         tone: "member",
+        district,
         createdAt: new Date().toISOString(),
       };
       return [nextMessage, ...current].slice(0, 12);
@@ -381,6 +441,9 @@ export function Worlds() {
                 </h2>
                 <p className="mt-1 max-w-2xl text-sm text-ivory/65">
                   {selectedDistrict.description}
+                </p>
+                <p className="mt-2 text-xs uppercase tracking-[0.18em] text-ivory/45">
+                  {selectedDistrict.mood}
                 </p>
               </div>
               <button
@@ -424,19 +487,7 @@ export function Worlds() {
             <div
               className={`relative min-h-[620px] overflow-hidden rounded-[30px] border border-white/10 bg-gradient-to-br ${selectedDistrict.accent}`}
             >
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,#fff7cc22,transparent_35%),linear-gradient(180deg,rgba(4,10,24,0.2),rgba(4,10,24,0.78))]" />
-              <div className="absolute inset-x-[8%] top-[12%] h-36 rounded-full bg-gold-300/10 blur-3xl" />
-              <div className="absolute bottom-[-10%] left-[15%] right-[15%] h-48 rounded-[50%] border border-gold-300/10 bg-night-950/50 blur-[2px]" />
-
-              <div className="absolute left-[12%] top-[18%] rounded-2xl border border-cyan-200/20 bg-night-950/50 px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-cyan-100/80 backdrop-blur">
-                Arcades
-              </div>
-              <div className="absolute right-[10%] top-[14%] rounded-2xl border border-rose-200/20 bg-night-950/50 px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-rose-100/80 backdrop-blur">
-                Observatoire live
-              </div>
-              <div className="absolute left-1/2 top-[42%] -translate-x-1/2 rounded-2xl border border-gold-200/20 bg-night-950/50 px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-gold-100/80 backdrop-blur">
-                Agora
-              </div>
+              <DistrictBackdrop district={district} />
 
               {stageMembers.map((member) => (
                 <motion.div
@@ -450,19 +501,48 @@ export function Worlds() {
                   transition={{ duration: 4.6, repeat: Infinity, ease: "easeInOut" }}
                 >
                   <div className="rounded-[24px] border border-white/15 bg-night-950/75 p-1.5 backdrop-blur">
-                    <AvatarImage
-                      candidates={[member.avatar]}
-                      fallbackSeed={member.id}
-                      alt={member.username}
-                      className="h-12 w-12 rounded-[18px] object-cover"
-                    />
+                    {member.avatarUrl ? (
+                      <div className="w-12 overflow-hidden rounded-[18px]">
+                        <AvatarViewer
+                          src={member.avatarUrl}
+                          fallbackImage={member.avatarImageUrl}
+                          alt={member.username}
+                          size="square"
+                          framing="face"
+                          autoRotate={false}
+                        />
+                      </div>
+                    ) : (
+                      <AvatarImage
+                        candidates={[member.avatarImageUrl]}
+                        fallbackSeed={member.id}
+                        alt={member.username}
+                        className="h-12 w-12 rounded-[18px] object-cover"
+                      />
+                    )}
                   </div>
                   <div className="mt-2 rounded-full border border-white/10 bg-night-950/80 px-2.5 py-1 text-center text-[10px] uppercase tracking-[0.18em] text-ivory/80">
                     <div>{member.username}</div>
-                    <div className="text-[9px] text-gold-200/80">{member.status}</div>
+                    <div className="text-[9px] text-gold-200/80">
+                      {member.status}
+                      {member.voiceEnabled ? " · vocal" : ""}
+                    </div>
                   </div>
                 </motion.div>
               ))}
+
+              {stageMembers.length === 0 && (
+                <div className="absolute inset-x-0 top-[22%] mx-auto flex max-w-md flex-col items-center text-center">
+                  <div className="rounded-3xl border border-royal-500/30 bg-night-950/70 px-6 py-5 backdrop-blur">
+                    <div className="font-display text-2xl text-gold-200">
+                      {selectedDistrict.name} est calme
+                    </div>
+                    <p className="mt-2 text-sm text-ivory/60">
+                      Aucun autre membre n'est connecté à ce monde pour le moment.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               <motion.div
                 className="absolute z-10"
@@ -734,8 +814,15 @@ export function Worlds() {
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="truncate text-sm font-semibold text-ivory/90">
-                        {message.author}
+                      <div className="flex items-center gap-2">
+                        <div className="truncate text-sm font-semibold text-ivory/90">
+                          {message.author}
+                        </div>
+                        {message.district && (
+                          <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[9px] uppercase tracking-[0.18em] text-ivory/55">
+                            {labelForDistrict(message.district)}
+                          </span>
+                        )}
                       </div>
                       {message.handle && (
                         <Handle handle={message.handle} className="text-[11px]" />
@@ -810,6 +897,81 @@ function WorldFact({
       <p className="mt-2 text-sm text-ivory/65">{copy}</p>
     </div>
   );
+}
+
+function DistrictBackdrop({ district }: { district: DistrictId }) {
+  if (district === "arcades") {
+    return (
+      <>
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.22),transparent_28%),radial-gradient(circle_at_top_right,rgba(96,165,250,0.18),transparent_26%),linear-gradient(180deg,rgba(2,6,23,0.18),rgba(2,6,23,0.86))]" />
+        <div className="absolute left-[8%] top-[14%] h-44 w-32 rounded-[32px] border border-cyan-200/20 bg-cyan-300/10 shadow-[0_0_40px_rgba(34,211,238,0.12)] backdrop-blur" />
+        <div className="absolute left-[24%] top-[18%] h-36 w-24 rounded-[28px] border border-sky-200/20 bg-sky-300/10 backdrop-blur" />
+        <div className="absolute right-[10%] top-[16%] h-48 w-36 rounded-[34px] border border-indigo-200/20 bg-indigo-300/10 shadow-[0_0_50px_rgba(129,140,248,0.14)] backdrop-blur" />
+        <div className="absolute right-[26%] top-[20%] h-32 w-24 rounded-[24px] border border-cyan-200/20 bg-cyan-200/10 backdrop-blur" />
+        <div className="absolute left-[14%] top-[22%] rounded-full border border-cyan-200/20 bg-night-950/70 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-cyan-100/80">
+          Galerie avatars
+        </div>
+        <div className="absolute right-[16%] top-[24%] rounded-full border border-indigo-200/20 bg-night-950/70 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-indigo-100/80">
+          Fan arts en vedette
+        </div>
+        <div className="absolute inset-x-[10%] bottom-[20%] h-20 rounded-[32px] border border-cyan-300/15 bg-[linear-gradient(90deg,rgba(34,211,238,0.18),rgba(56,189,248,0.06),rgba(99,102,241,0.18))] blur-[1px]" />
+        <div className="absolute inset-x-[6%] bottom-[-12%] h-56 rounded-[50%] border border-cyan-300/10 bg-night-950/60" />
+      </>
+    );
+  }
+
+  if (district === "observatory") {
+    return (
+      <>
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(244,114,182,0.18),transparent_26%),radial-gradient(circle_at_70%_20%,rgba(196,181,253,0.18),transparent_24%),linear-gradient(180deg,rgba(10,10,35,0.12),rgba(3,7,18,0.88))]" />
+        <div className="absolute left-1/2 top-[10%] h-56 w-[72%] -translate-x-1/2 rounded-t-[180px] border border-fuchsia-200/15 bg-fuchsia-200/5 backdrop-blur-[2px]" />
+        <div className="absolute left-[16%] top-[18%] h-24 w-40 rounded-[28px] border border-rose-200/20 bg-rose-200/10 shadow-[0_0_36px_rgba(244,114,182,0.14)] backdrop-blur">
+          <div className="flex h-full items-center justify-center text-[11px] uppercase tracking-[0.22em] text-rose-100/80">
+            Live 01
+          </div>
+        </div>
+        <div className="absolute right-[14%] top-[20%] h-28 w-44 rounded-[30px] border border-purple-200/20 bg-purple-200/10 shadow-[0_0_42px_rgba(192,132,252,0.16)] backdrop-blur">
+          <div className="flex h-full items-center justify-center text-[11px] uppercase tracking-[0.22em] text-purple-100/80">
+            Live 02
+          </div>
+        </div>
+        <div className="absolute left-1/2 top-[46%] h-32 w-[44%] -translate-x-1/2 rounded-[50%] border border-fuchsia-200/20 bg-night-950/65 shadow-[0_0_60px_rgba(192,132,252,0.14)]" />
+        <div className="absolute inset-x-[18%] bottom-[18%] h-24 rounded-[40px] border border-fuchsia-300/15 bg-[linear-gradient(180deg,rgba(217,70,239,0.12),rgba(15,23,42,0.1))]" />
+        {Array.from({ length: 14 }).map((_, index) => (
+          <span
+            key={`star-${index}`}
+            className="absolute h-1.5 w-1.5 rounded-full bg-white/80"
+            style={{
+              left: `${12 + ((index * 13) % 76)}%`,
+              top: `${8 + ((index * 9) % 22)}%`,
+              boxShadow: "0 0 14px rgba(255,255,255,0.55)",
+            }}
+          />
+        ))}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,247,204,0.16),transparent_30%),linear-gradient(180deg,rgba(4,10,24,0.18),rgba(4,10,24,0.8))]" />
+      <div className="absolute inset-x-[8%] top-[10%] h-36 rounded-full bg-gold-300/10 blur-3xl" />
+      <div className="absolute left-1/2 top-[20%] h-20 w-20 -translate-x-1/2 rounded-full border border-gold-200/25 bg-gold-200/10 shadow-[0_0_40px_rgba(250,204,21,0.16)]" />
+      <div className="absolute left-1/2 top-[36%] h-28 w-28 -translate-x-1/2 rounded-full border border-gold-200/15 bg-[radial-gradient(circle,rgba(255,248,220,0.26),rgba(250,204,21,0.08),transparent_70%)]" />
+      <div className="absolute left-[16%] top-[22%] rounded-full border border-gold-200/15 bg-night-950/70 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-gold-100/80">
+        Fontaine centrale
+      </div>
+      <div className="absolute right-[12%] top-[20%] rounded-full border border-amber-200/15 bg-night-950/70 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-amber-100/80">
+        Ronde des familiers
+      </div>
+      <div className="absolute inset-x-[14%] bottom-[26%] h-16 rounded-[30px] border border-gold-300/10 bg-gold-300/10" />
+      <div className="absolute bottom-[-10%] left-[15%] right-[15%] h-48 rounded-[50%] border border-gold-300/10 bg-night-950/50 blur-[2px]" />
+    </>
+  );
+}
+
+function labelForDistrict(district: DistrictId) {
+  return DISTRICTS.find((entry) => entry.id === district)?.name ?? "Monde";
 }
 
 function clamp(value: number, min: number, max: number) {

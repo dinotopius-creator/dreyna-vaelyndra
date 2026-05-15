@@ -446,6 +446,27 @@ class UserSearchHitOut(BaseModel):
     role: str = "user"
 
 
+class WorldPresenceHeartbeatIn(BaseModel):
+    district: str = Field(default="place", min_length=1, max_length=64)
+    posX: int = Field(default=50, ge=0, le=100)
+    posY: int = Field(default=50, ge=0, le=100)
+    voiceEnabled: bool = False
+
+
+class WorldPresenceOut(BaseModel):
+    userId: str
+    username: str
+    handle: Optional[str] = None
+    avatarImageUrl: str = ""
+    avatarUrl: Optional[str] = None
+    role: str = "user"
+    district: str = "place"
+    posX: int = 50
+    posY: int = 50
+    voiceEnabled: bool = False
+    lastSeenAt: str
+
+
 class GiftTransferOut(BaseModel):
     sender: UserProfileOut
     receiver: UserProfileOut
