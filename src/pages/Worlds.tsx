@@ -679,7 +679,7 @@ export function Worlds() {
                 </div>
               </motion.div>
 
-              <div className="absolute bottom-5 left-5 flex flex-wrap gap-2">
+              <div className="absolute bottom-5 left-5 hidden md:flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => moveBy(-5, 0)}
@@ -792,7 +792,7 @@ export function Worlds() {
               </Link>
               <Link
                 to={user ? "/live/studio" : "/connexion"}
-                className="rounded-2xl border border-gold-400/30 bg-gold-500/10 px-4 py-3 text-sm text-gold-100 transition hover:border-gold-300/70 hover:bg-gold-500/15"
+                className="rounded-2xl border border-gold-400/30 bg-gold-500/10 px-4 py-4 text-base md:py-3 md:text-sm text-gold-100 transition hover:border-gold-300/70 hover:bg-gold-500/15"
               >
                 Passer du monde au live studio
               </Link>
