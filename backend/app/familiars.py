@@ -269,6 +269,7 @@ def evolution_for_level(level: int) -> dict:
 # router), les suivants coûtent un montant fixe en Sylvins (PROMO ou PAID,
 # débit prioritairement PROMO).
 SWITCH_PRICE_SYLVINS = 300
+RENAME_PRICE_SYLVINS = 10
 
 
 def get_familiar(familiar_id: str | None) -> FamiliarDef | None:
