@@ -25,6 +25,7 @@ from ..db import get_session
 from ..familiars import (
     FAMILIARS,
     SWITCH_PRICE_SYLVINS,
+    RENAME_PRICE_SYLVINS,
     compute_familiar_stats,
     evolution_for_level,
     get_familiar,
@@ -607,7 +608,11 @@ def rename_active_familiar(
     payload: NicknamePayload,
     session: Session = Depends(_session_dep),
 ) -> FamiliarCollectionOut:
-    """Rename (surnom) du familier actif. `None` ou `""` retire le surnom."""
+    """Rename (surnom) du familier actif. `None` ou `""` retire le surnom.
+
+    Première attribution de surnom GRATUITE. Tout changement ultérieur vers
+    un nouveau surnom non vide coûte `RENAME_PRICE_SYLVINS` Sylvins.
+    """
     p = session.get(UserProfile, user_id)
     if not p:
         raise HTTPException(status_code=404, detail="Profil introuvable.")
@@ -618,8 +623,96 @@ def rename_active_familiar(
             detail="Tu n'as pas encore de familier actif.",
         )
     raw = (payload.nickname or "").strip()
+
+    # No-op if nothing changed
+    if (current.nickname or "") == raw:
+        return _collection_out(session, user_id)
+
+    # Determine cost: first time setting a nickname (from None -> non-empty) is free.
+    cost = 0
+    if raw and current.nickname:
+        # Changing an existing non-empty nickname -> charge rename price
+        cost = RENAME_PRICE_SYLVINS
+
+    reference_id = f"famrename-{current.id}-{int(datetime.now(timezone.utc).timestamp() * 1000)}-{user_id[-6:]}"
+    take_promo = take_paid = 0
+    if cost > 0:
+        take_promo, take_paid = _consume_sylvins(p, cost)
+
+    # Apply nickname change
     current.nickname = raw or None
     session.add(current)
+
+    # Record ledger if paid
+    if cost > 0:
+        _record_purchase_ledger(
+            session,
+            user_id,
+            take_promo,
+            take_paid,
+            p.sylvins,
+            p.sylvins_paid,
+            reason=f"familier:rename:{current.id}",
+            reference_id=reference_id,
+        )
+
+    p.updated_at = _now_iso()
+    session.commit()
+    return _collection_out(session, user_id)
+
+
+@user_router.post(
+    "/{user_id}/familiers/{familiar_user_id}/nickname",
+    response_model=FamiliarCollectionOut,
+)
+def rename_specific_familiar(
+    user_id: str,
+    familiar_user_id: int,
+    payload: NicknamePayload,
+    session: Session = Depends(_session_dep),
+) -> FamiliarCollectionOut:
+    """Rename surnom pour un familier précis (par son `UserFamiliar.id`).
+
+    Même règle : première attribution gratuite, changements ultérieurs
+    vers un surnom non vide coûtent `RENAME_PRICE_SYLVINS` Sylvins.
+    """
+    p = session.get(UserProfile, user_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Profil introuvable.")
+    row = session.get(UserFamiliar, familiar_user_id)
+    if not row or row.user_id != user_id:
+        raise HTTPException(status_code=404, detail="Familier utilisateur introuvable.")
+
+    raw = (payload.nickname or "").strip()
+
+    # No-op if nothing changed
+    if (row.nickname or "") == raw:
+        return _collection_out(session, user_id)
+
+    cost = 0
+    if raw and row.nickname:
+        cost = RENAME_PRICE_SYLVINS
+
+    reference_id = f"famrename-{row.id}-{int(datetime.now(timezone.utc).timestamp() * 1000)}-{user_id[-6:]}"
+    take_promo = take_paid = 0
+    if cost > 0:
+        take_promo, take_paid = _consume_sylvins(p, cost)
+
+    row.nickname = raw or None
+    session.add(row)
+
+    if cost > 0:
+        _record_purchase_ledger(
+            session,
+            user_id,
+            take_promo,
+            take_paid,
+            p.sylvins,
+            p.sylvins_paid,
+            reason=f"familier:rename:{row.id}",
+            reference_id=reference_id,
+        )
+
     p.updated_at = _now_iso()
     session.commit()
     return _collection_out(session, user_id)

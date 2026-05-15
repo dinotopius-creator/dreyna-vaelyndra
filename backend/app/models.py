@@ -80,6 +80,24 @@ class OracleGameSession(SQLModel, table=True):
     created_at: str = Field(default_factory=_now_iso, index=True)
 
 
+class WorldPresence(SQLModel, table=True):
+    """Présence temps réel d'un membre dans un monde social.
+
+    Heartbeat court envoyé par le front tant que l'utilisateur garde
+    l'onglet `/mondes` ouvert. Les lignes expirent rapidement côté API
+    pour n'afficher que les membres réellement présents.
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    world_id: str = Field(index=True, max_length=64)
+    user_id: str = Field(index=True, foreign_key="userprofile.id")
+    district: str = Field(default="place", max_length=64)
+    pos_x: int = Field(default=50)
+    pos_y: int = Field(default=50)
+    voice_enabled: bool = Field(default=False)
+    last_seen_at: str = Field(default_factory=_now_iso, index=True)
+
+
 class UserProfile(SQLModel, table=True):
     """Profil serveur d'un utilisateur : avatar, inventaire et bourses.
 
