@@ -137,7 +137,7 @@ export function Cart() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-16">
+    <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 sm:py-16">
       <SectionHeading
         eyebrow="Votre panier royal"
         title={<>Objets sacrés à emporter</>}
@@ -161,12 +161,12 @@ export function Cart() {
               !l.product ? null : (
                 <li
                   key={l.productId}
-                  className="card-royal flex gap-4 overflow-hidden p-4"
+                  className="card-royal flex flex-col gap-4 overflow-hidden p-4 sm:flex-row"
                 >
                   <img
                     src={l.product.image}
                     alt={l.product.name}
-                    className="h-28 w-28 rounded-xl object-cover"
+                    className="h-48 w-full rounded-xl object-cover sm:h-28 sm:w-28"
                   />
                   <div className="flex flex-1 flex-col">
                     <div className="flex items-start justify-between gap-4">
@@ -190,7 +190,7 @@ export function Cart() {
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
-                    <div className="mt-auto flex items-center justify-between pt-4">
+                    <div className="mt-auto flex flex-col items-start gap-3 pt-4 sm:flex-row sm:items-center sm:justify-between">
                       <div className="inline-flex items-center gap-2 rounded-full border border-royal-500/30 px-2 py-1">
                         <button
                           onClick={() =>
@@ -230,7 +230,7 @@ export function Cart() {
             )}
           </ul>
 
-          <aside className="card-royal h-fit p-6">
+          <aside className="card-royal h-fit p-6 lg:sticky lg:top-24">
             <h3 className="font-display text-xl text-gold-200">Récapitulatif</h3>
             <div className="mt-4 space-y-2 text-sm text-ivory/75">
               <div className="flex justify-between">

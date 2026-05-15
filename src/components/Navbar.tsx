@@ -67,20 +67,29 @@ export function Navbar() {
   }, [notificationsOpen]);
 
   useEffect(() => {
+    if (!open) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [open]);
+
+  useEffect(() => {
     setNotificationsOpen(false);
     setNotificationSettingsOpen(false);
     setOpen(false);
   }, [location.pathname]);
 
   return (
-    <header className="sticky top-0 z-40">
+    <header className="sticky top-0 z-50">
       <div className="border-b border-royal-600/20 bg-night-900/80 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-3 py-3 sm:gap-4 sm:px-5">
           <Link to="/" className="group flex min-w-0 items-center gap-2">
             <span className="relative flex h-9 w-9 items-center justify-center rounded-full bg-gold-shine text-night-900 shadow-glow-gold transition group-hover:scale-105">
               <Crown className="h-5 w-5" />
             </span>
-            <span className="hidden font-display text-lg font-bold text-gold-200 sm:inline">
+            <span className="hidden font-display text-base font-bold text-gold-200 min-[360px]:inline sm:text-lg">
               Vaelyndra
             </span>
           </Link>
@@ -473,69 +482,80 @@ export function Navbar() {
           </div>
         </div>
         {open && (
-          <nav className="mx-auto grid max-w-7xl gap-1 border-t border-royal-600/20 px-5 py-4 lg:hidden">
-            {NAV.map((n) => (
-              <NavLink
-                key={n.to}
-                to={n.to}
-                end={n.to === "/" || n.to === "/live"}
-                onClick={() => setOpen(false)}
-                className={({ isActive }) =>
-                  clsx(
-                    "rounded-xl px-4 py-3 font-regal text-xs font-semibold tracking-[0.22em]",
-                    isActive ? "bg-gold-500/15 text-gold-200" : "text-ivory/70",
-                  )
-                }
-              >
-                {n.label}
-              </NavLink>
-            ))}
-            {user && (
-              <>
+          <div className="border-t border-royal-600/20 bg-night-900/95 lg:hidden">
+            <nav className="mx-auto grid max-h-[calc(100dvh-4.5rem)] max-w-7xl gap-2 overflow-y-auto px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-4">
+              {NAV.map((n) => (
                 <NavLink
-                  to="/live/studio"
+                  key={n.to}
+                  to={n.to}
+                  end={n.to === "/" || n.to === "/live"}
                   onClick={() => setOpen(false)}
-                  className="rounded-xl border border-royal-500/30 px-4 py-3 font-regal text-xs font-semibold tracking-[0.22em] text-ivory/80"
+                  className={({ isActive }) =>
+                    clsx(
+                      "rounded-2xl px-4 py-3 font-regal text-xs font-semibold tracking-[0.18em] transition",
+                      isActive
+                        ? "bg-gold-500/15 text-gold-200"
+                        : "border border-royal-500/20 text-ivory/75",
+                    )
+                  }
                 >
-                  Mon live
+                  {n.label}
                 </NavLink>
+              ))}
+              {user && (
+                <>
+                  <NavLink
+                    to="/live/studio"
+                    onClick={() => setOpen(false)}
+                    className="rounded-2xl border border-royal-500/30 px-4 py-3 font-regal text-xs font-semibold tracking-[0.18em] text-ivory/80"
+                  >
+                    Mon live
+                  </NavLink>
+                  <NavLink
+                    to="/messages"
+                    onClick={() => setOpen(false)}
+                    className="rounded-2xl border border-royal-500/30 px-4 py-3 font-regal text-xs font-semibold tracking-[0.18em] text-ivory/80"
+                  >
+                    Messages
+                  </NavLink>
+                  <NavLink
+                    to="/compte"
+                    onClick={() => setOpen(false)}
+                    className="rounded-2xl border border-royal-500/30 px-4 py-3 font-regal text-xs font-semibold tracking-[0.18em] text-ivory/80"
+                  >
+                    Mon compte
+                  </NavLink>
+                  <NavLink
+                    to="/connexions"
+                    onClick={() => setOpen(false)}
+                    className="rounded-2xl border border-royal-500/30 px-4 py-3 font-regal text-xs font-semibold tracking-[0.18em] text-ivory/80"
+                  >
+                    Historique & appareils
+                  </NavLink>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpen(false);
+                      logout();
+                      navigate("/");
+                    }}
+                    className="rounded-2xl border border-royal-500/30 px-4 py-3 text-left font-regal text-xs font-semibold tracking-[0.18em] text-ivory/80"
+                  >
+                    Deconnexion
+                  </button>
+                </>
+              )}
+              {canAccessAdmin && (
                 <NavLink
-                  to="/compte"
+                  to="/admin"
                   onClick={() => setOpen(false)}
-                  className="rounded-xl border border-royal-500/30 px-4 py-3 font-regal text-xs font-semibold tracking-[0.22em] text-ivory/80"
+                  className="rounded-2xl border border-gold-400/40 bg-gold-500/10 px-4 py-3 font-regal text-xs font-semibold tracking-[0.18em] text-gold-200"
                 >
-                  Mon compte
+                  {adminLabel}
                 </NavLink>
-                <NavLink
-                  to="/connexions"
-                  onClick={() => setOpen(false)}
-                  className="rounded-xl border border-royal-500/30 px-4 py-3 font-regal text-xs font-semibold tracking-[0.22em] text-ivory/80"
-                >
-                  Historique & appareils
-                </NavLink>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOpen(false);
-                    logout();
-                    navigate("/");
-                  }}
-                  className="rounded-xl border border-royal-500/30 px-4 py-3 text-left font-regal text-xs font-semibold tracking-[0.22em] text-ivory/80"
-                >
-                  Deconnexion
-                </button>
-              </>
-            )}
-            {canAccessAdmin && (
-              <NavLink
-                to="/admin"
-                onClick={() => setOpen(false)}
-                className="rounded-xl border border-gold-400/40 bg-gold-500/10 px-4 py-3 font-regal text-xs font-semibold tracking-[0.22em] text-gold-200"
-              >
-                {adminLabel}
-              </NavLink>
-            )}
-          </nav>
+              )}
+            </nav>
+          </div>
         )}
       </div>
     </header>

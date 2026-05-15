@@ -581,7 +581,7 @@ export function Worlds() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-6 py-12">
+    <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-12">
       <SectionHeading
         eyebrow="Mondes"
         title={
@@ -593,14 +593,14 @@ export function Worlds() {
       />
 
       <section className="mt-8 overflow-hidden rounded-[34px] border border-gold-400/20 bg-[radial-gradient(circle_at_top,rgba(250,204,21,0.12),transparent_34%),linear-gradient(135deg,rgba(8,15,31,0.96),rgba(20,10,39,0.92)_55%,rgba(7,23,28,0.96))] shadow-[0_28px_120px_rgba(2,6,23,0.5)]">
-        <div className="grid gap-8 px-6 py-6 lg:grid-cols-[1.15fr,0.85fr] lg:px-8 lg:py-8">
+        <div className="grid gap-8 px-4 py-5 sm:px-6 sm:py-6 lg:grid-cols-[1.15fr,0.85fr] lg:px-8 lg:py-8">
           <div className="relative">
             <div className="absolute inset-x-0 top-0 h-24 rounded-full bg-gold-300/10 blur-3xl" />
             <div className="relative">
               <div className="inline-flex rounded-full border border-gold-400/25 bg-gold-500/10 px-3 py-1 text-[11px] uppercase tracking-[0.28em] text-gold-100">
                 {selectedDistrict.badge}
               </div>
-              <h2 className="mt-4 max-w-3xl font-display text-4xl text-ivory sm:text-5xl">
+              <h2 className="mt-4 max-w-3xl font-display text-3xl text-ivory sm:text-5xl">
                 {selectedDistrict.name}
               </h2>
               <p className="mt-4 max-w-2xl text-base leading-7 text-ivory/72">
@@ -745,7 +745,7 @@ export function Worlds() {
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
               onPointerCancel={handlePointerUp}
-              className={`relative min-h-[360px] sm:min-h-[500px] md:min-h-[620px] xl:min-h-[760px] overflow-hidden rounded-[30px] border border-white/10 bg-gradient-to-br ${selectedDistrict.accent}`}
+              className={`relative min-h-[320px] sm:min-h-[500px] md:min-h-[620px] xl:min-h-[760px] overflow-hidden rounded-[30px] border border-white/10 bg-gradient-to-br ${selectedDistrict.accent}`}
             >
               <DistrictBackdrop district={district} />
 
@@ -884,7 +884,7 @@ export function Worlds() {
                 </button>
               </div>
 
-              <div className="fixed bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 md:hidden">
+              <div className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 md:hidden">
                 <button
                   type="button"
                   onClick={() => moveBy(0, -5)}

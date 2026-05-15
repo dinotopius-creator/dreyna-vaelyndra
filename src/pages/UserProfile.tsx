@@ -145,7 +145,7 @@ export function UserProfile() {
     );
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-14">
+    <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 sm:py-14">
       <SoulBondsModal
         userId={profile.id}
         username={profile.username}
@@ -156,11 +156,11 @@ export function UserProfile() {
       <motion.header
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        className="card-royal relative overflow-hidden p-8 md:p-10"
+        className="card-royal relative overflow-hidden p-6 sm:p-8 md:p-10"
       >
-        <div className="flex flex-wrap items-center gap-6">
+        <div className="flex flex-col items-start gap-6 sm:flex-row sm:flex-wrap sm:items-center">
           {serverProfile?.avatarUrl ? (
-            <div className="w-32 sm:w-40">
+            <div className="w-28 sm:w-32 md:w-40">
               <AvatarViewer
                 src={serverProfile.avatarUrl}
                 fallbackImage={serverProfile.avatarImageUrl || profile.avatar}
@@ -182,7 +182,7 @@ export function UserProfile() {
               className="h-24 w-24 rounded-full object-cover ring-4 ring-gold-400/50"
             />
           )}
-          <div className="flex-1">
+          <div className="w-full flex-1">
             <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
               {roleLabelWithIcon(serverProfile?.role ?? profile.role)}
             </p>
@@ -232,7 +232,7 @@ export function UserProfile() {
               </div>
             )}
           </div>
-          <div className="flex flex-col items-end gap-2">
+          <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end">
 
             <FollowButton
               targetId={profile.id}
@@ -252,7 +252,7 @@ export function UserProfile() {
             {currentUser && currentUser.id !== profile.id && (
               <Link
                 to={`/messages/${encodeURIComponent(profile.id)}`}
-                className="inline-flex items-center gap-1.5 rounded-full border border-gold-400/50 bg-gold-500/10 px-3 py-2 text-xs font-semibold text-gold-200 hover:bg-gold-500/20"
+                className="inline-flex items-center justify-center gap-1.5 rounded-full border border-gold-400/50 bg-gold-500/10 px-3 py-2 text-xs font-semibold text-gold-200 hover:bg-gold-500/20"
               >
                 <MessageCircle className="h-4 w-4" />
                 Envoyer un message
@@ -281,7 +281,7 @@ export function UserProfile() {
         />
       </section>
 
-      <section className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <section className="mt-10 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <div className="card-royal p-5">
           <div className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-gold-300" />

@@ -263,7 +263,7 @@ export function Community() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-14">
+    <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-14">
       <SectionHeading
         eyebrow="Fil communautaire"
         title={
@@ -278,10 +278,10 @@ export function Community() {
         <MemberSearch />
       </div>
 
-      <div className="mt-10 grid gap-8 lg:grid-cols-[1fr,320px]">
+      <div className="mt-10 grid gap-8 lg:grid-cols-[minmax(0,1fr),320px]">
         <div>
           <form onSubmit={publish} className="card-royal p-5">
-            <div className="flex gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row">
               <AvatarImage
                 candidates={[user?.avatar]}
                 fallbackSeed={user?.id ?? "anon"}
@@ -300,8 +300,8 @@ export function Community() {
                   rows={3}
                   className="glass-input resize-none"
                 />
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="relative min-w-[200px] flex-1">
+                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                  <div className="relative min-w-0 flex-1">
                     <Image className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ivory/40" />
                     <input
                       value={imageUrl}
@@ -310,7 +310,7 @@ export function Community() {
                       className="glass-input pl-9"
                     />
                   </div>
-                  <div className="relative min-w-[200px] flex-1">
+                  <div className="relative min-w-0 flex-1">
                     <Film className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ivory/40" />
                     <input
                       value={videoUrl}
@@ -319,7 +319,7 @@ export function Community() {
                       className="glass-input pl-9"
                     />
                   </div>
-                  <button type="submit" className="btn-gold">
+                  <button type="submit" className="btn-gold w-full justify-center sm:w-auto">
                     <Send className="h-4 w-4" /> Publier
                   </button>
                 </div>
@@ -336,7 +336,7 @@ export function Community() {
                 transition={{ delay: index * 0.04 }}
                 className="card-royal p-5"
               >
-                <header className="flex items-start gap-3">
+                <header className="flex flex-wrap items-start gap-3">
                   <Link
                     to={profileHref(post.authorId)}
                     className="shrink-0"
@@ -384,7 +384,7 @@ export function Community() {
                       {post.content}
                     </p>
                   </div>
-                  <div className="flex items-center gap-1.5">
+                  <div className="ml-auto flex items-center gap-1.5">
                     {user && user.id !== post.authorId && (
                       <ReportButton
                         targetType="post"
@@ -445,7 +445,7 @@ export function Community() {
                         [post.id]: !current[post.id],
                       }))
                     }
-                    className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-royal-500/30 px-3 py-1 text-sm text-ivory/70 transition hover:border-gold-400/40 hover:text-gold-200"
+                    className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-royal-500/30 px-3 py-1 text-sm text-ivory/70 transition hover:border-gold-400/40 hover:text-gold-200 sm:ml-auto"
                   >
                     <MessageCircle className="h-3.5 w-3.5" />
                     Commenter
@@ -524,7 +524,7 @@ export function Community() {
                 <Gift className="h-4 w-4 text-gold-300" />
                 Recompenses de fin de semaine
               </p>
-              <div className="mt-2 grid grid-cols-3 gap-2 text-center text-xs">
+              <div className="mt-2 grid grid-cols-1 gap-2 text-center text-xs min-[360px]:grid-cols-3">
                 {[1, 2, 3].map((rank) => (
                   <div
                     key={rank}

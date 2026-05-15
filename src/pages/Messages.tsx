@@ -23,7 +23,7 @@ export function Messages() {
   if (!user) return null;
 
   return (
-    <div className="mx-auto max-w-3xl px-5 py-10">
+    <div className="mx-auto max-w-3xl px-4 py-10 sm:px-5">
       <SectionHeading
         eyebrow="Messagerie"
         title="Mes conversations"
@@ -55,7 +55,7 @@ export function Messages() {
             <li key={c.other_user_id}>
               <Link
                 to={`/messages/${encodeURIComponent(c.other_user_id)}`}
-                className="flex items-center gap-4 px-5 py-4 transition hover:bg-night-700/40"
+                className="flex items-start gap-3 px-4 py-4 transition hover:bg-night-700/40 sm:items-center sm:gap-4 sm:px-5"
               >
                 <img
                   src={c.other_avatar || "/favicon.svg"}
@@ -63,7 +63,7 @@ export function Messages() {
                   className="h-12 w-12 flex-none rounded-full border border-gold-400/30 object-cover"
                 />
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-baseline justify-between gap-3">
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
                     <p className="truncate font-regal text-sm font-semibold text-ivory">
                       {c.other_username}
                     </p>

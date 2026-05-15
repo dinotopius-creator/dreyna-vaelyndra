@@ -108,7 +108,7 @@ export function Shop() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-6 py-16">
+    <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16">
       <SectionHeading
         eyebrow="Boutique Royale"
         title={<>Les trésors de <span className="text-mystic">Vaelyndra</span></>}
@@ -130,7 +130,7 @@ export function Shop() {
             />
             <div className="absolute inset-0 bg-gradient-to-t from-night-900 via-transparent to-transparent md:bg-gradient-to-r" />
           </div>
-          <div className="flex flex-col justify-center p-8 md:p-12">
+          <div className="flex flex-col justify-center p-6 sm:p-8 md:p-12">
             <span className="tag-gold">
               <Sparkles className="h-3 w-3" /> Mis en avant
             </span>
@@ -141,7 +141,7 @@ export function Shop() {
               {featured.tagline}
             </p>
             <p className="mt-5 text-ivory/80">{featured.description}</p>
-            <div className="mt-6 flex items-center justify-between">
+            <div className="mt-6 flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
               <span className="font-display text-3xl text-ivory">
                 {formatPrice(featured.price, featured.currency)}
               </span>
@@ -149,7 +149,7 @@ export function Shop() {
                 <button
                   onClick={() => buyWithLueurs(featured)}
                   disabled={buyingLueursId === featured.id}
-                  className="btn-gold"
+                  className="btn-gold w-full justify-center sm:w-auto"
                 >
                   <Sparkles className="h-4 w-4" />{" "}
                   {buyingLueursId === featured.id
@@ -157,7 +157,10 @@ export function Shop() {
                     : "Acheter en Lueurs"}
                 </button>
               ) : (
-                <button onClick={() => addToCart(featured)} className="btn-gold">
+                <button
+                  onClick={() => addToCart(featured)}
+                  className="btn-gold w-full justify-center sm:w-auto"
+                >
                   <ShoppingBag className="h-4 w-4" /> Ajouter
                 </button>
               )}
@@ -166,7 +169,7 @@ export function Shop() {
         </motion.div>
       )}
 
-      <div className="mt-12 flex flex-wrap items-center justify-between gap-4">
+      <div className="mt-12 flex flex-col items-stretch gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-wrap gap-2">
           {CATEGORIES.map((c) => (
             <button
@@ -184,7 +187,7 @@ export function Shop() {
           ))}
         </div>
         {cartCount > 0 && (
-          <Link to="/panier" className="btn-royal">
+          <Link to="/panier" className="btn-royal w-full justify-center lg:w-auto">
             <ShoppingBag className="h-4 w-4" /> {cartCount} article
             {cartCount > 1 ? "s" : ""} · {formatPrice(cartTotal)}
           </Link>
@@ -224,7 +227,7 @@ export function Shop() {
               <p className="mt-2 line-clamp-2 text-sm text-ivory/65">
                 {p.description}
               </p>
-              <div className="mt-auto flex items-center justify-between pt-5">
+              <div className="mt-auto flex flex-col items-start gap-3 pt-5 sm:flex-row sm:items-center sm:justify-between">
                 <span className="font-display text-xl text-ivory">
                   {formatPrice(p.price, p.currency)}
                 </span>
@@ -232,13 +235,16 @@ export function Shop() {
                   <button
                     onClick={() => buyWithLueurs(p)}
                     disabled={buyingLueursId === p.id}
-                    className="btn-ghost"
+                    className="btn-ghost w-full justify-center sm:w-auto"
                   >
                     <Sparkles className="h-3.5 w-3.5" />{" "}
                     {buyingLueursId === p.id ? "Achat..." : "Acheter"}
                   </button>
                 ) : (
-                  <button onClick={() => addToCart(p)} className="btn-ghost">
+                  <button
+                    onClick={() => addToCart(p)}
+                    className="btn-ghost w-full justify-center sm:w-auto"
+                  >
                     <ShoppingBag className="h-3.5 w-3.5" /> Ajouter
                   </button>
                 )}

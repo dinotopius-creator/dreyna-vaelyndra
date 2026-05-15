@@ -98,8 +98,8 @@ export function MessageThread() {
   if (!user) return null;
 
   return (
-    <div className="mx-auto flex h-[calc(100vh-4.5rem)] max-w-3xl flex-col px-0 sm:px-5 sm:py-6">
-      <header className="flex items-center gap-3 border-b border-royal-500/20 bg-night-800/60 px-4 py-3 sm:rounded-t-2xl">
+    <div className="mx-auto flex min-h-[calc(100dvh-4rem)] max-w-3xl flex-col px-0 sm:h-[calc(100vh-4.5rem)] sm:px-5 sm:py-6">
+      <header className="flex items-center gap-3 border-b border-royal-500/20 bg-night-800/60 px-3 py-3 sm:rounded-t-2xl sm:px-4">
         <Link
           to="/messages"
           className="rounded-full border border-royal-500/30 p-2 text-ivory/70 hover:text-gold-200"
@@ -133,7 +133,7 @@ export function MessageThread() {
 
       <div
         ref={listRef}
-        className="flex-1 overflow-y-auto bg-night-900/40 px-4 py-5 sm:rounded-b-none"
+        className="flex-1 overflow-y-auto bg-night-900/40 px-3 py-4 sm:rounded-b-none sm:px-4 sm:py-5"
       >
         {threadLoading && thread.length === 0 ? (
           <p className="text-center text-xs text-ivory/50">Chargement…</p>
@@ -155,7 +155,7 @@ export function MessageThread() {
                   className={`flex ${mine ? "justify-end" : "justify-start"}`}
                 >
                   <div
-                    className={`max-w-[78%] rounded-2xl px-4 py-2 text-sm shadow-sm ${
+                    className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm shadow-sm sm:max-w-[78%] sm:px-4 ${
                       mine
                         ? "bg-gold-500/15 text-ivory border border-gold-400/40"
                         : "bg-night-800/70 text-ivory border border-royal-500/30"
@@ -193,7 +193,7 @@ export function MessageThread() {
           onChange={(e) => setDraft(e.target.value)}
           placeholder="Écrire un message…"
           maxLength={2000}
-          className="flex-1 rounded-full border border-royal-500/30 bg-night-900/60 px-4 py-2 text-sm text-ivory placeholder:text-ivory/40 focus:border-gold-400/60 focus:outline-none"
+        className="flex-1 rounded-full border border-royal-500/30 bg-night-900/60 px-4 py-2.5 text-sm text-ivory placeholder:text-ivory/40 focus:border-gold-400/60 focus:outline-none"
         />
         <button
           type="submit"
