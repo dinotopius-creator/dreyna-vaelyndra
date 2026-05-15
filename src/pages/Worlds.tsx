@@ -937,19 +937,18 @@ function DistrictBackdrop({ district }: { district: DistrictId }) {
   if (district === "arcades") {
     return (
       <>
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.22),transparent_28%),radial-gradient(circle_at_top_right,rgba(96,165,250,0.18),transparent_26%),linear-gradient(180deg,rgba(2,6,23,0.18),rgba(2,6,23,0.86))]" />
-        <div className="absolute left-[8%] top-[14%] h-44 w-32 rounded-[32px] border border-cyan-200/20 bg-cyan-300/10 shadow-[0_0_40px_rgba(34,211,238,0.12)] backdrop-blur" />
-        <div className="absolute left-[24%] top-[18%] h-36 w-24 rounded-[28px] border border-sky-200/20 bg-sky-300/10 backdrop-blur" />
-        <div className="absolute right-[10%] top-[16%] h-48 w-36 rounded-[34px] border border-indigo-200/20 bg-indigo-300/10 shadow-[0_0_50px_rgba(129,140,248,0.14)] backdrop-blur" />
-        <div className="absolute right-[26%] top-[20%] h-32 w-24 rounded-[24px] border border-cyan-200/20 bg-cyan-200/10 backdrop-blur" />
-        <div className="absolute left-[14%] top-[22%] rounded-full border border-cyan-200/20 bg-night-950/70 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-cyan-100/80">
-          Galerie avatars
-        </div>
-        <div className="absolute right-[16%] top-[24%] rounded-full border border-indigo-200/20 bg-night-950/70 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-indigo-100/80">
-          Fan arts en vedette
-        </div>
-        <div className="absolute inset-x-[10%] bottom-[20%] h-20 rounded-[32px] border border-cyan-300/15 bg-[linear-gradient(90deg,rgba(34,211,238,0.18),rgba(56,189,248,0.06),rgba(99,102,241,0.18))] blur-[1px]" />
-        <div className="absolute inset-x-[6%] bottom-[-12%] h-56 rounded-[50%] border border-cyan-300/10 bg-night-950/60" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.18),transparent_28%),radial-gradient(circle_at_top_right,rgba(96,165,250,0.14),transparent_26%),linear-gradient(180deg,rgba(2,6,23,0.18),rgba(2,6,23,0.86))]" />
+
+        {/* Neon display blocks (keep visual, remove text badges) */}
+        <div className="absolute left-[6%] top-[14%] h-40 w-28 rounded-[28px] border border-cyan-200/18 bg-cyan-300/8 shadow-[0_0_40px_rgba(34,211,238,0.12)] backdrop-blur" />
+        <div className="absolute left-[24%] top-[18%] h-32 w-20 rounded-[24px] border border-sky-200/18 bg-sky-300/8 backdrop-blur" />
+        <div className="absolute right-[8%] top-[16%] h-44 w-32 rounded-[32px] border border-indigo-200/18 bg-indigo-300/8 shadow-[0_0_50px_rgba(129,140,248,0.12)] backdrop-blur" />
+
+        {/* Low decorative ground */}
+        <div className="absolute inset-x-[8%] bottom-[6%] h-20 rounded-[24px] border border-cyan-300/12 bg-[linear-gradient(90deg,rgba(34,211,238,0.12),rgba(56,189,248,0.04),rgba(99,102,241,0.12))]" />
+
+        {/* Soft grass foreground to tie visuals together */}
+        <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-emerald-900/90 via-emerald-800/60 to-transparent opacity-95" />
       </>
     );
   }
@@ -957,20 +956,19 @@ function DistrictBackdrop({ district }: { district: DistrictId }) {
   if (district === "observatory") {
     return (
       <>
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(244,114,182,0.18),transparent_26%),radial-gradient(circle_at_70%_20%,rgba(196,181,253,0.18),transparent_24%),linear-gradient(180deg,rgba(10,10,35,0.12),rgba(3,7,18,0.88))]" />
-        <div className="absolute left-1/2 top-[10%] h-56 w-[72%] -translate-x-1/2 rounded-t-[180px] border border-fuchsia-200/15 bg-fuchsia-200/5 backdrop-blur-[2px]" />
-        <div className="absolute left-[16%] top-[18%] h-24 w-40 rounded-[28px] border border-rose-200/20 bg-rose-200/10 shadow-[0_0_36px_rgba(244,114,182,0.14)] backdrop-blur">
-          <div className="flex h-full items-center justify-center text-[11px] uppercase tracking-[0.22em] text-rose-100/80">
-            Live 01
-          </div>
-        </div>
-        <div className="absolute right-[14%] top-[20%] h-28 w-44 rounded-[30px] border border-purple-200/20 bg-purple-200/10 shadow-[0_0_42px_rgba(192,132,252,0.16)] backdrop-blur">
-          <div className="flex h-full items-center justify-center text-[11px] uppercase tracking-[0.22em] text-purple-100/80">
-            Live 02
-          </div>
-        </div>
-        <div className="absolute left-1/2 top-[46%] h-32 w-[44%] -translate-x-1/2 rounded-[50%] border border-fuchsia-200/20 bg-night-950/65 shadow-[0_0_60px_rgba(192,132,252,0.14)]" />
-        <div className="absolute inset-x-[18%] bottom-[18%] h-24 rounded-[40px] border border-fuchsia-300/15 bg-[linear-gradient(180deg,rgba(217,70,239,0.12),rgba(15,23,42,0.1))]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(244,114,182,0.16),transparent_26%),radial-gradient(circle_at_70%_20%,rgba(196,181,253,0.14),transparent_24%),linear-gradient(180deg,rgba(10,10,35,0.12),rgba(3,7,18,0.88))]" />
+
+        {/* Observatory dome */}
+        <div className="absolute left-1/2 top-[8%] h-56 w-[70%] -translate-x-1/2 rounded-t-[180px] border border-fuchsia-200/14 bg-fuchsia-200/4 backdrop-blur-[2px]" />
+
+        {/* Small live cards (no text) */}
+        <div className="absolute left-[14%] top-[20%] h-20 w-36 rounded-[24px] border border-rose-200/16 bg-rose-200/8 shadow-[0_0_28px_rgba(244,114,182,0.12)] backdrop-blur" />
+        <div className="absolute right-[12%] top-[20%] h-24 w-40 rounded-[26px] border border-purple-200/16 bg-purple-200/8 shadow-[0_0_36px_rgba(192,132,252,0.12)] backdrop-blur" />
+
+        {/* Ring/platform */}
+        <div className="absolute left-1/2 top-[46%] h-32 w-[44%] -translate-x-1/2 rounded-[50%] border border-fuchsia-200/18 bg-night-950/64 shadow-[0_0_60px_rgba(192,132,252,0.12)]" />
+
+        {/* Stars */}
         {Array.from({ length: 14 }).map((_, index) => (
           <span
             key={`star-${index}`}
@@ -982,24 +980,30 @@ function DistrictBackdrop({ district }: { district: DistrictId }) {
             }}
           />
         ))}
+
+        {/* Gentle grassy foreground to soften the bottom */}
+        <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-emerald-900/85 via-emerald-800/50 to-transparent opacity-95" />
       </>
     );
   }
 
+  // Place publique: add greenery and simplify badges
   return (
     <>
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,247,204,0.16),transparent_30%),linear-gradient(180deg,rgba(4,10,24,0.18),rgba(4,10,24,0.8))]" />
-      <div className="absolute inset-x-[8%] top-[10%] h-36 rounded-full bg-gold-300/10 blur-3xl" />
-      <div className="absolute left-1/2 top-[20%] h-20 w-20 -translate-x-1/2 rounded-full border border-gold-200/25 bg-gold-200/10 shadow-[0_0_40px_rgba(250,204,21,0.16)]" />
-      <div className="absolute left-1/2 top-[36%] h-28 w-28 -translate-x-1/2 rounded-full border border-gold-200/15 bg-[radial-gradient(circle,rgba(255,248,220,0.26),rgba(250,204,21,0.08),transparent_70%)]" />
-      <div className="absolute left-[16%] top-[22%] rounded-full border border-gold-200/15 bg-night-950/70 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-gold-100/80">
-        Fontaine centrale
-      </div>
-      <div className="absolute right-[12%] top-[20%] rounded-full border border-amber-200/15 bg-night-950/70 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-amber-100/80">
-        Ronde des familiers
-      </div>
-      <div className="absolute inset-x-[14%] bottom-[26%] h-16 rounded-[30px] border border-gold-300/10 bg-gold-300/10" />
-      <div className="absolute bottom-[-10%] left-[15%] right-[15%] h-48 rounded-[50%] border border-gold-300/10 bg-night-950/50 blur-[2px]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,247,204,0.14),transparent_30%),linear-gradient(180deg,rgba(4,10,24,0.14),rgba(4,10,24,0.78))]" />
+
+      {/* Decorative central elements simplified */}
+      <div className="absolute inset-x-[8%] top-[10%] h-28 rounded-full bg-gold-300/8 blur-3xl" />
+      <div className="absolute left-1/2 top-[20%] h-18 w-18 -translate-x-1/2 rounded-full border border-gold-200/22 bg-gold-200/8 shadow-[0_0_28px_rgba(250,204,21,0.12)]" />
+
+      {/* Remove text badges; keep soft shapes */}
+
+      {/* Large soft ground and grass foreground */}
+      <div className="absolute inset-x-[6%] bottom-[18%] h-20 rounded-[30px] border border-gold-300/10 bg-gold-300/8 opacity-60" />
+      <div className="absolute inset-x-0 bottom-0 h-36 bg-gradient-to-t from-emerald-900/96 via-emerald-800/68 to-transparent" />
+
+      {/* Subtle blurred shadow for depth */}
+      <div className="absolute bottom-[-6%] left-[12%] right-[12%] h-44 rounded-[50%] border border-gold-300/10 bg-night-950/44 blur-[2px]" />
     </>
   );
 }
