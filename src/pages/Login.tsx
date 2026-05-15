@@ -58,11 +58,11 @@ export function Login() {
   }
 
   return (
-    <div className="mx-auto flex max-w-md flex-col px-6 py-20">
+    <div className="mx-auto flex max-w-md flex-col px-4 py-14 sm:px-6 sm:py-20">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="card-royal p-8"
+        className="card-royal p-6 sm:p-8"
       >
         <div className="flex justify-center">
           <span className="flex h-14 w-14 items-center justify-center rounded-full bg-gold-shine text-night-900 shadow-glow-gold">

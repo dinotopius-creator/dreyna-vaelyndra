@@ -83,11 +83,11 @@ export function Register() {
   }
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col px-6 py-20">
+    <div className="mx-auto flex max-w-3xl flex-col px-4 py-14 sm:px-6 sm:py-20">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="card-royal p-8"
+        className="card-royal p-6 sm:p-8"
       >
         <div className="flex justify-center">
           <span className="flex h-14 w-14 items-center justify-center rounded-full bg-gold-shine text-night-900 shadow-glow-gold">
@@ -169,7 +169,7 @@ export function Register() {
             <div
               role="radiogroup"
               aria-label="Choisis ta créature"
-              className="grid grid-cols-2 gap-3 sm:grid-cols-3"
+              className="grid grid-cols-1 gap-3 min-[380px]:grid-cols-2 sm:grid-cols-3"
             >
               {CREATURES.map((c) => {
                 const selected = creatureId === c.id;
@@ -212,11 +212,11 @@ export function Register() {
               })}
             </div>
             {error && <p className="text-center text-sm text-rose-300">{error}</p>}
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
               <button
                 type="button"
                 onClick={() => setStep("identity")}
-                className="btn-ghost"
+                className="btn-ghost w-full justify-center sm:w-auto"
               >
                 ← Retour
               </button>
@@ -224,7 +224,7 @@ export function Register() {
                 type="button"
                 onClick={finalize}
                 disabled={!creatureId || submitting}
-                className="btn-gold justify-center disabled:cursor-not-allowed disabled:opacity-50"
+                className="btn-gold w-full justify-center disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
               >
                 {submitting ? "Incantation…" : "Sceller le pacte"}
               </button>

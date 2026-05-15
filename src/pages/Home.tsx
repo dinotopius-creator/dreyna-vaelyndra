@@ -47,8 +47,8 @@ function Hero({
   isRegistered: boolean;
 }) {
   return (
-    <section className="relative overflow-hidden pb-24 pt-14 md:pt-24">
-      <div className="mx-auto grid max-w-7xl items-center gap-12 px-6 lg:grid-cols-2">
+    <section className="relative overflow-hidden pb-20 pt-12 sm:pb-24 sm:pt-14 md:pt-24">
+      <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 sm:px-6 lg:grid-cols-2">
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
@@ -57,11 +57,11 @@ function Hero({
           <span className="tag-gold">
             <Crown className="h-3 w-3" /> Mini réseau social
           </span>
-          <h1 className="heading-gold mt-6 text-5xl leading-[1.05] md:text-7xl">
+          <h1 className="heading-gold mt-6 text-4xl leading-[1.05] sm:text-5xl md:text-7xl">
             Bienvenue à<br />
             Vaelyndra
           </h1>
-          <p className="mt-6 max-w-xl text-lg text-ivory/80 md:text-xl">
+          <p className="mt-5 max-w-xl text-base leading-7 text-ivory/80 sm:text-lg md:text-xl">
             Le mini-réseau social magique où{" "}
             <span className="text-mystic font-semibold">
               chacun peut percer
@@ -69,27 +69,27 @@ function Hero({
             — lance tes lives, poste, tisse des liens d'âme, grimpe dans les 6
             grades de streamer. Ton histoire commence ici.
           </p>
-          <div className="mt-8 flex flex-wrap items-center gap-3">
+          <div className="mt-8 flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center">
             {isRegistered ? (
-              <Link to="/compte" className="btn-gold">
+              <Link to="/compte" className="btn-gold w-full sm:w-auto">
                 <Crown className="h-4 w-4" /> Mon compte
               </Link>
             ) : (
-              <Link to="/inscription" className="btn-gold">
+              <Link to="/inscription" className="btn-gold w-full sm:w-auto">
                 <Crown className="h-4 w-4" /> Créer mon compte
               </Link>
             )}
-            <Link to="/live" className="btn-royal">
+            <Link to="/live" className="btn-royal w-full sm:w-auto">
               <Radio className="h-4 w-4" /> Rejoindre les lives
               {isLiveOn && (
                 <span className="ml-1 h-1.5 w-1.5 animate-pulse rounded-full bg-rose-400" />
               )}
             </Link>
-            <Link to="/communaute" className="btn-ghost">
+            <Link to="/communaute" className="btn-ghost w-full sm:w-auto">
               <Users className="h-4 w-4" /> Le fil communautaire
             </Link>
           </div>
-          <div className="mt-10 flex items-center gap-6 text-sm text-ivory/60">
+          <div className="mt-10 flex flex-col items-start gap-4 text-sm text-ivory/60 sm:flex-row sm:items-center sm:gap-6">
             <div className="flex -space-x-3">
               {TOP_FANS.slice(0, 4).map((f) => (
                 <img
@@ -176,8 +176,8 @@ function StatsBar() {
     },
   ];
   return (
-    <section className="mx-auto max-w-7xl px-6">
-      <div className="card-royal grid grid-cols-2 gap-6 p-6 md:grid-cols-4">
+    <section className="mx-auto max-w-7xl px-4 sm:px-6">
+      <div className="card-royal grid grid-cols-1 gap-4 p-5 min-[380px]:grid-cols-2 md:grid-cols-4">
         {items.map((it) => (
           <div key={it.label} className="flex items-center gap-3">
             <span className="flex h-10 w-10 items-center justify-center rounded-full border border-gold-400/40 bg-gold-500/10 text-gold-300">
@@ -228,7 +228,7 @@ function Pillars() {
     },
   ];
   return (
-    <section className="mx-auto max-w-7xl px-6 pt-16">
+    <section className="mx-auto max-w-7xl px-4 pt-16 sm:px-6">
       <SectionHeading
         eyebrow="Explore Vaelyndra"
         title={
@@ -281,7 +281,7 @@ function FeaturedArticle({
 }) {
   if (!article) return null;
   return (
-    <section className="mx-auto max-w-7xl px-6 pt-24">
+    <section className="mx-auto max-w-7xl px-4 pt-20 sm:px-6 sm:pt-24">
       <SectionHeading
         eyebrow="Dernière chronique"
         title={<>Le royaume raconte</>}
@@ -366,7 +366,7 @@ function ShopShowcase({
   products: ReturnType<typeof useStore>["products"];
 }) {
   return (
-    <section className="mx-auto max-w-7xl px-6 pt-24">
+    <section className="mx-auto max-w-7xl px-4 pt-20 sm:px-6 sm:pt-24">
       <SectionHeading
         eyebrow="Boutique Royale"
         title={<>Objets sacrés & drops exclusifs</>}
@@ -398,12 +398,12 @@ function ShopShowcase({
               <h3 className="mt-1 font-display text-xl text-gold-200">
                 {p.name}
               </h3>
-              <div className="mt-3 flex items-center justify-between">
+              <div className="mt-3 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <span className="font-display text-xl text-ivory">
                   {p.price}
                   {p.currency}
                 </span>
-                <Link to="/boutique" className="btn-ghost">
+                <Link to="/boutique" className="btn-ghost w-full justify-center sm:w-auto">
                   Voir
                 </Link>
               </div>
@@ -422,8 +422,8 @@ function ShopShowcase({
 
 function CommunityTeaser({ isRegistered }: { isRegistered: boolean }) {
   return (
-    <section className="mx-auto max-w-7xl px-6 pt-24">
-      <div className="card-royal relative overflow-hidden p-10 md:p-14">
+    <section className="mx-auto max-w-7xl px-4 pt-20 sm:px-6 sm:pt-24">
+      <div className="card-royal relative overflow-hidden p-6 sm:p-10 md:p-14">
         <div className="relative z-10 grid items-center gap-8 md:grid-cols-2">
           <div>
             <SectionHeading
@@ -436,22 +436,22 @@ function CommunityTeaser({ isRegistered }: { isRegistered: boolean }) {
               }
               subtitle="Publie, réagis, suis tes streamers préférés, débloque des badges et monte dans les 6 grades."
             />
-            <div className="mt-6 flex gap-3">
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               {isRegistered ? (
-                <Link to="/compte" className="btn-gold">
+                <Link to="/compte" className="btn-gold w-full sm:w-auto">
                   Mon compte
                 </Link>
               ) : (
-                <Link to="/inscription" className="btn-gold">
+                <Link to="/inscription" className="btn-gold w-full sm:w-auto">
                   Créer mon compte
                 </Link>
               )}
-              <Link to="/communaute" className="btn-ghost">
+              <Link to="/communaute" className="btn-ghost w-full sm:w-auto">
                 Voir le fil
               </Link>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2">
             {TOP_FANS.map((f, i) => (
               <motion.div
                 key={f.name}
@@ -483,12 +483,12 @@ function CommunityTeaser({ isRegistered }: { isRegistered: boolean }) {
 
 function CTA({ isRegistered }: { isRegistered: boolean }) {
   return (
-    <section className="mx-auto max-w-4xl px-6 pt-24 text-center">
+    <section className="mx-auto max-w-4xl px-4 pt-20 text-center sm:px-6 sm:pt-24">
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         whileInView={{ opacity: 1, scale: 1 }}
         viewport={{ once: true }}
-        className="card-royal p-10 md:p-14"
+        className="card-royal p-6 sm:p-10 md:p-14"
       >
         <Sparkles className="mx-auto h-8 w-8 text-gold-300" />
         <h2 className="heading-gold mt-4 text-3xl md:text-5xl">
@@ -504,17 +504,17 @@ function CTA({ isRegistered }: { isRegistered: boolean }) {
             Crée ton compte, choisis ta créature, lance ton premier live.
           </p>
         )}
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+        <div className="mt-6 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:flex-wrap sm:items-center">
           {isRegistered ? (
-            <Link to="/compte" className="btn-gold">
+            <Link to="/compte" className="btn-gold w-full sm:w-auto">
               Mon compte
             </Link>
           ) : (
-            <Link to="/inscription" className="btn-gold">
+            <Link to="/inscription" className="btn-gold w-full sm:w-auto">
               Créer mon compte
             </Link>
           )}
-          <Link to="/communaute" className="btn-royal">
+          <Link to="/communaute" className="btn-royal w-full sm:w-auto">
             Voir la communauté
           </Link>
         </div>
