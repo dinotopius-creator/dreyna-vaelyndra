@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+﻿import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -72,34 +72,34 @@ const DISTRICTS: District[] = [
     id: "place",
     name: "Place publique",
     accent: "from-gold-400/30 via-amber-300/10 to-rose-300/10",
-    description: "Le coeur du royaume, entre rencontres spontanées et passages de familiers.",
+    description: "Le coeur du royaume, entre rencontres spontan├®es et passages de familiers.",
     center: { x: 49, y: 62 },
-    mood: "Agora dorée, fontaine centrale et rondes de familiers.",
+    mood: "Agora dor├®e, fontaine centrale et rondes de familiers.",
   },
   {
     id: "arcades",
-    name: "Arcades des créateurs",
+    name: "Arcades des cr├®ateurs",
     accent: "from-cyan-300/25 via-sky-400/10 to-indigo-400/10",
-    description: "Un couloir social pensé pour les vitrines d'avatars, fan arts et mini événements.",
+    description: "Un couloir social pens├® pour les vitrines d'avatars, fan arts et mini ├®v├®nements.",
     center: { x: 30, y: 50 },
-    mood: "Galeries néon, cadres flottants et stands de créations.",
+    mood: "Galeries n├®on, cadres flottants et stands de cr├®ations.",
   },
   {
     id: "observatory",
     name: "Observatoire live",
     accent: "from-fuchsia-400/25 via-purple-400/10 to-rose-300/10",
-    description: "Le balcon d'où l'on regarde les streamers en direct et les happenings du soir.",
+    description: "Le balcon d'o├╣ l'on regarde les streamers en direct et les happenings du soir.",
     center: { x: 72, y: 42 },
-    mood: "Dôme céleste, écrans live suspendus et vue sur le royaume.",
+    mood: "D├┤me c├®leste, ├®crans live suspendus et vue sur le royaume.",
   },
 ];
 
 const EVENT_BOARD = [
   {
     id: "event-aurora",
-    title: "Défilé des familiers célestes",
-    schedule: "Ce soir · 21:00",
-    copy: "Parade lumineuse sur la place centrale avec bonus de présence et captures photo.",
+    title: "D├®fil├® des familiers c├®lestes",
+    schedule: "Ce soir ┬À 21:00",
+    copy: "Parade lumineuse sur la place centrale avec bonus de pr├®sence et captures photo.",
   },
   {
     id: "event-live",
@@ -111,14 +111,14 @@ const EVENT_BOARD = [
     id: "event-guild",
     title: "Ronde des nouveaux membres",
     schedule: "Ouvert maintenant",
-    copy: "Parcours guidé du hub pour accueillir les nouveaux profils et leurs familiers.",
+    copy: "Parcours guid├® du hub pour accueillir les nouveaux profils et leurs familiers.",
   },
 ];
 
 const BASE_CHAT: WorldChatMessage[] = [
   {
     id: "world-boot-1",
-    author: "Système",
+    author: "Syst├¿me",
     content: "Le portail des Mondes est ouvert. Approchez de la place publique pour croiser la cour.",
     tone: "system",
     district: "place",
@@ -126,9 +126,9 @@ const BASE_CHAT: WorldChatMessage[] = [
   },
   {
     id: "world-boot-2",
-    author: "Maîtresse des lieux",
+    author: "Ma├«tresse des lieux",
     handle: "dreyna",
-    content: "Les streamers visibles ici peuvent être rejoints instantanément depuis l'observatoire.",
+    content: "Les streamers visibles ici peuvent ├¬tre rejoints instantan├®ment depuis l'observatoire.",
     tone: "member",
     district: "observatory",
     createdAt: new Date(Date.now() - 1000 * 60 * 6).toISOString(),
@@ -427,7 +427,7 @@ export function Worlds() {
 
   async function startVoicePreview() {
     if (!navigator.mediaDevices?.getUserMedia) {
-      notify("Le chat vocal n'est pas supporté sur cet appareil.", "error");
+      notify("Le chat vocal n'est pas support├® sur cet appareil.", "error");
       return;
     }
     setVoiceLoading(true);
@@ -457,7 +457,7 @@ export function Worlds() {
       };
       rafRef.current = window.requestAnimationFrame(tick);
       setVoiceEnabled(true);
-      notify("Micro activé. Le salon vocal du hub est prêt.", "success");
+      notify("Micro activ├®. Le salon vocal du hub est pr├¬t.", "success");
     } catch (error) {
       console.warn(error);
       stopVoicePreview();
@@ -486,7 +486,7 @@ export function Worlds() {
     if (voiceLoading) return;
     if (voiceEnabled) {
       stopVoicePreview();
-      notify("Micro coupé. Tu restes visible dans le hub.", "info");
+      notify("Micro coup├®. Tu restes visible dans le hub.", "info");
       return;
     }
     await startVoicePreview();
@@ -534,7 +534,7 @@ export function Worlds() {
             La place <span className="text-mystic">virtuelle</span> de Vaelyndra
           </>
         }
-        subtitle="Un hub social vivant où les membres se déplacent avec leur familier, repèrent les lives en direct et rejoignent les événements du royaume."
+        subtitle="Un hub social vivant o├╣ les membres se d├®placent avec leur familier, rep├¿rent les lives en direct et rejoignent les ├®v├®nements du royaume."
       />
 
       <div className="mt-8 grid gap-4 xl:grid-cols-[1.35fr,0.65fr]">
@@ -615,25 +615,14 @@ export function Worlds() {
                   transition={{ duration: 4.6, repeat: Infinity, ease: "easeInOut" }}
                 >
                   <div className="rounded-[24px] border border-white/15 bg-night-950/75 p-1.5 backdrop-blur relative">
-                    {member.avatarUrl ? (
-                      <div className="w-10 md:w-12 overflow-hidden rounded-[18px]">
-                        <AvatarViewer
-                          src={member.avatarUrl}
-                          fallbackImage={member.avatarImageUrl}
-                          alt={member.username}
-                          size="square"
-                          framing="face"
-                          autoRotate={false}
-                        />
-                      </div>
-                    ) : (
+                    <div className="w-12 md:w-14 overflow-hidden rounded-full border border-white/6">
                       <AvatarImage
-                        candidates={[member.avatarImageUrl]}
+                        candidates={[member.avatarImageUrl, member.avatarUrl]}
                         fallbackSeed={member.id}
                         alt={member.username}
-                        className="h-10 w-10 md:h-12 md:w-12 rounded-[18px] object-cover"
+                        className="h-10 w-10 md:h-12 md:w-12 rounded-full object-cover"
                       />
-                    )}
+                    </div>
 
                     {/* Other member's active familiar (if available) */}
                     {otherFamiliars[member.id] && (
@@ -653,7 +642,7 @@ export function Worlds() {
                     <div>{member.username}</div>
                     <div className="text-[9px] text-gold-200/80">
                       {member.status}
-                      {member.voiceEnabled ? " · vocal" : ""}
+                      {member.voiceEnabled ? " ┬À vocal" : ""}
                     </div>
                   </div>
                 </motion.div>
@@ -666,7 +655,7 @@ export function Worlds() {
                       {selectedDistrict.name} est calme
                     </div>
                     <p className="mt-2 text-sm text-ivory/60">
-                      Aucun autre membre n'est connecté à ce monde pour le moment.
+                      Aucun autre membre n'est connect├® ├á ce monde pour le moment.
                     </p>
                   </div>
                 </div>
@@ -683,29 +672,14 @@ export function Worlds() {
               >
                 <div className="relative flex flex-col items-center">
                   <div className="rounded-[30px] border border-gold-300/40 bg-night-950/80 p-2 shadow-[0_0_45px_rgba(250,204,21,0.25)] backdrop-blur">
-                    {profile?.avatarUrl ? (
-                      <div className="w-14 md:w-20">
-                        <AvatarViewer
-                          src={profile.avatarUrl}
-                          fallbackImage={profile.avatarImageUrl || user?.avatar}
-                          alt={user?.username ?? "Explorateur"}
-                          size="square"
-                          framing="face"
-                          autoRotate={false}
-                          equippedFrameId={profile.equipped?.frame ?? null}
-                          equippedSceneId={profile.equipped?.scene ?? null}
-                          equippedOutfit3DId={profile.equipped?.outfit3d ?? null}
-                          equippedAccessory3DId={profile.equipped?.accessory3d ?? null}
-                        />
-                      </div>
-                    ) : (
+                    <div className="w-14 md:w-20 overflow-hidden rounded-full border border-white/6">
                       <AvatarImage
                         candidates={[profile?.avatarImageUrl, user?.avatar]}
                         fallbackSeed={user?.id ?? "guest-world"}
                         alt={user?.username ?? "Explorateur"}
-                        className="h-14 w-14 md:h-20 md:w-20 rounded-[24px] object-cover"
+                        className="h-14 w-14 md:h-20 md:w-20 rounded-full object-cover"
                       />
-                    )}
+                    </div>
                   </div>
 
                   {activeFamiliar && (
@@ -725,7 +699,7 @@ export function Worlds() {
                   <div className="mt-3 rounded-full border border-gold-300/30 bg-night-950/85 px-3 py-1 text-center text-[10px] uppercase tracking-[0.2em] text-gold-100">
                     <div>{user?.username ?? "Visiteur"}</div>
                     <div className="text-[9px] text-ivory/60">
-                      {voiceEnabled ? "micro ouvert" : "micro coupé"}
+                      {voiceEnabled ? "micro ouvert" : "micro coup├®"}
                     </div>
                   </div>
                 </div>
@@ -769,7 +743,7 @@ export function Worlds() {
                   onClick={() => moveBy(0, -5)}
                   className="rounded-full border border-royal-500/30 bg-night-950/80 px-4 py-3 text-sm text-ivory/90 shadow-lg"
                 >
-                  ▲
+                  Ôû▓
                 </button>
                 <div className="flex flex-col gap-2">
                   <button
@@ -777,14 +751,14 @@ export function Worlds() {
                     onClick={() => moveBy(-5, 0)}
                     className="rounded-full border border-royal-500/30 bg-night-950/80 px-4 py-3 text-sm text-ivory/90 shadow-lg"
                   >
-                    ◀
+                    ÔùÇ
                   </button>
                   <button
                     type="button"
                     onClick={() => moveBy(5, 0)}
                     className="rounded-full border border-royal-500/30 bg-night-950/80 px-4 py-3 text-sm text-ivory/90 shadow-lg"
                   >
-                    ▶
+                    ÔûÂ
                   </button>
                 </div>
                 <button
@@ -792,7 +766,7 @@ export function Worlds() {
                   onClick={() => moveBy(0, 5)}
                   className="rounded-full border border-royal-500/30 bg-night-950/80 px-4 py-3 text-sm text-ivory/90 shadow-lg"
                 >
-                  ▼
+                  Ôû╝
                 </button>
               </div>
 
@@ -827,7 +801,7 @@ export function Worlds() {
               <h3 className="font-display text-xl text-gold-200">Ton portail</h3>
             </div>
             <p className="mt-2 text-sm text-ivory/65">
-              Avatar, familier et accès rapides vers le reste du royaume.
+              Avatar, familier et acc├¿s rapides vers le reste du royaume.
             </p>
             <div className="mt-4 grid gap-3">
               <Link
@@ -840,7 +814,7 @@ export function Worlds() {
                 to={user ? "/familier" : "/connexion"}
                 className="rounded-2xl border border-royal-500/30 bg-night-950/60 px-4 py-3 text-sm text-ivory/80 transition hover:border-gold-400/60 hover:text-gold-200"
               >
-                Gérer mon familier
+                G├®rer mon familier
               </Link>
               <Link
                 to={user ? "/live/studio" : "/connexion"}
@@ -879,7 +853,7 @@ export function Worlds() {
                         {activeFamiliar.nickname ?? activeFamiliar.name}
                       </div>
                       <div className="text-xs text-ivory/55">
-                        Niveau {activeFamiliar.level} · compagnon actif
+                        Niveau {activeFamiliar.level} ┬À compagnon actif
                       </div>
                     </div>
                   </div>
@@ -917,7 +891,7 @@ export function Worlds() {
                           {entry.title || `${entry.username} est en direct`}
                         </div>
                         <div className="truncate text-xs text-ivory/55">
-                          {entry.username} · {formatRelative(entry.startedAt)}
+                          {entry.username} ┬À {formatRelative(entry.startedAt)}
                         </div>
                       </div>
                     </div>
@@ -925,7 +899,7 @@ export function Worlds() {
                 ))
               ) : (
                 <div className="rounded-2xl border border-royal-500/25 bg-night-950/55 p-4 text-sm text-ivory/55">
-                  Aucun streamer visible pour l'instant. L'observatoire s'animera dès le prochain direct.
+                  Aucun streamer visible pour l'instant. L'observatoire s'animera d├¿s le prochain direct.
                 </div>
               )}
             </div>
@@ -934,7 +908,7 @@ export function Worlds() {
           <section className="rounded-[26px] border border-royal-500/30 bg-night-900/60 p-5">
             <div className="flex items-center gap-2">
               <CalendarDays className="h-4 w-4 text-cyan-300" />
-              <h3 className="font-display text-xl text-gold-200">Événements</h3>
+              <h3 className="font-display text-xl text-gold-200">├ëv├®nements</h3>
             </div>
             <div className="mt-4 space-y-3">
               {EVENT_BOARD.map((event) => (
@@ -949,7 +923,7 @@ export function Worlds() {
                   <p className="mt-1 text-sm text-ivory/60">{event.copy}</p>
                   <button
                     type="button"
-                    onClick={() => notify(`Inscription ajoutée : ${event.title}`, "success")}
+                    onClick={() => notify(`Inscription ajout├®e : ${event.title}`, "success")}
                     className="mt-3 rounded-full border border-gold-400/35 px-3 py-1.5 text-xs uppercase tracking-[0.18em] text-gold-100 transition hover:border-gold-300/70"
                   >
                     Rejoindre
@@ -1024,12 +998,12 @@ export function Worlds() {
         <WorldFact
           icon={<Crown className="h-4 w-4" />}
           title="Hub social persistant"
-          copy="Présence des membres, zones distinctes et circulation libre dans la place."
+          copy="Pr├®sence des membres, zones distinctes et circulation libre dans la place."
         />
         <WorldFact
           icon={<Mic className="h-4 w-4" />}
           title="Chat vocal activable"
-          copy="Le micro peut déjà être ouvert localement depuis le hub pour préparer un vrai salon vocal temps réel."
+          copy="Le micro peut d├®j├á ├¬tre ouvert localement depuis le hub pour pr├®parer un vrai salon vocal temps r├®el."
         />
         <WorldFact
           icon={<Radio className="h-4 w-4" />}
