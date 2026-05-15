@@ -4,25 +4,31 @@ import { motion } from "framer-motion";
 import {
   CalendarDays,
   Crown,
+  Heart,
+  MessageCircle,
   Mic,
   MicOff,
   Radio,
   Sparkles,
   Volume2,
   Wand2,
+  X,
 } from "lucide-react";
 import { SectionHeading } from "../components/SectionHeading";
 import { AvatarImage } from "../components/AvatarImage";
 import { AvatarViewer } from "../components/AvatarViewer";
+import { FollowButton } from "../components/FollowButton";
 import { Handle } from "../components/Handle";
 import { useAuth } from "../contexts/AuthContext";
 import { useLive } from "../contexts/LiveContext";
 import { useProfile } from "../contexts/ProfileContext";
 import { useToast } from "../contexts/ToastContext";
 import {
+  apiGetProfile,
   apiHeartbeatWorldPresence,
   apiLeaveWorldPresence,
   apiListWorldPresence,
+  type UserProfileDto,
   type WorldPresenceDto,
 } from "../lib/api";
 import {
@@ -69,6 +75,12 @@ interface StageMember {
   status: string;
   aura: string;
   voiceEnabled: boolean;
+}
+
+interface SelectedWorldMember {
+  member: StageMember;
+  profile: UserProfileDto | null;
+  loading: boolean;
 }
 
 const WORLD_ID = "main";
@@ -173,6 +185,7 @@ export function Worlds() {
   const [chatMessages, setChatMessages] = useState<WorldChatMessage[]>(BASE_CHAT);
   const [chatInput, setChatInput] = useState("");
   const [worldMembers, setWorldMembers] = useState<WorldPresenceDto[]>([]);
+  const [selectedMember, setSelectedMember] = useState<SelectedWorldMember | null>(null);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [voiceLoading, setVoiceLoading] = useState(false);
   const [voiceLevel, setVoiceLevel] = useState(0);
@@ -262,6 +275,10 @@ export function Worlds() {
   useEffect(() => {
     setPosition(selectedDistrict.center);
   }, [selectedDistrict]);
+
+  useEffect(() => {
+    setSelectedMember(null);
+  }, [district]);
 
   useEffect(() => {
     let cancelled = false;
@@ -549,6 +566,42 @@ export function Worlds() {
     setChatInput("");
   }
 
+  function addWorldMessage(author: string, content: string, tone: "system" | "member" = "system") {
+    setChatMessages((current) => {
+      const nextMessage: WorldChatMessage = {
+        id: `world-social-${Date.now()}`,
+        author,
+        content,
+        tone,
+        district,
+        createdAt: new Date().toISOString(),
+      };
+      return [nextMessage, ...current].slice(0, 12);
+    });
+  }
+
+  async function openMemberCard(member: StageMember) {
+    setSelectedMember({ member, profile: null, loading: true });
+    try {
+      const memberProfile = await apiGetProfile(member.id);
+      setSelectedMember({ member, profile: memberProfile, loading: false });
+    } catch {
+      setSelectedMember({ member, profile: null, loading: false });
+    }
+  }
+
+  function sendCuteAction(kind: "wave" | "sparkle") {
+    if (!selectedMember) return;
+    const target = selectedMember.profile?.username ?? selectedMember.member.username;
+    const actor = user?.username ?? "Visiteur";
+    const content =
+      kind === "wave"
+        ? `${actor} salue ${target} avec une reverence lumineuse.`
+        : `${actor} envoie une pluie d'etincelles a ${target}.`;
+    addWorldMessage("Lien social", content);
+    notify(kind === "wave" ? `Salut envoye a ${target}.` : `Eclat envoye a ${target}.`, "success");
+  }
+
   return (
     <div className="mx-auto max-w-7xl px-6 py-12">
       <SectionHeading
@@ -631,7 +684,7 @@ export function Worlds() {
         </div>
       </section>
 
-      <div className="mt-8 grid gap-4 xl:grid-cols-[1.35fr,0.65fr]">
+      <div className="mt-8 grid gap-4 xl:grid-cols-[1.52fr,0.48fr]">
         <section className="overflow-hidden rounded-[28px] border border-royal-500/30 bg-night-900/70 shadow-[0_24px_80px_rgba(2,6,23,0.45)]">
           <div className="border-b border-royal-500/20 bg-gradient-to-r from-night-900 via-night-900/80 to-night-900/50 px-5 py-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -686,55 +739,37 @@ export function Worlds() {
             </div>
           </div>
 
-          <div className="relative overflow-hidden p-5">
+          <div className="relative overflow-hidden p-4 md:p-5">
+            <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-[1.2fr,0.8fr]">
+              <div className="rounded-[24px] border border-white/10 bg-night-950/55 p-4 backdrop-blur-xl">
+                <div className="text-[11px] uppercase tracking-[0.24em] text-gold-200/75">
+                  Signature visuelle
+                </div>
+                <div className="mt-2 font-display text-xl text-ivory md:text-2xl">
+                  {selectedDistrict.signature}
+                </div>
+                <p className="mt-2 text-sm leading-6 text-ivory/62">
+                  {selectedDistrict.ambience}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-2">
+                <CompactStat label="Presence" value={String(stageMembers.length + (user ? 1 : 0))} />
+                <CompactStat label="Lives" value={String(liveEntries.length)} />
+                <CompactStat label="Ciel" value={selectedDistrict.sky} />
+                <CompactStat label="Flore" value={selectedDistrict.flora} />
+              </div>
+            </div>
+
             <div
               ref={mapRef}
               onPointerDown={handlePointerDown}
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
               onPointerCancel={handlePointerUp}
-              className={`relative min-h-[420px] sm:min-h-[560px] md:min-h-[680px] overflow-hidden rounded-[30px] border border-white/10 bg-gradient-to-br ${selectedDistrict.accent}`}
+              className={`relative min-h-[360px] sm:min-h-[500px] md:min-h-[620px] xl:min-h-[760px] overflow-hidden rounded-[30px] border border-white/10 bg-gradient-to-br ${selectedDistrict.accent}`}
             >
               <DistrictBackdrop district={district} />
-
-              <div className="absolute left-4 top-4 z-10 max-w-xs rounded-[26px] border border-white/10 bg-night-950/55 p-4 backdrop-blur-xl">
-                <div className="text-[11px] uppercase tracking-[0.24em] text-gold-200/75">
-                  Signature visuelle
-                </div>
-                <div className="mt-2 font-display text-2xl text-ivory">
-                  {selectedDistrict.signature}
-                </div>
-                <p className="mt-2 text-sm leading-6 text-ivory/62">
-                  {selectedDistrict.ambience}
-                </p>
-                <div className="mt-4 flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.18em] text-ivory/55">
-                  <span className="rounded-full border border-white/10 px-2.5 py-1">
-                    {selectedDistrict.sky}
-                  </span>
-                  <span className="rounded-full border border-white/10 px-2.5 py-1">
-                    {selectedDistrict.flora}
-                  </span>
-                </div>
-              </div>
-
-              <div className="absolute right-4 top-4 z-10 flex gap-2">
-                <div className="rounded-2xl border border-white/10 bg-night-950/55 px-3 py-2 text-right backdrop-blur-xl">
-                  <div className="text-[10px] uppercase tracking-[0.22em] text-ivory/45">
-                    Presence
-                  </div>
-                  <div className="mt-1 font-display text-2xl text-gold-100">
-                    {stageMembers.length + (user ? 1 : 0)}
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-night-950/55 px-3 py-2 text-right backdrop-blur-xl">
-                  <div className="text-[10px] uppercase tracking-[0.22em] text-ivory/45">
-                    Lives
-                  </div>
-                  <div className="mt-1 font-display text-2xl text-rose-200">
-                    {liveEntries.length}
-                  </div>
-                </div>
-              </div>
 
               {stageMembers.map((member) => (
                 <motion.div
@@ -747,7 +782,12 @@ export function Worlds() {
                   animate={{ y: [0, -5, 0] }}
                   transition={{ duration: 4.6, repeat: Infinity, ease: "easeInOut" }}
                 >
-                  <div className="rounded-[24px] border border-white/15 bg-night-950/75 p-1.5 backdrop-blur relative">
+                  <button
+                    type="button"
+                    onClick={() => void openMemberCard(member)}
+                    className="group flex flex-col items-center"
+                  >
+                  <div className="rounded-[24px] border border-white/15 bg-night-950/75 p-1.5 backdrop-blur relative transition group-hover:border-gold-300/45">
                     {member.avatarUrl ? (
                       <div className="w-10 md:w-12 overflow-hidden rounded-[18px]">
                         <AvatarViewer
@@ -782,18 +822,19 @@ export function Worlds() {
                       </div>
                     )}
                   </div>
-                  <div className="mt-2 rounded-full border border-white/10 bg-night-950/80 px-2.5 py-1 text-center text-[10px] uppercase tracking-[0.18em] text-ivory/80">
+                  <div className="mt-2 rounded-full border border-white/10 bg-night-950/80 px-2.5 py-1 text-center text-[10px] uppercase tracking-[0.18em] text-ivory/80 transition group-hover:border-gold-300/35 group-hover:text-gold-100">
                     <div>{member.username}</div>
                     <div className="text-[9px] text-gold-200/80">
                       {member.status}
                       {member.voiceEnabled ? " · vocal" : ""}
                     </div>
                   </div>
+                  </button>
                 </motion.div>
               ))}
 
               {stageMembers.length === 0 && (
-                <div className="absolute inset-x-0 top-[22%] mx-auto flex max-w-md flex-col items-center text-center">
+                <div className="absolute inset-x-0 top-[18%] mx-auto flex max-w-md flex-col items-center px-4 text-center md:top-[22%]">
                   <div className="rounded-3xl border border-royal-500/30 bg-night-950/70 px-6 py-5 backdrop-blur">
                     <div className="font-display text-2xl text-gold-200">
                       {selectedDistrict.name} respire en silence
@@ -896,11 +937,11 @@ export function Worlds() {
               </div>
 
               {/* Mobile-friendly floating pad (hidden on md+) */}
-              <div className="md:hidden fixed bottom-6 left-1/2 z-30 flex -translate-x-1/2 items-center gap-2">
+              <div className="fixed bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 md:hidden">
                 <button
                   type="button"
                   onClick={() => moveBy(0, -5)}
-                  className="rounded-full border border-royal-500/30 bg-night-950/80 px-4 py-3 text-sm text-ivory/90 shadow-lg"
+                  className="rounded-full border border-royal-500/30 bg-night-950/85 px-4 py-3 text-sm text-ivory/90 shadow-lg backdrop-blur"
                 >
                   ▲
                 </button>
@@ -908,14 +949,14 @@ export function Worlds() {
                   <button
                     type="button"
                     onClick={() => moveBy(-5, 0)}
-                    className="rounded-full border border-royal-500/30 bg-night-950/80 px-4 py-3 text-sm text-ivory/90 shadow-lg"
+                    className="rounded-full border border-royal-500/30 bg-night-950/85 px-4 py-3 text-sm text-ivory/90 shadow-lg backdrop-blur"
                   >
                     ◀
                   </button>
                   <button
                     type="button"
                     onClick={() => moveBy(5, 0)}
-                    className="rounded-full border border-royal-500/30 bg-night-950/80 px-4 py-3 text-sm text-ivory/90 shadow-lg"
+                    className="rounded-full border border-royal-500/30 bg-night-950/85 px-4 py-3 text-sm text-ivory/90 shadow-lg backdrop-blur"
                   >
                     ▶
                   </button>
@@ -923,7 +964,7 @@ export function Worlds() {
                 <button
                   type="button"
                   onClick={() => moveBy(0, 5)}
-                  className="rounded-full border border-royal-500/30 bg-night-950/80 px-4 py-3 text-sm text-ivory/90 shadow-lg"
+                  className="rounded-full border border-royal-500/30 bg-night-950/85 px-4 py-3 text-sm text-ivory/90 shadow-lg backdrop-blur"
                 >
                   ▼
                 </button>
@@ -953,7 +994,7 @@ export function Worlds() {
           </div>
         </section>
 
-        <aside className="space-y-4">
+        <aside className="space-y-4 xl:sticky xl:top-24 xl:self-start">
           <section className="rounded-[26px] border border-royal-500/30 bg-night-900/60 p-5">
             <div className="flex items-center gap-2">
               <Wand2 className="h-4 w-4 text-gold-300" />
@@ -1153,6 +1194,124 @@ export function Worlds() {
         </aside>
       </div>
 
+      {selectedMember && (
+        <section className="mt-6 rounded-[28px] border border-royal-500/30 bg-night-900/65 p-5 shadow-[0_20px_70px_rgba(2,6,23,0.35)]">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <AvatarImage
+                candidates={[
+                  selectedMember.profile?.avatarImageUrl ?? selectedMember.member.avatarImageUrl,
+                ]}
+                fallbackSeed={selectedMember.member.id}
+                alt={selectedMember.member.username}
+                className="h-16 w-16 rounded-[22px] object-cover"
+              />
+              <div>
+                <div className="font-display text-2xl text-gold-100">
+                  {selectedMember.profile?.username ?? selectedMember.member.username}
+                </div>
+                <Handle
+                  handle={selectedMember.profile?.handle ?? selectedMember.member.handle}
+                  className="text-sm"
+                />
+                <div className="mt-2 flex flex-wrap gap-3 text-sm text-ivory/65">
+                  <span>
+                    {selectedMember.profile?.followersCount ?? 0} abonnes
+                  </span>
+                  <span>
+                    {selectedMember.profile?.followingCount ?? 0} liens
+                  </span>
+                  <span>{selectedMember.member.status}</span>
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setSelectedMember(null)}
+              className="rounded-full border border-white/10 p-2 text-ivory/60 transition hover:border-gold-300/40 hover:text-gold-100"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="mt-4 grid gap-4 lg:grid-cols-[1.15fr,0.85fr]">
+            <div className="rounded-[22px] border border-white/10 bg-night-950/55 p-4">
+              <div className="text-[11px] uppercase tracking-[0.22em] text-gold-200/70">
+                Profil rapide
+              </div>
+              <p className="mt-3 text-sm leading-6 text-ivory/70">
+                {selectedMember.loading
+                  ? "Chargement du profil..."
+                  : selectedMember.profile
+                    ? "Ouvre sa fiche, regarde ses abonnes et interagis directement depuis les mondes."
+                    : "Le profil detaille n'a pas pu etre charge, mais tu peux deja interagir avec cette presence."}
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Link
+                  to={`/u/${selectedMember.member.id}`}
+                  className="rounded-full border border-gold-400/35 px-4 py-2 text-sm text-gold-100 transition hover:border-gold-300/70"
+                >
+                  Voir le profil
+                </Link>
+                {user && user.id !== selectedMember.member.id && (
+                  <Link
+                    to={`/messages/${encodeURIComponent(selectedMember.member.id)}`}
+                    className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm text-ivory/80 transition hover:border-gold-300/35 hover:text-gold-100"
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                    Ecrire
+                  </Link>
+                )}
+                {selectedMember.profile && (
+                  <FollowButton
+                    targetId={selectedMember.profile.id}
+                    targetUsername={selectedMember.profile.username}
+                    onChange={(nowFollowing) =>
+                      setSelectedMember((current) =>
+                        current && current.profile
+                          ? {
+                              ...current,
+                              profile: {
+                                ...current.profile,
+                                followersCount: current.profile.followersCount + (nowFollowing ? 1 : -1),
+                              },
+                            }
+                          : current,
+                      )
+                    }
+                  />
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-[22px] border border-white/10 bg-night-950/55 p-4">
+              <div className="text-[11px] uppercase tracking-[0.22em] text-gold-200/70">
+                Actions mimi
+              </div>
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => sendCuteAction("wave")}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 px-4 py-3 text-sm text-ivory/80 transition hover:border-gold-300/35 hover:text-gold-100"
+                >
+                  <Heart className="h-4 w-4 text-rose-300" />
+                  Saluer
+                </button>
+                <button
+                  type="button"
+                  onClick={() => sendCuteAction("sparkle")}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 px-4 py-3 text-sm text-ivory/80 transition hover:border-gold-300/35 hover:text-gold-100"
+                >
+                  <Sparkles className="h-4 w-4 text-gold-300" />
+                  Envoyer un eclat
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
       <section className="mt-10 grid gap-4 md:grid-cols-3">
         <WorldFact
           icon={<Crown className="h-4 w-4" />}
@@ -1179,6 +1338,15 @@ function WorldPill({ label, value }: { label: string; value: string }) {
     <div className="rounded-[22px] border border-white/10 bg-white/[0.04] px-4 py-3 backdrop-blur">
       <div className="text-[11px] uppercase tracking-[0.24em] text-gold-200/70">{label}</div>
       <div className="mt-2 text-sm text-ivory/80">{value}</div>
+    </div>
+  );
+}
+
+function CompactStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-[22px] border border-white/10 bg-night-950/55 px-4 py-3 backdrop-blur">
+      <div className="text-[10px] uppercase tracking-[0.22em] text-ivory/45">{label}</div>
+      <div className="mt-2 font-display text-lg text-gold-100 md:text-xl">{value}</div>
     </div>
   );
 }
