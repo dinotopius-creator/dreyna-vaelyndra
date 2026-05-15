@@ -485,7 +485,7 @@ export function Worlds() {
 
           <div className="relative overflow-hidden p-5">
             <div
-              className={`relative min-h-[620px] overflow-hidden rounded-[30px] border border-white/10 bg-gradient-to-br ${selectedDistrict.accent}`}
+              className={`relative min-h-[360px] sm:min-h-[520px] md:min-h-[620px] overflow-hidden rounded-[30px] border border-white/10 bg-gradient-to-br ${selectedDistrict.accent}`}
             >
               <DistrictBackdrop district={district} />
 
@@ -502,7 +502,7 @@ export function Worlds() {
                 >
                   <div className="rounded-[24px] border border-white/15 bg-night-950/75 p-1.5 backdrop-blur">
                     {member.avatarUrl ? (
-                      <div className="w-12 overflow-hidden rounded-[18px]">
+                      <div className="w-10 md:w-12 overflow-hidden rounded-[18px]">
                         <AvatarViewer
                           src={member.avatarUrl}
                           fallbackImage={member.avatarImageUrl}
@@ -517,7 +517,7 @@ export function Worlds() {
                         candidates={[member.avatarImageUrl]}
                         fallbackSeed={member.id}
                         alt={member.username}
-                        className="h-12 w-12 rounded-[18px] object-cover"
+                        className="h-10 w-10 md:h-12 md:w-12 rounded-[18px] object-cover"
                       />
                     )}
                   </div>
@@ -556,7 +556,7 @@ export function Worlds() {
                 <div className="relative flex flex-col items-center">
                   <div className="rounded-[30px] border border-gold-300/40 bg-night-950/80 p-2 shadow-[0_0_45px_rgba(250,204,21,0.25)] backdrop-blur">
                     {profile?.avatarUrl ? (
-                      <div className="w-20">
+                      <div className="w-14 md:w-20">
                         <AvatarViewer
                           src={profile.avatarUrl}
                           fallbackImage={profile.avatarImageUrl || user?.avatar}
@@ -575,7 +575,7 @@ export function Worlds() {
                         candidates={[profile?.avatarImageUrl, user?.avatar]}
                         fallbackSeed={user?.id ?? "guest-world"}
                         alt={user?.username ?? "Explorateur"}
-                        className="h-20 w-20 rounded-[24px] object-cover"
+                        className="h-14 w-14 md:h-20 md:w-20 rounded-[24px] object-cover"
                       />
                     )}
                   </div>
@@ -631,6 +631,40 @@ export function Worlds() {
                   className="rounded-full border border-royal-500/30 bg-night-950/70 px-3 py-1.5 text-xs text-ivory/75 transition hover:border-gold-400/50"
                 >
                   Droite
+                </button>
+              </div>
+
+              {/* Mobile-friendly floating pad (hidden on md+) */}
+              <div className="md:hidden fixed bottom-6 left-1/2 z-30 -translate-x-1/2 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => moveBy(0, -5)}
+                  className="rounded-full border border-royal-500/30 bg-night-950/80 px-4 py-3 text-sm text-ivory/90 shadow-lg"
+                >
+                  ▲
+                </button>
+                <div className="flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={() => moveBy(-5, 0)}
+                    className="rounded-full border border-royal-500/30 bg-night-950/80 px-4 py-3 text-sm text-ivory/90 shadow-lg"
+                  >
+                    ◀
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveBy(5, 0)}
+                    className="rounded-full border border-royal-500/30 bg-night-950/80 px-4 py-3 text-sm text-ivory/90 shadow-lg"
+                  >
+                    ▶
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => moveBy(0, 5)}
+                  className="rounded-full border border-royal-500/30 bg-night-950/80 px-4 py-3 text-sm text-ivory/90 shadow-lg"
+                >
+                  ▼
                 </button>
               </div>
 
