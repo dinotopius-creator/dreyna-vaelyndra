@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 import { SectionHeading } from "../components/SectionHeading";
 import { AvatarImage } from "../components/AvatarImage";
-import { AvatarViewer } from "../components/AvatarViewer";
 import { Handle } from "../components/Handle";
 import { useAuth } from "../contexts/AuthContext";
 import { useLive } from "../contexts/LiveContext";
@@ -182,37 +181,16 @@ export function Worlds() {
   const rafRef = useRef<number | null>(null);
 
   const mapRef = useRef<HTMLDivElement | null>(null);
-  const pointerDownRef = useRef(false);
-
-  function setPositionFromClient(clientX: number, clientY: number) {
-    const rect = mapRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const x = ((clientX - rect.left) / rect.width) * 100;
-    const y = ((clientY - rect.top) / rect.height) * 100;
-    const newX = clamp(x, 10, 88);
-    const newY = clamp(y, 18, 84);
-    setPosition({ x: newX, y: newY });
-    try {
-      window.dispatchEvent(new CustomEvent("vaelyndra:position-change", { detail: { x: newX, y: newY } }));
-    } catch {
-      // ignore
-    }
+  function handlePointerDown() {
+    // Clicking or tapping the map should not teleport the player.
   }
 
-  function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
-    pointerDownRef.current = true;
-    try { (e.target as Element).setPointerCapture?.(e.pointerId); } catch {}
-    setPositionFromClient(e.clientX, e.clientY);
+  function handlePointerMove() {
+    // Movement stays on dedicated controls to preserve player interactions.
   }
 
-  function handlePointerMove(e: React.PointerEvent<HTMLDivElement>) {
-    if (!pointerDownRef.current) return;
-    setPositionFromClient(e.clientX, e.clientY);
-  }
-
-  function handlePointerUp(e: React.PointerEvent<HTMLDivElement>) {
-    pointerDownRef.current = false;
-    try { (e.target as Element).releasePointerCapture?.(e.pointerId); } catch {}
+  function handlePointerUp() {
+    // Movement stays on dedicated controls to preserve player interactions.
   }
 
   const selectedDistrict = useMemo(
@@ -748,25 +726,12 @@ export function Worlds() {
                   transition={{ duration: 4.6, repeat: Infinity, ease: "easeInOut" }}
                 >
                   <div className="rounded-[24px] border border-white/15 bg-night-950/75 p-1.5 backdrop-blur relative">
-                    {member.avatarUrl ? (
-                      <div className="w-10 md:w-12 overflow-hidden rounded-[18px]">
-                        <AvatarViewer
-                          src={member.avatarUrl}
-                          fallbackImage={member.avatarImageUrl}
-                          alt={member.username}
-                          size="square"
-                          framing="face"
-                          autoRotate={false}
-                        />
-                      </div>
-                    ) : (
-                      <AvatarImage
-                        candidates={[member.avatarImageUrl]}
-                        fallbackSeed={member.id}
-                        alt={member.username}
-                        className="h-10 w-10 md:h-12 md:w-12 rounded-[18px] object-cover"
-                      />
-                    )}
+                    <AvatarImage
+                      candidates={[member.avatarImageUrl]}
+                      fallbackSeed={member.id}
+                      alt={member.username}
+                      className="h-10 w-10 md:h-12 md:w-12 rounded-[18px] object-cover"
+                    />
 
                     {/* Other member's active familiar (if available) */}
                     {otherFamiliars[member.id] && (
@@ -816,29 +781,12 @@ export function Worlds() {
               >
                 <div className="relative flex flex-col items-center">
                   <div className="rounded-[30px] border border-gold-300/40 bg-night-950/80 p-2 shadow-[0_0_45px_rgba(250,204,21,0.25)] backdrop-blur">
-                    {profile?.avatarUrl ? (
-                      <div className="w-14 md:w-20">
-                        <AvatarViewer
-                          src={profile.avatarUrl}
-                          fallbackImage={profile.avatarImageUrl || user?.avatar}
-                          alt={user?.username ?? "Explorateur"}
-                          size="square"
-                          framing="face"
-                          autoRotate={false}
-                          equippedFrameId={profile.equipped?.frame ?? null}
-                          equippedSceneId={profile.equipped?.scene ?? null}
-                          equippedOutfit3DId={profile.equipped?.outfit3d ?? null}
-                          equippedAccessory3DId={profile.equipped?.accessory3d ?? null}
-                        />
-                      </div>
-                    ) : (
-                      <AvatarImage
-                        candidates={[profile?.avatarImageUrl, user?.avatar]}
-                        fallbackSeed={user?.id ?? "guest-world"}
-                        alt={user?.username ?? "Explorateur"}
-                        className="h-14 w-14 md:h-20 md:w-20 rounded-[24px] object-cover"
-                      />
-                    )}
+                    <AvatarImage
+                      candidates={[profile?.avatarImageUrl, user?.avatar]}
+                      fallbackSeed={user?.id ?? "guest-world"}
+                      alt={user?.username ?? "Explorateur"}
+                      className="h-14 w-14 md:h-20 md:w-20 rounded-[24px] object-cover"
+                    />
                   </div>
 
                   {activeFamiliar && (
