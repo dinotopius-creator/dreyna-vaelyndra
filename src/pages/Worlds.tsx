@@ -40,6 +40,12 @@ interface District {
   description: string;
   center: { x: number; y: number };
   mood: string;
+  sky: string;
+  flora: string;
+  signature: string;
+  orb: string;
+  ambience: string;
+  badge: string;
 }
 
 interface WorldChatMessage {
@@ -75,6 +81,12 @@ const DISTRICTS: District[] = [
     description: "Le coeur du royaume, entre rencontres spontanées et passages de familiers.",
     center: { x: 49, y: 62 },
     mood: "Agora dorée, fontaine centrale et rondes de familiers.",
+    sky: "Aube doree",
+    flora: "Parterres fleuris et herbes hautes",
+    signature: "Fontaine solaire",
+    orb: "Soleil",
+    ambience: "Un coeur vivant baigne dans une lumiere chaude, avec des fleurs en bord de place et des rubans d'herbe qui bougent doucement.",
+    badge: "Cour royale",
   },
   {
     id: "arcades",
@@ -83,6 +95,12 @@ const DISTRICTS: District[] = [
     description: "Un couloir social pensé pour les vitrines d'avatars, fan arts et mini événements.",
     center: { x: 30, y: 50 },
     mood: "Galeries néon, cadres flottants et stands de créations.",
+    sky: "Ciel pastel de fin de journee",
+    flora: "Lianes, fleurs lumineuses et prairie neon",
+    signature: "Serres creatives",
+    orb: "Soleil couchant",
+    ambience: "Les vitrines flottent dans un jardin electrique, entoure d'herbe vive et de fleurs qui reprennent les couleurs des creations.",
+    badge: "Galerie vivante",
   },
   {
     id: "observatory",
@@ -91,6 +109,12 @@ const DISTRICTS: District[] = [
     description: "Le balcon d'où l'on regarde les streamers en direct et les happenings du soir.",
     center: { x: 72, y: 42 },
     mood: "Dôme céleste, écrans live suspendus et vue sur le royaume.",
+    sky: "Nuit astrale",
+    flora: "Jardin lunaire et herbes d'argent",
+    signature: "Terrasse des constellations",
+    orb: "Lune",
+    ambience: "Une scene de nuit claire avec lune, etoiles, halos et herbes argentees pour donner au live une allure ceremonielle.",
+    badge: "Balcon celeste",
   },
 ];
 
@@ -537,6 +561,76 @@ export function Worlds() {
         subtitle="Un hub social vivant où les membres se déplacent avec leur familier, repèrent les lives en direct et rejoignent les événements du royaume."
       />
 
+      <section className="mt-8 overflow-hidden rounded-[34px] border border-gold-400/20 bg-[radial-gradient(circle_at_top,rgba(250,204,21,0.12),transparent_34%),linear-gradient(135deg,rgba(8,15,31,0.96),rgba(20,10,39,0.92)_55%,rgba(7,23,28,0.96))] shadow-[0_28px_120px_rgba(2,6,23,0.5)]">
+        <div className="grid gap-8 px-6 py-6 lg:grid-cols-[1.15fr,0.85fr] lg:px-8 lg:py-8">
+          <div className="relative">
+            <div className="absolute inset-x-0 top-0 h-24 rounded-full bg-gold-300/10 blur-3xl" />
+            <div className="relative">
+              <div className="inline-flex rounded-full border border-gold-400/25 bg-gold-500/10 px-3 py-1 text-[11px] uppercase tracking-[0.28em] text-gold-100">
+                {selectedDistrict.badge}
+              </div>
+              <h2 className="mt-4 max-w-3xl font-display text-4xl text-ivory sm:text-5xl">
+                {selectedDistrict.name}
+              </h2>
+              <p className="mt-4 max-w-2xl text-base leading-7 text-ivory/72">
+                {selectedDistrict.ambience}
+              </p>
+            </div>
+
+            <div className="mt-6 grid gap-3 sm:grid-cols-3">
+              <WorldPill label="Ciel" value={selectedDistrict.sky} />
+              <WorldPill label="Flore" value={selectedDistrict.flora} />
+              <WorldPill label="Astre" value={selectedDistrict.orb} />
+            </div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-1">
+            {DISTRICTS.map((entry) => {
+              const active = entry.id === district;
+              return (
+                <button
+                  key={entry.id}
+                  type="button"
+                  onClick={() => setDistrict(entry.id)}
+                  className={`group rounded-[26px] border p-4 text-left transition ${
+                    active
+                      ? "border-gold-300/45 bg-white/10 shadow-[0_18px_50px_rgba(250,204,21,0.14)]"
+                      : "border-white/10 bg-white/[0.04] hover:border-gold-400/30 hover:bg-white/[0.07]"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-[11px] uppercase tracking-[0.24em] text-gold-200/70">
+                        {entry.badge}
+                      </div>
+                      <div className="mt-2 font-display text-2xl text-ivory">
+                        {entry.name}
+                      </div>
+                    </div>
+                    <div className={`rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.22em] ${
+                      active ? "bg-gold-400/15 text-gold-100" : "bg-white/5 text-ivory/55"
+                    }`}>
+                      {entry.orb}
+                    </div>
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-ivory/65">
+                    {entry.description}
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.18em] text-ivory/55">
+                    <span className="rounded-full border border-white/10 px-2.5 py-1">
+                      {entry.sky}
+                    </span>
+                    <span className="rounded-full border border-white/10 px-2.5 py-1">
+                      {entry.signature}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
       <div className="mt-8 grid gap-4 xl:grid-cols-[1.35fr,0.65fr]">
         <section className="overflow-hidden rounded-[28px] border border-royal-500/30 bg-night-900/70 shadow-[0_24px_80px_rgba(2,6,23,0.45)]">
           <div className="border-b border-royal-500/20 bg-gradient-to-r from-night-900 via-night-900/80 to-night-900/50 px-5 py-4">
@@ -599,9 +693,48 @@ export function Worlds() {
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
               onPointerCancel={handlePointerUp}
-              className={`relative min-h-[360px] sm:min-h-[520px] md:min-h-[620px] overflow-hidden rounded-[30px] border border-white/10 bg-gradient-to-br ${selectedDistrict.accent}`}
+              className={`relative min-h-[420px] sm:min-h-[560px] md:min-h-[680px] overflow-hidden rounded-[30px] border border-white/10 bg-gradient-to-br ${selectedDistrict.accent}`}
             >
               <DistrictBackdrop district={district} />
+
+              <div className="absolute left-4 top-4 z-10 max-w-xs rounded-[26px] border border-white/10 bg-night-950/55 p-4 backdrop-blur-xl">
+                <div className="text-[11px] uppercase tracking-[0.24em] text-gold-200/75">
+                  Signature visuelle
+                </div>
+                <div className="mt-2 font-display text-2xl text-ivory">
+                  {selectedDistrict.signature}
+                </div>
+                <p className="mt-2 text-sm leading-6 text-ivory/62">
+                  {selectedDistrict.ambience}
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.18em] text-ivory/55">
+                  <span className="rounded-full border border-white/10 px-2.5 py-1">
+                    {selectedDistrict.sky}
+                  </span>
+                  <span className="rounded-full border border-white/10 px-2.5 py-1">
+                    {selectedDistrict.flora}
+                  </span>
+                </div>
+              </div>
+
+              <div className="absolute right-4 top-4 z-10 flex gap-2">
+                <div className="rounded-2xl border border-white/10 bg-night-950/55 px-3 py-2 text-right backdrop-blur-xl">
+                  <div className="text-[10px] uppercase tracking-[0.22em] text-ivory/45">
+                    Presence
+                  </div>
+                  <div className="mt-1 font-display text-2xl text-gold-100">
+                    {stageMembers.length + (user ? 1 : 0)}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-night-950/55 px-3 py-2 text-right backdrop-blur-xl">
+                  <div className="text-[10px] uppercase tracking-[0.22em] text-ivory/45">
+                    Lives
+                  </div>
+                  <div className="mt-1 font-display text-2xl text-rose-200">
+                    {liveEntries.length}
+                  </div>
+                </div>
+              </div>
 
               {stageMembers.map((member) => (
                 <motion.div
@@ -663,10 +796,10 @@ export function Worlds() {
                 <div className="absolute inset-x-0 top-[22%] mx-auto flex max-w-md flex-col items-center text-center">
                   <div className="rounded-3xl border border-royal-500/30 bg-night-950/70 px-6 py-5 backdrop-blur">
                     <div className="font-display text-2xl text-gold-200">
-                      {selectedDistrict.name} est calme
+                      {selectedDistrict.name} respire en silence
                     </div>
                     <p className="mt-2 text-sm text-ivory/60">
-                      Aucun autre membre n'est connecté à ce monde pour le moment.
+                      Aucun autre membre n'est connecte pour le moment, mais le decor reste pret a s'animer.
                     </p>
                   </div>
                 </div>
@@ -725,7 +858,7 @@ export function Worlds() {
                   <div className="mt-3 rounded-full border border-gold-300/30 bg-night-950/85 px-3 py-1 text-center text-[10px] uppercase tracking-[0.2em] text-gold-100">
                     <div>{user?.username ?? "Visiteur"}</div>
                     <div className="text-[9px] text-ivory/60">
-                      {voiceEnabled ? "micro ouvert" : "micro coupé"}
+                      {voiceEnabled ? "micro ouvert" : "micro coupe"}
                     </div>
                   </div>
                 </div>
@@ -763,7 +896,7 @@ export function Worlds() {
               </div>
 
               {/* Mobile-friendly floating pad (hidden on md+) */}
-              <div className="md:hidden fixed bottom-6 left-1/2 z-30 -translate-x-1/2 flex items-center gap-2">
+              <div className="md:hidden fixed bottom-6 left-1/2 z-30 flex -translate-x-1/2 items-center gap-2">
                 <button
                   type="button"
                   onClick={() => moveBy(0, -5)}
@@ -1041,6 +1174,15 @@ export function Worlds() {
   );
 }
 
+function WorldPill({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-[22px] border border-white/10 bg-white/[0.04] px-4 py-3 backdrop-blur">
+      <div className="text-[11px] uppercase tracking-[0.24em] text-gold-200/70">{label}</div>
+      <div className="mt-2 text-sm text-ivory/80">{value}</div>
+    </div>
+  );
+}
+
 function WorldFact({
   icon,
   title,
@@ -1051,12 +1193,12 @@ function WorldFact({
   copy: string;
 }) {
   return (
-    <div className="rounded-[24px] border border-royal-500/30 bg-night-900/55 p-5">
-      <div className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-gold-400/30 bg-gold-500/10 text-gold-200">
+    <div className="rounded-[26px] border border-royal-500/30 bg-[radial-gradient(circle_at_top,rgba(250,204,21,0.08),transparent_32%),linear-gradient(180deg,rgba(15,23,42,0.8),rgba(15,23,42,0.56))] p-5 shadow-[0_18px_50px_rgba(2,6,23,0.25)]">
+      <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-gold-400/30 bg-gold-500/10 text-gold-200">
         {icon}
       </div>
-      <div className="mt-3 font-display text-xl text-gold-200">{title}</div>
-      <p className="mt-2 text-sm text-ivory/65">{copy}</p>
+      <div className="mt-4 font-display text-xl text-gold-100">{title}</div>
+      <p className="mt-2 text-sm leading-6 text-ivory/65">{copy}</p>
     </div>
   );
 }
@@ -1065,18 +1207,28 @@ function DistrictBackdrop({ district }: { district: DistrictId }) {
   if (district === "arcades") {
     return (
       <>
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.18),transparent_28%),radial-gradient(circle_at_top_right,rgba(96,165,250,0.14),transparent_26%),linear-gradient(180deg,rgba(2,6,23,0.18),rgba(2,6,23,0.86))]" />
-
-        {/* Neon display blocks (keep visual, remove text badges) */}
-        <div className="absolute left-[6%] top-[14%] h-40 w-28 rounded-[28px] border border-cyan-200/18 bg-cyan-300/8 shadow-[0_0_40px_rgba(34,211,238,0.12)] backdrop-blur" />
-        <div className="absolute left-[24%] top-[18%] h-32 w-20 rounded-[24px] border border-sky-200/18 bg-sky-300/8 backdrop-blur" />
-        <div className="absolute right-[8%] top-[16%] h-44 w-32 rounded-[32px] border border-indigo-200/18 bg-indigo-300/8 shadow-[0_0_50px_rgba(129,140,248,0.12)] backdrop-blur" />
-
-        {/* Low decorative ground */}
-        <div className="absolute inset-x-[8%] bottom-[6%] h-20 rounded-[24px] border border-cyan-300/12 bg-[linear-gradient(90deg,rgba(34,211,238,0.12),rgba(56,189,248,0.04),rgba(99,102,241,0.12))]" />
-
-        {/* Soft grass foreground to tie visuals together */}
-        <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-emerald-900/90 via-emerald-800/60 to-transparent opacity-95" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(253,224,71,0.18),transparent_18%),radial-gradient(circle_at_82%_16%,rgba(34,211,238,0.18),transparent_24%),linear-gradient(180deg,rgba(37,99,235,0.12),rgba(2,6,23,0.86))]" />
+        <div className="absolute left-[8%] top-[8%] h-20 w-20 rounded-full bg-amber-200/65 blur-[2px] shadow-[0_0_70px_rgba(253,224,71,0.45)]" />
+        <div className="absolute inset-x-[8%] top-[18%] h-44 rounded-[40px] border border-cyan-200/12 bg-[linear-gradient(180deg,rgba(15,23,42,0.18),rgba(15,23,42,0.04))]" />
+        <div className="absolute left-[8%] top-[20%] h-44 w-32 rounded-[32px] border border-cyan-200/20 bg-cyan-300/8 shadow-[0_0_40px_rgba(34,211,238,0.12)] backdrop-blur" />
+        <div className="absolute left-[27%] top-[16%] h-52 w-24 rounded-[28px] border border-sky-200/18 bg-sky-300/8 backdrop-blur" />
+        <div className="absolute right-[10%] top-[18%] h-48 w-36 rounded-[36px] border border-indigo-200/18 bg-indigo-300/8 shadow-[0_0_50px_rgba(129,140,248,0.12)] backdrop-blur" />
+        {Array.from({ length: 7 }).map((_, index) => (
+          <div
+            key={`arcade-flower-${index}`}
+            className="absolute rounded-full border border-cyan-200/18 bg-cyan-200/10 backdrop-blur"
+            style={{
+              left: `${8 + index * 12}%`,
+              bottom: `${15 + (index % 3) * 2}%`,
+              width: `${18 + (index % 2) * 8}px`,
+              height: `${18 + (index % 2) * 8}px`,
+              boxShadow: "0 0 18px rgba(103,232,249,0.18)",
+            }}
+          />
+        ))}
+        <div className="absolute inset-x-[10%] bottom-[10%] h-24 rounded-[28px] border border-cyan-300/15 bg-[linear-gradient(90deg,rgba(34,211,238,0.1),rgba(56,189,248,0.04),rgba(99,102,241,0.14))]" />
+        <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-emerald-950 via-emerald-900/78 to-transparent" />
+        <div className="absolute inset-x-0 bottom-0 h-16 bg-[radial-gradient(circle_at_12px_100%,rgba(16,185,129,0.9),transparent_45%),radial-gradient(circle_at_44px_100%,rgba(74,222,128,0.7),transparent_42%),radial-gradient(circle_at_76px_100%,rgba(21,128,61,0.85),transparent_44%)] bg-[length:88px_100%] opacity-90" />
       </>
     );
   }
@@ -1084,19 +1236,12 @@ function DistrictBackdrop({ district }: { district: DistrictId }) {
   if (district === "observatory") {
     return (
       <>
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(244,114,182,0.16),transparent_26%),radial-gradient(circle_at_70%_20%,rgba(196,181,253,0.14),transparent_24%),linear-gradient(180deg,rgba(10,10,35,0.12),rgba(3,7,18,0.88))]" />
-
-        {/* Observatory dome */}
-        <div className="absolute left-1/2 top-[8%] h-56 w-[70%] -translate-x-1/2 rounded-t-[180px] border border-fuchsia-200/14 bg-fuchsia-200/4 backdrop-blur-[2px]" />
-
-        {/* Small live cards (no text) */}
-        <div className="absolute left-[14%] top-[20%] h-20 w-36 rounded-[24px] border border-rose-200/16 bg-rose-200/8 shadow-[0_0_28px_rgba(244,114,182,0.12)] backdrop-blur" />
-        <div className="absolute right-[12%] top-[20%] h-24 w-40 rounded-[26px] border border-purple-200/16 bg-purple-200/8 shadow-[0_0_36px_rgba(192,132,252,0.12)] backdrop-blur" />
-
-        {/* Ring/platform */}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(244,114,182,0.16),transparent_22%),radial-gradient(circle_at_70%_20%,rgba(196,181,253,0.14),transparent_20%),linear-gradient(180deg,rgba(10,10,35,0.08),rgba(3,7,18,0.9))]" />
+        <div className="absolute right-[14%] top-[10%] h-24 w-24 rounded-full border border-white/20 bg-[radial-gradient(circle_at_30%_30%,rgba(255,255,255,0.95),rgba(224,231,255,0.74)_38%,rgba(147,197,253,0.12)_70%)] shadow-[0_0_80px_rgba(226,232,240,0.35)]" />
+        <div className="absolute left-1/2 top-[9%] h-56 w-[72%] -translate-x-1/2 rounded-t-[180px] border border-fuchsia-200/14 bg-fuchsia-200/4 backdrop-blur-[2px]" />
+        <div className="absolute left-[14%] top-[22%] h-20 w-36 rounded-[24px] border border-rose-200/16 bg-rose-200/8 shadow-[0_0_28px_rgba(244,114,182,0.12)] backdrop-blur" />
+        <div className="absolute right-[12%] top-[22%] h-24 w-40 rounded-[26px] border border-purple-200/16 bg-purple-200/8 shadow-[0_0_36px_rgba(192,132,252,0.12)] backdrop-blur" />
         <div className="absolute left-1/2 top-[46%] h-32 w-[44%] -translate-x-1/2 rounded-[50%] border border-fuchsia-200/18 bg-night-950/64 shadow-[0_0_60px_rgba(192,132,252,0.12)]" />
-
-        {/* Stars */}
         {Array.from({ length: 14 }).map((_, index) => (
           <span
             key={`star-${index}`}
@@ -1108,29 +1253,49 @@ function DistrictBackdrop({ district }: { district: DistrictId }) {
             }}
           />
         ))}
-
-        {/* Gentle grassy foreground to soften the bottom */}
-        <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-emerald-900/85 via-emerald-800/50 to-transparent opacity-95" />
+        {Array.from({ length: 5 }).map((_, index) => (
+          <div
+            key={`moon-flower-${index}`}
+            className="absolute rounded-full border border-fuchsia-100/18 bg-fuchsia-100/10"
+            style={{
+              left: `${16 + index * 14}%`,
+              bottom: `${13 + (index % 2) * 3}%`,
+              width: `${14 + (index % 2) * 6}px`,
+              height: `${14 + (index % 2) * 6}px`,
+              boxShadow: "0 0 22px rgba(244,114,182,0.16)",
+            }}
+          />
+        ))}
+        <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-emerald-950 via-emerald-900/68 to-transparent opacity-95" />
+        <div className="absolute inset-x-0 bottom-0 h-16 bg-[radial-gradient(circle_at_14px_100%,rgba(203,213,225,0.78),transparent_40%),radial-gradient(circle_at_42px_100%,rgba(167,243,208,0.38),transparent_38%),radial-gradient(circle_at_72px_100%,rgba(190,242,100,0.32),transparent_38%)] bg-[length:88px_100%] opacity-80" />
       </>
     );
   }
 
-  // Place publique: add greenery and simplify badges
   return (
     <>
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,247,204,0.14),transparent_30%),linear-gradient(180deg,rgba(4,10,24,0.14),rgba(4,10,24,0.78))]" />
-
-      {/* Decorative central elements simplified */}
-      <div className="absolute inset-x-[8%] top-[10%] h-28 rounded-full bg-gold-300/8 blur-3xl" />
-      <div className="absolute left-1/2 top-[20%] h-18 w-18 -translate-x-1/2 rounded-full border border-gold-200/22 bg-gold-200/8 shadow-[0_0_28px_rgba(250,204,21,0.12)]" />
-
-      {/* Remove text badges; keep soft shapes */}
-
-      {/* Large soft ground and grass foreground */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_14%,rgba(255,247,204,0.22),transparent_24%),linear-gradient(180deg,rgba(4,10,24,0.08),rgba(4,10,24,0.8))]" />
+      <div className="absolute left-1/2 top-[12%] h-24 w-24 -translate-x-1/2 rounded-full bg-amber-200/85 shadow-[0_0_95px_rgba(251,191,36,0.5)]" />
+      <div className="absolute inset-x-[8%] top-[12%] h-28 rounded-full bg-gold-300/12 blur-3xl" />
+      <div className="absolute left-[18%] top-[34%] h-28 w-28 rounded-full border border-gold-200/18 bg-gold-200/10 shadow-[0_0_28px_rgba(250,204,21,0.12)]" />
+      <div className="absolute left-1/2 top-[36%] h-36 w-36 -translate-x-1/2 rounded-full border border-gold-200/20 bg-[radial-gradient(circle,rgba(255,255,255,0.1),rgba(250,204,21,0.12),transparent_68%)]" />
+      <div className="absolute left-1/2 top-[41%] h-14 w-14 -translate-x-1/2 rounded-full border border-gold-100/30 bg-gold-100/15" />
+      {Array.from({ length: 8 }).map((_, index) => (
+        <div
+          key={`place-flower-${index}`}
+          className="absolute rounded-full border border-rose-100/18 bg-rose-100/12"
+          style={{
+            left: `${10 + index * 10}%`,
+            bottom: `${14 + (index % 3) * 2}%`,
+            width: `${14 + (index % 2) * 8}px`,
+            height: `${14 + (index % 2) * 8}px`,
+            boxShadow: "0 0 18px rgba(251,191,36,0.12)",
+          }}
+        />
+      ))}
       <div className="absolute inset-x-[6%] bottom-[18%] h-20 rounded-[30px] border border-gold-300/10 bg-gold-300/8 opacity-60" />
-      <div className="absolute inset-x-0 bottom-0 h-36 bg-gradient-to-t from-emerald-900/96 via-emerald-800/68 to-transparent" />
-
-      {/* Subtle blurred shadow for depth */}
+      <div className="absolute inset-x-0 bottom-0 h-36 bg-gradient-to-t from-emerald-950 via-emerald-900/78 to-transparent" />
+      <div className="absolute inset-x-0 bottom-0 h-20 bg-[radial-gradient(circle_at_12px_100%,rgba(34,197,94,0.9),transparent_40%),radial-gradient(circle_at_36px_100%,rgba(163,230,53,0.74),transparent_40%),radial-gradient(circle_at_70px_100%,rgba(21,128,61,0.9),transparent_44%)] bg-[length:84px_100%] opacity-90" />
       <div className="absolute bottom-[-6%] left-[12%] right-[12%] h-44 rounded-[50%] border border-gold-300/10 bg-night-950/44 blur-[2px]" />
     </>
   );
