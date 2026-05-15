@@ -23,6 +23,7 @@ import { useLive } from "../contexts/LiveContext";
 import { useProfile } from "../contexts/ProfileContext";
 import { useToast } from "../contexts/ToastContext";
 import {
+  apiApplyWalletDelta,
   apiGetProfile,
   apiHeartbeatWorldPresence,
   apiLeaveWorldPresence,
@@ -82,7 +83,57 @@ interface SelectedWorldMember {
   loading: boolean;
 }
 
+type LueurRarity = "common" | "rare" | "epic";
+
+interface WorldLueurNode {
+  id: string;
+  district: DistrictId;
+  x: number;
+  y: number;
+  value: number;
+  rarity: LueurRarity;
+  label: string;
+  respawnMs: number;
+  availableAt: number;
+  temporary?: boolean;
+}
+
+interface WorldHotspot {
+  id: string;
+  district: DistrictId;
+  title: string;
+  hint: string;
+  description: string;
+  x: number;
+  y: number;
+  radius: number;
+  reward: number;
+  glyph: string;
+  resonance: string;
+}
+
+interface WorldAmbientEvent {
+  id: string;
+  district: DistrictId;
+  title: string;
+  copy: string;
+  bonusLueurs: number;
+  durationMs: number;
+}
+
+interface LueurBurst {
+  id: string;
+  x: number;
+  y: number;
+  value: number;
+  rarity: LueurRarity;
+}
+
 const WORLD_ID = "main";
+const WORLD_LUEUR_DAILY_CAP = 90;
+const WORLD_SYNC_DEBOUNCE_MS = 1400;
+const WORLD_CLOCK_TICK_MS = 1000;
+const LUEUR_STORAGE_PREFIX = "vaelyndra-world-lueurs";
 
 const DISTRICTS: District[] = [
   {
@@ -150,6 +201,180 @@ const EVENT_BOARD = [
   },
 ];
 
+const DISTRICT_LUEURS: Record<
+  DistrictId,
+  Array<Omit<WorldLueurNode, "district" | "availableAt">>
+> = {
+  place: [
+    { id: "place-lueur-1", x: 22, y: 71, value: 1, rarity: "common", label: "eclat de parterre", respawnMs: 16000 },
+    { id: "place-lueur-2", x: 34, y: 65, value: 1, rarity: "common", label: "fil d'aube", respawnMs: 18000 },
+    { id: "place-lueur-3", x: 47, y: 56, value: 2, rarity: "rare", label: "goutte de fontaine", respawnMs: 24000 },
+    { id: "place-lueur-4", x: 58, y: 68, value: 1, rarity: "common", label: "pollenne dore", respawnMs: 17000 },
+    { id: "place-lueur-5", x: 70, y: 62, value: 1, rarity: "common", label: "herbe haute", respawnMs: 18000 },
+    { id: "place-lueur-6", x: 81, y: 73, value: 2, rarity: "rare", label: "rune solaire", respawnMs: 26000 },
+  ],
+  arcades: [
+    { id: "arcade-lueur-1", x: 18, y: 74, value: 1, rarity: "common", label: "pixel neon", respawnMs: 18000 },
+    { id: "arcade-lueur-2", x: 28, y: 48, value: 1, rarity: "common", label: "verre chanteur", respawnMs: 19000 },
+    { id: "arcade-lueur-3", x: 40, y: 63, value: 2, rarity: "rare", label: "echo de vitrine", respawnMs: 24000 },
+    { id: "arcade-lueur-4", x: 56, y: 41, value: 1, rarity: "common", label: "fil cyan", respawnMs: 17000 },
+    { id: "arcade-lueur-5", x: 67, y: 70, value: 1, rarity: "common", label: "petale electrique", respawnMs: 18000 },
+    { id: "arcade-lueur-6", x: 78, y: 52, value: 3, rarity: "epic", label: "maquette inspiree", respawnMs: 34000 },
+  ],
+  observatory: [
+    { id: "obs-lueur-1", x: 16, y: 64, value: 1, rarity: "common", label: "poussiere d'etoile", respawnMs: 18000 },
+    { id: "obs-lueur-2", x: 29, y: 38, value: 2, rarity: "rare", label: "givre astral", respawnMs: 25000 },
+    { id: "obs-lueur-3", x: 45, y: 60, value: 1, rarity: "common", label: "halo lunaire", respawnMs: 19000 },
+    { id: "obs-lueur-4", x: 58, y: 34, value: 2, rarity: "rare", label: "comete lente", respawnMs: 26000 },
+    { id: "obs-lueur-5", x: 72, y: 72, value: 1, rarity: "common", label: "filament froid", respawnMs: 18000 },
+    { id: "obs-lueur-6", x: 84, y: 50, value: 3, rarity: "epic", label: "eclat de meteore", respawnMs: 36000 },
+  ],
+};
+
+const DISTRICT_HOTSPOTS: Record<DistrictId, WorldHotspot[]> = {
+  place: [
+    {
+      id: "place-fountain",
+      district: "place",
+      title: "Fontaine solaire",
+      hint: "Son coeur pulse plus fort quand tu t'approches.",
+      description: "Le bassin retient des lueurs dormantes et relache parfois un souffle dore.",
+      x: 49,
+      y: 42,
+      radius: 12,
+      reward: 5,
+      glyph: "F",
+      resonance: "Le cercle d'eau renvoie une benediction chaude sur toute la place.",
+    },
+    {
+      id: "place-garden",
+      district: "place",
+      title: "Roseraie des serments",
+      hint: "Les fleurs repondent aux membres patients.",
+      description: "Une bordure fleurie cache de petites lueurs entre les herbes hautes.",
+      x: 23,
+      y: 76,
+      radius: 10,
+      reward: 4,
+      glyph: "R",
+      resonance: "Les petales se soulevent puis laissent tomber des poussières d'aube.",
+    },
+  ],
+  arcades: [
+    {
+      id: "arcades-mirror",
+      district: "arcades",
+      title: "Miroir des createurs",
+      hint: "Le verre garde les idees qui vibrent le plus fort.",
+      description: "Les vitrines retiennent des impulsions de couleur et relachent parfois une serie d'eclats.",
+      x: 62,
+      y: 30,
+      radius: 11,
+      reward: 5,
+      glyph: "M",
+      resonance: "Les vitrines se synchronisent et allument la galerie pendant quelques secondes.",
+    },
+    {
+      id: "arcades-workbench",
+      district: "arcades",
+      title: "Atelier cache",
+      hint: "Un recoin discret chante sous le neon.",
+      description: "Des outils oubliés battent doucement sous la verriere et aiment les explorateurs curieux.",
+      x: 31,
+      y: 66,
+      radius: 10,
+      reward: 4,
+      glyph: "A",
+      resonance: "Une pulsation cyan traverse les panneaux et reveille des lueurs de vitrine.",
+    },
+  ],
+  observatory: [
+    {
+      id: "observatory-moonwell",
+      district: "observatory",
+      title: "Puits lunaire",
+      hint: "La pierre refracte les meteorites lentes.",
+      description: "Un puits de nuit retient les fragments tombes des constellations.",
+      x: 64,
+      y: 35,
+      radius: 11,
+      reward: 6,
+      glyph: "L",
+      resonance: "Le dome reflète la lune et fait pleuvoir quelques eclats rares.",
+    },
+    {
+      id: "observatory-rail",
+      district: "observatory",
+      title: "Rail des cometes",
+      hint: "Quand le ciel change, les rails se remettent a murmurer.",
+      description: "Les passerelles celestes accumulent une charge lumineuse qui ne se montre pas a tout le monde.",
+      x: 24,
+      y: 54,
+      radius: 10,
+      reward: 4,
+      glyph: "C",
+      resonance: "Une trame froide traverse le balcon et reveille la bordure du ciel.",
+    },
+  ],
+};
+
+const DISTRICT_AMBIENT_EVENTS: Record<DistrictId, WorldAmbientEvent[]> = {
+  place: [
+    {
+      id: "place-breeze",
+      district: "place",
+      title: "Brise doree",
+      copy: "Les herbes hautes se penchent et de nouvelles lueurs glissent vers les parterres.",
+      bonusLueurs: 2,
+      durationMs: 9000,
+    },
+    {
+      id: "place-fountain-song",
+      district: "place",
+      title: "Chant de la fontaine",
+      copy: "La place retient son souffle : le bassin central relache un cycle de gouttes lumineuses.",
+      bonusLueurs: 3,
+      durationMs: 8000,
+    },
+  ],
+  arcades: [
+    {
+      id: "arcades-neon-surge",
+      district: "arcades",
+      title: "Surge neon",
+      copy: "Les vitrines se synchronisent. Quelques eclats de creation deviennent visibles.",
+      bonusLueurs: 2,
+      durationMs: 9000,
+    },
+    {
+      id: "arcades-gallery-whisper",
+      district: "arcades",
+      title: "Murmure de galerie",
+      copy: "Une onde traverse les cadres. Les panneaux caches s'ouvrent un instant.",
+      bonusLueurs: 3,
+      durationMs: 8500,
+    },
+  ],
+  observatory: [
+    {
+      id: "observatory-meteor-drift",
+      district: "observatory",
+      title: "Derive meteore",
+      copy: "Une trainee lente coupe le dome et reveille des lueurs plus rares.",
+      bonusLueurs: 2,
+      durationMs: 8500,
+    },
+    {
+      id: "observatory-lunar-flare",
+      district: "observatory",
+      title: "Halo lunaire",
+      copy: "La terrasse s'eclaircit. Le puits lunaire pulse et attire les explorateurs.",
+      bonusLueurs: 3,
+      durationMs: 9500,
+    },
+  ],
+};
+
 const BASE_CHAT: WorldChatMessage[] = [
   {
     id: "world-boot-1",
@@ -172,7 +397,7 @@ const BASE_CHAT: WorldChatMessage[] = [
 
 export function Worlds() {
   const { user } = useAuth();
-  const { profile } = useProfile();
+  const { profile, setProfile } = useProfile();
   const { liveRegistry } = useLive();
   const { notify } = useToast();
   const [district, setDistrict] = useState<DistrictId>("place");
@@ -188,10 +413,30 @@ export function Worlds() {
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [voiceLoading, setVoiceLoading] = useState(false);
   const [voiceLevel, setVoiceLevel] = useState(0);
+  const [worldClock, setWorldClock] = useState(() => Date.now());
+  const [lueurNodes, setLueurNodes] = useState<Record<DistrictId, WorldLueurNode[]>>(
+    () => createInitialLueurNodes(),
+  );
+  const [lueurBursts, setLueurBursts] = useState<LueurBurst[]>([]);
+  const [sessionLueurs, setSessionLueurs] = useState(0);
+  const [queuedLueurs, setQueuedLueurs] = useState(0);
+  const [syncingLueurs, setSyncingLueurs] = useState(false);
+  const [dailyWorldLueurs, setDailyWorldLueurs] = useState(() =>
+    readWorldLueurProgress(null).total,
+  );
+  const [discoveredHotspots, setDiscoveredHotspots] = useState<Record<string, boolean>>(() =>
+    readWorldLueurProgress(null).hotspots,
+  );
+  const [ambientEvent, setAmbientEvent] = useState<WorldAmbientEvent | null>(null);
+  const [comboCount, setComboCount] = useState(0);
+  const [lastCollectAt, setLastCollectAt] = useState(0);
   const streamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const rafRef = useRef<number | null>(null);
+  const lueurFlushRef = useRef(0);
+  const profileRef = useRef(profile);
+  const collectedRecentlyRef = useRef<Record<string, number>>({});
 
   const mapRef = useRef<HTMLDivElement | null>(null);
   function handlePointerDown() {
@@ -209,6 +454,40 @@ export function Worlds() {
   const selectedDistrict = useMemo(
     () => DISTRICTS.find((entry) => entry.id === district) ?? DISTRICTS[0],
     [district],
+  );
+
+  const visibleLueurs = useMemo(
+    () =>
+      lueurNodes[district].filter((entry) => entry.availableAt <= worldClock),
+    [district, lueurNodes, worldClock],
+  );
+
+  const districtHotspots = useMemo(
+    () => DISTRICT_HOTSPOTS[district],
+    [district],
+  );
+
+  const nearbyHotspot = useMemo(() => {
+    return districtHotspots
+      .map((entry) => ({
+        entry,
+        distance: distancePct(position.x, position.y, entry.x, entry.y),
+      }))
+      .filter((item) => item.distance <= item.entry.radius + 4)
+      .sort((a, b) => a.distance - b.distance)[0]?.entry ?? null;
+  }, [districtHotspots, position.x, position.y]);
+
+  const lueurPouchTotal = useMemo(
+    () => (profile?.lueurs ?? 0) + queuedLueurs,
+    [profile?.lueurs, queuedLueurs],
+  );
+
+  const hiddenSecretsCount = useMemo(
+    () =>
+      Object.values(DISTRICT_HOTSPOTS)
+        .flat()
+        .filter((entry) => discoveredHotspots[entry.id]).length,
+    [discoveredHotspots],
   );
 
   const liveEntries = useMemo(
@@ -253,6 +532,31 @@ export function Worlds() {
   useEffect(() => {
     setPosition(selectedDistrict.center);
   }, [selectedDistrict]);
+
+  useEffect(() => {
+    profileRef.current = profile;
+  }, [profile]);
+
+  useEffect(() => {
+    const progress = readWorldLueurProgress(user?.id ?? null);
+    setDailyWorldLueurs(progress.total);
+    setDiscoveredHotspots(progress.hotspots);
+  }, [user?.id]);
+
+  useEffect(() => {
+    const timer = window.setInterval(
+      () => setWorldClock(Date.now()),
+      WORLD_CLOCK_TICK_MS,
+    );
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    writeWorldLueurProgress(user?.id ?? null, {
+      total: dailyWorldLueurs,
+      hotspots: discoveredHotspots,
+    });
+  }, [dailyWorldLueurs, discoveredHotspots, user?.id]);
 
   useEffect(() => {
     setSelectedMember(null);
@@ -372,6 +676,88 @@ export function Worlds() {
       return [nextMessage, ...current].slice(0, 12);
     });
   }, [liveEntries]);
+
+  useEffect(() => {
+    if (!visibleLueurs.length) return;
+    const nearbyNodes = visibleLueurs
+      .filter((entry) => distancePct(position.x, position.y, entry.x, entry.y) <= 6.5)
+      .slice(0, 2);
+    nearbyNodes.forEach((entry) => collectLueur(entry, "proximity"));
+  }, [district, position.x, position.y, visibleLueurs, worldClock]);
+
+  useEffect(() => {
+    if (!queuedLueurs || !user || syncingLueurs) return;
+    const timeout = window.setTimeout(async () => {
+      const amount = lueurFlushRef.current;
+      if (!amount) return;
+      setSyncingLueurs(true);
+      try {
+        const updated = await apiApplyWalletDelta(user.id, {
+          lueurs: amount,
+          reason: `world:exploration:${district}`,
+        });
+        profileRef.current = updated;
+        setProfile(updated);
+        setQueuedLueurs((current) => Math.max(0, current - amount));
+      } catch {
+        notify("Les lueurs vibrent encore hors ligne. Elles seront retentees.", "info");
+      } finally {
+        setSyncingLueurs(false);
+      }
+    }, WORLD_SYNC_DEBOUNCE_MS);
+
+    return () => window.clearTimeout(timeout);
+  }, [district, notify, queuedLueurs, setProfile, syncingLueurs, user]);
+
+  useEffect(() => {
+    lueurFlushRef.current = queuedLueurs;
+  }, [queuedLueurs]);
+
+  useEffect(() => {
+    if (!lueurBursts.length) return;
+    const timeout = window.setTimeout(() => {
+      setLueurBursts((current) => current.slice(-6));
+    }, 1100);
+    return () => window.clearTimeout(timeout);
+  }, [lueurBursts]);
+
+  useEffect(() => {
+    const availableEvents = DISTRICT_AMBIENT_EVENTS[district];
+    if (!availableEvents.length) return;
+    let cancelled = false;
+    let timeout: number | null = null;
+
+    const trigger = () => {
+      const event =
+        availableEvents[Math.floor(Math.random() * availableEvents.length)];
+      setAmbientEvent({
+        ...event,
+        id: `${event.id}-${Date.now()}`,
+      });
+      awakenDormantLueurs(district, event.bonusLueurs);
+      addWorldMessage("Flux du monde", event.copy);
+      timeout = window.setTimeout(() => {
+        if (!cancelled) setAmbientEvent(null);
+      }, event.durationMs);
+    };
+
+    const loop = () => {
+      const nextDelay = 22000 + Math.round(Math.random() * 14000);
+      timeout = window.setTimeout(() => {
+        if (cancelled) return;
+        trigger();
+        loop();
+      }, nextDelay);
+    };
+
+    loop();
+
+    return () => {
+      cancelled = true;
+      if (timeout !== null) window.clearTimeout(timeout);
+      setAmbientEvent(null);
+    };
+  }, [district]);
 
   useEffect(() => {
     return () => {
@@ -580,6 +966,172 @@ export function Worlds() {
     notify(kind === "wave" ? `Salut envoye a ${target}.` : `Eclat envoye a ${target}.`, "success");
   }
 
+  function awardWorldLueurs(rawAmount: number, reason: string) {
+    if (rawAmount <= 0) return 0;
+    const remaining = Math.max(0, WORLD_LUEUR_DAILY_CAP - dailyWorldLueurs);
+    const granted = Math.min(rawAmount, remaining);
+    if (!granted) {
+      notify("Le flux quotidien de lueurs a deja ete capte pour aujourd'hui.", "info");
+      return 0;
+    }
+
+    setDailyWorldLueurs((current) => current + granted);
+    setSessionLueurs((current) => current + granted);
+    if (user) {
+      setQueuedLueurs((current) => current + granted);
+    }
+    setComboCount((current) =>
+      Date.now() - lastCollectAt < 6000 ? current + 1 : 1,
+    );
+    setLastCollectAt(Date.now());
+
+    if (profileRef.current) {
+      const optimistic = {
+        ...profileRef.current,
+        lueurs: profileRef.current.lueurs + granted,
+      };
+      profileRef.current = optimistic;
+      setProfile(optimistic);
+    }
+
+    if (!user && sessionLueurs === 0 && granted > 0) {
+      notify("Connecte-toi pour lier durablement ces lueurs a ton compte.", "info");
+    }
+
+    if (granted >= 3) {
+      addWorldMessage("Lueurs", `${reason} reveille ${granted} lueurs autour de toi.`);
+    }
+
+    return granted;
+  }
+
+  function playLueurChime(rarity: LueurRarity) {
+    if (typeof window === "undefined") return;
+    try {
+      const audioContext = new AudioContext();
+      const oscillator = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+      oscillator.type = rarity === "epic" ? "triangle" : "sine";
+      oscillator.frequency.value =
+        rarity === "epic" ? 880 : rarity === "rare" ? 740 : 620;
+      gain.gain.value = rarity === "epic" ? 0.03 : 0.02;
+      oscillator.connect(gain);
+      gain.connect(audioContext.destination);
+      oscillator.start();
+      gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.18);
+      oscillator.stop(audioContext.currentTime + 0.18);
+      window.setTimeout(() => {
+        void audioContext.close().catch(() => undefined);
+      }, 240);
+    } catch {
+      /* best effort */
+    }
+  }
+
+  function awakenDormantLueurs(targetDistrict: DistrictId, count: number) {
+    setLueurNodes((current) => {
+      const nodes = [...current[targetDistrict]];
+      const sleeping = nodes
+        .filter((entry) => entry.availableAt > Date.now())
+        .sort((a, b) => a.availableAt - b.availableAt)
+        .slice(0, count);
+      if (!sleeping.length) return current;
+      const awakened = new Set(sleeping.map((entry) => entry.id));
+      return {
+        ...current,
+        [targetDistrict]: nodes.map((entry) =>
+          awakened.has(entry.id)
+            ? { ...entry, availableAt: Date.now() + Math.round(Math.random() * 900) }
+            : entry,
+        ),
+      };
+    });
+  }
+
+  function collectLueur(node: WorldLueurNode, source: "tap" | "proximity") {
+    const now = Date.now();
+    if ((collectedRecentlyRef.current[node.id] ?? 0) > now - 700) return;
+    collectedRecentlyRef.current[node.id] = now;
+
+    setLueurNodes((current) => ({
+      ...current,
+      [node.district]: current[node.district].map((entry) =>
+        entry.id === node.id
+          ? {
+              ...entry,
+              availableAt:
+                now +
+                entry.respawnMs +
+                Math.round(Math.random() * (entry.rarity === "common" ? 5000 : 9000)),
+            }
+          : entry,
+      ),
+    }));
+
+    setLueurBursts((current) => [
+      ...current.slice(-7),
+      {
+        id: `${node.id}-${now}`,
+        x: node.x,
+        y: node.y,
+        value: node.value,
+        rarity: node.rarity,
+      },
+    ]);
+
+    const granted = awardWorldLueurs(
+      node.value,
+      source === "tap" ? node.label : `La ${node.label}`,
+    );
+    playLueurChime(node.rarity);
+
+    if (granted && (node.rarity !== "common" || source === "tap")) {
+      notify(`+${granted} lueur${granted > 1 ? "s" : ""} : ${node.label}.`, "success");
+    }
+  }
+
+  function triggerHotspot(hotspot: WorldHotspot) {
+    const distance = distancePct(position.x, position.y, hotspot.x, hotspot.y);
+    if (distance > hotspot.radius + 4) {
+      notify(`Approche-toi de ${hotspot.title.toLowerCase()} pour l'activer.`, "info");
+      return;
+    }
+
+    const isFirstDiscovery = !discoveredHotspots[hotspot.id];
+    setDiscoveredHotspots((current) => ({ ...current, [hotspot.id]: true }));
+    awakenDormantLueurs(hotspot.district, isFirstDiscovery ? 3 : 1);
+
+    const granted = awardWorldLueurs(
+      isFirstDiscovery ? hotspot.reward : 1,
+      hotspot.title,
+    );
+
+    addWorldMessage(
+      "Resonance",
+      isFirstDiscovery
+        ? `${hotspot.title} s'ouvre : ${hotspot.resonance}`
+        : `${hotspot.title} pulse encore, puis se rendort doucement.`,
+    );
+
+    setAmbientEvent({
+      id: `${hotspot.id}-echo-${Date.now()}`,
+      district: hotspot.district,
+      title: hotspot.title,
+      copy: hotspot.description,
+      bonusLueurs: isFirstDiscovery ? 2 : 1,
+      durationMs: 7000,
+    });
+
+    if (granted) {
+      notify(
+        isFirstDiscovery
+          ? `${hotspot.title} revele +${granted} lueurs.`
+          : `${hotspot.title} laisse encore filer une lueur.`,
+        "success",
+      );
+    }
+  }
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-12">
       <SectionHeading
@@ -734,8 +1286,8 @@ export function Worlds() {
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-2">
                 <CompactStat label="Presence" value={String(stageMembers.length + (user ? 1 : 0))} />
                 <CompactStat label="Lives" value={String(liveEntries.length)} />
-                <CompactStat label="Ciel" value={selectedDistrict.sky} />
-                <CompactStat label="Flore" value={selectedDistrict.flora} />
+                <CompactStat label="Lueurs" value={String(visibleLueurs.length)} />
+                <CompactStat label="Secrets" value={String(districtHotspots.length)} />
               </div>
             </div>
 
@@ -748,6 +1300,106 @@ export function Worlds() {
               className={`relative min-h-[320px] sm:min-h-[500px] md:min-h-[620px] xl:min-h-[760px] overflow-hidden rounded-[30px] border border-white/10 bg-gradient-to-br ${selectedDistrict.accent}`}
             >
               <DistrictBackdrop district={district} />
+              <DistrictAmbientVeil district={district} activeEvent={ambientEvent} />
+
+              {ambientEvent?.district === district && (
+                <div className="absolute left-4 top-4 z-20 max-w-sm rounded-[24px] border border-gold-300/30 bg-night-950/72 px-4 py-3 backdrop-blur-xl">
+                  <div className="text-[10px] uppercase tracking-[0.22em] text-cyan-200/70">
+                    Evenement vivant
+                  </div>
+                  <div className="mt-1 font-display text-lg text-gold-100">
+                    {ambientEvent.title}
+                  </div>
+                  <p className="mt-1 text-sm text-ivory/65">{ambientEvent.copy}</p>
+                </div>
+              )}
+
+              {districtHotspots.map((hotspot) => {
+                const nearHotspot =
+                  distancePct(position.x, position.y, hotspot.x, hotspot.y) <=
+                  hotspot.radius + 4;
+                return (
+                  <button
+                    key={hotspot.id}
+                    type="button"
+                    onClick={() => triggerHotspot(hotspot)}
+                    className="absolute z-[15] flex -translate-x-1/2 -translate-y-1/2 flex-col items-center"
+                    style={{ left: `${hotspot.x}%`, top: `${hotspot.y}%` }}
+                  >
+                    <motion.span
+                      className={`absolute h-16 w-16 rounded-full border ${
+                        discoveredHotspots[hotspot.id]
+                          ? "border-emerald-300/30"
+                          : "border-gold-300/28"
+                      }`}
+                      animate={{ scale: [1, 1.15, 1], opacity: [0.3, 0.7, 0.3] }}
+                      transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}
+                    />
+                    <span
+                      className={`relative flex h-8 w-8 items-center justify-center rounded-full border text-[11px] font-semibold transition ${
+                        nearHotspot
+                          ? "border-gold-300/70 bg-gold-400/18 text-gold-100"
+                          : "border-white/10 bg-night-950/62 text-ivory/65"
+                      }`}
+                    >
+                      {hotspot.glyph}
+                    </span>
+                    <span className="mt-2 rounded-full border border-white/10 bg-night-950/80 px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-ivory/75">
+                      {hotspot.title}
+                    </span>
+                  </button>
+                );
+              })}
+
+              {visibleLueurs.map((node) => (
+                <motion.button
+                  key={node.id}
+                  type="button"
+                  onClick={() => collectLueur(node, "tap")}
+                  className="absolute z-[16] -translate-x-1/2 -translate-y-1/2"
+                  style={{ left: `${node.x}%`, top: `${node.y}%` }}
+                  animate={{
+                    y: [0, -4, 0],
+                    scale: node.rarity === "epic" ? [1, 1.08, 1] : [1, 1.04, 1],
+                  }}
+                  transition={{ duration: node.rarity === "epic" ? 1.8 : 2.4, repeat: Infinity }}
+                >
+                  <span
+                    className={`flex h-6 w-6 items-center justify-center rounded-full border ${
+                      node.rarity === "epic"
+                        ? "border-cyan-200/70 bg-cyan-200/22 shadow-[0_0_24px_rgba(103,232,249,0.42)]"
+                        : node.rarity === "rare"
+                          ? "border-gold-200/70 bg-gold-200/20 shadow-[0_0_22px_rgba(250,204,21,0.4)]"
+                          : "border-gold-100/55 bg-gold-100/18 shadow-[0_0_18px_rgba(253,230,138,0.32)]"
+                    }`}
+                  >
+                    <span className="h-2.5 w-2.5 rounded-full bg-white/90" />
+                  </span>
+                </motion.button>
+              ))}
+
+              {lueurBursts.map((burst) => (
+                <motion.div
+                  key={burst.id}
+                  className="pointer-events-none absolute z-[17] -translate-x-1/2 -translate-y-1/2"
+                  style={{ left: `${burst.x}%`, top: `${burst.y}%` }}
+                  initial={{ opacity: 0.95, y: 0, scale: 0.9 }}
+                  animate={{ opacity: 0, y: -34, scale: 1.18 }}
+                  transition={{ duration: 0.95, ease: "easeOut" }}
+                >
+                  <div
+                    className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                      burst.rarity === "epic"
+                        ? "bg-cyan-200/18 text-cyan-100"
+                        : burst.rarity === "rare"
+                          ? "bg-gold-200/16 text-gold-100"
+                          : "bg-white/12 text-ivory"
+                    }`}
+                  >
+                    +{burst.value}
+                  </div>
+                </motion.div>
+              ))}
 
               {stageMembers.map((member) => (
                 <motion.div
@@ -942,6 +1594,62 @@ export function Worlds() {
         </section>
 
         <aside className="space-y-4 xl:sticky xl:top-24 xl:self-start">
+          <section className="rounded-[26px] border border-gold-400/25 bg-[radial-gradient(circle_at_top,rgba(250,204,21,0.14),transparent_38%),linear-gradient(180deg,rgba(17,24,39,0.82),rgba(17,24,39,0.64))] p-5 shadow-[0_18px_40px_rgba(2,6,23,0.26)]">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-gold-300" />
+              <h3 className="font-display text-xl text-gold-100">Bourse de lueurs</h3>
+            </div>
+            <p className="mt-2 text-sm text-ivory/65">
+              Explore, reveille les zones secretes et laisse les evenements du monde guider ta collecte.
+            </p>
+
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <CompactStat label="En poche" value={String(lueurPouchTotal)} />
+              <CompactStat label="Session" value={String(sessionLueurs)} />
+            </div>
+
+            <div className="mt-4 rounded-2xl border border-white/10 bg-night-950/55 p-4">
+              <div className="flex items-center justify-between gap-3 text-xs uppercase tracking-[0.18em] text-ivory/55">
+                <span>Flux du jour</span>
+                <span>{dailyWorldLueurs}/{WORLD_LUEUR_DAILY_CAP}</span>
+              </div>
+              <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/8">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-gold-300 via-amber-300 to-cyan-300 transition-all"
+                  style={{
+                    width: `${Math.min(100, (dailyWorldLueurs / WORLD_LUEUR_DAILY_CAP) * 100)}%`,
+                  }}
+                />
+              </div>
+              <div className="mt-3 text-xs text-ivory/60">
+                {syncingLueurs
+                  ? "Synchronisation des lueurs en cours..."
+                  : queuedLueurs > 0
+                    ? `${queuedLueurs} lueur${queuedLueurs > 1 ? "s" : ""} en attente de scellement.`
+                    : "Toutes tes lueurs visibles sont deja scellees."}
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-2xl border border-white/10 bg-night-950/55 p-4">
+              <div className="text-[11px] uppercase tracking-[0.22em] text-gold-200/70">
+                Exploration active
+              </div>
+              <div className="mt-2 text-sm text-ivory/70">
+                {nearbyHotspot
+                  ? `${nearbyHotspot.title} : ${nearbyHotspot.hint}`
+                  : `Il reste ${visibleLueurs.length} lueur${visibleLueurs.length > 1 ? "s" : ""} visible${visibleLueurs.length > 1 ? "s" : ""} dans ${selectedDistrict.name.toLowerCase()}.`}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2 text-xs text-ivory/60">
+                <span className="rounded-full border border-white/10 px-2.5 py-1">
+                  Secrets ouverts : {hiddenSecretsCount}
+                </span>
+                <span className="rounded-full border border-white/10 px-2.5 py-1">
+                  Combo : x{Math.max(comboCount, 1)}
+                </span>
+              </div>
+            </div>
+          </section>
+
           <section className="rounded-[26px] border border-royal-500/30 bg-night-900/60 p-5">
             <div className="flex items-center gap-2">
               <Wand2 className="h-4 w-4 text-gold-300" />
@@ -1058,6 +1766,20 @@ export function Worlds() {
               <h3 className="font-display text-xl text-gold-200">Événements</h3>
             </div>
             <div className="mt-4 space-y-3">
+              {ambientEvent && (
+                <div className="rounded-2xl border border-gold-300/30 bg-[radial-gradient(circle_at_top,rgba(250,204,21,0.12),transparent_45%),linear-gradient(180deg,rgba(15,23,42,0.72),rgba(15,23,42,0.6))] p-4 shadow-[0_16px_40px_rgba(250,204,21,0.12)]">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-[11px] uppercase tracking-[0.2em] text-cyan-200/70">
+                      En cours dans {labelForDistrict(ambientEvent.district)}
+                    </div>
+                    <span className="rounded-full border border-gold-300/35 px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-gold-100">
+                      +{ambientEvent.bonusLueurs} lueurs reveillees
+                    </span>
+                  </div>
+                  <div className="mt-2 font-display text-gold-100">{ambientEvent.title}</div>
+                  <p className="mt-1 text-sm text-ivory/65">{ambientEvent.copy}</p>
+                </div>
+              )}
               {EVENT_BOARD.map((event) => (
                 <div
                   key={event.id}
@@ -1259,7 +1981,7 @@ export function Worlds() {
         </section>
       )}
 
-      <section className="mt-10 grid gap-4 md:grid-cols-3">
+      <section className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <WorldFact
           icon={<Crown className="h-4 w-4" />}
           title="Hub social persistant"
@@ -1274,6 +1996,11 @@ export function Worlds() {
           icon={<Radio className="h-4 w-4" />}
           title="Pont vers les lives"
           copy="L'observatoire relie directement le monde social et les streamers actifs."
+        />
+        <WorldFact
+          icon={<Sparkles className="h-4 w-4" />}
+          title="Lueurs a collecter"
+          copy="Chaque monde revele ses propres eclats, secrets et mini-evenements pour recompenser l'exploration."
         />
       </section>
     </div>
@@ -1313,6 +2040,78 @@ function WorldFact({
       </div>
       <div className="mt-4 font-display text-xl text-gold-100">{title}</div>
       <p className="mt-2 text-sm leading-6 text-ivory/65">{copy}</p>
+    </div>
+  );
+}
+
+function DistrictAmbientVeil({
+  district,
+  activeEvent,
+}: {
+  district: DistrictId;
+  activeEvent: WorldAmbientEvent | null;
+}) {
+  const palette =
+    district === "arcades"
+      ? {
+          glow: "bg-cyan-300/12",
+          beam: "from-cyan-300/14 via-sky-300/8 to-transparent",
+          spark: "bg-cyan-100/80",
+          ring: "border-cyan-200/20",
+        }
+      : district === "observatory"
+        ? {
+            glow: "bg-fuchsia-300/10",
+            beam: "from-fuchsia-300/14 via-purple-300/10 to-transparent",
+            spark: "bg-white/85",
+            ring: "border-fuchsia-100/20",
+          }
+        : {
+            glow: "bg-gold-300/12",
+            beam: "from-gold-300/14 via-amber-300/10 to-transparent",
+            spark: "bg-gold-100/85",
+            ring: "border-gold-100/20",
+          };
+
+  return (
+    <div className="pointer-events-none absolute inset-0 overflow-hidden">
+      <div className={`absolute inset-x-[10%] top-[8%] h-28 rounded-full blur-3xl ${palette.glow}`} />
+      <div className={`absolute inset-x-0 top-[18%] h-40 bg-gradient-to-r ${palette.beam}`} />
+      {Array.from({ length: 5 }).map((_, index) => (
+        <motion.span
+          key={`${district}-spark-${index}`}
+          className={`absolute h-1.5 w-1.5 rounded-full shadow-[0_0_16px_rgba(255,255,255,0.35)] ${palette.spark}`}
+          style={{
+            left: `${14 + index * 16}%`,
+            top: `${18 + ((index * 9) % 46)}%`,
+          }}
+          animate={{
+            y: [0, -10 - index, 0],
+            opacity: [0.25, 0.95, 0.3],
+            scale: [0.8, 1.15, 0.85],
+          }}
+          transition={{
+            duration: 5 + index * 0.4,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: index * 0.25,
+          }}
+        />
+      ))}
+      {activeEvent?.district === district && (
+        <>
+          <motion.div
+            className={`absolute inset-x-[18%] top-[24%] h-32 rounded-full blur-3xl ${palette.glow}`}
+            animate={{ opacity: [0.2, 0.5, 0.25], scale: [0.96, 1.06, 0.98] }}
+            transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
+          />
+          <motion.div
+            className={`absolute left-1/2 top-[44%] h-44 w-44 -translate-x-1/2 rounded-full border ${palette.ring}`}
+            animate={{ scale: [0.8, 1.18], opacity: [0.5, 0] }}
+            transition={{ duration: 1.8, repeat: Infinity, ease: "easeOut" }}
+          />
+        </>
+      )}
     </div>
   );
 }
@@ -1417,6 +2216,76 @@ function DistrictBackdrop({ district }: { district: DistrictId }) {
 
 function labelForDistrict(district: DistrictId) {
   return DISTRICTS.find((entry) => entry.id === district)?.name ?? "Monde";
+}
+
+function createInitialLueurNodes(): Record<DistrictId, WorldLueurNode[]> {
+  return {
+    place: DISTRICT_LUEURS.place.map((entry) => ({ ...entry, district: "place", availableAt: 0 })),
+    arcades: DISTRICT_LUEURS.arcades.map((entry) => ({ ...entry, district: "arcades", availableAt: 0 })),
+    observatory: DISTRICT_LUEURS.observatory.map((entry) => ({
+      ...entry,
+      district: "observatory",
+      availableAt: 0,
+    })),
+  };
+}
+
+function progressStorageKey(userId: string | null) {
+  return `${LUEUR_STORAGE_PREFIX}:${userId ?? "guest"}`;
+}
+
+function readWorldLueurProgress(userId: string | null) {
+  if (typeof window === "undefined") {
+    return { total: 0, hotspots: {} as Record<string, boolean> };
+  }
+
+  try {
+    const raw = window.localStorage.getItem(progressStorageKey(userId));
+    if (!raw) {
+      return { total: 0, hotspots: {} as Record<string, boolean> };
+    }
+
+    const parsed = JSON.parse(raw) as {
+      day?: string;
+      total?: number;
+      hotspots?: string[];
+    };
+    const today = new Date().toISOString().slice(0, 10);
+    if (parsed.day !== today) {
+      return { total: 0, hotspots: {} as Record<string, boolean> };
+    }
+
+    return {
+      total: Number.isFinite(parsed.total) ? Math.max(0, parsed.total ?? 0) : 0,
+      hotspots: Object.fromEntries((parsed.hotspots ?? []).map((entry) => [entry, true])),
+    };
+  } catch {
+    return { total: 0, hotspots: {} as Record<string, boolean> };
+  }
+}
+
+function writeWorldLueurProgress(
+  userId: string | null,
+  payload: { total: number; hotspots: Record<string, boolean> },
+) {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(
+      progressStorageKey(userId),
+      JSON.stringify({
+        day: new Date().toISOString().slice(0, 10),
+        total: Math.max(0, payload.total),
+        hotspots: Object.keys(payload.hotspots).filter((entry) => payload.hotspots[entry]),
+      }),
+    );
+  } catch {
+    // Ignore storage failures and keep the world playable.
+  }
+}
+
+function distancePct(ax: number, ay: number, bx: number, by: number) {
+  return Math.hypot(ax - bx, ay - by);
 }
 
 function clamp(value: number, min: number, max: number) {
