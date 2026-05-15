@@ -154,6 +154,40 @@ export function Worlds() {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const rafRef = useRef<number | null>(null);
 
+  const mapRef = useRef<HTMLDivElement | null>(null);
+  const pointerDownRef = useRef(false);
+
+  function setPositionFromClient(clientX: number, clientY: number) {
+    const rect = mapRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const x = ((clientX - rect.left) / rect.width) * 100;
+    const y = ((clientY - rect.top) / rect.height) * 100;
+    const newX = clamp(x, 10, 88);
+    const newY = clamp(y, 18, 84);
+    setPosition({ x: newX, y: newY });
+    try {
+      window.dispatchEvent(new CustomEvent("vaelyndra:position-change", { detail: { x: newX, y: newY } }));
+    } catch {
+      // ignore
+    }
+  }
+
+  function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    pointerDownRef.current = true;
+    try { (e.target as Element).setPointerCapture?.(e.pointerId); } catch {}
+    setPositionFromClient(e.clientX, e.clientY);
+  }
+
+  function handlePointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!pointerDownRef.current) return;
+    setPositionFromClient(e.clientX, e.clientY);
+  }
+
+  function handlePointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    pointerDownRef.current = false;
+    try { (e.target as Element).releasePointerCapture?.(e.pointerId); } catch {}
+  }
+
   const selectedDistrict = useMemo(
     () => DISTRICTS.find((entry) => entry.id === district) ?? DISTRICTS[0],
     [district],
@@ -215,7 +249,7 @@ export function Worlds() {
     }
 
     void refreshPresence();
-    const timer = window.setInterval(refreshPresence, 5000);
+    const timer = window.setInterval(refreshPresence, 1200); // poll more frequently for smoother movement
     return () => {
       cancelled = true;
       window.clearInterval(timer);
@@ -252,18 +286,11 @@ export function Worlds() {
         return;
       }
       event.preventDefault();
-      setPosition((current) => {
-        const step = 3;
-        const next = { ...current };
-        if (key === "arrowup" || key === "z" || key === "w") next.y -= step;
-        if (key === "arrowdown" || key === "s") next.y += step;
-        if (key === "arrowleft" || key === "q" || key === "a") next.x -= step;
-        if (key === "arrowright" || key === "d") next.x += step;
-        return {
-          x: clamp(next.x, 10, 88),
-          y: clamp(next.y, 18, 84),
-        };
-      });
+      const step = 3;
+      if (key === "arrowup" || key === "z" || key === "w") moveBy(0, -step);
+      if (key === "arrowdown" || key === "s") moveBy(0, step);
+      if (key === "arrowleft" || key === "q" || key === "a") moveBy(-step, 0);
+      if (key === "arrowright" || key === "d") moveBy(step, 0);
     }
 
     window.addEventListener("keydown", onKeyDown);
@@ -316,9 +343,46 @@ export function Worlds() {
 
     void heartbeat();
     const timer = window.setInterval(heartbeat, 8000);
+
+    // Real-time presence: send immediate updates on position change (throttled)
+    const lastSentRef = { current: 0 } as { current: number };
+    let sendTimeout: number | null = null;
+
+    const sendImmediate = async () => {
+      try {
+        await apiHeartbeatWorldPresence(WORLD_ID, {
+          district,
+          posX: Math.round(position.x),
+          posY: Math.round(position.y),
+          voiceEnabled,
+        });
+        lastSentRef.current = Date.now();
+      } catch {
+        /* ignore */
+      }
+    };
+
+    // attach a listener for position changes via custom event (we call moveBy which updates state)
+    // Using a Mutation-like approach: listen to window for 'vaelyndra:position-change' events (dispatched below when moveBy runs)
+    function onPosChange() {
+      const now = Date.now();
+      const elapsed = now - lastSentRef.current;
+      const minInterval = 200; // ms
+      if (elapsed > minInterval) {
+        void sendImmediate();
+      } else {
+        if (sendTimeout !== null) window.clearTimeout(sendTimeout);
+        sendTimeout = window.setTimeout(() => void sendImmediate(), minInterval - elapsed);
+      }
+    }
+
+    window.addEventListener("vaelyndra:position-change", onPosChange as EventListener);
+
     return () => {
       cancelled = true;
       window.clearInterval(timer);
+      if (sendTimeout !== null) window.clearTimeout(sendTimeout);
+      window.removeEventListener("vaelyndra:position-change", onPosChange as EventListener);
       void apiLeaveWorldPresence(WORLD_ID).catch(() => undefined);
     };
   }, [district, position.x, position.y, user, voiceEnabled]);
@@ -391,10 +455,17 @@ export function Worlds() {
   }
 
   function moveBy(deltaX: number, deltaY: number) {
-    setPosition((current) => ({
-      x: clamp(current.x + deltaX, 10, 88),
-      y: clamp(current.y + deltaY, 18, 84),
-    }));
+    setPosition((current) => {
+      const newX = clamp(current.x + deltaX, 10, 88);
+      const newY = clamp(current.y + deltaY, 18, 84);
+      // dispatch a small event so the presence effect can send an immediate update
+      try {
+        window.dispatchEvent(new CustomEvent("vaelyndra:position-change", { detail: { x: newX, y: newY } }));
+      } catch {
+        // ignore in non-browser environments
+      }
+      return { x: newX, y: newY };
+    });
   }
 
   function sendMessage() {
@@ -485,6 +556,11 @@ export function Worlds() {
 
           <div className="relative overflow-hidden p-5">
             <div
+              ref={mapRef}
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerCancel={handlePointerUp}
               className={`relative min-h-[360px] sm:min-h-[520px] md:min-h-[620px] overflow-hidden rounded-[30px] border border-white/10 bg-gradient-to-br ${selectedDistrict.accent}`}
             >
               <DistrictBackdrop district={district} />
@@ -603,7 +679,7 @@ export function Worlds() {
                 </div>
               </motion.div>
 
-              <div className="absolute bottom-5 left-5 flex flex-wrap gap-2">
+              <div className="absolute bottom-5 left-5 hidden md:flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => moveBy(-5, 0)}
@@ -716,7 +792,7 @@ export function Worlds() {
               </Link>
               <Link
                 to={user ? "/live/studio" : "/connexion"}
-                className="rounded-2xl border border-gold-400/30 bg-gold-500/10 px-4 py-3 text-sm text-gold-100 transition hover:border-gold-300/70 hover:bg-gold-500/15"
+                className="rounded-2xl border border-gold-400/30 bg-gold-500/10 px-4 py-4 text-base md:py-3 md:text-sm text-gold-100 transition hover:border-gold-300/70 hover:bg-gold-500/15"
               >
                 Passer du monde au live studio
               </Link>
