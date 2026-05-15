@@ -27,6 +27,7 @@ const NAV = [
   { to: "/blog", label: "Chroniques" },
   { to: "/boutique", label: "Boutique" },
   { to: "/live", label: "Live" },
+  { to: "/mondes", label: "Mondes" },
   { to: "/communaute", label: "Communauté" },
 ];
 
