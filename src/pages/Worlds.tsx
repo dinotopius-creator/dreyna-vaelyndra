@@ -936,7 +936,6 @@ export function Worlds() {
                 </button>
               </div>
 
-              {/* Mobile-friendly floating pad (hidden on md+) */}
               <div className="fixed bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 md:hidden">
                 <button
                   type="button"
@@ -1350,7 +1349,6 @@ function CompactStat({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
-
 function WorldFact({
   icon,
   title,
