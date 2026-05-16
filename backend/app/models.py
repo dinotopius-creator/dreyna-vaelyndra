@@ -95,6 +95,17 @@ class WorldPresence(SQLModel, table=True):
     pos_x: int = Field(default=50)
     pos_y: int = Field(default=50)
     voice_enabled: bool = Field(default=False)
+    voice_channel_id: Optional[str] = Field(default=None, max_length=128)
+    private_voice_partner_id: Optional[str] = Field(default=None, max_length=128)
+    voice_invite_from_user_id: Optional[str] = Field(default=None, max_length=128)
+    voice_invite_to_user_id: Optional[str] = Field(default=None, max_length=128)
+    voice_invite_created_at: Optional[str] = None
+    interaction_kind: Optional[str] = Field(default=None, max_length=32)
+    interaction_from_user_id: Optional[str] = Field(default=None, max_length=128)
+    interaction_from_username: Optional[str] = Field(default=None, max_length=64)
+    interaction_partner_user_id: Optional[str] = Field(default=None, max_length=128)
+    interaction_expires_at: Optional[str] = None
+    last_interaction_sent_at: Optional[str] = None
     last_seen_at: str = Field(default_factory=_now_iso, index=True)
 
 

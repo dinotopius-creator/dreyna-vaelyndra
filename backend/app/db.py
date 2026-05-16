@@ -74,6 +74,19 @@ def _apply_migrations() -> None:
             ("handle", "TEXT"),
             ("handle_updated_at", "TEXT"),
         ],
+        "worldpresence": [
+            ("voice_channel_id", "TEXT"),
+            ("private_voice_partner_id", "TEXT"),
+            ("voice_invite_from_user_id", "TEXT"),
+            ("voice_invite_to_user_id", "TEXT"),
+            ("voice_invite_created_at", "TEXT"),
+            ("interaction_kind", "TEXT"),
+            ("interaction_from_user_id", "TEXT"),
+            ("interaction_from_username", "TEXT"),
+            ("interaction_partner_user_id", "TEXT"),
+            ("interaction_expires_at", "TEXT"),
+            ("last_interaction_sent_at", "TEXT"),
+        ],
     }
     with engine.begin() as conn:
         for table, columns in required.items():
