@@ -156,6 +156,9 @@ const WORLD_LUEUR_DAILY_CAP = 90;
 const WORLD_SYNC_DEBOUNCE_MS = 1400;
 const WORLD_CLOCK_TICK_MS = 1000;
 const LUEUR_STORAGE_PREFIX = "vaelyndra-world-lueurs";
+const WORLD_PRESENCE_POLL_MS = 400;
+const WORLD_PRESENCE_HEARTBEAT_MS = 2500;
+const WORLD_POSITION_PUSH_MIN_INTERVAL_MS = 120;
 
 const DISTRICTS: District[] = [
   {
@@ -541,12 +544,8 @@ export function Worlds() {
   }
 
   const refreshWorldPresence = useCallback(async () => {
-    try {
-      const entries = await apiListWorldPresence(WORLD_ID);
-      setWorldMembers(entries);
-    } catch {
-      setWorldMembers([]);
-    }
+    const entries = await apiListWorldPresence(WORLD_ID);
+    setWorldMembers(entries);
   }, []);
 
   const selectedDistrict = useMemo(
@@ -728,14 +727,23 @@ export function Worlds() {
 
   useEffect(() => {
     let cancelled = false;
+    let inFlight = false;
 
     async function refreshPresence() {
-      await refreshWorldPresence().catch(() => undefined);
-      if (cancelled) return;
+      if (cancelled || inFlight) return;
+      inFlight = true;
+      try {
+        await refreshWorldPresence();
+      } catch {
+        // Keep last known members on transient network failures so
+        // movement and audio links do not blink.
+      } finally {
+        inFlight = false;
+      }
     }
 
     void refreshPresence();
-    const timer = window.setInterval(refreshPresence, 1200); // poll more frequently for smoother movement
+    const timer = window.setInterval(refreshPresence, WORLD_PRESENCE_POLL_MS);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
@@ -922,49 +930,51 @@ export function Worlds() {
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
+    let sendTimeout: number | null = null;
+    let heartbeatInFlight = false;
+    let lastSentAt = 0;
 
-    async function heartbeat() {
+    async function heartbeat(includeList = false) {
+      if (heartbeatInFlight) return;
+      heartbeatInFlight = true;
       try {
-        await apiHeartbeatWorldPresence(WORLD_ID, {
+        const me = await apiHeartbeatWorldPresence(WORLD_ID, {
           district,
           posX: Math.round(position.x),
           posY: Math.round(position.y),
           voiceEnabled,
         });
-        const entries = await apiListWorldPresence(WORLD_ID);
-        if (!cancelled) setWorldMembers(entries);
+        lastSentAt = Date.now();
+        if (!cancelled) {
+          setWorldMembers((current) => {
+            const next = current.filter((entry) => entry.userId !== me.userId);
+            return [me, ...next];
+          });
+        }
+        if (includeList) {
+          const entries = await apiListWorldPresence(WORLD_ID);
+          if (!cancelled) setWorldMembers(entries);
+        }
       } catch {
-        /* best effort */
+        // Keep current local world state on transient heartbeat failures.
+      } finally {
+        heartbeatInFlight = false;
       }
     }
 
-    void heartbeat();
-    const timer = window.setInterval(heartbeat, 8000);
-
-    // Real-time presence: send immediate updates on position change (throttled)
-    const lastSentRef = { current: 0 } as { current: number };
-    let sendTimeout: number | null = null;
+    void heartbeat(true);
+    const timer = window.setInterval(() => {
+      void heartbeat(true);
+    }, WORLD_PRESENCE_HEARTBEAT_MS);
 
     const sendImmediate = async () => {
-      try {
-        await apiHeartbeatWorldPresence(WORLD_ID, {
-          district,
-          posX: Math.round(position.x),
-          posY: Math.round(position.y),
-          voiceEnabled,
-        });
-        lastSentRef.current = Date.now();
-      } catch {
-        /* ignore */
-      }
+      await heartbeat(false);
     };
 
-    // attach a listener for position changes via custom event (we call moveBy which updates state)
-    // Using a Mutation-like approach: listen to window for 'vaelyndra:position-change' events (dispatched below when moveBy runs)
     function onPosChange() {
       const now = Date.now();
-      const elapsed = now - lastSentRef.current;
-      const minInterval = 200; // ms
+      const elapsed = now - lastSentAt;
+      const minInterval = WORLD_POSITION_PUSH_MIN_INTERVAL_MS;
       if (elapsed > minInterval) {
         void sendImmediate();
       } else {
@@ -1567,59 +1577,66 @@ export function Worlds() {
                 <motion.div
                   key={member.id}
                   className={`absolute flex flex-col items-center ${member.aura}`}
-                  style={{
+                  animate={{
                     left: `calc(${member.x}% - 28px)`,
                     top: `calc(${member.y}% - 40px)`,
                   }}
-                  animate={{ y: [0, -5, 0] }}
-                  transition={{ duration: 4.6, repeat: Infinity, ease: "easeInOut" }}
+                  transition={{
+                    left: { type: "spring", stiffness: 180, damping: 24, mass: 0.85 },
+                    top: { type: "spring", stiffness: 180, damping: 24, mass: 0.85 },
+                  }}
                 >
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      const rect = event.currentTarget.getBoundingClientRect();
-                      void openMemberCard(member, {
-                        x: rect.left + rect.width / 2,
-                        y: rect.top + rect.height / 2,
-                      });
-                    }}
-                    className="group flex flex-col items-center"
+                  <motion.div
+                    animate={{ y: [0, -5, 0] }}
+                    transition={{ duration: 4.6, repeat: Infinity, ease: "easeInOut" }}
                   >
-                    <div className="relative rounded-[24px] border border-white/15 bg-night-950/75 p-1.5 backdrop-blur transition group-hover:border-gold-300/45">
-                      <AvatarImage
-                        candidates={[member.avatarImageUrl]}
-                        fallbackSeed={member.id}
-                        alt={member.username}
-                        className="h-10 w-10 md:h-12 md:w-12 rounded-[18px] object-cover"
-                      />
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        const rect = event.currentTarget.getBoundingClientRect();
+                        void openMemberCard(member, {
+                          x: rect.left + rect.width / 2,
+                          y: rect.top + rect.height / 2,
+                        });
+                      }}
+                      className="group flex flex-col items-center"
+                    >
+                      <div className="relative rounded-[24px] border border-white/15 bg-night-950/75 p-1.5 backdrop-blur transition group-hover:border-gold-300/45">
+                        <AvatarImage
+                          candidates={[member.avatarImageUrl]}
+                          fallbackSeed={member.id}
+                          alt={member.username}
+                          className="h-10 w-10 md:h-12 md:w-12 rounded-[18px] object-cover"
+                        />
 
-                      <WorldInteractionBurst
-                        kind={member.interactionKind}
-                        anchor="member"
-                      />
+                        <WorldInteractionBurst
+                          kind={member.interactionKind}
+                          anchor="member"
+                        />
 
-                      {/* Other member's active familiar (if available) */}
-                      {otherFamiliars[member.id] && (
-                        <div
-                          className="absolute -bottom-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full border border-white/12 bg-night-950/80 text-xs shadow-sm"
-                          style={{
-                            background: `${otherFamiliars[member.id]?.color ?? "#ffffff"}22`,
-                            borderColor: `${otherFamiliars[member.id]?.color ?? "#ffffff"}66`,
-                          }}
-                          title={otherFamiliars[member.id]?.nickname ?? otherFamiliars[member.id]?.name}
-                        >
-                          <span className="text-[14px]">{otherFamiliars[member.id]?.icon}</span>
-                        </div>
-                      )}
-                    </div>
-                    <div className="mt-2 rounded-full border border-white/10 bg-night-950/80 px-2.5 py-1 text-center text-[10px] uppercase tracking-[0.18em] text-ivory/80 transition group-hover:border-gold-300/35 group-hover:text-gold-100">
-                      <div>{member.username}</div>
-                      <div className="text-[9px] text-gold-200/80">
-                        {member.status}
-                        {member.voiceEnabled ? " - vocal" : ""}
+                        {/* Other member's active familiar (if available) */}
+                        {otherFamiliars[member.id] && (
+                          <div
+                            className="absolute -bottom-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full border border-white/12 bg-night-950/80 text-xs shadow-sm"
+                            style={{
+                              background: `${otherFamiliars[member.id]?.color ?? "#ffffff"}22`,
+                              borderColor: `${otherFamiliars[member.id]?.color ?? "#ffffff"}66`,
+                            }}
+                            title={otherFamiliars[member.id]?.nickname ?? otherFamiliars[member.id]?.name}
+                          >
+                            <span className="text-[14px]">{otherFamiliars[member.id]?.icon}</span>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  </button>
+                      <div className="mt-2 rounded-full border border-white/10 bg-night-950/80 px-2.5 py-1 text-center text-[10px] uppercase tracking-[0.18em] text-ivory/80 transition group-hover:border-gold-300/35 group-hover:text-gold-100">
+                        <div>{member.username}</div>
+                        <div className="text-[9px] text-gold-200/80">
+                          {member.status}
+                          {member.voiceEnabled ? " - vocal" : ""}
+                        </div>
+                      </div>
+                    </button>
+                  </motion.div>
                 </motion.div>
               ))}
 

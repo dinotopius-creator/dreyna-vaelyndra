@@ -20,7 +20,7 @@ from ..schemas import (
 router = APIRouter(prefix="/worlds", tags=["worlds"])
 
 _WORLD_IDS = {"main"}
-_STALE_AFTER = timedelta(seconds=20)
+_STALE_AFTER = timedelta(seconds=90)
 _PRIVATE_INVITE_TTL = timedelta(seconds=25)
 _INTERACTION_TTL = timedelta(seconds=6)
 _INTERACTION_COOLDOWN = timedelta(seconds=4)
