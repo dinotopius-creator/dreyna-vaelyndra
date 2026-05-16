@@ -2,7 +2,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import type { Avatar3DConfig } from "../lib/avatar3d";
 
-export type OutfitTheme = "base" | "royal" | "battle" | "mystic" | "shadow";
+export type OutfitTheme =
+  | "base"
+  | "royal"
+  | "battle"
+  | "mystic"
+  | "shadow"
+  | "celestial"
+  | "verdant"
+  | "ember";
 export type AccessoryTheme =
   | "crown"
   | "halo"
@@ -12,6 +20,10 @@ export type AccessoryTheme =
   | "antlers"
   | "circlet"
   | "gem"
+  | "laurel"
+  | "moon-crown"
+  | "butterfly"
+  | "visor"
   | null;
 
 interface Props {
@@ -174,6 +186,12 @@ function outfitPalette(theme: OutfitTheme) {
       return { top: "#6d28d9", bottom: "#312e81", accent: "#c4b5fd" };
     case "shadow":
       return { top: "#111827", bottom: "#1f2937", accent: "#e879f9" };
+    case "celestial":
+      return { top: "#1d4ed8", bottom: "#1e3a8a", accent: "#dbeafe" };
+    case "verdant":
+      return { top: "#166534", bottom: "#14532d", accent: "#bbf7d0" };
+    case "ember":
+      return { top: "#c2410c", bottom: "#7c2d12", accent: "#fdba74" };
     default:
       return { top: "#9d174d", bottom: "#5b1648", accent: "#fbeecb" };
   }
@@ -396,6 +414,60 @@ export function Avatar3DModel({
             />
           </>
         )}
+        {config.hairStyle === "ponytail" && (
+          <>
+            <Cuboid
+              width={54}
+              height={34}
+              depth={18}
+              color={config.hairColor}
+              transform="translate3d(0,-70px,-16px)"
+            />
+            <Cuboid
+              width={18}
+              height={64}
+              depth={14}
+              color={config.hairColor}
+              transform="translate3d(0,-24px,-32px)"
+            />
+          </>
+        )}
+        {config.hairStyle === "afro" && (
+          <>
+            <Cuboid
+              width={76}
+              height={74}
+              depth={64}
+              color={config.hairColor}
+              transform="translate3d(0,-78px,-4px)"
+            />
+            <Cuboid
+              width={56}
+              height={34}
+              depth={20}
+              color={shade(config.hairColor, 0.92)}
+              transform="translate3d(0,-52px,-26px)"
+            />
+          </>
+        )}
+        {config.hairStyle === "pixie" && (
+          <>
+            <Cuboid
+              width={60}
+              height={26}
+              depth={16}
+              color={config.hairColor}
+              transform="translate3d(0,-84px,-12px)"
+            />
+            <Cuboid
+              width={44}
+              height={20}
+              depth={20}
+              color={shade(config.hairColor, 0.9)}
+              transform="translate3d(6px,-60px,-22px) rotateZ(-8deg)"
+            />
+          </>
+        )}
         <Cuboid
           width={10}
           height={12}
@@ -483,6 +555,51 @@ export function Avatar3DModel({
               depth={8}
               color="#e6c274"
               transform="translate3d(18px,10px,18px)"
+            />
+          </>
+        )}
+        {outfit === "celestial" && (
+          <>
+            <Cuboid
+              width={88}
+              height={86}
+              depth={14}
+              color="#93c5fd"
+              transform="translate3d(0,20px,-14px)"
+            />
+            <Cuboid
+              width={18}
+              height={28}
+              depth={8}
+              color="#e0f2fe"
+              transform="translate3d(0,58px,18px)"
+            />
+          </>
+        )}
+        {outfit === "verdant" && (
+          <Cuboid
+            width={92}
+            height={96}
+            depth={14}
+            color="#4ade80"
+            transform="translate3d(0,30px,-16px)"
+          />
+        )}
+        {outfit === "ember" && (
+          <>
+            <Cuboid
+              width={84}
+              height={94}
+              depth={12}
+              color="#fb923c"
+              transform="translate3d(0,28px,-14px)"
+            />
+            <Cuboid
+              width={42}
+              height={16}
+              depth={8}
+              color="#ffedd5"
+              transform="translate3d(0,-2px,18px)"
             />
           </>
         )}
@@ -618,6 +735,39 @@ export function Avatar3DModel({
               transform="translate3d(0,-78px,24px) rotateZ(45deg)"
             />
           </>
+        )}
+        {accessory === "laurel" && (
+          <>
+            <Cuboid width={18} height={10} depth={8} color="#86efac" transform="translate3d(-20px,-116px,14px) rotateZ(-18deg)" />
+            <Cuboid width={18} height={10} depth={8} color="#86efac" transform="translate3d(20px,-116px,14px) rotateZ(18deg)" />
+            <Cuboid width={18} height={10} depth={8} color="#4ade80" transform="translate3d(-8px,-122px,12px) rotateZ(-8deg)" />
+            <Cuboid width={18} height={10} depth={8} color="#4ade80" transform="translate3d(8px,-122px,12px) rotateZ(8deg)" />
+          </>
+        )}
+        {accessory === "moon-crown" && (
+          <>
+            <Cuboid width={44} height={8} depth={34} color="#e9d5ff" transform="translate3d(0,-114px,0)" />
+            <Cuboid width={14} height={18} depth={8} color="#f5f3ff" transform="translate3d(0,-128px,0)" />
+            <Cuboid width={10} height={12} depth={8} color="#ddd6fe" transform="translate3d(-16px,-122px,0)" />
+            <Cuboid width={10} height={12} depth={8} color="#ddd6fe" transform="translate3d(16px,-122px,0)" />
+          </>
+        )}
+        {accessory === "butterfly" && (
+          <>
+            <Cuboid width={18} height={22} depth={8} color="#f9a8d4" transform="translate3d(-22px,-90px,-22px) rotateZ(-20deg)" />
+            <Cuboid width={18} height={22} depth={8} color="#f9a8d4" transform="translate3d(22px,-90px,-22px) rotateZ(20deg)" />
+            <Cuboid width={10} height={14} depth={8} color="#fbcfe8" transform="translate3d(-12px,-102px,-24px) rotateZ(-10deg)" />
+            <Cuboid width={10} height={14} depth={8} color="#fbcfe8" transform="translate3d(12px,-102px,-24px) rotateZ(10deg)" />
+          </>
+        )}
+        {accessory === "visor" && (
+          <Cuboid
+            width={58}
+            height={14}
+            depth={10}
+            color="#67e8f9"
+            transform="translate3d(0,-56px,24px)"
+          />
         )}
         <div
           style={{

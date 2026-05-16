@@ -82,6 +82,14 @@ interface MeshCtx {
 
 const Ctx = createContext<MeshCtx | null>(null);
 
+function meshAudioLog(scope: string, message: string, extra?: unknown) {
+  if (extra === undefined) {
+    console.info(`[live-mesh:${scope}] ${message}`);
+    return;
+  }
+  console.info(`[live-mesh:${scope}] ${message}`, extra);
+}
+
 export function LiveMeshAudioProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const { liveRegistry } = useLive();
@@ -245,6 +253,7 @@ export function LiveMeshAudioProvider({ children }: { children: ReactNode }) {
         peer.on("open", () => {
           if (cancelled || gen !== generationRef.current) return;
           setMeshActive(true);
+          meshAudioLog("peer", `open ${user.id}`);
         });
 
         peer.on("error", (err: Error & { type?: string }) => {
@@ -256,9 +265,10 @@ export function LiveMeshAudioProvider({ children }: { children: ReactNode }) {
             setError(
               "Un mesh audio existe déjà à ton nom ailleurs. Ferme l'autre onglet.",
             );
+            meshAudioLog("peer", "duplicate id");
             return;
           }
-          console.warn("mesh audio peer error", err);
+          meshAudioLog("peer", "peer error", err);
         });
 
         // 3) Répondeur : quand un autre participant nous appelle, on répond
@@ -285,12 +295,14 @@ export function LiveMeshAudioProvider({ children }: { children: ReactNode }) {
           setError(
             "Accès au micro refusé — impossible de rejoindre la scène en audio.",
           );
+          meshAudioLog("mic", "permission denied");
         } else {
           setError(
             `Impossible d'initialiser l'audio : ${
               err instanceof Error ? err.message : String(err)
             }`,
           );
+          meshAudioLog("mic", "boot failed", err);
         }
       }
     })();
@@ -439,6 +451,7 @@ export function LiveMeshAudioProvider({ children }: { children: ReactNode }) {
       }
     };
     clearRetry();
+    meshAudioLog("conn", `linked ${remoteUserId}`);
     const noStreamTimeout = window.setTimeout(() => {
       if (gen !== generationRef.current) return;
       if (connsRef.current.get(remoteUserId) !== conn) return;
@@ -571,6 +584,13 @@ function RemoteAudioSink({
       // ignore — autoplay policy
     });
   }, [stream]);
+  useEffect(() => {
+    const resumePlayback = () => {
+      ref.current?.play().catch(() => undefined);
+    };
+    window.addEventListener("pointerdown", resumePlayback, { passive: true });
+    return () => window.removeEventListener("pointerdown", resumePlayback);
+  }, []);
   return <audio ref={ref} autoPlay playsInline muted={muted} />;
 }
 

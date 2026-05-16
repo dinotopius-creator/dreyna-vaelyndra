@@ -56,7 +56,10 @@ export function MessageThread() {
   const [pendingAttachment, setPendingAttachment] = useState<MessageAttachment | null>(null);
   const [attachmentLoading, setAttachmentLoading] = useState(false);
   const listRef = useRef<HTMLDivElement | null>(null);
+  const bottomRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const lastThreadKeyRef = useRef<string>("");
+  const lastMessageCountRef = useRef(0);
 
   useEffect(() => {
     if (!user) {
@@ -76,11 +79,31 @@ export function MessageThread() {
     };
   }, [user, userId, navigate, openThread, closeThread]);
 
-  // Auto-scroll vers le bas à chaque nouveau message du fil.
+  function scrollToLatest(behavior: ScrollBehavior = "auto") {
+    const list = listRef.current;
+    if (!list) return;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        bottomRef.current?.scrollIntoView({ block: "end", behavior });
+        list.scrollTop = list.scrollHeight;
+      });
+    });
+  }
+
+  // Quand on ouvre un nouveau fil, on doit arriver tout en bas, même si
+  // le rendu final dépend d'images/pièces jointes mesurées après paint.
   useLayoutEffect(() => {
-    const el = listRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [thread]);
+    const threadKey = thread.map((message) => message.id).join("|");
+    const threadChanged = threadKey !== lastThreadKeyRef.current;
+    const addedMessages = thread.length > lastMessageCountRef.current;
+
+    if (!threadLoading && (threadChanged || addedMessages)) {
+      scrollToLatest(threadChanged ? "auto" : "smooth");
+    }
+
+    lastThreadKeyRef.current = threadKey;
+    lastMessageCountRef.current = thread.length;
+  }, [thread, threadLoading]);
 
   const otherName = otherProfile?.username ?? "Membre";
   const otherAvatar = otherProfile?.avatarImageUrl ?? "";
@@ -264,6 +287,7 @@ export function MessageThread() {
             })}
           </ul>
         )}
+        <div ref={bottomRef} />
       </div>
 
       {/* Zone de composition */}

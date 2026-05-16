@@ -12,7 +12,12 @@
 import { useMemo, useState } from "react";
 import clsx from "clsx";
 import { Lock, Check, Heart, Sparkles } from "lucide-react";
-import { SHOP_CATALOG, type ShopCategory, type ShopItem } from "../lib/avatarShop";
+import {
+  EQUIP_SLOT,
+  SHOP_CATALOG,
+  type ShopCategory,
+  type ShopItem,
+} from "../lib/avatarShop";
 import { useProfile } from "../contexts/ProfileContext";
 import { useToast } from "../contexts/ToastContext";
 
@@ -49,7 +54,13 @@ const TABS: { id: ShopCategory; label: string; hint: string }[] = [
 ];
 
 export function AvatarShop() {
-  const { profile, buyItem, addToWishlist, removeFromWishlist } = useProfile();
+  const {
+    profile,
+    buyItem,
+    addToWishlist,
+    removeFromWishlist,
+    setEquipped,
+  } = useProfile();
   const { notify } = useToast();
   const [tab, setTab] = useState<ShopCategory>("outfit3d");
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -65,6 +76,7 @@ export function AvatarShop() {
     () => new Set(profile?.wishlist ?? []),
     [profile?.wishlist],
   );
+  const equippedBySlot = useMemo(() => profile?.equipped ?? {}, [profile?.equipped]);
 
   const items = SHOP_CATALOG.filter((item) => item.category === tab);
   const groupedAccessories = useMemo(() => {
@@ -105,6 +117,39 @@ export function AvatarShop() {
       notify(`${item.name} ajouté à votre inventaire ✨`);
     } catch {
       notify("L'achat n'a pas abouti. Réessayez.", "error");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  function slotForCategory(category: ShopCategory): string | null {
+    switch (category) {
+      case "frame":
+        return EQUIP_SLOT.Frame;
+      case "scene":
+        return EQUIP_SLOT.Scene;
+      case "outfit3d":
+        return EQUIP_SLOT.Outfit3D;
+      case "accessory3d":
+        return EQUIP_SLOT.Accessory3D;
+      default:
+        return null;
+    }
+  }
+
+  async function handleEquip(item: ShopItem) {
+    const slot = slotForCategory(item.category);
+    if (!profile || !slot) return;
+    setBusyId(item.id);
+    try {
+      const activeId = equippedBySlot[slot] ?? null;
+      await setEquipped(slot, activeId === item.id ? null : item.id);
+      notify(activeId === item.id ? `${item.name} retiré.` : `${item.name} équipé ✨`);
+    } catch (err) {
+      notify(
+        err instanceof Error ? err.message : "Impossible d'équiper cet item.",
+        "error",
+      );
     } finally {
       setBusyId(null);
     }
@@ -200,6 +245,8 @@ export function AvatarShop() {
                   const canAfford = balance >= item.price;
                   const busy = busyId === item.id;
                   const wishlistBusy = wishlistBusyId === item.id;
+                  const slot = slotForCategory(item.category);
+                  const equipped = !!slot && equippedBySlot[slot] === item.id;
                   return (
                     <article
                       key={item.id}
@@ -259,9 +306,22 @@ export function AvatarShop() {
                       </p>
                       <div className="mt-auto pt-4">
                         {owned ? (
-                          <span className="inline-flex items-center gap-2 rounded-full border border-gold-400/50 bg-gold-500/15 px-3 py-1.5 text-[11px] font-semibold text-gold-200">
-                            <Check className="h-3.5 w-3.5" /> Débloqué
-                          </span>
+                          <div className="flex flex-wrap gap-2">
+                            <span className="inline-flex items-center gap-2 rounded-full border border-gold-400/50 bg-gold-500/15 px-3 py-1.5 text-[11px] font-semibold text-gold-200">
+                              <Check className="h-3.5 w-3.5" />
+                              {equipped ? "Équipé" : "Possédé"}
+                            </span>
+                            {slot && (
+                              <button
+                                type="button"
+                                onClick={() => handleEquip(item)}
+                                disabled={busy}
+                                className="inline-flex items-center gap-2 rounded-full border border-royal-500/40 px-3 py-1.5 font-regal text-[11px] tracking-[0.16em] text-ivory/80 transition hover:border-gold-300/40 hover:text-gold-100 disabled:opacity-60"
+                              >
+                                {busy ? "Maj..." : equipped ? "Retirer" : "Equiper"}
+                              </button>
+                            )}
+                          </div>
                         ) : (
                           <button
                             type="button"
@@ -303,6 +363,8 @@ export function AvatarShop() {
           const canAfford = balance >= item.price;
           const busy = busyId === item.id;
           const wishlistBusy = wishlistBusyId === item.id;
+          const slot = slotForCategory(item.category);
+          const equipped = !!slot && equippedBySlot[slot] === item.id;
           return (
             <article
               key={item.id}
@@ -362,9 +424,22 @@ export function AvatarShop() {
               </p>
               <div className="mt-auto pt-4">
                 {owned ? (
-                  <span className="inline-flex items-center gap-2 rounded-full border border-gold-400/50 bg-gold-500/15 px-3 py-1.5 text-[11px] font-semibold text-gold-200">
-                    <Check className="h-3.5 w-3.5" /> Débloqué
-                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="inline-flex items-center gap-2 rounded-full border border-gold-400/50 bg-gold-500/15 px-3 py-1.5 text-[11px] font-semibold text-gold-200">
+                      <Check className="h-3.5 w-3.5" />
+                      {equipped ? "Équipé" : "Possédé"}
+                    </span>
+                    {slot && (
+                      <button
+                        type="button"
+                        onClick={() => handleEquip(item)}
+                        disabled={busy}
+                        className="inline-flex items-center gap-2 rounded-full border border-royal-500/40 px-3 py-1.5 font-regal text-[11px] tracking-[0.16em] text-ivory/80 transition hover:border-gold-300/40 hover:text-gold-100 disabled:opacity-60"
+                      >
+                        {busy ? "Maj..." : equipped ? "Retirer" : "Equiper"}
+                      </button>
+                    )}
+                  </div>
                 ) : (
                   <button
                     type="button"

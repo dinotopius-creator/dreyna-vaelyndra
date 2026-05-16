@@ -349,6 +349,18 @@ function clearResumeMarker() {
   }
 }
 
+async function listVideoInputDevices() {
+  if (
+    typeof navigator === "undefined" ||
+    !navigator.mediaDevices ||
+    typeof navigator.mediaDevices.enumerateDevices !== "function"
+  ) {
+    return [];
+  }
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  return devices.filter((device) => device.kind === "videoinput");
+}
+
 function toNativeIceCandidate(candidate: RTCIceCandidate): NativeIceCandidate {
   const json = candidate.toJSON();
   return {
@@ -533,6 +545,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   // MediaStream concurrents et la première fuite (tracks jamais
   // `stop()`-ées → caméra/micro restent actifs en tâche de fond).
   const switchingCameraRef = useRef(false);
+  const cameraDeviceIdRef = useRef<string | null>(null);
   // Ref miroir sur le flux local pour que `cleanup` puisse toujours couper
   // les tracks même quand il est appelé depuis un callback qui a capturé
   // l'ancienne valeur de state (ex. listener "ended" ou erreur peer).
@@ -1007,6 +1020,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       activeStream.getTracks().forEach((t) => t.stop());
     }
     localStreamRef.current = null;
+    cameraDeviceIdRef.current = null;
     setLocalStream(null);
   }, []);
 
@@ -1623,11 +1637,17 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       }
       let stream: MediaStream;
       try {
+        const videoDevices = await listVideoInputDevices();
+        const preferredDevice = videoDevices.find((device) =>
+          facingMode === "environment"
+            ? /back|rear|environment|triple|ultra/i.test(device.label)
+            : /front|user|facetime/i.test(device.label),
+        );
         stream = await navigator.mediaDevices.getUserMedia({
-          // `facingMode` est un hint : sur desktop (webcam unique), le
-          // navigateur ignore et prend la seule caméra dispo.
           video: {
-            facingMode: { ideal: facingMode },
+            ...(preferredDevice?.deviceId
+              ? { deviceId: { exact: preferredDevice.deviceId } }
+              : { facingMode: { ideal: facingMode } }),
             frameRate: { ideal: 30 },
             width: { ideal: 1280 },
             height: { ideal: 720 },
@@ -1635,6 +1655,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
           audio: {
             echoCancellation: true,
             noiseSuppression: true,
+            autoGainControl: true,
           },
         });
       } catch (err) {
@@ -1648,6 +1669,8 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         return;
       }
       setCameraFacing(facingMode);
+      cameraDeviceIdRef.current =
+        stream.getVideoTracks()[0]?.getSettings().deviceId ?? null;
       stream.getVideoTracks().forEach((track) => {
         track.addEventListener("ended", () => {
           if (localStreamRef.current === stream) {
@@ -1692,17 +1715,23 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         cameraFacing === "user" ? "environment" : "user";
       let next: MediaStream;
       try {
+        const videoDevices = await listVideoInputDevices();
+        const currentDeviceId =
+          current.getVideoTracks()[0]?.getSettings().deviceId ??
+          cameraDeviceIdRef.current;
+        const alternateDevice =
+          videoDevices.find((device) => device.deviceId !== currentDeviceId) ??
+          null;
         next = await navigator.mediaDevices.getUserMedia({
           video: {
-            facingMode: { ideal: nextFacing },
+            ...(alternateDevice?.deviceId
+              ? { deviceId: { exact: alternateDevice.deviceId } }
+              : { facingMode: { exact: nextFacing } }),
             frameRate: { ideal: 30 },
             width: { ideal: 1280 },
             height: { ideal: 720 },
           },
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-          },
+          audio: false,
         });
       } catch (err) {
         if (err instanceof Error) {
@@ -1719,7 +1748,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       }
 
       const newVideoTrack = next.getVideoTracks()[0];
-      const newAudioTrack = next.getAudioTracks()[0];
+      const currentAudioTrack = current.getAudioTracks()[0];
       if (!newVideoTrack) {
         next.getTracks().forEach((t) => t.stop());
         return;
@@ -1735,26 +1764,30 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             sender.replaceTrack(newVideoTrack).catch(() => {
               /* ignore — la connexion peut être en cours de fermeture */
             });
-          } else if (sender.track?.kind === "audio" && newAudioTrack) {
-            sender.replaceTrack(newAudioTrack).catch(() => {
+          } else if (sender.track?.kind === "audio" && currentAudioTrack) {
+            sender.replaceTrack(currentAudioTrack).catch(() => {
               /* ignore */
             });
           }
         }
       });
 
-      // Stoppe l'ancien stream (tracks) puis publie le nouveau côté host.
-      current.getTracks().forEach((t) => t.stop());
+      const nextStream = new MediaStream([
+        newVideoTrack,
+        ...current.getAudioTracks(),
+      ]);
+      current.getVideoTracks().forEach((track) => track.stop());
       newVideoTrack.addEventListener("ended", () => {
-        if (localStreamRef.current === next) {
+        if (localStreamRef.current === nextStream) {
           pauseLiveForRecovery(
             "camera",
             "La camera a ete interrompue. Ton live reste annonce : relance la camera pour reprendre.",
           );
         }
       });
-      localStreamRef.current = next;
-      setLocalStream(next);
+      cameraDeviceIdRef.current = newVideoTrack.getSettings().deviceId ?? null;
+      localStreamRef.current = nextStream;
+      setLocalStream(nextStream);
       setCameraFacing(nextFacing);
     } finally {
       switchingCameraRef.current = false;
