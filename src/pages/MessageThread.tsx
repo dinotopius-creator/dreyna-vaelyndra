@@ -24,6 +24,7 @@ import {
   FileValidationError,
 } from "../lib/fileUtils";
 import { moderateFile } from "../lib/contentModeration";
+import { parsePostImageUrl } from "../lib/helpers";
 
 function formatHourMinute(iso: string): string {
   try {
@@ -34,6 +35,34 @@ function formatHourMinute(iso: string): string {
   } catch {
     return "";
   }
+}
+
+function parseDirectImageMessage(content: string): string | null {
+  const trimmed = content.trim();
+  if (!trimmed || /\s/.test(trimmed)) return null;
+  const parsed = parsePostImageUrl(trimmed);
+  return parsed?.kind === "image" ? parsed.src : null;
+}
+
+function renderMessageContent(content: string) {
+  return content.split(/(https?:\/\/[^\s]+)/g).map((part, index) => {
+    if (!/^https?:\/\//i.test(part)) {
+      return <span key={`text-${index}`}>{part}</span>;
+    }
+    const parsed = parsePostImageUrl(part);
+    const href = parsed?.kind === "image" ? parsed.src : part;
+    return (
+      <a
+        key={`link-${index}`}
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+        className="break-all text-gold-200 underline underline-offset-2 hover:text-gold-100"
+      >
+        {part}
+      </a>
+    );
+  });
 }
 
 export function MessageThread() {
@@ -241,6 +270,8 @@ export function MessageThread() {
               const showReadBelow =
                 mine && m.read_at !== null && m.read_at === lastSeen;
               const attachments = m.attachments ?? [];
+              const directImageUrl =
+                attachments.length === 0 ? parseDirectImageMessage(m.content) : null;
               return (
                 <li
                   key={m.id}
@@ -255,8 +286,26 @@ export function MessageThread() {
                     </div>
                   )}
 
+                  {directImageUrl && (
+                    <a
+                      href={directImageUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mb-1 block max-w-[85%] overflow-hidden rounded-2xl border border-gold-400/30 bg-night-950/45 sm:max-w-[78%]"
+                    >
+                      <img
+                        src={directImageUrl}
+                        alt="Image envoyee"
+                        className="max-h-[22rem] w-full object-cover"
+                        loading="lazy"
+                      />
+                    </a>
+                  )}
+
                   {/* Bulle de message (uniquement si du texte réel, pas juste le fallback nom de fichier) */}
-                  {m.content && !(attachments.length > 0 && m.content === `📎 ${attachments[0]?.filename}`) && (
+                  {m.content &&
+                    !directImageUrl &&
+                    !(attachments.length > 0 && m.content === `📎 ${attachments[0]?.filename}`) && (
                     <div
                       className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm shadow-sm sm:max-w-[78%] sm:px-4 ${
                         mine
@@ -264,7 +313,9 @@ export function MessageThread() {
                           : "bg-night-800/70 text-ivory border border-royal-500/30"
                       }`}
                     >
-                      <p className="whitespace-pre-wrap break-words">{m.content}</p>
+                      <p className="whitespace-pre-wrap break-words">
+                        {renderMessageContent(m.content)}
+                      </p>
                     </div>
                   )}
 
