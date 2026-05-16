@@ -338,6 +338,15 @@ export interface WorldPresenceDto {
   posX: number;
   posY: number;
   voiceEnabled: boolean;
+  voiceChannelId: string;
+  privateVoicePartnerId: string | null;
+  pendingVoiceInviteFromUserId: string | null;
+  pendingVoiceInviteToUserId: string | null;
+  interactionKind: string | null;
+  interactionFromUserId: string | null;
+  interactionFromUsername: string | null;
+  interactionPartnerUserId: string | null;
+  interactionExpiresAt: string | null;
   lastSeenAt: string;
 }
 
@@ -514,6 +523,59 @@ export async function apiLeaveWorldPresence(worldId: string): Promise<void> {
   await sessionRequest<null>(`/worlds/${encodeURIComponent(worldId)}/presence/me`, {
     method: "DELETE",
   });
+}
+
+export async function apiRequestPrivateWorldVoice(
+  worldId: string,
+  targetUserId: string,
+): Promise<WorldPresenceDto> {
+  return (await sessionRequest<WorldPresenceDto>(
+    `/worlds/${encodeURIComponent(worldId)}/voice/private/request`,
+    {
+      method: "POST",
+      body: JSON.stringify({ targetUserId }),
+    },
+  )) as WorldPresenceDto;
+}
+
+export async function apiRespondPrivateWorldVoice(
+  worldId: string,
+  payload: { requesterUserId: string; accept: boolean },
+): Promise<WorldPresenceDto> {
+  return (await sessionRequest<WorldPresenceDto>(
+    `/worlds/${encodeURIComponent(worldId)}/voice/private/respond`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  )) as WorldPresenceDto;
+}
+
+export async function apiLeavePrivateWorldVoice(
+  worldId: string,
+): Promise<WorldPresenceDto> {
+  return (await sessionRequest<WorldPresenceDto>(
+    `/worlds/${encodeURIComponent(worldId)}/voice/private/leave`,
+    {
+      method: "POST",
+    },
+  )) as WorldPresenceDto;
+}
+
+export async function apiSendWorldInteraction(
+  worldId: string,
+  payload: {
+    targetUserId: string;
+    kind: "wave" | "heart" | "hug" | "applaud" | "dance" | "lueur";
+  },
+): Promise<WorldPresenceDto> {
+  return (await sessionRequest<WorldPresenceDto>(
+    `/worlds/${encodeURIComponent(worldId)}/interactions`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  )) as WorldPresenceDto;
 }
 
 /**

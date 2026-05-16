@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   CalendarDays,
   Crown,
-  Heart,
   MessageCircle,
   Mic,
   MicOff,
@@ -24,11 +23,16 @@ import { useProfile } from "../contexts/ProfileContext";
 import { useToast } from "../contexts/ToastContext";
 import { useWorldVoice } from "../contexts/WorldVoiceContext";
 import {
+  ApiError,
   apiApplyWalletDelta,
   apiGetProfile,
   apiHeartbeatWorldPresence,
+  apiLeavePrivateWorldVoice,
   apiLeaveWorldPresence,
   apiListWorldPresence,
+  apiRequestPrivateWorldVoice,
+  apiRespondPrivateWorldVoice,
+  apiSendWorldInteraction,
   type UserProfileDto,
   type WorldPresenceDto,
 } from "../lib/api";
@@ -71,17 +75,26 @@ interface StageMember {
   handle?: string | null;
   avatarImageUrl: string;
   avatarUrl?: string | null;
+  role: string;
   x: number;
   y: number;
   status: string;
   aura: string;
   voiceEnabled: boolean;
+  voiceChannelId: string;
+  privateVoicePartnerId?: string | null;
+  interactionKind?: string | null;
+  interactionFromUserId?: string | null;
+  interactionFromUsername?: string | null;
+  interactionPartnerUserId?: string | null;
+  interactionExpiresAt?: string | null;
 }
 
 interface SelectedWorldMember {
   member: StageMember;
   profile: UserProfileDto | null;
   loading: boolean;
+  anchor: { x: number; y: number } | null;
 }
 
 type LueurRarity = "common" | "rare" | "epic";
@@ -129,6 +142,14 @@ interface LueurBurst {
   value: number;
   rarity: LueurRarity;
 }
+
+type WorldCuteInteractionKind =
+  | "wave"
+  | "heart"
+  | "hug"
+  | "applaud"
+  | "dance"
+  | "lueur";
 
 const WORLD_ID = "main";
 const WORLD_LUEUR_DAILY_CAP = 90;
@@ -396,6 +417,59 @@ const BASE_CHAT: WorldChatMessage[] = [
   },
 ];
 
+const WORLD_INTERACTION_META: Record<
+  WorldCuteInteractionKind,
+  {
+    label: string;
+    emoji: string;
+    toast: string;
+    copy: (actor: string, target: string) => string;
+  }
+> = {
+  wave: {
+    label: "Faire coucou",
+    emoji: "👋",
+    toast: "Coucou envoye.",
+    copy: (actor, target) => `${actor} fait coucou a ${target}.`,
+  },
+  heart: {
+    label: "Envoyer un coeur",
+    emoji: "💖",
+    toast: "Coeur envoye.",
+    copy: (actor, target) => `${actor} envoie un coeur tendre a ${target}.`,
+  },
+  hug: {
+    label: "Faire un calin",
+    emoji: "🤗",
+    toast: "Calin envoye.",
+    copy: (actor, target) => `${actor} partage un calin doux avec ${target}.`,
+  },
+  applaud: {
+    label: "Applaudir",
+    emoji: "👏",
+    toast: "Applaudissement envoye.",
+    copy: (actor, target) => `${actor} applaudit ${target} avec enthousiasme.`,
+  },
+  dance: {
+    label: "Danser ensemble",
+    emoji: "✨",
+    toast: "Invitation a danser envoyee.",
+    copy: (actor, target) => `${actor} lance une danse complice avec ${target}.`,
+  },
+  lueur: {
+    label: "Envoyer une petite lueur",
+    emoji: "🪄",
+    toast: "Petite lueur envoyee.",
+    copy: (actor, target) => `${actor} envoie une petite lueur scintillante a ${target}.`,
+  },
+};
+
+function toApiDetail(error: unknown, fallback: string) {
+  if (!(error instanceof ApiError)) return fallback;
+  const match = error.message.match(/"detail":"([^"]+)"/);
+  return match?.[1] ?? fallback;
+}
+
 export function Worlds() {
   const { user } = useAuth();
   const { profile, setProfile } = useProfile();
@@ -411,6 +485,9 @@ export function Worlds() {
   const [chatInput, setChatInput] = useState("");
   const [worldMembers, setWorldMembers] = useState<WorldPresenceDto[]>([]);
   const [selectedMember, setSelectedMember] = useState<SelectedWorldMember | null>(null);
+  const [memberActionBusy, setMemberActionBusy] = useState<string | null>(null);
+  const [privateVoiceBusy, setPrivateVoiceBusy] = useState(false);
+  const [isCompactMenu, setIsCompactMenu] = useState(false);
   const [worldClock, setWorldClock] = useState(() => Date.now());
   const [lueurNodes, setLueurNodes] = useState<Record<DistrictId, WorldLueurNode[]>>(
     () => createInitialLueurNodes(),
@@ -431,6 +508,7 @@ export function Worlds() {
   const lueurFlushRef = useRef(0);
   const profileRef = useRef(profile);
   const collectedRecentlyRef = useRef<Record<string, number>>({});
+  const lastIncomingInviteRef = useRef<string | null>(null);
 
   const {
     voiceEnabled,
@@ -438,6 +516,8 @@ export function Worlds() {
     voiceLevel,
     connectionCount: worldVoiceConnections,
     error: worldVoiceError,
+    currentChannelId,
+    privateVoicePartnerId,
     toggleVoice,
     VoiceAudioLayer,
   } = useWorldVoice({
@@ -459,6 +539,15 @@ export function Worlds() {
   function handlePointerUp() {
     // Movement stays on dedicated controls to preserve player interactions.
   }
+
+  const refreshWorldPresence = useCallback(async () => {
+    try {
+      const entries = await apiListWorldPresence(WORLD_ID);
+      setWorldMembers(entries);
+    } catch {
+      setWorldMembers([]);
+    }
+  }, []);
 
   const selectedDistrict = useMemo(
     () => DISTRICTS.find((entry) => entry.id === district) ?? DISTRICTS[0],
@@ -529,14 +618,37 @@ export function Worlds() {
           avatarUrl: entry.avatarUrl,
           x: entry.posX,
           y: entry.posY,
+          role: entry.role,
           status: liveMatch ? "en live" : entry.district === "observatory" ? "observe" : "dans le monde",
           aura: liveMatch
             ? "shadow-[0_0_38px_rgba(244,63,94,0.32)]"
             : palette[index % palette.length],
           voiceEnabled: entry.voiceEnabled,
+          voiceChannelId: entry.voiceChannelId,
+          privateVoicePartnerId: entry.privateVoicePartnerId,
+          interactionKind: entry.interactionKind,
+          interactionFromUserId: entry.interactionFromUserId,
+          interactionFromUsername: entry.interactionFromUsername,
+          interactionPartnerUserId: entry.interactionPartnerUserId,
+          interactionExpiresAt: entry.interactionExpiresAt,
         };
       });
   }, [district, liveEntries, user?.id, worldMembers]);
+
+  const myWorldPresence = useMemo(
+    () => worldMembers.find((entry) => entry.userId === user?.id) ?? null,
+    [user?.id, worldMembers],
+  );
+
+  const pendingIncomingVoiceInvite = useMemo(
+    () =>
+      myWorldPresence?.pendingVoiceInviteFromUserId
+        ? worldMembers.find(
+            (entry) => entry.userId === myWorldPresence.pendingVoiceInviteFromUserId,
+          ) ?? null
+        : null,
+    [myWorldPresence, worldMembers],
+  );
 
   useEffect(() => {
     setPosition(selectedDistrict.center);
@@ -561,6 +673,15 @@ export function Worlds() {
   }, []);
 
   useEffect(() => {
+    const syncViewport = () => {
+      setIsCompactMenu(window.innerWidth < 768);
+    };
+    syncViewport();
+    window.addEventListener("resize", syncViewport);
+    return () => window.removeEventListener("resize", syncViewport);
+  }, []);
+
+  useEffect(() => {
     writeWorldLueurProgress(user?.id ?? null, {
       total: dailyWorldLueurs,
       hotspots: discoveredHotspots,
@@ -572,15 +693,45 @@ export function Worlds() {
   }, [district]);
 
   useEffect(() => {
+    if (!selectedMember) return;
+    const fresh = stageMembers.find((entry) => entry.id === selectedMember.member.id);
+    if (!fresh) {
+      setSelectedMember(null);
+      return;
+    }
+    if (fresh !== selectedMember.member) {
+      setSelectedMember((current) =>
+        current
+          ? {
+              ...current,
+              member: fresh,
+            }
+          : current,
+      );
+    }
+  }, [selectedMember, stageMembers]);
+
+  useEffect(() => {
+    if (!pendingIncomingVoiceInvite) {
+      lastIncomingInviteRef.current = null;
+      return;
+    }
+    if (lastIncomingInviteRef.current === pendingIncomingVoiceInvite.userId) return;
+    lastIncomingInviteRef.current = pendingIncomingVoiceInvite.userId;
+    notify(`${pendingIncomingVoiceInvite.username} souhaite discuter en vocal prive.`, "info");
+    if (selectedMember?.member.id === pendingIncomingVoiceInvite.userId) return;
+    const member =
+      stageMembers.find((entry) => entry.id === pendingIncomingVoiceInvite.userId) ?? null;
+    if (!member) return;
+    void openMemberCard(member, null);
+  }, [notify, openMemberCard, pendingIncomingVoiceInvite, selectedMember?.member.id, stageMembers]);
+
+  useEffect(() => {
     let cancelled = false;
 
     async function refreshPresence() {
-      try {
-        const entries = await apiListWorldPresence(WORLD_ID);
-        if (!cancelled) setWorldMembers(entries);
-      } catch {
-        if (!cancelled) setWorldMembers([]);
-      }
+      await refreshWorldPresence().catch(() => undefined);
+      if (cancelled) return;
     }
 
     void refreshPresence();
@@ -589,7 +740,7 @@ export function Worlds() {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, []);
+  }, [refreshWorldPresence]);
 
   useEffect(() => {
     if (!user) {
@@ -893,26 +1044,87 @@ export function Worlds() {
     });
   }
 
-  async function openMemberCard(member: StageMember) {
-    setSelectedMember({ member, profile: null, loading: true });
+  async function openMemberCard(
+    member: StageMember,
+    anchor: { x: number; y: number } | null,
+  ) {
+    setSelectedMember({ member, profile: null, loading: true, anchor });
     try {
       const memberProfile = await apiGetProfile(member.id);
-      setSelectedMember({ member, profile: memberProfile, loading: false });
+      setSelectedMember({ member, profile: memberProfile, loading: false, anchor });
     } catch {
-      setSelectedMember({ member, profile: null, loading: false });
+      setSelectedMember({ member, profile: null, loading: false, anchor });
     }
   }
 
-  function sendCuteAction(kind: "wave" | "sparkle") {
+  async function sendCuteAction(kind: WorldCuteInteractionKind) {
     if (!selectedMember) return;
     const target = selectedMember.profile?.username ?? selectedMember.member.username;
     const actor = user?.username ?? "Visiteur";
-    const content =
-      kind === "wave"
-        ? `${actor} salue ${target} avec une reverence lumineuse.`
-        : `${actor} envoie une pluie d'etincelles a ${target}.`;
-    addWorldMessage("Lien social", content);
-    notify(kind === "wave" ? `Salut envoye a ${target}.` : `Eclat envoye a ${target}.`, "success");
+    const meta = WORLD_INTERACTION_META[kind];
+    setMemberActionBusy(kind);
+    try {
+      await apiSendWorldInteraction(WORLD_ID, {
+        targetUserId: selectedMember.member.id,
+        kind,
+      });
+      await refreshWorldPresence();
+      addWorldMessage("Lien social", meta.copy(actor, target));
+      notify(`${meta.toast} ${target}.`, "success");
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 429) {
+        notify("Interaction trop rapide. Attends un instant.", "info");
+      } else {
+        notify("Impossible d'envoyer cette interaction pour le moment.", "error");
+      }
+    } finally {
+      setMemberActionBusy(null);
+    }
+  }
+
+  async function requestPrivateVoice(targetUserId: string) {
+    setPrivateVoiceBusy(true);
+    try {
+      await apiRequestPrivateWorldVoice(WORLD_ID, targetUserId);
+      await refreshWorldPresence();
+      notify("Invitation au vocal prive envoyee.", "success");
+    } catch (err) {
+      notify(
+        toApiDetail(err, "Impossible de lancer le vocal prive pour le moment."),
+        "error",
+      );
+    } finally {
+      setPrivateVoiceBusy(false);
+    }
+  }
+
+  async function respondPrivateVoice(requesterUserId: string, accept: boolean) {
+    setPrivateVoiceBusy(true);
+    try {
+      await apiRespondPrivateWorldVoice(WORLD_ID, { requesterUserId, accept });
+      await refreshWorldPresence();
+      notify(
+        accept ? "Vocal prive active." : "Invitation au vocal prive refusee.",
+        accept ? "success" : "info",
+      );
+    } catch {
+      notify("Impossible de traiter cette invitation.", "error");
+    } finally {
+      setPrivateVoiceBusy(false);
+    }
+  }
+
+  async function leavePrivateVoice() {
+    setPrivateVoiceBusy(true);
+    try {
+      await apiLeavePrivateWorldVoice(WORLD_ID);
+      await refreshWorldPresence();
+      notify("Retour au vocal normal du monde.", "success");
+    } catch {
+      notify("Impossible de quitter le vocal prive pour le moment.", "error");
+    } finally {
+      setPrivateVoiceBusy(false);
+    }
   }
 
   function awardWorldLueurs(rawAmount: number, reason: string) {
@@ -1364,15 +1576,26 @@ export function Worlds() {
                 >
                   <button
                     type="button"
-                    onClick={() => void openMemberCard(member)}
+                    onClick={(event) => {
+                      const rect = event.currentTarget.getBoundingClientRect();
+                      void openMemberCard(member, {
+                        x: rect.left + rect.width / 2,
+                        y: rect.top + rect.height / 2,
+                      });
+                    }}
                     className="group flex flex-col items-center"
                   >
-                    <div className="rounded-[24px] border border-white/15 bg-night-950/75 p-1.5 backdrop-blur relative transition group-hover:border-gold-300/45">
+                    <div className="relative rounded-[24px] border border-white/15 bg-night-950/75 p-1.5 backdrop-blur transition group-hover:border-gold-300/45">
                       <AvatarImage
                         candidates={[member.avatarImageUrl]}
                         fallbackSeed={member.id}
                         alt={member.username}
                         className="h-10 w-10 md:h-12 md:w-12 rounded-[18px] object-cover"
+                      />
+
+                      <WorldInteractionBurst
+                        kind={member.interactionKind}
+                        anchor="member"
                       />
 
                       {/* Other member's active familiar (if available) */}
@@ -1431,6 +1654,10 @@ export function Worlds() {
                       className="h-14 w-14 md:h-20 md:w-20 rounded-[24px] object-cover"
                     />
                   </div>
+                  <WorldInteractionBurst
+                    kind={myWorldPresence?.interactionKind ?? null}
+                    anchor="self"
+                  />
 
                   {activeFamiliar && (
                     <motion.div
@@ -1528,7 +1755,9 @@ export function Worlds() {
                 </div>
                 <div className="mt-2 text-[10px] uppercase tracking-[0.18em] text-ivory/45">
                   {voiceEnabled
-                    ? `${worldVoiceConnections} presence${worldVoiceConnections > 1 ? "s" : ""} audio reliee${worldVoiceConnections > 1 ? "s" : ""}`
+                    ? currentChannelId.startsWith("private:")
+                      ? "discussion privee active"
+                      : `${worldVoiceConnections} presence${worldVoiceConnections > 1 ? "s" : ""} audio reliee${worldVoiceConnections > 1 ? "s" : ""}`
                     : "micro local en veille"}
                 </div>
                 <div className="mt-3 flex gap-1">
@@ -1545,6 +1774,16 @@ export function Worlds() {
                     />
                   ))}
                 </div>
+                {currentChannelId.startsWith("private:") && (
+                  <button
+                    type="button"
+                    disabled={privateVoiceBusy}
+                    onClick={() => void leavePrivateVoice()}
+                    className="mt-3 w-full rounded-full border border-rose-400/35 px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-rose-100 transition hover:border-rose-300/70 disabled:opacity-60"
+                  >
+                    Quitter le prive
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -1821,119 +2060,234 @@ export function Worlds() {
       </div>
 
       {selectedMember && (
-        <section className="mt-6 rounded-[28px] border border-royal-500/30 bg-night-900/65 p-5 shadow-[0_20px_70px_rgba(2,6,23,0.35)]">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <AvatarImage
-                candidates={[
-                  selectedMember.profile?.avatarImageUrl ?? selectedMember.member.avatarImageUrl,
-                ]}
-                fallbackSeed={selectedMember.member.id}
-                alt={selectedMember.member.username}
-                className="h-16 w-16 rounded-[22px] object-cover"
-              />
-              <div>
-                <div className="font-display text-2xl text-gold-100">
-                  {selectedMember.profile?.username ?? selectedMember.member.username}
-                </div>
-                <Handle
-                  handle={selectedMember.profile?.handle ?? selectedMember.member.handle}
-                  className="text-sm"
+        <>
+          <button
+            type="button"
+            aria-label="Fermer le menu joueur"
+            onClick={() => setSelectedMember(null)}
+            className="fixed inset-0 z-30 bg-transparent"
+          />
+          <section
+            className={`fixed z-40 rounded-[28px] border border-royal-500/35 bg-[linear-gradient(180deg,rgba(15,23,42,0.96),rgba(15,23,42,0.9))] p-4 shadow-[0_28px_80px_rgba(2,6,23,0.5)] backdrop-blur-xl ${
+              isCompactMenu
+                ? "bottom-[calc(1rem+env(safe-area-inset-bottom))] left-4 right-4 max-w-none"
+                : "w-[min(360px,calc(100vw-2rem))]"
+            }`}
+            style={
+              isCompactMenu
+                ? undefined
+                : {
+                    left: Math.max(
+                      16,
+                      Math.min(
+                        (selectedMember.anchor?.x ?? 220) - 150,
+                        window.innerWidth - 376,
+                      ),
+                    ),
+                    top: Math.max(
+                      96,
+                      Math.min(
+                        (selectedMember.anchor?.y ?? 180) - 24,
+                        window.innerHeight - 440,
+                      ),
+                    ),
+                  }
+            }
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <AvatarImage
+                  candidates={[
+                    selectedMember.profile?.avatarImageUrl ?? selectedMember.member.avatarImageUrl,
+                  ]}
+                  fallbackSeed={selectedMember.member.id}
+                  alt={selectedMember.member.username}
+                  className="h-14 w-14 rounded-[20px] object-cover"
                 />
-                <div className="mt-2 flex flex-wrap gap-3 text-sm text-ivory/65">
-                  <span>
-                    {selectedMember.profile?.followersCount ?? 0} abonnes
-                  </span>
-                  <span>
-                    {selectedMember.profile?.followingCount ?? 0} liens
-                  </span>
-                  <span>{selectedMember.member.status}</span>
+                <div className="min-w-0">
+                  <div className="truncate font-display text-xl text-gold-100">
+                    {selectedMember.profile?.username ?? selectedMember.member.username}
+                  </div>
+                  <Handle
+                    handle={selectedMember.profile?.handle ?? selectedMember.member.handle}
+                    className="text-xs"
+                  />
+                  <div className="mt-2 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.14em] text-ivory/55">
+                    <span className="rounded-full border border-white/10 px-2.5 py-1">
+                      {selectedMember.profile?.followersCount ?? 0} abonnes
+                    </span>
+                    <span className="rounded-full border border-white/10 px-2.5 py-1">
+                      {selectedMember.member.status}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedMember(null)}
+                className="rounded-full border border-white/10 p-2 text-ivory/60 transition hover:border-gold-300/40 hover:text-gold-100"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              <div className="rounded-[22px] border border-white/10 bg-night-950/55 p-3">
+                <div className="text-[11px] uppercase tracking-[0.22em] text-gold-200/70">
+                  Liens rapides
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Link
+                    to={`/u/${selectedMember.member.id}`}
+                    className="rounded-full border border-gold-400/35 px-3 py-2 text-sm text-gold-100 transition hover:border-gold-300/70"
+                  >
+                    Voir le profil
+                  </Link>
+                  {user && user.id !== selectedMember.member.id && (
+                    <Link
+                      to={`/messages/${encodeURIComponent(selectedMember.member.id)}`}
+                      className="inline-flex items-center gap-2 rounded-full border border-white/10 px-3 py-2 text-sm text-ivory/80 transition hover:border-gold-300/35 hover:text-gold-100"
+                    >
+                      <MessageCircle className="h-4 w-4" />
+                      Ecrire
+                    </Link>
+                  )}
+                  {selectedMember.profile && (
+                    <FollowButton
+                      targetId={selectedMember.profile.id}
+                      targetUsername={selectedMember.profile.username}
+                      onChange={(nowFollowing) =>
+                        setSelectedMember((current) =>
+                          current && current.profile
+                            ? {
+                                ...current,
+                                profile: {
+                                  ...current.profile,
+                                  followersCount:
+                                    current.profile.followersCount + (nowFollowing ? 1 : -1),
+                                },
+                              }
+                            : current,
+                        )
+                      }
+                    />
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-[22px] border border-white/10 bg-night-950/55 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-[11px] uppercase tracking-[0.22em] text-gold-200/70">
+                    Discussion vocale privee
+                  </div>
+                  <div className="text-[10px] uppercase tracking-[0.18em] text-ivory/45">
+                    {currentChannelId.startsWith("private:") ? "canal prive" : "canal de zone"}
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {myWorldPresence?.pendingVoiceInviteFromUserId === selectedMember.member.id ? (
+                    <>
+                      <button
+                        type="button"
+                        disabled={privateVoiceBusy}
+                        onClick={() => void respondPrivateVoice(selectedMember.member.id, true)}
+                        className="rounded-full border border-emerald-400/45 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-100 transition hover:border-emerald-300/70 disabled:opacity-60"
+                      >
+                        Accepter
+                      </button>
+                      <button
+                        type="button"
+                        disabled={privateVoiceBusy}
+                        onClick={() => void respondPrivateVoice(selectedMember.member.id, false)}
+                        className="rounded-full border border-white/10 px-3 py-2 text-sm text-ivory/80 transition hover:border-gold-300/35 disabled:opacity-60"
+                      >
+                        Refuser
+                      </button>
+                    </>
+                  ) : privateVoicePartnerId === selectedMember.member.id ? (
+                    <button
+                      type="button"
+                      disabled={privateVoiceBusy}
+                      onClick={() => void leavePrivateVoice()}
+                      className="inline-flex items-center gap-2 rounded-full border border-rose-400/45 bg-rose-400/10 px-3 py-2 text-sm text-rose-100 transition hover:border-rose-300/70 disabled:opacity-60"
+                    >
+                      <Volume2 className="h-4 w-4" />
+                      Quitter le vocal prive
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={
+                        privateVoiceBusy ||
+                        !!myWorldPresence?.pendingVoiceInviteToUserId ||
+                        !!myWorldPresence?.pendingVoiceInviteFromUserId ||
+                        (!!privateVoicePartnerId && privateVoicePartnerId !== selectedMember.member.id)
+                      }
+                      onClick={() => void requestPrivateVoice(selectedMember.member.id)}
+                      className="inline-flex items-center gap-2 rounded-full border border-gold-400/35 px-3 py-2 text-sm text-gold-100 transition hover:border-gold-300/70 disabled:opacity-50"
+                    >
+                      <Volume2 className="h-4 w-4" />
+                      {myWorldPresence?.pendingVoiceInviteToUserId === selectedMember.member.id
+                        ? "Invitation envoyee"
+                        : "Discussion vocale privee"}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-[22px] border border-white/10 bg-night-950/55 p-3">
+                <div className="text-[11px] uppercase tracking-[0.22em] text-gold-200/70">
+                  Interactions mimi
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  {(Object.entries(WORLD_INTERACTION_META) as Array<
+                    [WorldCuteInteractionKind, (typeof WORLD_INTERACTION_META)[WorldCuteInteractionKind]]
+                  >).map(([kind, meta]) => (
+                    <button
+                      key={kind}
+                      type="button"
+                      disabled={memberActionBusy !== null}
+                      onClick={() => void sendCuteAction(kind)}
+                      className="flex items-center gap-2 rounded-2xl border border-white/10 px-3 py-3 text-left text-sm text-ivory/82 transition hover:border-gold-300/35 hover:text-gold-100 disabled:opacity-50"
+                    >
+                      <span className="text-lg">{meta.emoji}</span>
+                      <span className="leading-5">{meta.label}</span>
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
+          </section>
+        </>
+      )}
 
+      {pendingIncomingVoiceInvite && !selectedMember && (
+        <section className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-[24px] border border-cyan-300/25 bg-[linear-gradient(135deg,rgba(15,23,42,0.92),rgba(8,47,73,0.82))] px-4 py-4">
+          <div>
+            <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-200/75">
+              Invitation vocale privee
+            </div>
+            <div className="mt-1 text-sm text-ivory/80">
+              {pendingIncomingVoiceInvite.username} souhaite discuter en tete-a-tete.
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => setSelectedMember(null)}
-              className="rounded-full border border-white/10 p-2 text-ivory/60 transition hover:border-gold-300/40 hover:text-gold-100"
+              disabled={privateVoiceBusy}
+              onClick={() => void respondPrivateVoice(pendingIncomingVoiceInvite.userId, true)}
+              className="rounded-full border border-emerald-400/45 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-100 transition hover:border-emerald-300/70 disabled:opacity-60"
             >
-              <X className="h-4 w-4" />
+              Accepter
             </button>
-          </div>
-
-          <div className="mt-4 grid gap-4 lg:grid-cols-[1.15fr,0.85fr]">
-            <div className="rounded-[22px] border border-white/10 bg-night-950/55 p-4">
-              <div className="text-[11px] uppercase tracking-[0.22em] text-gold-200/70">
-                Profil rapide
-              </div>
-              <p className="mt-3 text-sm leading-6 text-ivory/70">
-                {selectedMember.loading
-                  ? "Chargement du profil..."
-                  : selectedMember.profile
-                    ? "Ouvre sa fiche, regarde ses abonnes et interagis directement depuis les mondes."
-                    : "Le profil detaille n'a pas pu etre charge, mais tu peux deja interagir avec cette presence."}
-              </p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <Link
-                  to={`/u/${selectedMember.member.id}`}
-                  className="rounded-full border border-gold-400/35 px-4 py-2 text-sm text-gold-100 transition hover:border-gold-300/70"
-                >
-                  Voir le profil
-                </Link>
-                {user && user.id !== selectedMember.member.id && (
-                  <Link
-                    to={`/messages/${encodeURIComponent(selectedMember.member.id)}`}
-                    className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm text-ivory/80 transition hover:border-gold-300/35 hover:text-gold-100"
-                  >
-                    <MessageCircle className="h-4 w-4" />
-                    Ecrire
-                  </Link>
-                )}
-                {selectedMember.profile && (
-                  <FollowButton
-                    targetId={selectedMember.profile.id}
-                    targetUsername={selectedMember.profile.username}
-                    onChange={(nowFollowing) =>
-                      setSelectedMember((current) =>
-                        current && current.profile
-                          ? {
-                              ...current,
-                              profile: {
-                                ...current.profile,
-                                followersCount: current.profile.followersCount + (nowFollowing ? 1 : -1),
-                              },
-                            }
-                          : current,
-                      )
-                    }
-                  />
-                )}
-              </div>
-            </div>
-
-            <div className="rounded-[22px] border border-white/10 bg-night-950/55 p-4">
-              <div className="text-[11px] uppercase tracking-[0.22em] text-gold-200/70">
-                Actions mimi
-              </div>
-              <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={() => sendCuteAction("wave")}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 px-4 py-3 text-sm text-ivory/80 transition hover:border-gold-300/35 hover:text-gold-100"
-                >
-                  <Heart className="h-4 w-4 text-rose-300" />
-                  Saluer
-                </button>
-                <button
-                  type="button"
-                  onClick={() => sendCuteAction("sparkle")}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 px-4 py-3 text-sm text-ivory/80 transition hover:border-gold-300/35 hover:text-gold-100"
-                >
-                  <Sparkles className="h-4 w-4 text-gold-300" />
-                  Envoyer un eclat
-                </button>
-              </div>
-            </div>
+            <button
+              type="button"
+              disabled={privateVoiceBusy}
+              onClick={() => void respondPrivateVoice(pendingIncomingVoiceInvite.userId, false)}
+              className="rounded-full border border-white/10 px-3 py-2 text-sm text-ivory/80 transition hover:border-gold-300/35 disabled:opacity-60"
+            >
+              Refuser
+            </button>
           </div>
         </section>
       )}
@@ -1998,6 +2352,30 @@ function WorldFact({
       <div className="mt-4 font-display text-xl text-gold-100">{title}</div>
       <p className="mt-2 text-sm leading-6 text-ivory/65">{copy}</p>
     </div>
+  );
+}
+
+function WorldInteractionBurst({
+  kind,
+  anchor,
+}: {
+  kind: string | null | undefined;
+  anchor: "member" | "self";
+}) {
+  if (!kind || !(kind in WORLD_INTERACTION_META)) return null;
+  const meta = WORLD_INTERACTION_META[kind as WorldCuteInteractionKind];
+  return (
+    <motion.div
+      className={`pointer-events-none absolute left-1/2 z-20 -translate-x-1/2 ${
+        anchor === "self" ? "-top-3" : "-top-4"
+      }`}
+      animate={{ y: [0, -10, 0], opacity: [0.35, 1, 0.55], scale: [0.94, 1.08, 0.98] }}
+      transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+    >
+      <div className="rounded-full border border-white/12 bg-night-950/82 px-2.5 py-1 text-base shadow-[0_12px_28px_rgba(2,6,23,0.35)]">
+        {meta.emoji}
+      </div>
+    </motion.div>
   );
 }
 

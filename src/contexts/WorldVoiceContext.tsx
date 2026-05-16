@@ -6,7 +6,12 @@ import type { WorldPresenceDto } from "../lib/api";
 
 type DistrictVoiceMember = Pick<
   WorldPresenceDto,
-  "userId" | "username" | "district" | "voiceEnabled"
+  | "userId"
+  | "username"
+  | "district"
+  | "voiceEnabled"
+  | "voiceChannelId"
+  | "privateVoicePartnerId"
 >;
 
 interface WorldVoiceState {
@@ -16,6 +21,8 @@ interface WorldVoiceState {
   hasMicPermission: boolean;
   connectionCount: number;
   error: string | null;
+  currentChannelId: string;
+  privateVoicePartnerId: string | null;
   toggleVoice: () => Promise<void>;
 }
 
@@ -94,6 +101,11 @@ export function useWorldVoice(input: {
   const generationRef = useRef(0);
   const mountedRef = useRef(true);
   const connectionCount = remoteStreams.length;
+  const currentPresence = useMemo(
+    () => members.find((member) => member.userId === userId) ?? null,
+    [members, userId],
+  );
+  const currentChannelId = currentPresence?.voiceChannelId ?? `district:${district}`;
 
   const activePeers = useMemo(
     () =>
@@ -102,10 +114,10 @@ export function useWorldVoice(input: {
           (member) =>
             member.userId !== userId &&
             member.voiceEnabled &&
-            member.district === district,
+            member.voiceChannelId === currentChannelId,
         )
         .map((member) => member.userId),
-    [district, members, userId],
+    [currentChannelId, members, userId],
   );
 
   const shutdownVoice = useCallback(() => {
@@ -295,6 +307,7 @@ export function useWorldVoice(input: {
   }, [
     registerConnection,
     shutdownVoice,
+    currentChannelId,
     userId,
     voiceEnabled,
     voiceLoading,
@@ -347,7 +360,7 @@ export function useWorldVoice(input: {
       if (!conn) continue;
       registerConnection(remoteUserId, conn, generation);
     }
-  }, [activePeers, district, registerConnection, userId, voiceEnabled, worldId]);
+  }, [activePeers, registerConnection, userId, voiceEnabled, worldId]);
 
   const VoiceAudioLayer = useMemo(
     () =>
@@ -374,6 +387,8 @@ export function useWorldVoice(input: {
     connectionCount,
     error,
     toggleVoice,
+    currentChannelId,
+    privateVoicePartnerId: currentPresence?.privateVoicePartnerId ?? null,
     VoiceAudioLayer,
   } as WorldVoiceState & { VoiceAudioLayer: () => ReactElement };
 }
