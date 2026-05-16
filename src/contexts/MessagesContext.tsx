@@ -18,6 +18,7 @@ import {
   type DirectMessageDto,
   type MessagesStreamEvent,
 } from "../lib/messagesApi";
+import { saveAttachment, mergeAttachments } from "../lib/attachmentStore";
 import { useAuth } from "./AuthContext";
 
 interface MessagesCtx {
@@ -103,9 +104,11 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
             : message.sender_id;
         // Si le fil ouvert correspond, on l'enrichit.
         if (threadOtherRef.current === otherId) {
-          setThread((t) =>
-            t.some((m) => m.id === message.id) ? t : [...t, message],
-          );
+          setThread((t) => {
+            if (t.some((m) => m.id === message.id)) return t;
+            const [enriched] = mergeAttachments([message]);
+            return [...t, enriched];
+          });
         }
         // Incrémente le badge si je reçois un message et que je ne suis pas
         // en train de lire le fil correspondant.
@@ -147,7 +150,7 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
         // réponses : si on est déjà passé à un autre fil, on ignore cette
         // réponse pour ne pas écraser les messages du fil actuel.
         if (threadOtherRef.current !== otherUserId) return;
-        setThread(rows);
+        setThread(mergeAttachments(rows));
         // Les messages reçus viennent d'être marqués lus côté backend →
         // on resynchronise le badge et la liste.
         await Promise.all([refreshUnread(), refreshConversations()]);
@@ -183,9 +186,11 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
       // comme fallback quand l'utilisateur envoie une pièce jointe sans texte.
       const finalContent = trimmed || (attachment ? `📎 ${attachment.filename}` : "");
       const msg = await apiSendMessage(otherId, finalContent, attachment);
-      // Optimisme : on push localement immédiatement. Le serveur va aussi
-      // nous renvoyer l'event SSE — on dédoublonne par id.
-      setThread((t) => (t.some((m) => m.id === msg.id) ? t : [...t, msg]));
+      // Persiste la pièce jointe en localStorage (le backend ne la stocke pas).
+      if (attachment) saveAttachment(msg.id, attachment);
+      // Push optimiste avec les données d'attachment fusionnées.
+      const msgWithAtt = attachment ? { ...msg, attachments: [attachment] } : msg;
+      setThread((t) => (t.some((m) => m.id === msgWithAtt.id) ? t : [...t, msgWithAtt]));
       refreshConversations();
     },
     [refreshConversations],
