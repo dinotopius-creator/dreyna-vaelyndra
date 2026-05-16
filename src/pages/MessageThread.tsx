@@ -232,8 +232,8 @@ export function MessageThread() {
                     </div>
                   )}
 
-                  {/* Bulle de message (uniquement si du texte) */}
-                  {m.content && (
+                  {/* Bulle de message (uniquement si du texte réel, pas juste le fallback nom de fichier) */}
+                  {m.content && !(attachments.length > 0 && m.content === `📎 ${attachments[0]?.filename}`) && (
                     <div
                       className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm shadow-sm sm:max-w-[78%] sm:px-4 ${
                         mine

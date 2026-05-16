@@ -179,7 +179,10 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
       if (!otherId) throw new Error("Aucun fil ouvert.");
       const trimmed = content.trim();
       if (!trimmed && !attachment) return;
-      const msg = await apiSendMessage(otherId, trimmed, attachment);
+      // Le backend exige un contenu non vide — on utilise le nom du fichier
+      // comme fallback quand l'utilisateur envoie une pièce jointe sans texte.
+      const finalContent = trimmed || (attachment ? `📎 ${attachment.filename}` : "");
+      const msg = await apiSendMessage(otherId, finalContent, attachment);
       // Optimisme : on push localement immédiatement. Le serveur va aussi
       // nous renvoyer l'event SSE — on dédoublonne par id.
       setThread((t) => (t.some((m) => m.id === msg.id) ? t : [...t, msg]));
