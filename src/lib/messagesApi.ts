@@ -13,6 +13,8 @@ export interface DirectMessageDto {
   content: string;
   created_at: string;
   read_at: string | null;
+  /** Pièces jointes encodées en base64 (images, PDF, etc.) */
+  attachments?: import('../types').MessageAttachment[];
 }
 
 export interface ConversationDto {
@@ -70,12 +72,13 @@ export async function apiGetThread(
 export async function apiSendMessage(
   otherUserId: string,
   content: string,
+  attachment?: import('../types').MessageAttachment,
 ): Promise<DirectMessageDto> {
   return (await messagesRequest<DirectMessageDto>(
     `/${encodeURIComponent(otherUserId)}`,
     {
       method: "POST",
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({ content, ...(attachment ? { attachments: [attachment] } : {}) }),
     },
   )) as DirectMessageDto;
 }

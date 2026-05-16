@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { Upload, AlertCircle } from 'lucide-react';
-import { validateFile, FileValidationError, formatFileSize } from '../lib/fileUtils';
+import { validateFile, FileValidationError } from '../lib/fileUtils';
 import { FILE_CONFIG } from '../lib/fileUtils';
 
 interface FileUploadInputProps {

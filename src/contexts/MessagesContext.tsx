@@ -33,7 +33,7 @@ interface MessagesCtx {
   /** Ferme le fil courant (libère la ref interne). */
   closeThread: () => void;
   /** Envoie un message dans le fil courant. Lève en cas d'erreur. */
-  sendMessage: (content: string) => Promise<void>;
+  sendMessage: (content: string, attachment?: import('../types').MessageAttachment) => Promise<void>;
   /** Re-fetch la liste de conversations (ex. pull-to-refresh). */
   refreshConversations: () => Promise<void>;
 }
@@ -174,12 +174,12 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const sendMessage = useCallback(
-    async (content: string) => {
+    async (content: string, attachment?: import('../types').MessageAttachment) => {
       const otherId = threadOtherRef.current;
       if (!otherId) throw new Error("Aucun fil ouvert.");
       const trimmed = content.trim();
-      if (!trimmed) return;
-      const msg = await apiSendMessage(otherId, trimmed);
+      if (!trimmed && !attachment) return;
+      const msg = await apiSendMessage(otherId, trimmed, attachment);
       // Optimisme : on push localement immédiatement. Le serveur va aussi
       // nous renvoyer l'event SSE — on dédoublonne par id.
       setThread((t) => (t.some((m) => m.id === msg.id) ? t : [...t, msg]));
