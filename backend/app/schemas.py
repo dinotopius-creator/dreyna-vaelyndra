@@ -464,7 +464,33 @@ class WorldPresenceOut(BaseModel):
     posX: int = 50
     posY: int = 50
     voiceEnabled: bool = False
+    voiceChannelId: str = "district:place"
+    privateVoicePartnerId: Optional[str] = None
+    pendingVoiceInviteFromUserId: Optional[str] = None
+    pendingVoiceInviteToUserId: Optional[str] = None
+    interactionKind: Optional[str] = None
+    interactionFromUserId: Optional[str] = None
+    interactionFromUsername: Optional[str] = None
+    interactionPartnerUserId: Optional[str] = None
+    interactionExpiresAt: Optional[str] = None
     lastSeenAt: str
+
+
+class WorldPrivateVoiceRequestIn(BaseModel):
+    targetUserId: str = Field(..., min_length=1, max_length=128)
+
+
+class WorldPrivateVoiceRespondIn(BaseModel):
+    requesterUserId: str = Field(..., min_length=1, max_length=128)
+    accept: bool = False
+
+
+class WorldInteractionSendIn(BaseModel):
+    targetUserId: str = Field(..., min_length=1, max_length=128)
+    kind: str = Field(
+        ...,
+        pattern=r"^(wave|heart|hug|applaud|dance|lueur)$",
+    )
 
 
 class GiftTransferOut(BaseModel):
