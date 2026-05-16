@@ -160,6 +160,12 @@ const SCENE_STYLES: Record<SceneId, string> = {
     "avatar-scene avatar-scene--aurora bg-[linear-gradient(125deg,#312e81_0%,#166534_35%,#a21caf_60%,#1e1b4b_100%)]",
   flames:
     "avatar-scene avatar-scene--flames bg-[radial-gradient(ellipse_at_50%_90%,#60a5fa_0%,#2563eb_40%,#1e1b4b_80%)]",
+  "rose-dawn":
+    "avatar-scene bg-[radial-gradient(ellipse_at_50%_78%,#fde68a_0%,transparent_42%),linear-gradient(180deg,#f9a8d4_0%,#fb7185_38%,#7c2d12_100%)]",
+  "jade-temple":
+    "avatar-scene bg-[radial-gradient(ellipse_at_50%_30%,#a7f3d0_0%,transparent_36%),linear-gradient(160deg,#064e3b_0%,#166534_45%,#0f172a_100%)]",
+  "midnight-court":
+    "avatar-scene bg-[radial-gradient(ellipse_at_50%_24%,#fef3c7_0%,transparent_30%),linear-gradient(140deg,#111827_0%,#312e81_45%,#4c1d95_100%)]",
 };
 
 function SceneBackground({ sceneId }: { sceneId: string }) {

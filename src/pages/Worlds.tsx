@@ -22,6 +22,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useLive } from "../contexts/LiveContext";
 import { useProfile } from "../contexts/ProfileContext";
 import { useToast } from "../contexts/ToastContext";
+import { useWorldVoice } from "../contexts/WorldVoiceContext";
 import {
   apiApplyWalletDelta,
   apiGetProfile,
@@ -410,9 +411,6 @@ export function Worlds() {
   const [chatInput, setChatInput] = useState("");
   const [worldMembers, setWorldMembers] = useState<WorldPresenceDto[]>([]);
   const [selectedMember, setSelectedMember] = useState<SelectedWorldMember | null>(null);
-  const [voiceEnabled, setVoiceEnabled] = useState(false);
-  const [voiceLoading, setVoiceLoading] = useState(false);
-  const [voiceLevel, setVoiceLevel] = useState(0);
   const [worldClock, setWorldClock] = useState(() => Date.now());
   const [lueurNodes, setLueurNodes] = useState<Record<DistrictId, WorldLueurNode[]>>(
     () => createInitialLueurNodes(),
@@ -430,13 +428,24 @@ export function Worlds() {
   const [ambientEvent, setAmbientEvent] = useState<WorldAmbientEvent | null>(null);
   const [comboCount, setComboCount] = useState(0);
   const [lastCollectAt, setLastCollectAt] = useState(0);
-  const streamRef = useRef<MediaStream | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const rafRef = useRef<number | null>(null);
   const lueurFlushRef = useRef(0);
   const profileRef = useRef(profile);
   const collectedRecentlyRef = useRef<Record<string, number>>({});
+
+  const {
+    voiceEnabled,
+    voiceLoading,
+    voiceLevel,
+    connectionCount: worldVoiceConnections,
+    error: worldVoiceError,
+    toggleVoice,
+    VoiceAudioLayer,
+  } = useWorldVoice({
+    worldId: WORLD_ID,
+    userId: user?.id,
+    district,
+    members: worldMembers,
+  });
 
   const mapRef = useRef<HTMLDivElement | null>(null);
   function handlePointerDown() {
@@ -760,12 +769,6 @@ export function Worlds() {
   }, [district]);
 
   useEffect(() => {
-    return () => {
-      stopVoicePreview();
-    };
-  }, []);
-
-  useEffect(() => {
     if (!user) return;
     let cancelled = false;
 
@@ -830,72 +833,18 @@ export function Worlds() {
     };
   }, [district, position.x, position.y, user, voiceEnabled]);
 
-  async function startVoicePreview() {
-    if (!navigator.mediaDevices?.getUserMedia) {
-      notify("Le chat vocal n'est pas supporté sur cet appareil.", "error");
+  useEffect(() => {
+    if (!worldVoiceError) return;
+    if (worldVoiceError === "duplicate-peer") {
+      notify("Le vocal du monde est deja ouvert dans un autre onglet.", "info");
       return;
     }
-    setVoiceLoading(true);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      });
-      streamRef.current = stream;
-      const audioContext = new AudioContext();
-      const source = audioContext.createMediaStreamSource(stream);
-      const analyser = audioContext.createAnalyser();
-      analyser.fftSize = 128;
-      source.connect(analyser);
-      audioContextRef.current = audioContext;
-      analyserRef.current = analyser;
-      const data = new Uint8Array(analyser.frequencyBinCount);
-      const tick = () => {
-        analyser.getByteFrequencyData(data);
-        const avg =
-          data.reduce((sum, value) => sum + value, 0) / Math.max(data.length, 1);
-        setVoiceLevel(Math.min(100, Math.round((avg / 160) * 100)));
-        rafRef.current = window.requestAnimationFrame(tick);
-      };
-      rafRef.current = window.requestAnimationFrame(tick);
-      setVoiceEnabled(true);
-      notify("Micro activé. Le salon vocal du hub est prêt.", "success");
-    } catch (error) {
-      console.warn(error);
-      stopVoicePreview();
-      notify("Impossible d'activer le micro pour le chat vocal.", "error");
-    } finally {
-      setVoiceLoading(false);
-    }
-  }
-
-  function stopVoicePreview() {
-    if (rafRef.current !== null) {
-      window.cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-    }
-    analyserRef.current?.disconnect();
-    analyserRef.current = null;
-    audioContextRef.current?.close().catch(() => undefined);
-    audioContextRef.current = null;
-    streamRef.current?.getTracks().forEach((track) => track.stop());
-    streamRef.current = null;
-    setVoiceEnabled(false);
-    setVoiceLevel(0);
-  }
-
-  async function toggleVoice() {
-    if (voiceLoading) return;
-    if (voiceEnabled) {
-      stopVoicePreview();
-      notify("Micro coupé. Tu restes visible dans le hub.", "info");
+    if (worldVoiceError === "audio-unsupported") {
+      notify("Le vocal du monde n'est pas supporte sur cet appareil.", "error");
       return;
     }
-    await startVoicePreview();
-  }
+    notify("Le vocal du monde a rencontre une erreur. Verifie ton micro.", "error");
+  }, [notify, worldVoiceError]);
 
   function moveBy(deltaX: number, deltaY: number) {
     setPosition((current) => {
@@ -1134,6 +1083,7 @@ export function Worlds() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-12">
+      <VoiceAudioLayer />
       <SectionHeading
         eyebrow="Mondes"
         title={
@@ -1499,7 +1449,9 @@ export function Worlds() {
                   <div className="mt-3 rounded-full border border-gold-300/30 bg-night-950/85 px-3 py-1 text-center text-[10px] uppercase tracking-[0.2em] text-gold-100">
                     <div>{user?.username ?? "Visiteur"}</div>
                     <div className="text-[9px] text-ivory/60">
-                      {voiceEnabled ? "micro ouvert" : "micro coupe"}
+                      {voiceEnabled
+                        ? `micro ouvert · ${worldVoiceConnections} lien${worldVoiceConnections > 1 ? "s" : ""}`
+                        : "micro coupe"}
                     </div>
                   </div>
                 </div>
@@ -1573,6 +1525,11 @@ export function Worlds() {
                 <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-ivory/60">
                   <Volume2 className="h-3.5 w-3.5 text-gold-300" />
                   Salon vocal
+                </div>
+                <div className="mt-2 text-[10px] uppercase tracking-[0.18em] text-ivory/45">
+                  {voiceEnabled
+                    ? `${worldVoiceConnections} presence${worldVoiceConnections > 1 ? "s" : ""} audio reliee${worldVoiceConnections > 1 ? "s" : ""}`
+                    : "micro local en veille"}
                 </div>
                 <div className="mt-3 flex gap-1">
                   {Array.from({ length: 10 }).map((_, index) => (
@@ -1989,8 +1946,8 @@ export function Worlds() {
         />
         <WorldFact
           icon={<Mic className="h-4 w-4" />}
-          title="Chat vocal activable"
-          copy="Le micro peut déjà être ouvert localement depuis le hub pour préparer un vrai salon vocal temps réel."
+          title="Chat vocal de zone"
+          copy="Le micro relie maintenant les membres presents dans la meme zone du monde avec un vrai canal audio temps reel."
         />
         <WorldFact
           icon={<Radio className="h-4 w-4" />}

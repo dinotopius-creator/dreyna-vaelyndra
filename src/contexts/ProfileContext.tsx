@@ -222,6 +222,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       price: number;
     }): Promise<UserProfileDto | null> => {
       if (!user) return null;
+      if (profile?.inventory?.includes(input.itemId)) return profile;
       // L'achat est en deux appels (débit de bourse puis ajout inventaire) :
       // faute d'endpoint atomique côté backend, on applique le pattern "saga"
       // avec une transaction compensatoire si l'étape 2 échoue, pour éviter
@@ -244,11 +245,17 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         });
         const purchasedItem = CATALOG_BY_ID[input.itemId];
         if (
+          purchasedItem?.category === "frame" ||
+          purchasedItem?.category === "scene" ||
           purchasedItem?.category === "outfit3d" ||
           purchasedItem?.category === "accessory3d"
         ) {
           const slot =
-            purchasedItem.category === "outfit3d"
+            purchasedItem.category === "frame"
+              ? EQUIP_SLOT.Frame
+              : purchasedItem.category === "scene"
+                ? EQUIP_SLOT.Scene
+                : purchasedItem.category === "outfit3d"
               ? EQUIP_SLOT.Outfit3D
               : EQUIP_SLOT.Accessory3D;
           const equipped = await apiUpdateInventory(user.id, {
@@ -278,7 +285,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         throw err;
       }
     },
-    [user],
+    [profile, user],
   );
 
   const setEquipped = useCallback(
@@ -287,6 +294,9 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       itemId: string | null,
     ): Promise<UserProfileDto | null> => {
       if (!user || !profile) return null;
+      if (itemId && !(profile.inventory ?? []).includes(itemId)) {
+        throw new Error("Impossible d'equiper un item non possede.");
+      }
       const next = { ...(profile.equipped ?? {}) };
       if (itemId) next[slot] = itemId;
       else delete next[slot];

@@ -39,6 +39,9 @@ const HAIR_STYLES: { id: Avatar3DHairStyle; label: string; note: string }[] = [
   { id: "bob", label: "Carré runique", note: "Coupe nette et magique" },
   { id: "fade", label: "Fade guerrier", note: "Style court et précis" },
   { id: "braids", label: "Tresses sacrées", note: "Deux tresses avant" },
+  { id: "ponytail", label: "Queue solaire", note: "Attache haute plus mobile" },
+  { id: "afro", label: "Couronne nuage", note: "Volume rond et assume" },
+  { id: "pixie", label: "Pixie lunaire", note: "Coupe courte et vive" },
 ];
 
 const BODY_TYPES: { id: Avatar3DBodyType; label: string }[] = [
@@ -97,7 +100,9 @@ export function AvatarEditor({
           ? "braids"
           : defaultSeed.length % 3 === 1
             ? "wave"
-            : "bob",
+            : defaultSeed.length % 5 === 0
+              ? "ponytail"
+              : "bob",
     };
   });
 
