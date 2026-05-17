@@ -81,6 +81,15 @@ export function LiveChatOverlay({
             ? "pointer-events-none absolute inset-x-0 bottom-[4.25rem] z-10 flex max-h-[22dvh] flex-col justify-end gap-2 overflow-hidden px-3 sm:bottom-[5rem] sm:max-h-[26dvh] sm:px-4"
             : "pointer-events-none absolute bottom-20 left-3 right-3 z-10 flex max-h-[40%] flex-col justify-end gap-2 sm:bottom-24 sm:left-4 sm:right-auto sm:max-h-[55%] sm:max-w-[60%]"
         }
+        style={
+          isFullscreen
+            ? {
+                bottom: "calc(4.25rem + env(safe-area-inset-bottom))",
+                left: "calc(0.75rem + env(safe-area-inset-left))",
+                right: "calc(0.75rem + env(safe-area-inset-right))",
+              }
+            : undefined
+        }
       >
         <AnimatePresence initial={false}>
           {visible.map((m) => (
@@ -100,6 +109,15 @@ export function LiveChatOverlay({
           isFullscreen
             ? "pointer-events-auto absolute inset-x-3 bottom-3 z-20 flex items-center gap-2 rounded-2xl border border-white/10 bg-night-950/84 px-3 py-2.5 shadow-[0_-18px_50px_rgba(2,6,23,0.45)] backdrop-blur-md sm:inset-x-4 sm:bottom-4"
             : "pointer-events-auto absolute bottom-4 left-4 right-4 z-20 flex items-center gap-2 rounded-full border border-ivory/10 bg-night-900/60 px-2 py-1.5 backdrop-blur"
+        }
+        style={
+          isFullscreen
+            ? {
+                bottom: "calc(0.75rem + env(safe-area-inset-bottom))",
+                left: "calc(0.75rem + env(safe-area-inset-left))",
+                right: "calc(0.75rem + env(safe-area-inset-right))",
+              }
+            : undefined
         }
       >
         <input
