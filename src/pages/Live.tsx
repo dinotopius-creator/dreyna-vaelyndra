@@ -860,6 +860,14 @@ function BroadcasterControls() {
             </div>
           </button>
         </div>
+        {isMobile && (
+          <div className="mt-3 rounded-2xl border border-gold-300/20 bg-gold-500/10 px-4 py-3 text-xs leading-5 text-gold-100/90">
+            Sur telephone, le mode <strong>Camera</strong> reste le plus stable.
+            Le partage d'ecran depend fortement du navigateur et de l'appareil.
+            Quand Android ou iPhone ne le supportent pas proprement, Vaelyndra
+            te bascule sur un message clair au lieu de laisser le live se bloquer.
+          </div>
+        )}
       </fieldset>
 
       <IosStreamingHelp
@@ -963,8 +971,15 @@ function BroadcasterControls() {
         )}
         {isLive && config.mode === "camera" && (
           <p className="text-xs text-ivory/55">
-            Autorise caméra + micro dans ton navigateur. Garde cet onglet
-            ouvert.
+            Autorise caméra + micro dans ton navigateur. Tu peux changer
+            d'objectif sans couper le live, puis garder cet onglet ouvert.
+          </p>
+        )}
+        {isLive && config.mode === "android-screen" && (
+          <p className="text-xs text-ivory/55">
+            Android maintient ton partage d'écran via le service natif.
+            Si l'appareil refuse la capture, Vaelyndra affichera une erreur
+            claire au lieu de laisser le live figé.
           </p>
         )}
         {isLive && config.mode === "screen" && (
