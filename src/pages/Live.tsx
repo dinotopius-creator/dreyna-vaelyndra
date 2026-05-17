@@ -1358,14 +1358,11 @@ export function Live() {
     const { body, documentElement } = document;
     const previousBodyOverflow = body.style.overflow;
     const previousHtmlOverflow = documentElement.style.overflow;
-    const previousBodyTouchAction = body.style.touchAction;
     body.style.overflow = "hidden";
     documentElement.style.overflow = "hidden";
-    body.style.touchAction = "none";
     return () => {
       body.style.overflow = previousBodyOverflow;
       documentElement.style.overflow = previousHtmlOverflow;
-      body.style.touchAction = previousBodyTouchAction;
     };
   }, [isViewportFullscreen]);
 
@@ -1396,6 +1393,17 @@ export function Live() {
   async function toggleFullscreen() {
     const el = playerCardRef.current;
     if (!el) return;
+    if (isIosWebkitMobile()) {
+      setFullscreenMode((current) => {
+        const next = current === "viewport" ? null : "viewport";
+        if (next === "viewport") {
+          setIsChatVisible(true);
+          notify("Mode plein écran Safari iPhone activé.", "info");
+        }
+        return next;
+      });
+      return;
+    }
     const fullscreenDoc = document as Document & {
       webkitExitFullscreen?: () => Promise<void> | void;
       webkitFullscreenElement?: Element | null;
@@ -1432,22 +1440,10 @@ export function Live() {
       } else if (fullscreenTarget.webkitRequestFullscreen) {
         await fullscreenTarget.webkitRequestFullscreen();
         return;
-      } else if (videoEl && typeof videoEl.webkitEnterFullscreen === "function") {
-        videoEl.webkitEnterFullscreen();
-        return;
-      } else if (isIosWebkitMobile()) {
-        setFullscreenMode("viewport");
-        notify("Mode plein écran optimisé pour Safari iPhone activé.", "info");
-        return;
       }
       notify("Le plein écran n'est pas disponible sur ce navigateur.", "info");
     } catch (err) {
       console.warn("fullscreen request failed", err);
-      if (isIosWebkitMobile()) {
-        setFullscreenMode("viewport");
-        notify("Mode plein écran optimisé pour Safari iPhone activé.", "info");
-        return;
-      }
       notify(
         "Le navigateur a refusé le plein écran. Réessaie après une interaction directe avec le live.",
         "info",
