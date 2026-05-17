@@ -184,10 +184,16 @@ function LiveVideoStage({
   isHost,
   localStream,
   remoteStream,
+  showCameraFlip,
+  cameraFacing,
+  onFlipCamera,
 }: {
   isHost: boolean;
   localStream: MediaStream | null;
   remoteStream: MediaStream | null;
+  showCameraFlip?: boolean;
+  cameraFacing?: "user" | "environment";
+  onFlipCamera?: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const stream = isHost ? localStream : remoteStream;
@@ -271,6 +277,25 @@ function LiveVideoStage({
         controls={!isHost}
         className="absolute inset-0 h-full w-full bg-night-900 object-contain"
       />
+      {showCameraFlip && onFlipCamera ? (
+        <button
+          type="button"
+          onClick={onFlipCamera}
+          className="absolute right-3 top-3 z-20 inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-night-950/80 text-ivory shadow-[0_12px_30px_rgba(2,6,23,0.45)] backdrop-blur-md transition hover:border-gold-300/45 hover:text-gold-100 sm:right-4 sm:top-4"
+          title={
+            cameraFacing === "user"
+              ? "Passer en caméra arrière"
+              : "Passer en caméra frontale"
+          }
+          aria-label={
+            cameraFacing === "user"
+              ? "Passer en caméra arrière"
+              : "Passer en caméra frontale"
+          }
+        >
+          <RefreshCw className="h-5 w-5" />
+        </button>
+      ) : null}
       {needsUnmute ? (
         <button
           type="button"
@@ -960,7 +985,7 @@ function BroadcasterControls() {
         {isLive && config.mode === "camera" && (
           <button
             onClick={() => switchCamera()}
-            className="btn-ghost"
+            className="hidden"
             title="Basculer entre caméra frontale et arrière"
           >
             <RefreshCw className="h-4 w-4" />
@@ -1051,6 +1076,8 @@ export function Live() {
     remoteStream,
     localStream,
     isConnecting,
+    switchCamera,
+    cameraFacing,
     joinAsViewer,
     liveRegistry,
     viewingMeta,
@@ -2086,6 +2113,11 @@ export function Live() {
                       isHost={isHost}
                       localStream={localStream}
                       remoteStream={viewerRemoteStream}
+                      showCameraFlip={isHost && config.mode === "camera"}
+                      cameraFacing={cameraFacing}
+                      onFlipCamera={() => {
+                        void switchCamera();
+                      }}
                     />
                   )}
                   {activeMode === "twitch" && (
