@@ -550,6 +550,12 @@ class DirectMessage(SQLModel, table=True):
     content: str
     created_at: str = Field(default_factory=_now_iso, index=True)
     read_at: Optional[str] = Field(default=None, index=True)
+    # Liste JSON sérialisée de `MessageAttachment` (base64). Nullable :
+    # historique = messages texte seul. Stocké côté serveur pour que le
+    # destinataire reçoive bien l'image au lieu d'un fallback texte
+    # `📎 nom.jpeg` (ce qui était l'ancien comportement basé sur un
+    # cache localStorage côté émetteur uniquement).
+    attachments_json: Optional[str] = Field(default=None)
 
 
 class WalletLedger(SQLModel, table=True):

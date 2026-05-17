@@ -79,6 +79,30 @@ def _other_id_from_conversation_key(conv_key: str, me_id: str) -> Optional[str]:
     return parts[0] if parts[1] == me_id else parts[1]
 
 
+# Plafond serveur par fichier (base64). 14 Mo couvre les 10 Mo bruts +
+# marge base64. Défense en profondeur si quelqu'un bypass la validation
+# frontend.
+MAX_ATTACHMENT_BASE64_LEN = 14 * 1024 * 1024
+MAX_ATTACHMENTS_PER_MESSAGE = 4
+ALLOWED_ATTACHMENT_MIMES = {
+    "image/jpeg", "image/png", "image/gif", "image/webp",
+    "application/pdf", "text/plain",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/zip", "application/x-rar-compressed",
+}
+
+
+class MessageAttachmentPayload(BaseModel):
+    id: str = Field(..., max_length=64)
+    filename: str = Field(..., max_length=200)
+    mimeType: str = Field(..., max_length=120)
+    size: int = Field(..., ge=0)
+    base64Data: str = Field(..., min_length=1, max_length=MAX_ATTACHMENT_BASE64_LEN)
+    createdAt: str = Field(..., max_length=64)
+    flagged: Optional[bool] = None
+
+
 class MessageOut(BaseModel):
     id: int
     sender_id: str
@@ -86,6 +110,7 @@ class MessageOut(BaseModel):
     content: str
     created_at: str
     read_at: Optional[str] = None
+    attachments: Optional[List[MessageAttachmentPayload]] = None
 
 
 class ConversationOut(BaseModel):
@@ -99,7 +124,10 @@ class ConversationOut(BaseModel):
 
 
 class SendMessagePayload(BaseModel):
-    content: str = Field(..., min_length=1, max_length=MAX_CONTENT_LEN)
+    # Le contenu peut être vide quand on envoie uniquement une pièce
+    # jointe ; on rejette plus loin si content ET attachments sont vides.
+    content: str = Field(default="", max_length=MAX_CONTENT_LEN)
+    attachments: Optional[List[MessageAttachmentPayload]] = None
 
 
 # ---------- Pub/sub en mémoire (SSE) ----------
@@ -231,6 +259,28 @@ def post_system_dm(
     return msg
 
 
+def _deserialize_attachments(
+    raw: Optional[str],
+) -> Optional[List[MessageAttachmentPayload]]:
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(data, list) or not data:
+        return None
+    out: List[MessageAttachmentPayload] = []
+    for item in data:
+        try:
+            out.append(MessageAttachmentPayload.model_validate(item))
+        except Exception:
+            # On ignore un attachment corrompu plutôt que de faire planter
+            # tout le fil.
+            continue
+    return out or None
+
+
 def _serialize(m: DirectMessage) -> MessageOut:
     assert m.id is not None
     return MessageOut(
@@ -240,6 +290,7 @@ def _serialize(m: DirectMessage) -> MessageOut:
         content=m.content,
         created_at=m.created_at,
         read_at=m.read_at,
+        attachments=_deserialize_attachments(m.attachments_json),
     )
 
 
@@ -462,7 +513,19 @@ def send_message(
     conv_key = _conversation_key(me.id, other.id)
 
     content = payload.content.strip()
-    if not content:
+    attachments = payload.attachments or []
+    if len(attachments) > MAX_ATTACHMENTS_PER_MESSAGE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Trop de pièces jointes (max {MAX_ATTACHMENTS_PER_MESSAGE}).",
+        )
+    for att in attachments:
+        if att.mimeType not in ALLOWED_ATTACHMENT_MIMES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Type de fichier non autorisé : {att.mimeType}",
+            )
+    if not content and not attachments:
         raise HTTPException(status_code=400, detail="Message vide.")
 
     # Cooldown 1s anti-spam : on regarde le dernier message envoyé par me.
@@ -500,11 +563,19 @@ def send_message(
             detail="Limite horaire atteinte, réessaie plus tard.",
         )
 
+    attachments_json: Optional[str] = None
+    if attachments:
+        attachments_json = json.dumps(
+            [att.model_dump() for att in attachments],
+            ensure_ascii=False,
+        )
+
     msg = DirectMessage(
         conversation_key=conv_key,
         sender_id=me.id,
         recipient_id=other.id,
         content=content,
+        attachments_json=attachments_json,
     )
     session.add(msg)
     session.commit()
