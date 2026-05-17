@@ -123,11 +123,14 @@ export async function switchFamiliar(
 
 export async function setFamiliarNickname(
   userId: string,
-  familiarUserId: number,
+  // L'ancien `familiarUserId` n'est plus utilisé : le backend met à jour
+  // automatiquement le familier actif du user. On garde la signature
+  // (avec le param ignoré) pour ne pas casser les anciens appelants.
+  _familiarUserId: number,
   nickname: string | null,
-): Promise<OwnedFamiliar> {
-  return familiarRequest<OwnedFamiliar>(
-    `/users/${encodeURIComponent(userId)}/familiers/${familiarUserId}/nickname`,
+): Promise<FamiliarCollection> {
+  return familiarRequest<FamiliarCollection>(
+    `/users/${encodeURIComponent(userId)}/familiers/nickname`,
     { method: "POST", body: JSON.stringify({ nickname }) },
   );
 }
