@@ -18,6 +18,7 @@ import {
   RefreshCw,
   Maximize,
   Minimize,
+  Settings2,
   MessageSquare,
   MessageSquareOff,
   SkipForward,
@@ -512,8 +513,6 @@ function BroadcasterControls() {
     updateConfig,
     startScreenShare,
     startCameraShare,
-    switchCamera,
-    cameraFacing,
     stopLive,
     announceTwitchLive,
     lastError,
@@ -689,7 +688,7 @@ function BroadcasterControls() {
     <section className="card-royal mt-8 p-5 md:p-6">
       <div className="flex items-center gap-2">
         <Video className="h-4 w-4 text-gold-300" />
-        <h3 className="font-display text-lg text-gold-200">Lancer mon live</h3>
+        <h3 className="font-display text-lg text-gold-200">Studio Live</h3>
         {isLive && (
           <span className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-rose-400/50 bg-rose-500/20 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-rose-200">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-rose-400" />
@@ -972,26 +971,14 @@ function BroadcasterControls() {
           <button onClick={goLive} className="btn-royal">
             <Radio className="h-4 w-4" />
             {config.mode === "camera"
-              ? "Passer en direct (caméra)"
+              ? "Démarrer en caméra"
               : config.mode === "screen"
-                ? "Partager mon écran"
-                : "Annoncer le live Twitch"}
+                ? "Démarrer le partage"
+                : "Publier le live Twitch"}
           </button>
         ) : (
           <button onClick={stopLive} className="btn-ghost">
             <StopCircle className="h-4 w-4" /> Terminer mon live
-          </button>
-        )}
-        {isLive && config.mode === "camera" && (
-          <button
-            onClick={() => switchCamera()}
-            className="hidden"
-            title="Basculer entre caméra frontale et arrière"
-          >
-            <RefreshCw className="h-4 w-4" />
-            {cameraFacing === "user"
-              ? "Passer en caméra arrière"
-              : "Passer en caméra frontale"}
           </button>
         )}
         {isLive && config.mode === "camera" && (
@@ -1078,6 +1065,7 @@ export function Live() {
     isConnecting,
     switchCamera,
     cameraFacing,
+    saveLiveMetadata,
     joinAsViewer,
     liveRegistry,
     viewingMeta,
@@ -1274,19 +1262,22 @@ export function Live() {
     {},
   );
 
-  // Optimisation mobile : le cadre vidéo peut passer en plein écran
-  // (Fullscreen API) et l'overlay de chat flottant peut être masqué pour
-  // ne pas manger la vidéo sur petit écran. `playerCardRef` pointe sur
-  // la carte contenant le player pour que `requestFullscreen` prenne
-  // aussi les overlays (chat flottant, avatar, cadeaux) et pas juste
-  // l'élément <video>.
+  // Le player passe en vrai plein écran navigateur via la Fullscreen API.
+  // On cible la carte entière pour embarquer vidéo + barre d'actions +
+  // chat fullscreen dans le même contexte.
   const playerCardRef = useRef<HTMLDivElement | null>(null);
+  const liveSettingsTitleInputRef = useRef<HTMLInputElement | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isPseudoFullscreen, setIsPseudoFullscreen] = useState(false);
   const [isChatVisible, setIsChatVisible] = useState(true);
-  const fullscreenActive = isFullscreen || isPseudoFullscreen;
+  const fullscreenActive = isFullscreen;
   const [isOfferingOpen, setIsOfferingOpen] = useState(false);
   const [isViewerListOpen, setIsViewerListOpen] = useState(false);
+  const [isLiveSettingsOpen, setIsLiveSettingsOpen] = useState(false);
+  const [isSavingLiveSettings, setIsSavingLiveSettings] = useState(false);
+  const [liveSettingsDraft, setLiveSettingsDraft] = useState(() => ({
+    title: "",
+    category: config.category,
+  }));
   const displayedViewerCount = isActiveLive
     ? amBroadcaster
       ? realViewers.length
@@ -1298,57 +1289,102 @@ export function Live() {
   }, [isActiveLive, broadcasterId]);
 
   useEffect(() => {
+    const fullscreenDoc = document as Document & {
+      webkitFullscreenElement?: Element | null;
+    };
     function onFsChange() {
-      const ownsNativeFullscreen =
-        !!document.fullscreenElement &&
-        document.fullscreenElement === playerCardRef.current;
-      setIsFullscreen(ownsNativeFullscreen);
-      if (ownsNativeFullscreen) setIsPseudoFullscreen(false);
+      const activeElement =
+        document.fullscreenElement ?? fullscreenDoc.webkitFullscreenElement ?? null;
+      setIsFullscreen(activeElement === playerCardRef.current);
     }
     document.addEventListener("fullscreenchange", onFsChange);
-    return () => document.removeEventListener("fullscreenchange", onFsChange);
+    document.addEventListener("webkitfullscreenchange", onFsChange as EventListener);
+    return () => {
+      document.removeEventListener("fullscreenchange", onFsChange);
+      document.removeEventListener(
+        "webkitfullscreenchange",
+        onFsChange as EventListener,
+      );
+    };
   }, []);
 
   useEffect(() => {
-    if (!isPseudoFullscreen) return;
-    const previousBodyOverflow = document.body.style.overflow;
-    const previousHtmlOverflow = document.documentElement.style.overflow;
-    document.body.style.overflow = "hidden";
-    document.documentElement.style.overflow = "hidden";
-
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setIsPseudoFullscreen(false);
+    if (!fullscreenActive) {
+      setIsLiveSettingsOpen(false);
+      return;
     }
+    if (amBroadcaster) {
+      setLiveSettingsDraft({
+        title: config.title,
+        category: config.category,
+      });
+    }
+  }, [fullscreenActive, amBroadcaster, config.title, config.category]);
 
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.body.style.overflow = previousBodyOverflow;
-      document.documentElement.style.overflow = previousHtmlOverflow;
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  }, [isPseudoFullscreen]);
+  useEffect(() => {
+    if (!isLiveSettingsOpen) return;
+    liveSettingsTitleInputRef.current?.focus();
+  }, [isLiveSettingsOpen]);
+
+  useEffect(() => {
+    if (!amBroadcaster || !isActiveLive || !fullscreenActive) {
+      setIsLiveSettingsOpen(false);
+    }
+  }, [amBroadcaster, isActiveLive, fullscreenActive]);
 
   async function toggleFullscreen() {
     const el = playerCardRef.current;
     if (!el) return;
-    if (isPseudoFullscreen) {
-      setIsPseudoFullscreen(false);
-      return;
-    }
+    const fullscreenDoc = document as Document & {
+      webkitExitFullscreen?: () => Promise<void> | void;
+      webkitFullscreenElement?: Element | null;
+    };
+    const fullscreenEl = document.fullscreenElement ?? fullscreenDoc.webkitFullscreenElement;
+    const fullscreenTarget = el as HTMLDivElement & {
+      webkitRequestFullscreen?: () => Promise<void> | void;
+    };
     try {
-      if (document.fullscreenElement === el) {
-        await document.exitFullscreen();
+      if (fullscreenEl === el) {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        } else if (fullscreenDoc.webkitExitFullscreen) {
+          await fullscreenDoc.webkitExitFullscreen();
+        }
         return;
       } else if (el.requestFullscreen) {
         await el.requestFullscreen();
         return;
-      } else {
-        setIsPseudoFullscreen(true);
+      } else if (fullscreenTarget.webkitRequestFullscreen) {
+        await fullscreenTarget.webkitRequestFullscreen();
         return;
       }
-    } catch {
-      setIsPseudoFullscreen(true);
+      notify("Le plein écran n'est pas disponible sur ce navigateur.", "info");
+    } catch (err) {
+      console.warn("fullscreen request failed", err);
+      notify(
+        "Le navigateur a refusé le plein écran. Réessaie après une interaction directe avec le live.",
+        "info",
+      );
+    }
+  }
+
+  async function saveFullscreenLiveSettings() {
+    const nextTitle = liveSettingsDraft.title.trim().slice(0, LIVE_TITLE_MAX);
+    if (!nextTitle) {
+      notify("Ajoute un titre de live avant d'enregistrer.", "info");
       return;
+    }
+    setIsSavingLiveSettings(true);
+    try {
+      await saveLiveMetadata({
+        title: nextTitle,
+        category: liveSettingsDraft.category,
+      });
+      setLiveSettingsDraft((current) => ({ ...current, title: nextTitle }));
+      notify("Les paramètres du live ont été mis à jour.", "success");
+      setIsLiveSettingsOpen(false);
+    } finally {
+      setIsSavingLiveSettings(false);
     }
   }
 
@@ -2094,14 +2130,14 @@ export function Live() {
           <div
             ref={playerCardRef}
             className={`relative overflow-hidden ${
-              isPseudoFullscreen
-                ? "fixed inset-0 z-[120] rounded-none border-0 bg-night-900 shadow-none"
+              fullscreenActive
+                ? "z-[120] h-full w-full rounded-none border-0 bg-night-900 shadow-none"
                 : "card-royal"
             } ${fullscreenActive ? "bg-night-900" : ""}`}
           >
             <div
               className={`relative w-full overflow-hidden bg-night-900 ${
-                fullscreenActive ? "h-[100dvh]" : "aspect-video"
+                fullscreenActive ? "h-full min-h-[100dvh]" : "aspect-video"
               }`}
             >
               {showViewer ? (
@@ -2195,7 +2231,7 @@ export function Live() {
                       onClick={dismissResumableLive}
                       className="rounded-full border border-ivory/20 px-4 py-2 text-xs text-ivory/70 transition hover:bg-ivory/10"
                     >
-                      Non, c'est fini
+                      Ignorer
                     </button>
                   </div>
                 </div>
@@ -2203,12 +2239,12 @@ export function Live() {
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-center">
                   <Radio className="h-10 w-10 text-royal-300" />
                   <p className="font-display text-2xl text-gold-200">
-                    Le rideau est tiré
+                    Aucun direct actif
                   </p>
                   <p className="max-w-md text-sm text-ivory/65">
                     {broadcasterProfile?.username ?? "Ce membre"} n'est pas en
-                    direct pour le moment. Préparez votre bougie pour le
-                    prochain rituel.
+                    direct pour le moment. Le prochain live apparaîtra ici dès
+                    que la diffusion reprendra.
                   </p>
                 </div>
               )}
@@ -2219,6 +2255,20 @@ export function Live() {
                   de broadcaster : l'état interne (bursts + processedRef)
                   est entièrement purgé pour éviter le leak visuel et
                   mémoire du `Set` accumulateur. */}
+              {fullscreenActive && showViewer && (
+                <div className="pointer-events-none absolute left-3 top-3 z-30 max-w-[min(60vw,32rem)] rounded-2xl border border-white/10 bg-night-950/68 px-3 py-2.5 shadow-xl backdrop-blur-md sm:left-4 sm:top-4 sm:px-4">
+                  <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.2em] text-ivory/55">
+                    <span className="inline-flex h-2 w-2 rounded-full bg-rose-400 shadow-[0_0_12px_rgba(251,113,133,0.7)]" />
+                    En direct
+                    <span className={`rounded-full border px-2 py-0.5 ${heroCategory.chipClass}`}>
+                      {heroCategory.label}
+                    </span>
+                  </div>
+                  <div className="mt-2 line-clamp-2 font-display text-lg text-gold-100 sm:text-xl">
+                    {heroTitle}
+                  </div>
+                </div>
+              )}
               <LiveHeartsOverlay key={broadcasterId} events={heartEvents} />
               <GiftFlight items={giftFlights} />
 
@@ -2254,10 +2304,13 @@ export function Live() {
                   systemAuthorId={SYSTEM_AUTHOR.id}
                   onSend={sendMessage}
                   canSend={!!user}
+                  variant={fullscreenActive ? "fullscreen" : "floating"}
                   placeholder={
                     user
-                      ? "Un mot pour la cour…"
-                      : "Connecte-toi pour parler dans le live"
+                      ? fullscreenActive
+                        ? "Répondre dans le chat live"
+                        : "Écrire dans le chat live"
+                      : "Connecte-toi pour participer au chat"
                   }
                 />
               )}
@@ -2270,6 +2323,43 @@ export function Live() {
                   les overlays, et assez grands pour être tappables
                   au doigt (h-8 w-8 = 32 px). */}
               <div className="absolute right-2 top-2 z-30 flex items-center gap-2 sm:right-4 sm:top-4">
+                {fullscreenActive && amBroadcaster && isActiveLive && (
+                  <button
+                    type="button"
+                    onClick={() => setIsLiveSettingsOpen((open) => !open)}
+                    className="pointer-events-auto inline-flex h-8 w-8 items-center justify-center rounded-full bg-night-900/70 text-ivory/80 backdrop-blur transition hover:bg-night-900/90 hover:text-gold-200"
+                    aria-label={
+                      isLiveSettingsOpen
+                        ? "Fermer les paramètres du live"
+                        : "Ouvrir les paramètres du live"
+                    }
+                    aria-pressed={isLiveSettingsOpen}
+                    title="Paramètres du live"
+                  >
+                    <Settings2 className="h-4 w-4" />
+                  </button>
+                )}
+                {isHost && activeMode === "camera" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void switchCamera();
+                    }}
+                    className="pointer-events-auto inline-flex h-8 w-8 items-center justify-center rounded-full bg-night-900/70 text-ivory/80 backdrop-blur transition hover:bg-night-900/90 hover:text-gold-200"
+                    aria-label={
+                      cameraFacing === "user"
+                        ? "Passer en caméra arrière"
+                        : "Passer en caméra frontale"
+                    }
+                    title={
+                      cameraFacing === "user"
+                        ? "Passer en caméra arrière"
+                        : "Passer en caméra frontale"
+                    }
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                  </button>
+                )}
                 {amBroadcaster && isActiveLive ? (
                   <button
                     type="button"
@@ -2347,6 +2437,114 @@ export function Live() {
                   )}
                 </button>
               </div>
+              {fullscreenActive && amBroadcaster && isActiveLive && isLiveSettingsOpen && (
+                <div className="absolute right-3 top-14 z-40 w-[min(25rem,calc(100%-1.5rem))] rounded-3xl border border-gold-400/25 bg-night-950/92 p-4 shadow-2xl backdrop-blur-md sm:right-4 sm:top-16">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-display text-lg text-gold-100">
+                        Paramètres du live
+                      </p>
+                      <p className="mt-1 text-xs text-ivory/55">
+                        Mets à jour le titre et la catégorie sans couper le direct.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsLiveSettingsOpen(false)}
+                      className="rounded-full border border-ivory/10 px-2.5 py-1 text-[11px] text-ivory/60 transition hover:border-gold-300/40 hover:text-gold-200"
+                    >
+                      Fermer
+                    </button>
+                  </div>
+
+                  <div className="mt-4 space-y-4">
+                    <label className="block">
+                      <span className="mb-1 flex items-center justify-between text-[11px] uppercase tracking-[0.2em] text-ivory/55">
+                        Titre du live
+                        <span className="text-ivory/35">
+                          {liveSettingsDraft.title.length}/{LIVE_TITLE_MAX}
+                        </span>
+                      </span>
+                      <input
+                        ref={liveSettingsTitleInputRef}
+                        type="text"
+                        maxLength={LIVE_TITLE_MAX}
+                        value={liveSettingsDraft.title}
+                        onChange={(event) =>
+                          setLiveSettingsDraft((current) => ({
+                            ...current,
+                            title: event.target.value,
+                          }))
+                        }
+                        className="input-royal"
+                        placeholder="Titre du direct"
+                      />
+                    </label>
+
+                    <label className="block">
+                      <span className="mb-2 block text-[11px] uppercase tracking-[0.2em] text-ivory/55">
+                        Catégorie
+                      </span>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {LIVE_CATEGORIES.map((category) => {
+                          const selected =
+                            liveSettingsDraft.category === category.id;
+                          return (
+                            <button
+                              key={category.id}
+                              type="button"
+                              onClick={() =>
+                                setLiveSettingsDraft((current) => ({
+                                  ...current,
+                                  category: category.id,
+                                }))
+                              }
+                              className={`rounded-2xl border px-3 py-2 text-left transition ${
+                                selected
+                                  ? `${category.chipClass} ring-1 ring-white/15`
+                                  : "border-ivory/10 bg-night-900/55 text-ivory/70 hover:border-gold-300/35 hover:text-gold-100"
+                              }`}
+                            >
+                              <div className="text-sm font-semibold">
+                                {category.label}
+                              </div>
+                              <div className="mt-1 text-[11px] leading-4 opacity-80">
+                                {category.description}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </label>
+
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLiveSettingsDraft({
+                            title: config.title,
+                            category: config.category,
+                          });
+                          setIsLiveSettingsOpen(false);
+                        }}
+                        className="rounded-full border border-ivory/10 px-4 py-2 text-xs text-ivory/65 transition hover:border-gold-300/35 hover:text-gold-100"
+                      >
+                        Annuler
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void saveFullscreenLiveSettings();
+                        }}
+                        disabled={isSavingLiveSettings}
+                        className="rounded-full border border-gold-300/45 bg-gold-400/20 px-4 py-2 text-xs font-semibold text-gold-100 transition hover:bg-gold-400/30 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {isSavingLiveSettings ? "Enregistrement..." : "Enregistrer"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
               {amBroadcaster && isActiveLive && isViewerListOpen && (
                 <div className="absolute right-2 top-12 z-30 w-[min(22rem,calc(100%-1rem))] rounded-2xl border border-gold-400/25 bg-night-950/88 p-3 text-left shadow-2xl backdrop-blur-md sm:right-4 sm:top-14">
                   <div className="mb-2 flex items-center justify-between gap-3">
@@ -2406,7 +2604,7 @@ export function Live() {
             <div
               className={
                 fullscreenActive
-                  ? "pointer-events-none absolute bottom-3 left-3 right-3 z-40 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-night-950/75 p-3 shadow-2xl backdrop-blur-md sm:bottom-5 sm:left-5 sm:right-5"
+                  ? "hidden"
                   : "flex flex-wrap items-center justify-between gap-3 p-4"
               }
             >
@@ -2438,10 +2636,10 @@ export function Live() {
                 }
               >
                 {isActiveLive
-                  ? "Chat flottant sur le flux. Les Sorts I/II/III ont chacun leur cooldown (10 / 25 / 60 s)."
+                  ? "Chat live intégré au lecteur. Les Sorts I/II/III gardent leur cooldown (10 / 25 / 60 s)."
                   : broadcasterProfile && amBroadcaster
-                    ? "Lance ton propre live depuis le panneau ci-dessous."
-                    : "Le rideau est tiré. Reviens quand la scène s'allume."}
+                    ? "Configure puis démarre ton direct depuis le studio."
+                    : "Aucun direct actif pour le moment."}
               </p>
             </div>
             {isOfferingOpen && broadcasterProfile && !fullscreenActive && (

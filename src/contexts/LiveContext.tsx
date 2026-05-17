@@ -456,6 +456,9 @@ interface LiveCtx {
   /** Config du live du user connecté (son propre broadcast). */
   config: LiveConfig;
   updateConfig: (patch: Partial<LiveConfig>) => void;
+  saveLiveMetadata: (
+    patch: Partial<Pick<LiveConfig, "title" | "description" | "category">>,
+  ) => Promise<void>;
   /** Registre public des lives en cours (tous users). */
   liveRegistry: Record<string, LiveRegistryEntry>;
   /**
@@ -737,6 +740,72 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       });
     },
     [],
+  );
+
+  const saveLiveMetadata = useCallback(
+    async (
+      patch: Partial<Pick<LiveConfig, "title" | "description" | "category">>,
+    ) => {
+      const me = userRef.current;
+      const nextTitle =
+        patch.title !== undefined ? patch.title : configRef.current.title;
+      const nextDescription =
+        patch.description !== undefined
+          ? patch.description
+          : configRef.current.description;
+      const nextCategory =
+        patch.category !== undefined
+          ? normalizeLiveCategory(patch.category)
+          : configRef.current.category;
+
+      setConfig((current) => ({
+        ...current,
+        ...patch,
+        category: nextCategory,
+      }));
+
+      if (!me || configRef.current.status !== "live") return;
+
+      const now = new Date().toISOString();
+      updateRegistry((registry) => {
+        const existing = registry[me.id];
+        if (!existing) return registry;
+        return {
+          ...registry,
+          [me.id]: {
+            ...existing,
+            title: nextTitle.trim() || `${me.username} en direct`,
+            description: nextDescription.trim(),
+            category: nextCategory,
+            lastHeartbeat: now,
+          },
+        };
+      });
+
+      const marker = readResumeMarker();
+      if (marker && marker.userId === me.id) {
+        writeResumeMarker({
+          ...marker,
+          title: nextTitle,
+          description: nextDescription,
+          category: nextCategory,
+          savedAt: now,
+        });
+      }
+
+      try {
+        await apiLiveHeartbeat({
+          title: nextTitle,
+          description: nextDescription,
+          category: nextCategory,
+          mode: configRef.current.mode,
+          twitchChannel: configRef.current.twitchChannel,
+        });
+      } catch (err) {
+        console.warn("live metadata sync failed", err);
+      }
+    },
+    [updateRegistry],
   );
 
   /**
@@ -2609,6 +2678,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     () => ({
       config,
       updateConfig,
+      saveLiveMetadata,
       liveRegistry,
       announceTwitchLive,
       startScreenShare,
@@ -2634,6 +2704,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     [
       config,
       updateConfig,
+      saveLiveMetadata,
       liveRegistry,
       announceTwitchLive,
       startScreenShare,
