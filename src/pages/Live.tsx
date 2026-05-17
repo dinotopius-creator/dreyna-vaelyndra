@@ -396,6 +396,17 @@ function isLikelyMobile(): boolean {
   return false;
 }
 
+function isIosWebkitMobile(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent || "";
+  const isiPhoneFamily =
+    /iPhone|iPad|iPod/i.test(ua) ||
+    (/Macintosh/i.test(ua) &&
+      typeof navigator.maxTouchPoints === "number" &&
+      navigator.maxTouchPoints > 1);
+  return isiPhoneFamily && /AppleWebKit/i.test(ua);
+}
+
 /**
  * Panneau d'aide pour les users iPhone / iPad : explique le parcours
  * "streamer depuis mon appareil Apple" via Twitch Mobile → embed
@@ -1268,8 +1279,12 @@ export function Live() {
   const playerCardRef = useRef<HTMLDivElement | null>(null);
   const liveSettingsTitleInputRef = useRef<HTMLInputElement | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [fullscreenMode, setFullscreenMode] = useState<
+    "browser" | "ios-video" | "viewport" | null
+  >(null);
   const [isChatVisible, setIsChatVisible] = useState(true);
-  const fullscreenActive = isFullscreen;
+  const fullscreenActive = isFullscreen || fullscreenMode === "viewport";
+  const isViewportFullscreen = fullscreenMode === "viewport";
   const [isOfferingOpen, setIsOfferingOpen] = useState(false);
   const [isViewerListOpen, setIsViewerListOpen] = useState(false);
   const [isLiveSettingsOpen, setIsLiveSettingsOpen] = useState(false);
@@ -1295,7 +1310,12 @@ export function Live() {
     function onFsChange() {
       const activeElement =
         document.fullscreenElement ?? fullscreenDoc.webkitFullscreenElement ?? null;
-      setIsFullscreen(activeElement === playerCardRef.current);
+      const active = activeElement === playerCardRef.current;
+      setIsFullscreen(active);
+      setFullscreenMode((current) => {
+        if (active) return "browser";
+        return current === "browser" ? null : current;
+      });
     }
     document.addEventListener("fullscreenchange", onFsChange);
     document.addEventListener("webkitfullscreenchange", onFsChange as EventListener);
@@ -1307,6 +1327,47 @@ export function Live() {
       );
     };
   }, []);
+
+  useEffect(() => {
+    const video = playerCardRef.current?.querySelector("video") as
+      | (HTMLVideoElement & {
+          webkitDisplayingFullscreen?: boolean;
+          webkitEnterFullscreen?: () => void;
+          webkitExitFullscreen?: () => void;
+        })
+      | null;
+    if (!video || typeof video.webkitEnterFullscreen !== "function") return;
+    function handleBeginFullscreen() {
+      setIsFullscreen(true);
+      setFullscreenMode("ios-video");
+    }
+    function handleEndFullscreen() {
+      setIsFullscreen(false);
+      setFullscreenMode((current) => (current === "ios-video" ? null : current));
+    }
+    video.addEventListener("webkitbeginfullscreen", handleBeginFullscreen);
+    video.addEventListener("webkitendfullscreen", handleEndFullscreen);
+    return () => {
+      video.removeEventListener("webkitbeginfullscreen", handleBeginFullscreen);
+      video.removeEventListener("webkitendfullscreen", handleEndFullscreen);
+    };
+  }, [isHost, localStream, viewerRemoteStream, activeMode]);
+
+  useEffect(() => {
+    if (!isViewportFullscreen) return;
+    const { body, documentElement } = document;
+    const previousBodyOverflow = body.style.overflow;
+    const previousHtmlOverflow = documentElement.style.overflow;
+    const previousBodyTouchAction = body.style.touchAction;
+    body.style.overflow = "hidden";
+    documentElement.style.overflow = "hidden";
+    body.style.touchAction = "none";
+    return () => {
+      body.style.overflow = previousBodyOverflow;
+      documentElement.style.overflow = previousHtmlOverflow;
+      body.style.touchAction = previousBodyTouchAction;
+    };
+  }, [isViewportFullscreen]);
 
   useEffect(() => {
     if (!fullscreenActive) {
@@ -1343,7 +1404,18 @@ export function Live() {
     const fullscreenTarget = el as HTMLDivElement & {
       webkitRequestFullscreen?: () => Promise<void> | void;
     };
+    const videoEl = el.querySelector("video") as
+      | (HTMLVideoElement & {
+          webkitDisplayingFullscreen?: boolean;
+          webkitEnterFullscreen?: () => void;
+          webkitExitFullscreen?: () => void;
+        })
+      | null;
     try {
+      if (fullscreenMode === "viewport") {
+        setFullscreenMode(null);
+        return;
+      }
       if (fullscreenEl === el) {
         if (document.exitFullscreen) {
           await document.exitFullscreen();
@@ -1351,16 +1423,31 @@ export function Live() {
           await fullscreenDoc.webkitExitFullscreen();
         }
         return;
+      } else if (videoEl?.webkitDisplayingFullscreen) {
+        videoEl.webkitExitFullscreen?.();
+        return;
       } else if (el.requestFullscreen) {
         await el.requestFullscreen();
         return;
       } else if (fullscreenTarget.webkitRequestFullscreen) {
         await fullscreenTarget.webkitRequestFullscreen();
         return;
+      } else if (videoEl && typeof videoEl.webkitEnterFullscreen === "function") {
+        videoEl.webkitEnterFullscreen();
+        return;
+      } else if (isIosWebkitMobile()) {
+        setFullscreenMode("viewport");
+        notify("Mode plein écran optimisé pour Safari iPhone activé.", "info");
+        return;
       }
       notify("Le plein écran n'est pas disponible sur ce navigateur.", "info");
     } catch (err) {
       console.warn("fullscreen request failed", err);
+      if (isIosWebkitMobile()) {
+        setFullscreenMode("viewport");
+        notify("Mode plein écran optimisé pour Safari iPhone activé.", "info");
+        return;
+      }
       notify(
         "Le navigateur a refusé le plein écran. Réessaie après une interaction directe avec le live.",
         "info",
@@ -2131,7 +2218,9 @@ export function Live() {
             ref={playerCardRef}
             className={`relative overflow-hidden ${
               fullscreenActive
-                ? "z-[120] h-full w-full rounded-none border-0 bg-night-900 shadow-none"
+                ? isViewportFullscreen
+                  ? "fixed inset-0 z-[120] h-[100dvh] w-screen rounded-none border-0 bg-night-900 shadow-none"
+                  : "z-[120] h-full w-full rounded-none border-0 bg-night-900 shadow-none"
                 : "card-royal"
             } ${fullscreenActive ? "bg-night-900" : ""}`}
           >
@@ -2256,7 +2345,17 @@ export function Live() {
                   est entièrement purgé pour éviter le leak visuel et
                   mémoire du `Set` accumulateur. */}
               {fullscreenActive && showViewer && (
-                <div className="pointer-events-none absolute left-3 top-3 z-30 max-w-[min(60vw,32rem)] rounded-2xl border border-white/10 bg-night-950/68 px-3 py-2.5 shadow-xl backdrop-blur-md sm:left-4 sm:top-4 sm:px-4">
+                <div
+                  className="pointer-events-none absolute left-3 top-3 z-30 max-w-[min(60vw,32rem)] rounded-2xl border border-white/10 bg-night-950/68 px-3 py-2.5 shadow-xl backdrop-blur-md sm:left-4 sm:top-4 sm:px-4"
+                  style={
+                    isViewportFullscreen
+                      ? {
+                          left: "calc(0.75rem + env(safe-area-inset-left))",
+                          top: "calc(0.75rem + env(safe-area-inset-top))",
+                        }
+                      : undefined
+                  }
+                >
                   <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.2em] text-ivory/55">
                     <span className="inline-flex h-2 w-2 rounded-full bg-rose-400 shadow-[0_0_12px_rgba(251,113,133,0.7)]" />
                     En direct
@@ -2322,7 +2421,17 @@ export function Live() {
                   pointer-events:auto pour rester cliquables par-dessus
                   les overlays, et assez grands pour être tappables
                   au doigt (h-8 w-8 = 32 px). */}
-              <div className="absolute right-2 top-2 z-30 flex items-center gap-2 sm:right-4 sm:top-4">
+              <div
+                className="absolute right-2 top-2 z-30 flex items-center gap-2 sm:right-4 sm:top-4"
+                style={
+                  isViewportFullscreen
+                    ? {
+                        right: "calc(0.5rem + env(safe-area-inset-right))",
+                        top: "calc(0.5rem + env(safe-area-inset-top))",
+                      }
+                    : undefined
+                }
+              >
                 {fullscreenActive && amBroadcaster && isActiveLive && (
                   <button
                     type="button"
@@ -2438,7 +2547,17 @@ export function Live() {
                 </button>
               </div>
               {fullscreenActive && amBroadcaster && isActiveLive && isLiveSettingsOpen && (
-                <div className="absolute right-3 top-14 z-40 w-[min(25rem,calc(100%-1.5rem))] rounded-3xl border border-gold-400/25 bg-night-950/92 p-4 shadow-2xl backdrop-blur-md sm:right-4 sm:top-16">
+                <div
+                  className="absolute right-3 top-14 z-40 w-[min(25rem,calc(100%-1.5rem))] rounded-3xl border border-gold-400/25 bg-night-950/92 p-4 shadow-2xl backdrop-blur-md sm:right-4 sm:top-16"
+                  style={
+                    isViewportFullscreen
+                      ? {
+                          right: "calc(0.75rem + env(safe-area-inset-right))",
+                          top: "calc(3.5rem + env(safe-area-inset-top))",
+                        }
+                      : undefined
+                  }
+                >
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="font-display text-lg text-gold-100">
