@@ -25,6 +25,7 @@ interface Props {
   onSend: (content: string) => void;
   canSend: boolean;
   placeholder: string;
+  variant?: "floating" | "fullscreen";
 }
 
 interface VisibleMessage extends ChatMessage {
@@ -38,6 +39,7 @@ export function LiveChatOverlay({
   onSend,
   canSend,
   placeholder,
+  variant = "floating",
 }: Props) {
   const [visible, setVisible] = useState<VisibleMessage[]>([]);
   const [input, setInput] = useState("");
@@ -69,30 +71,36 @@ export function LiveChatOverlay({
     setInput("");
   }
 
+  const isFullscreen = variant === "fullscreen";
+
   return (
     <>
-      {/* File de messages flottants en bas-gauche du flux. */}
-      {/* Sur mobile, on contraint la hauteur à 40% de la carte pour
-          laisser la vidéo respirer ; sur sm+, on autorise 55% comme
-          avant. Le masquage complet du chat reste accessible via le
-          bouton dédié dans la barre d'outils du lecteur. */}
-      <div className="pointer-events-none absolute bottom-20 left-3 right-3 z-10 flex max-h-[40%] flex-col justify-end gap-2 sm:bottom-24 sm:left-4 sm:right-auto sm:max-h-[55%] sm:max-w-[60%]">
+      <div
+        className={
+          isFullscreen
+            ? "pointer-events-none absolute inset-x-0 bottom-[4.25rem] z-10 flex max-h-[22dvh] flex-col justify-end gap-2 overflow-hidden px-3 sm:bottom-[5rem] sm:max-h-[26dvh] sm:px-4"
+            : "pointer-events-none absolute bottom-20 left-3 right-3 z-10 flex max-h-[40%] flex-col justify-end gap-2 sm:bottom-24 sm:left-4 sm:right-auto sm:max-h-[55%] sm:max-w-[60%]"
+        }
+      >
         <AnimatePresence initial={false}>
           {visible.map((m) => (
             <FloatingChatLine
               key={m.id}
               msg={m}
               isSystem={m.authorId === systemAuthorId}
+              compact={isFullscreen}
             />
           ))}
         </AnimatePresence>
       </div>
 
-      {/* Champ de saisie intégré au bas de l'overlay — pointer-events:auto
-          pour qu'on puisse cliquer dedans. */}
       <form
         onSubmit={submit}
-        className="pointer-events-auto absolute bottom-4 left-4 right-4 z-20 flex items-center gap-2 rounded-full border border-ivory/10 bg-night-900/60 px-2 py-1.5 backdrop-blur"
+        className={
+          isFullscreen
+            ? "pointer-events-auto absolute inset-x-3 bottom-3 z-20 flex items-center gap-2 rounded-2xl border border-white/10 bg-night-950/84 px-3 py-2.5 shadow-[0_-18px_50px_rgba(2,6,23,0.45)] backdrop-blur-md sm:inset-x-4 sm:bottom-4"
+            : "pointer-events-auto absolute bottom-4 left-4 right-4 z-20 flex items-center gap-2 rounded-full border border-ivory/10 bg-night-900/60 px-2 py-1.5 backdrop-blur"
+        }
       >
         <input
           value={input}
@@ -104,7 +112,11 @@ export function LiveChatOverlay({
         />
         <button
           type="submit"
-          className="inline-flex items-center gap-1 rounded-full bg-gold-shine px-3 py-1 text-xs font-semibold text-night-900 disabled:opacity-40"
+          className={`inline-flex items-center gap-1 font-semibold text-night-900 disabled:opacity-40 ${
+            isFullscreen
+              ? "rounded-xl bg-gold-shine px-3.5 py-2 text-xs"
+              : "rounded-full bg-gold-shine px-3 py-1 text-xs"
+          }`}
           disabled={!canSend || !input.trim()}
           aria-label="Envoyer"
         >
@@ -118,9 +130,11 @@ export function LiveChatOverlay({
 function FloatingChatLine({
   msg,
   isSystem,
+  compact,
 }: {
   msg: ChatMessage;
   isSystem: boolean;
+  compact: boolean;
 }) {
   const official = useMemo(() => getOfficial(msg.authorId), [msg.authorId]);
   const creature = useMemo(
@@ -135,7 +149,8 @@ function FloatingChatLine({
       exit={{ opacity: 0, y: -6 }}
       transition={{ duration: 0.35, ease: "easeOut" }}
       className={
-        "pointer-events-none flex items-start gap-2 rounded-2xl px-3 py-1.5 backdrop-blur-md" +
+        "pointer-events-none flex items-start gap-2 rounded-2xl backdrop-blur-md" +
+        (compact ? " px-3 py-2" : " px-3 py-1.5") +
         (isSystem
           ? " border border-gold-400/40 bg-gold-500/15 text-gold-100"
           : msg.highlight
@@ -180,7 +195,9 @@ function FloatingChatLine({
             </span>
           )}
         </div>
-        <p className="break-words text-sm leading-snug">{msg.content}</p>
+        <p className={`break-words leading-snug ${compact ? "text-[13px]" : "text-sm"}`}>
+          {msg.content}
+        </p>
       </div>
     </motion.div>
   );
