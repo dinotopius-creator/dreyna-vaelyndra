@@ -18,7 +18,7 @@ import {
   type DirectMessageDto,
   type MessagesStreamEvent,
 } from "../lib/messagesApi";
-import { saveAttachment, mergeAttachments } from "../lib/attachmentStore";
+import { mergeAttachments } from "../lib/attachmentStore";
 import { useAuth } from "./AuthContext";
 
 interface MessagesCtx {
@@ -182,14 +182,21 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
       if (!otherId) throw new Error("Aucun fil ouvert.");
       const trimmed = content.trim();
       if (!trimmed && !attachment) return;
-      // Le backend exige un contenu non vide — on utilise le nom du fichier
-      // comme fallback quand l'utilisateur envoie une pièce jointe sans texte.
-      const finalContent = trimmed || (attachment ? `📎 ${attachment.filename}` : "");
-      const msg = await apiSendMessage(otherId, finalContent, attachment);
-      // Persiste la pièce jointe en localStorage (le backend ne la stocke pas).
-      if (attachment) saveAttachment(msg.id, attachment);
-      // Push optimiste avec les données d'attachment fusionnées.
-      const msgWithAtt = attachment ? { ...msg, attachments: [attachment] } : msg;
+      // Le backend accepte maintenant un contenu vide quand une pièce
+      // jointe est présente (cf. backend.routers.messages). On envoie
+      // l'attachment au serveur qui le persiste, donc le destinataire
+      // recevra bien le fichier (avant : seul l'émetteur l'avait en
+      // localStorage et l'autre voyait `📎 nom.jpeg` en texte).
+      const msg = await apiSendMessage(otherId, trimmed, attachment);
+      // La réponse serveur contient déjà `attachments` ; on garde
+      // l'objet local comme fallback au cas où le backend ne les
+      // renverrait pas (ancienne version déployée).
+      const msgWithAtt =
+        msg.attachments && msg.attachments.length > 0
+          ? msg
+          : attachment
+            ? { ...msg, attachments: [attachment] }
+            : msg;
       setThread((t) => (t.some((m) => m.id === msgWithAtt.id) ? t : [...t, msgWithAtt]));
       refreshConversations();
     },

@@ -74,6 +74,12 @@ def _apply_migrations() -> None:
             ("handle", "TEXT"),
             ("handle_updated_at", "TEXT"),
         ],
+        "directmessage": [
+            # Persistance des pièces jointes (images, PDF) en base64 JSON.
+            # Avant : seul l'émetteur avait l'attachment (localStorage). Le
+            # destinataire voyait juste `📎 nom.jpeg` en texte.
+            ("attachments_json", "TEXT"),
+        ],
         "worldpresence": [
             ("voice_channel_id", "TEXT"),
             ("private_voice_partner_id", "TEXT"),
