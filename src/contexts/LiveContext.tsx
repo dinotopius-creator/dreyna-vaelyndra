@@ -1949,7 +1949,6 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       viewersToRestart.forEach((viewerPeerId) => {
         restartOutboundCallForViewer(viewerPeerId);
       });
-      current.getVideoTracks().forEach((track) => track.stop());
       newVideoTrack.addEventListener("ended", () => {
         if (localStreamRef.current === nextStream) {
           pauseLiveForRecovery(
@@ -1958,10 +1957,14 @@ export function LiveProvider({ children }: { children: ReactNode }) {
           );
         }
       });
+      // Bascule le flux actif AVANT de stopper l'ancienne camera. Sinon le
+      // listener `ended` de l'ancienne track croit a une vraie interruption
+      // et force a tort le live en mode reprise.
       cameraDeviceIdRef.current = newVideoTrack.getSettings().deviceId ?? null;
       localStreamRef.current = nextStream;
       setLocalStream(nextStream);
       setCameraFacing(nextFacing);
+      current.getVideoTracks().forEach((track) => track.stop());
     } finally {
       next?.getAudioTracks().forEach((track) => track.stop());
       switchingCameraRef.current = false;
