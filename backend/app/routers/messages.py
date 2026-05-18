@@ -439,12 +439,19 @@ def get_thread(
     me: UserProfile = Depends(require_auth),
     session: Session = Depends(_session_dep),
     limit: int = 200,
+    before_id: int | None = None,
 ) -> List[MessageOut]:
-    """Retourne le fil avec `other_user_id` (récent en dernier).
+    """Retourne une tranche du fil avec `other_user_id` (récent en dernier).
 
-    **Effet de bord** : marque tous les messages reçus de cet user comme
-    lus (read_at = now). C'est ce qui déclenche l'accusé de lecture côté
-    sender (via un event SSE `read`).
+    Sans `before_id`, renvoie les `limit` messages les plus récents et
+    marque comme lus ceux où je suis destinataire (déclenche l'accusé
+    de lecture SSE).
+
+    Avec `before_id`, renvoie les `limit` messages dont l'id est
+    strictement inférieur à `before_id` (pagination "charger plus
+    anciens"). Pas d'effet de bord read_at sur cette branche : un
+    message déjà ancien dans l'historique a déjà été (ou non) lu, on
+    ne re-touche pas au statut.
     """
     # Read-only : on autorise même si l'autre est banni, pour que l'user
     # puisse relire l'historique et faire baisser son badge non-lu.
@@ -463,40 +470,45 @@ def get_thread(
     conv_key = _conversation_key(me.id, other_user_id)
     limit = max(1, min(limit, 500))
 
-    rows = session.exec(
+    stmt = (
         select(DirectMessage)
         .where(DirectMessage.conversation_key == conv_key)
-        .order_by(DirectMessage.created_at.desc())  # type: ignore[attr-defined]
-        .limit(limit)
-    ).all()
+        .order_by(DirectMessage.id.desc())  # type: ignore[attr-defined]
+    )
+    if before_id is not None and before_id > 0:
+        stmt = stmt.where(DirectMessage.id < before_id)  # type: ignore[attr-defined]
+    rows = session.exec(stmt.limit(limit)).all()
     rows = list(reversed(rows))  # plus ancien → plus récent pour l'UI
 
-    # Marque comme lus les messages où je suis destinataire.
-    now = _now_iso()
-    updated_ids: List[int] = []
-    for m in rows:
-        if m.recipient_id == me.id and m.read_at is None:
-            m.read_at = now
-            session.add(m)
-            assert m.id is not None
-            updated_ids.append(m.id)
-    if updated_ids:
-        session.commit()
+    # En mode "charger plus anciens", on ne touche pas aux read_at :
+    # ces messages ont déjà leur statut (lus ou pas), c'est l'utilisateur
+    # qui consulte l'historique, pas une nouvelle session.
+    if before_id is None:
+        now = _now_iso()
+        updated_ids: List[int] = []
         for m in rows:
-            if m.id in updated_ids:
-                session.refresh(m)
-        # Notifie l'autre user (qui est sender de ces messages) pour que
-        # son UI mette à jour les "Vu à HH:MM" en temps réel.
-        _publish(
-            (other_user_id,),
-            {
-                "type": "read",
-                "conversation_key": conv_key,
-                "reader_id": me.id,
-                "read_at": now,
-                "message_ids": updated_ids,
-            },
-        )
+            if m.recipient_id == me.id and m.read_at is None:
+                m.read_at = now
+                session.add(m)
+                assert m.id is not None
+                updated_ids.append(m.id)
+        if updated_ids:
+            session.commit()
+            for m in rows:
+                if m.id in updated_ids:
+                    session.refresh(m)
+            # Notifie l'autre user (qui est sender de ces messages) pour
+            # que son UI mette à jour les "Vu à HH:MM" en temps réel.
+            _publish(
+                (other_user_id,),
+                {
+                    "type": "read",
+                    "conversation_key": conv_key,
+                    "reader_id": me.id,
+                    "read_at": now,
+                    "message_ids": updated_ids,
+                },
+            )
 
     return [_serialize(m) for m in rows]
 

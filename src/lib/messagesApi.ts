@@ -60,11 +60,16 @@ export async function apiListConversations(): Promise<ConversationDto[]> {
 
 export async function apiGetThread(
   otherUserId: string,
-  limit = 200,
+  options: { limit?: number; beforeId?: number } = {},
 ): Promise<DirectMessageDto[]> {
+  const limit = options.limit ?? 200;
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (options.beforeId !== undefined && options.beforeId > 0) {
+    params.set("before_id", String(options.beforeId));
+  }
   return (
     (await messagesRequest<DirectMessageDto[]>(
-      `/${encodeURIComponent(otherUserId)}?limit=${limit}`,
+      `/${encodeURIComponent(otherUserId)}?${params.toString()}`,
     )) ?? []
   );
 }
