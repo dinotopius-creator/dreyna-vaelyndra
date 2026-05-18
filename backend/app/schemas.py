@@ -33,6 +33,13 @@ class PostCreate(AuthorIn):
 
 class CommentCreate(AuthorIn):
     content: str = Field(..., min_length=1, max_length=1000)
+    parent_id: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    reply_to_author_id: Optional[str] = Field(
+        default=None, min_length=1, max_length=128
+    )
+    reply_to_author_name: Optional[str] = Field(
+        default=None, min_length=1, max_length=128
+    )
 
 
 class ReactionToggle(BaseModel):
@@ -49,6 +56,10 @@ class CommentOut(BaseModel):
     authorHandle: Optional[str] = None
     authorAvatar: str
     content: str
+    parentId: Optional[str] = None
+    replyToAuthorId: Optional[str] = None
+    replyToAuthorName: Optional[str] = None
+    replyToAuthorHandle: Optional[str] = None
     createdAt: str
     likes: List[str] = []
 

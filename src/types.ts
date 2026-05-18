@@ -40,11 +40,12 @@ export interface Comment {
   authorHandle?: string | null;
   authorAvatar: string;
   content: string;
-  createdAt: string;
-  likes: string[]; // userIds
   parentId?: string | null;
   replyToAuthorId?: string | null;
   replyToAuthorName?: string | null;
+  replyToAuthorHandle?: string | null;
+  createdAt: string;
+  likes: string[]; // userIds
 }
 
 export interface Article {
