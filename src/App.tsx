@@ -9,7 +9,6 @@ import { Home } from "./pages/Home";
 import { Guarded } from "./components/Guarded";
 import { EasterEggs } from "./components/EasterEggs";
 import { CookieBanner } from "./components/CookieBanner";
-import { FloatingLiveChat } from "./components/FloatingLiveChat";
 import { FamiliarOnboardingGate } from "./components/FamiliarOnboardingGate";
 
 const BlogList = lazy(async () => {
@@ -321,7 +320,6 @@ function App() {
       </main>
       <Footer />
       <CookieBanner />
-      <FloatingLiveChat />
       <FamiliarOnboardingGate />
     </div>
   );
