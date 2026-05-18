@@ -170,10 +170,28 @@ export function MessageThread() {
       newestId > lastNewestIdRef.current;
     const wasNearBottom = isNearBottom();
 
-    if (threadChanged && !threadLoading && thread.length > 0) {
-      // Nouveau fil ouvert → on saute tout en bas.
-      scrollToLatest("auto");
-    } else if (olderPrepended) {
+    if (threadChanged) {
+      // Demande client (Alexandre, 20/04) : "quand on clique sur une
+      // conversation privée ça nous met à jour, ça nous descend en bas
+      // de la conversation". On ne marque le fil comme "ouvert" QUE
+      // quand les premiers messages sont arrivés et qu'on a pu scroller
+      // au plus récent — sinon, à l'ouverture d'un fil long, le premier
+      // rendu (vide / loading) consommait `threadChanged` puis le rendu
+      // suivant (messages chargés) trouvait `threadChanged=false` et
+      // laissait l'user en haut de l'historique.
+      if (!threadLoading && thread.length > 0) {
+        scrollToLatest("auto");
+        lastThreadIdRef.current = userId;
+        lastOldestIdRef.current = oldestId;
+        lastNewestIdRef.current = newestId;
+      }
+      // Si encore en chargement ou vide : on ne touche à rien et on
+      // attend le prochain rendu (`lastThreadIdRef` reste à l'ancien
+      // userId pour que `threadChanged` redéclenche).
+      return;
+    }
+
+    if (olderPrepended) {
       // On vient d'insérer des messages anciens en haut. On ajuste le
       // scrollTop pour que le message qui était visible le reste.
       const prev = preservedScrollHeightRef.current;
@@ -189,7 +207,6 @@ export function MessageThread() {
     // Sinon : on respecte la position de scroll de l'utilisateur (il est
     // en train de lire dans l'historique), on ne touche à rien.
 
-    lastThreadIdRef.current = userId;
     lastOldestIdRef.current = oldestId;
     lastNewestIdRef.current = newestId;
   }, [thread, threadLoading, userId]);

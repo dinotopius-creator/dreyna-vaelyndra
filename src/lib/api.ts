@@ -861,3 +861,34 @@ export async function apiDailyClaim(userId: string): Promise<DailyClaimDto> {
     { method: "POST" },
   )) as DailyClaimDto;
 }
+
+// ──────────────────────────────────────────────────────────────────────
+// /stats — chiffres publics de la communauté pour la home (membres
+// réels, top donateurs réels). Remplace les bots décoratifs historiques
+// (TOP_FANS, "∞ membres", etc.) côté frontend.
+// ──────────────────────────────────────────────────────────────────────
+
+export interface CommunityStatsOverviewDto {
+  membersCount: number;
+  liveCount: number;
+  currenciesCount: number;
+  gradesCount: number;
+}
+
+export interface CommunityTopFanDto {
+  userId: string;
+  username: string;
+  handle?: string | null;
+  avatarImageUrl: string;
+  totalSylvinsGiven: number;
+}
+
+export async function apiGetCommunityStats(): Promise<CommunityStatsOverviewDto | null> {
+  return (await request<CommunityStatsOverviewDto>("/stats/overview")) ?? null;
+}
+
+export async function apiGetTopFans(limit = 6): Promise<CommunityTopFanDto[]> {
+  return (
+    (await request<CommunityTopFanDto[]>(`/stats/top-fans?limit=${limit}`)) ?? []
+  );
+}

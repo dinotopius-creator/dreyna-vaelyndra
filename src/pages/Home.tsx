@@ -1,4 +1,5 @@
 import type React from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -13,7 +14,12 @@ import {
 } from "lucide-react";
 import { useStore } from "../contexts/StoreContext";
 import { useAuth } from "../contexts/AuthContext";
-import { TOP_FANS } from "../data/mock";
+import {
+  apiGetCommunityStats,
+  apiGetTopFans,
+  type CommunityStatsOverviewDto,
+  type CommunityTopFanDto,
+} from "../lib/api";
 import { formatNumber } from "../lib/helpers";
 import { SectionHeading } from "../components/SectionHeading";
 import { RuneDivider } from "../components/RuneDivider";
@@ -25,15 +31,48 @@ export function Home() {
   const featuredArticle = articles[0];
   const topProducts = products.filter((p) => p.featured).slice(0, 3);
 
+  // Demande client (Alexandre, 20/04) : "plus aucun bot sur le site, ce
+  // doit être des vrais membres". On agrège ici les chiffres / top fans
+  // réellement issus de la base au boot de la page, puis on passe le
+  // résultat aux composants. Si l'API échoue ou renvoie 0 entrée, les
+  // composants enfants se replient sur des libellés neutres (pas de
+  // fallback bot).
+  const [stats, setStats] = useState<CommunityStatsOverviewDto | null>(null);
+  const [topFans, setTopFans] = useState<CommunityTopFanDto[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    void apiGetCommunityStats()
+      .then((data) => {
+        if (!cancelled) setStats(data);
+      })
+      .catch(() => {
+        if (!cancelled) setStats(null);
+      });
+    void apiGetTopFans(6)
+      .then((data) => {
+        if (!cancelled) setTopFans(data);
+      })
+      .catch(() => {
+        if (!cancelled) setTopFans([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <div>
-      <Hero isLiveOn={isLiveOn} isRegistered={isRegistered} />
-      <StatsBar />
+      <Hero
+        isLiveOn={isLiveOn}
+        isRegistered={isRegistered}
+        topFans={topFans}
+      />
+      <StatsBar stats={stats} />
       <RuneDivider label="✦ Les portes de Vaelyndra ✦" />
       <Pillars />
       <FeaturedArticle article={featuredArticle} />
       <ShopShowcase products={topProducts} />
-      <CommunityTeaser isRegistered={isRegistered} />
+      <CommunityTeaser isRegistered={isRegistered} topFans={topFans} />
       <CTA isRegistered={isRegistered} />
     </div>
   );
@@ -42,9 +81,11 @@ export function Home() {
 function Hero({
   isLiveOn,
   isRegistered,
+  topFans,
 }: {
   isLiveOn: boolean;
   isRegistered: boolean;
+  topFans: CommunityTopFanDto[];
 }) {
   return (
     <section className="relative overflow-hidden pb-20 pt-12 sm:pb-24 sm:pt-14 md:pt-24">
@@ -90,16 +131,18 @@ function Hero({
             </Link>
           </div>
           <div className="mt-10 flex flex-col items-start gap-4 text-sm text-ivory/60 sm:flex-row sm:items-center sm:gap-6">
-            <div className="flex -space-x-3">
-              {TOP_FANS.slice(0, 4).map((f) => (
-                <img
-                  key={f.name}
-                  src={f.avatar}
-                  alt={f.name}
-                  className="h-9 w-9 rounded-full border-2 border-night-900 object-cover"
-                />
-              ))}
-            </div>
+            {topFans.length > 0 && (
+              <div className="flex -space-x-3">
+                {topFans.slice(0, 4).map((f) => (
+                  <img
+                    key={f.userId}
+                    src={f.avatarImageUrl || "/crown.svg"}
+                    alt={f.username}
+                    className="h-9 w-9 rounded-full border-2 border-night-900 object-cover"
+                  />
+                ))}
+              </div>
+            )}
             <p>Chaque membre écrit sa propre page de Vaelyndra.</p>
           </div>
         </motion.div>
@@ -152,25 +195,32 @@ type StatItem = {
   live?: boolean;
 };
 
-function StatsBar() {
+function StatsBar({ stats }: { stats: CommunityStatsOverviewDto | null }) {
+  // Compteur de membres : valeur réelle du backend si dispo (>= 1),
+  // sinon libellé neutre "Bientôt" — plus de "∞" cosmétique déconnecté
+  // de la réalité (demande client 20/04).
+  const membersValue =
+    stats && stats.membersCount > 0 ? formatNumber(stats.membersCount) : "—";
+  const livesValue =
+    stats && stats.liveCount > 0 ? `${stats.liveCount} en direct` : "24/7";
   const items: StatItem[] = [
     {
-      value: "∞",
+      value: membersValue,
       label: "Membres de Vaelyndra",
       icon: <Users className="h-4 w-4" />,
     },
     {
-      value: "2",
+      value: stats?.currenciesCount ?? 2,
       label: "Monnaies — Lueurs & Sylvins",
       icon: <Heart className="h-4 w-4" />,
     },
     {
-      value: 6,
+      value: stats?.gradesCount ?? 6,
       label: "Grades streamers",
       icon: <Sparkles className="h-4 w-4" />,
     },
     {
-      value: "24/7",
+      value: livesValue,
       label: "Lives possibles",
       icon: <Radio className="h-4 w-4" />,
     },
@@ -420,7 +470,13 @@ function ShopShowcase({
   );
 }
 
-function CommunityTeaser({ isRegistered }: { isRegistered: boolean }) {
+function CommunityTeaser({
+  isRegistered,
+  topFans,
+}: {
+  isRegistered: boolean;
+  topFans: CommunityTopFanDto[];
+}) {
   return (
     <section className="mx-auto max-w-7xl px-4 pt-20 sm:px-6 sm:pt-24">
       <div className="card-royal relative overflow-hidden p-6 sm:p-10 md:p-14">
@@ -451,30 +507,39 @@ function CommunityTeaser({ isRegistered }: { isRegistered: boolean }) {
               </Link>
             </div>
           </div>
-          <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2">
-            {TOP_FANS.map((f, i) => (
-              <motion.div
-                key={f.name}
-                initial={{ opacity: 0, y: 12 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.08 }}
-                className="flex items-center gap-3 rounded-2xl border border-royal-500/30 bg-night-800/60 p-3"
-              >
-                <img
-                  src={f.avatar}
-                  alt={f.name}
-                  className="h-10 w-10 rounded-full object-cover ring-2 ring-gold-400/60"
-                />
-                <div>
-                  <p className="font-display text-sm text-gold-200">{f.name}</p>
-                  <p className="font-regal text-[10px] tracking-[0.22em] text-ivory/60">
-                    {formatNumber(f.score)} pts
-                  </p>
-                </div>
-              </motion.div>
-            ))}
-          </div>
+          {topFans.length > 0 ? (
+            <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2">
+              {topFans.map((f, i) => (
+                <motion.div
+                  key={f.userId}
+                  initial={{ opacity: 0, y: 12 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: i * 0.08 }}
+                  className="flex items-center gap-3 rounded-2xl border border-royal-500/30 bg-night-800/60 p-3"
+                >
+                  <img
+                    src={f.avatarImageUrl || "/crown.svg"}
+                    alt={f.username}
+                    className="h-10 w-10 rounded-full object-cover ring-2 ring-gold-400/60"
+                  />
+                  <div>
+                    <p className="font-display text-sm text-gold-200">
+                      {f.username}
+                    </p>
+                    <p className="font-regal text-[10px] tracking-[0.22em] text-ivory/60">
+                      {formatNumber(f.totalSylvinsGiven)} Sylvins offerts
+                    </p>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-royal-500/30 bg-night-800/60 p-5 text-center text-sm text-ivory/65">
+              Les premiers donateurs de la communauté apparaîtront ici —
+              soutiens ton streamer préféré pour figurer dans le tableau.
+            </div>
+          )}
         </div>
       </div>
     </section>
