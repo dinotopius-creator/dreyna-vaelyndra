@@ -410,6 +410,10 @@ def _serialize_post(
                 authorHandle=handles.get(c.author_id),
                 authorAvatar=c.author_avatar,
                 content=c.content,
+                parentId=c.parent_id,
+                replyToAuthorId=c.reply_to_author_id,
+                replyToAuthorName=c.reply_to_author_name,
+                replyToAuthorHandle=handles.get(c.reply_to_author_id or ""),
                 createdAt=c.created_at,
                 likes=[],
             )
@@ -615,6 +619,12 @@ def add_comment(
     post = session.get(Post, post_id)
     if not post:
         raise HTTPException(status_code=404, detail="Post introuvable.")
+    parent_comment: Comment | None = None
+    if payload.parent_id:
+        parent_comment = session.get(Comment, payload.parent_id)
+        if not parent_comment or parent_comment.post_id != post_id:
+            raise HTTPException(status_code=404, detail="Commentaire parent introuvable.")
+
     comment = Comment(
         id=_generate_id("comment"),
         post_id=post_id,
@@ -622,6 +632,15 @@ def add_comment(
         author_name=payload.author_name,
         author_avatar=_sanitize_avatar(payload.author_avatar),
         content=payload.content,
+        parent_id=parent_comment.id if parent_comment else None,
+        reply_to_author_id=(
+            payload.reply_to_author_id
+            or (parent_comment.author_id if parent_comment else None)
+        ),
+        reply_to_author_name=(
+            payload.reply_to_author_name
+            or (parent_comment.author_name if parent_comment else None)
+        ),
     )
     session.add(comment)
     # PR familiers#2 — XP au familier actif de l'auteur du commentaire.
@@ -633,7 +652,10 @@ def add_comment(
     )
     session.commit()
     session.refresh(comment)
-    handles = _resolve_handles(session, [comment.author_id])
+    handle_ids = [comment.author_id]
+    if comment.reply_to_author_id:
+        handle_ids.append(comment.reply_to_author_id)
+    handles = _resolve_handles(session, handle_ids)
     return CommentOut(
         id=comment.id,
         authorId=comment.author_id,
@@ -641,6 +663,10 @@ def add_comment(
         authorHandle=handles.get(comment.author_id),
         authorAvatar=comment.author_avatar,
         content=comment.content,
+        parentId=comment.parent_id,
+        replyToAuthorId=comment.reply_to_author_id,
+        replyToAuthorName=comment.reply_to_author_name,
+        replyToAuthorHandle=handles.get(comment.reply_to_author_id or ""),
         createdAt=comment.created_at,
         likes=[],
     )
@@ -669,5 +695,23 @@ def delete_comment(
         and not _is_moderator(session, user_id)
     ):
         raise HTTPException(status_code=403, detail="Interdit.")
-    session.delete(comment)
+    post_comments = session.exec(select(Comment).where(Comment.post_id == post_id)).all()
+    descendants_by_parent: Dict[str, List[Comment]] = defaultdict(list)
+    for current in post_comments:
+        if current.parent_id:
+            descendants_by_parent[current.parent_id].append(current)
+
+    to_delete: List[Comment] = []
+    stack = [comment]
+    seen: set[str] = set()
+    while stack:
+        current = stack.pop()
+        if current.id in seen:
+            continue
+        seen.add(current.id)
+        to_delete.append(current)
+        stack.extend(descendants_by_parent.get(current.id, []))
+
+    for row in to_delete:
+        session.delete(row)
     session.commit()

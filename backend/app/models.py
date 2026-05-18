@@ -34,6 +34,9 @@ class Comment(SQLModel, table=True):
     author_name: str
     author_avatar: str
     content: str
+    parent_id: Optional[str] = Field(default=None, index=True)
+    reply_to_author_id: Optional[str] = Field(default=None, index=True)
+    reply_to_author_name: Optional[str] = Field(default=None)
     created_at: str = Field(default_factory=_now_iso)
 
 

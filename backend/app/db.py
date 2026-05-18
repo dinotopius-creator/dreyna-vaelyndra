@@ -93,6 +93,11 @@ def _apply_migrations() -> None:
             ("interaction_expires_at", "TEXT"),
             ("last_interaction_sent_at", "TEXT"),
         ],
+        "comment": [
+            ("parent_id", "TEXT"),
+            ("reply_to_author_id", "TEXT"),
+            ("reply_to_author_name", "TEXT"),
+        ],
     }
     with engine.begin() as conn:
         for table, columns in required.items():

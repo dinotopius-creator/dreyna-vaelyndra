@@ -25,6 +25,7 @@ import { UserBadges } from "../components/UserBadges";
 import { Handle } from "../components/Handle";
 import { MemberSearch } from "../components/MemberSearch";
 import { AvatarImage } from "../components/AvatarImage";
+import StreamerGradeBadge from "../components/StreamerGradeBadge";
 import { getOfficial } from "../data/officials";
 import {
   formatRelative,
@@ -36,9 +37,10 @@ import {
   apiCreatePost,
   apiDeletePost,
   apiGetCommunityActivityLeaderboard,
-  apiGetProfile,
   apiSyncCommunityActivityRewards,
   apiToggleReaction,
+  apiGetProfile,
+  type UserProfileDto,
 } from "../lib/api";
 
 
@@ -63,7 +65,7 @@ export function Community() {
   const [videoUrl, setVideoUrl] = useState("");
   const [openComments, setOpenComments] = useState<Record<string, boolean>>({});
   const [brokenImages, setBrokenImages] = useState<Record<string, boolean>>({});
-  const [profileAvatars, setProfileAvatars] = useState<Record<string, string>>(
+  const [profilesById, setProfilesById] = useState<Record<string, UserProfileDto>>(
     {},
   );
   const [activityLeaderboard, setActivityLeaderboard] = useState<
@@ -83,14 +85,19 @@ export function Community() {
     () =>
       activityLeaderboard.map((member) => {
         const knownUser = usersById.get(member.id);
+        const profile = profilesById[member.id];
         return {
           ...member,
-          username: knownUser?.username || member.username,
-          handle: knownUser?.handle ?? member.handle,
-          avatarImageUrl: knownUser?.avatar || member.avatarImageUrl,
+          username: profile?.username || knownUser?.username || member.username,
+          handle: profile?.handle ?? knownUser?.handle ?? member.handle,
+          avatarImageUrl:
+            profile?.avatarImageUrl ||
+            knownUser?.avatar ||
+            member.avatarImageUrl,
+          grade: profile?.grade ?? null,
         };
       }),
-    [activityLeaderboard, usersById],
+    [activityLeaderboard, profilesById, usersById],
   );
 
   const sorted = useMemo(
@@ -108,13 +115,14 @@ export function Community() {
       if (post.authorId) authorIds.add(post.authorId);
       post.comments.forEach((comment) => {
         if (comment.authorId) authorIds.add(comment.authorId);
+        if (comment.replyToAuthorId) authorIds.add(comment.replyToAuthorId);
       });
     });
     activityLeaderboard.forEach((member) => {
       if (member.id) authorIds.add(member.id);
     });
     const missingIds = Array.from(authorIds).filter(
-      (userId) => !profileAvatars[userId],
+      (userId) => !profilesById[userId],
     );
     if (missingIds.length === 0) return;
 
@@ -122,22 +130,20 @@ export function Community() {
     Promise.allSettled(missingIds.map((userId) => apiGetProfile(userId))).then(
       (results) => {
         if (cancelled) return;
-        const next: Record<string, string> = {};
+        const next: Record<string, UserProfileDto> = {};
         results.forEach((result, index) => {
           if (result.status !== "fulfilled") return;
-          const avatar = result.value.avatarImageUrl?.trim();
-          if (!avatar) return;
-          next[missingIds[index]] = avatar;
+          next[missingIds[index]] = result.value;
         });
         if (Object.keys(next).length === 0) return;
-        setProfileAvatars((current) => ({ ...current, ...next }));
+        setProfilesById((current) => ({ ...current, ...next }));
       },
     );
 
     return () => {
       cancelled = true;
     };
-  }, [activityLeaderboard, posts, profileAvatars]);
+  }, [activityLeaderboard, posts, profilesById]);
 
   useEffect(() => {
     let cancelled = false;
@@ -262,6 +268,10 @@ export function Community() {
     return `/u/${authorId}`;
   }
 
+  function resolvedProfile(authorId: string) {
+    return profilesById[authorId] ?? null;
+  }
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-14">
       <SectionHeading
@@ -328,28 +338,35 @@ export function Community() {
           </form>
 
           <ul className="mt-6 space-y-4">
-            {sorted.map((post, index) => (
-              <motion.li
-                key={post.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.04 }}
-                className="card-royal p-5"
-              >
+            {sorted.map((post, index) => {
+              const profile = resolvedProfile(post.authorId);
+              const displayName = profile?.username || post.authorName;
+              const displayHandle = profile?.handle ?? post.authorHandle ?? null;
+              const displayAvatar =
+                profile?.avatarImageUrl ||
+                usersById.get(post.authorId)?.avatar ||
+                post.authorAvatar;
+              return (
+                <motion.li
+                  key={post.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.04 }}
+                  className="card-royal p-5"
+                >
                 <header className="flex flex-wrap items-start gap-3">
                   <Link
                     to={profileHref(post.authorId)}
                     className="shrink-0"
-                    title={`Voir le profil de ${post.authorName}`}
+                    title={`Voir le profil de ${displayName}`}
                   >
                     <AvatarImage
                       candidates={[
-                        profileAvatars[post.authorId],
-                        usersById.get(post.authorId)?.avatar,
+                        displayAvatar,
                         post.authorAvatar,
                       ]}
                       fallbackSeed={post.authorId || post.authorName}
-                      alt={post.authorName}
+                      alt={displayName}
                       className="h-10 w-10 rounded-full object-cover ring-2 ring-royal-500/40 transition hover:ring-gold-400/70"
                     />
                   </Link>
@@ -359,8 +376,11 @@ export function Community() {
                         to={profileHref(post.authorId)}
                         className="font-display text-gold-200 transition hover:text-gold-300"
                       >
-                        {post.authorName}
+                        {displayName}
                       </Link>
+                      {profile?.grade && (
+                        <StreamerGradeBadge grade={profile.grade} size="sm" />
+                      )}
                       {(() => {
                         const official = getOfficial(post.authorId);
                         return (
@@ -378,7 +398,7 @@ export function Community() {
                       to={profileHref(post.authorId)}
                       className="transition hover:opacity-80"
                     >
-                      <Handle handle={post.authorHandle} />
+                      <Handle handle={displayHandle} />
                     </Link>
                     <p className="mt-1 whitespace-pre-wrap text-sm text-ivory/85">
                       {post.content}
@@ -461,11 +481,12 @@ export function Community() {
                     postId={post.id}
                     comments={post.comments}
                     postAuthorId={post.authorId}
-                    avatarOverrides={profileAvatars}
+                    profileOverrides={profilesById}
                   />
                 )}
-              </motion.li>
-            ))}
+                </motion.li>
+              );
+            })}
             {sorted.length === 0 && (
               <li className="text-center text-sm text-ivory/50">
                 Silence... Le fil attend la premiere voix.
@@ -547,18 +568,20 @@ export function Community() {
                       {index + 1}
                     </div>
                     <AvatarImage
-                      candidates={[
-                        profileAvatars[member.id],
-                        member.avatarImageUrl,
-                      ]}
+                      candidates={[member.avatarImageUrl]}
                       fallbackSeed={member.id}
                       alt={member.username}
                       className="h-10 w-10 rounded-full object-cover ring-2 ring-gold-400/35"
                     />
                     <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
                       <p className="truncate font-display text-sm text-gold-200 group-hover:text-gold-100">
                         {member.username}
                       </p>
+                        {member.grade && (
+                          <StreamerGradeBadge grade={member.grade} size="sm" />
+                        )}
+                      </div>
                       <Handle handle={member.handle} size="xs" />
                       <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-ivory/55">
                         <span>

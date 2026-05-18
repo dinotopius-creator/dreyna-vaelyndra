@@ -99,7 +99,13 @@ export async function apiToggleReaction(
 
 export async function apiAddComment(
   postId: string,
-  input: { author: AuthorPayload; content: string },
+  input: {
+    author: AuthorPayload;
+    content: string;
+    parentId?: string | null;
+    replyToAuthorId?: string | null;
+    replyToAuthorName?: string | null;
+  },
 ): Promise<Comment> {
   return (await request<Comment>(
     `/posts/${encodeURIComponent(postId)}/comments`,
@@ -108,6 +114,9 @@ export async function apiAddComment(
       body: JSON.stringify({
         ...input.author,
         content: input.content,
+        parent_id: input.parentId ?? null,
+        reply_to_author_id: input.replyToAuthorId ?? null,
+        reply_to_author_name: input.replyToAuthorName ?? null,
       }),
     },
   )) as Comment;
