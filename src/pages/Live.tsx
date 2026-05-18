@@ -2302,13 +2302,8 @@ export function Live() {
                       isHost={isHost}
                       localStream={localStream}
                       remoteStream={viewerRemoteStream}
-                      showCameraFlip={
-                        isHost && config.mode === "camera" && !cameraHidden
-                      }
+                      showCameraFlip={false}
                       cameraFacing={cameraFacing}
-                      onFlipCamera={() => {
-                        void switchCamera();
-                      }}
                     />
                   )}
                   {activeMode === "twitch" && (
@@ -2512,6 +2507,27 @@ export function Live() {
                     title="Paramètres du live"
                   >
                     <Settings2 className="h-4 w-4" />
+                  </button>
+                )}
+                {isHost && activeMode === "camera" && !cameraHidden && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void switchCamera();
+                    }}
+                    className="pointer-events-auto inline-flex h-8 w-8 items-center justify-center rounded-full bg-night-900/70 text-ivory/80 backdrop-blur transition hover:bg-night-900/90 hover:text-gold-200"
+                    aria-label={
+                      cameraFacing === "user"
+                        ? "Passer en caméra arrière"
+                        : "Passer en caméra frontale"
+                    }
+                    title={
+                      cameraFacing === "user"
+                        ? "Passer en caméra arrière"
+                        : "Passer en caméra frontale"
+                    }
+                  >
+                    <RefreshCw className="h-4 w-4" />
                   </button>
                 )}
                 {isHost && activeMode === "camera" && (
