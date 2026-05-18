@@ -16,7 +16,6 @@ import StreamerGradeBadge from "./StreamerGradeBadge";
 interface Props {
   postId: string;
   comments: Comment[];
-  /** Auteur du post : seul lui (ou la reine) peut supprimer un commentaire. */
   postAuthorId: string;
   profileOverrides?: Record<string, UserProfileDto>;
 }
@@ -33,8 +32,9 @@ export function PostComments({
   const { notify } = useToast();
   const [draft, setDraft] = useState("");
   const [replyTo, setReplyTo] = useState<Comment | null>(null);
+
   const usersById = useMemo(
-    () => new Map(users.map((u) => [u.id, u])),
+    () => new Map(users.map((entry) => [entry.id, entry])),
     [users],
   );
 
@@ -42,6 +42,7 @@ export function PostComments({
     () => comments.filter((comment) => !comment.parentId),
     [comments],
   );
+
   const repliesByParent = useMemo(
     () =>
       comments.reduce<Record<string, Comment[]>>((acc, comment) => {
@@ -56,11 +57,17 @@ export function PostComments({
     return `/u/${authorId}`;
   }
 
+  function resolvedHandle(comment: Comment) {
+    return (
+      comment.authorHandle?.trim() ||
+      profileOverrides[comment.authorId]?.handle?.trim() ||
+      null
+    );
+  }
+
   function mentionFor(comment: Comment) {
-    const handle = comment.authorHandle?.trim();
+    const handle = resolvedHandle(comment);
     if (handle) return `@${handle}`;
-    const profileHandle = profileOverrides[comment.authorId]?.handle?.trim();
-    if (profileHandle) return `@${profileHandle}`;
     return `@${comment.authorName.replace(/\s+/g, "_")}`;
   }
 
@@ -82,10 +89,11 @@ export function PostComments({
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!user) {
-      notify("Connectez-vous pour commenter.", "info");
+      notify("Connecte-toi pour commenter.", "info");
       return;
     }
     if (!draft.trim()) return;
+
     try {
       const comment = await apiAddComment(postId, {
         author: {
@@ -117,7 +125,11 @@ export function PostComments({
       while (changed) {
         changed = false;
         comments.forEach((comment) => {
-          if (comment.parentId && toDelete.has(comment.parentId) && !toDelete.has(comment.id)) {
+          if (
+            comment.parentId &&
+            toDelete.has(comment.parentId) &&
+            !toDelete.has(comment.id)
+          ) {
             toDelete.add(comment.id);
             changed = true;
           }
@@ -131,7 +143,7 @@ export function PostComments({
       }
     } catch (err) {
       console.warn(err);
-      notify("Suppression refusée par le royaume.", "error");
+      notify("Suppression refusee par le royaume.", "error");
     }
   }
 
@@ -141,12 +153,15 @@ export function PostComments({
     const replies = repliesByParent[comment.id] ?? [];
     const profile = profileOverrides[comment.authorId];
     const displayName = profile?.username || comment.authorName;
-    const displayHandle =
-      profile?.handle ?? comment.authorHandle ?? null;
+    const displayHandle = profile?.handle ?? comment.authorHandle ?? null;
     const displayAvatar =
       profile?.avatarImageUrl ||
       usersById.get(comment.authorId)?.avatar ||
       comment.authorAvatar;
+    const displayGrade = profile?.grade ?? comment.authorGrade ?? null;
+    const replyLabel = comment.replyToAuthorHandle
+      ? `@${comment.replyToAuthorHandle}`
+      : comment.replyToAuthorName;
 
     return (
       <li
@@ -161,6 +176,7 @@ export function PostComments({
             className="h-8 w-8 rounded-full object-cover ring-2 ring-royal-500/30 transition hover:ring-gold-400/60"
           />
         </Link>
+
         <div className="min-w-0 flex-1">
           <div className="rounded-2xl bg-night-900/40 px-3 py-2">
             <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
@@ -170,8 +186,8 @@ export function PostComments({
               >
                 {displayName}
               </Link>
-              {profile?.grade && (
-                <StreamerGradeBadge grade={profile.grade} size="sm" />
+              {displayGrade && (
+                <StreamerGradeBadge grade={displayGrade} size="sm" />
               )}
               <Link
                 to={profileHref(comment.authorId)}
@@ -183,20 +199,28 @@ export function PostComments({
                 {formatRelative(comment.createdAt)}
               </span>
             </p>
+
             {comment.replyToAuthorName && (
               <p className="mt-1 text-[11px] text-gold-300/85">
-                Réponse à{" "}
-                <span className="font-medium">
-                  {comment.replyToAuthorHandle
-                    ? `@${comment.replyToAuthorHandle}`
-                    : comment.replyToAuthorName}
-                </span>
+                Reponse a{" "}
+                {comment.replyToAuthorId ? (
+                  <Link
+                    to={profileHref(comment.replyToAuthorId)}
+                    className="font-medium transition hover:text-gold-200"
+                  >
+                    {replyLabel}
+                  </Link>
+                ) : (
+                  <span className="font-medium">{replyLabel}</span>
+                )}
               </p>
             )}
+
             <p className="mt-1 whitespace-pre-wrap break-words text-sm text-ivory/85">
               {comment.content}
             </p>
           </div>
+
           <div className="mt-1.5 flex flex-wrap items-center gap-2 px-1 text-[11px] text-ivory/50">
             <button
               type="button"
@@ -204,7 +228,7 @@ export function PostComments({
               className="inline-flex items-center gap-1 transition hover:text-gold-200"
             >
               <CornerUpLeft className="h-3.5 w-3.5" />
-              Répondre
+              Repondre
             </button>
             {user && user.id !== comment.authorId && (
               <ReportButton
@@ -227,6 +251,7 @@ export function PostComments({
               </button>
             )}
           </div>
+
           {replies.length > 0 && (
             <ul className="mt-3 space-y-3">
               {replies.map((reply) => renderComment(reply, true))}
@@ -237,11 +262,18 @@ export function PostComments({
     );
   }
 
+  const replyDraftLabel = replyTo
+    ? resolvedHandle(replyTo)
+      ? `@${resolvedHandle(replyTo)}`
+      : replyTo.authorName
+    : null;
+
   return (
     <div className="mt-4 border-t border-royal-500/15 pt-4">
       <ul className="space-y-3">
         {topLevelComments.map((comment) => renderComment(comment))}
       </ul>
+
       <form onSubmit={submit} className="mt-3 flex items-start gap-3">
         <AvatarImage
           candidates={[user?.avatar]}
@@ -249,27 +281,24 @@ export function PostComments({
           alt="Vous"
           className="h-8 w-8 rounded-full object-cover ring-2 ring-royal-500/30"
         />
+
         <div className="min-w-0 flex-1">
           {replyTo && (
             <div className="mb-2 flex items-center justify-between gap-2 rounded-2xl border border-gold-400/20 bg-gold-500/10 px-3 py-2 text-xs text-gold-100">
               <span className="truncate">
-                Réponse à{" "}
-                <strong>
-                  {replyTo.authorHandle
-                    ? `@${replyTo.authorHandle}`
-                    : replyTo.authorName}
-                </strong>
+                Reponse a <strong>{replyDraftLabel}</strong>
               </span>
               <button
                 type="button"
                 onClick={resetReply}
                 className="rounded-full border border-gold-300/25 p-1 transition hover:border-gold-200/45"
-                title="Annuler la réponse"
+                title="Annuler la reponse"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
             </div>
           )}
+
           <div className="flex gap-2">
             <input
               value={draft}
@@ -277,13 +306,9 @@ export function PostComments({
               placeholder={
                 user
                   ? replyTo
-                    ? `Répondre à ${
-                        replyTo.authorHandle
-                          ? `@${replyTo.authorHandle}`
-                          : replyTo.authorName
-                      }...`
+                    ? `Repondre a ${replyDraftLabel}...`
                     : "Commenter cette parole..."
-                  : "Connectez-vous pour commenter..."
+                  : "Connecte-toi pour commenter..."
               }
               className="glass-input flex-1"
               disabled={!user}

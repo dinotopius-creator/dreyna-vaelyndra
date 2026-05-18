@@ -54,6 +54,7 @@ class CommentOut(BaseModel):
     # PR S — `@handle` résolu depuis l'auteur au serialize, pas snapshot.
     # `None` si l'auteur n'a pas encore de profil ou de handle.
     authorHandle: Optional[str] = None
+    authorGrade: Optional["StreamerGradeOut"] = None
     authorAvatar: str
     content: str
     parentId: Optional[str] = None
@@ -69,6 +70,7 @@ class PostOut(BaseModel):
     authorId: str
     authorName: str
     authorHandle: Optional[str] = None
+    authorGrade: Optional["StreamerGradeOut"] = None
     authorAvatar: str
     content: str
     imageUrl: Optional[str] = None
@@ -96,6 +98,7 @@ class CommunityActivityEntryOut(BaseModel):
     id: str
     username: str
     handle: Optional[str] = None
+    grade: Optional["StreamerGradeOut"] = None
     avatarImageUrl: str = ""
     postCount: int = 0
     commentCount: int = 0

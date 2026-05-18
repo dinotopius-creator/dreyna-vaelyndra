@@ -38,6 +38,20 @@ export interface Comment {
   authorName: string;
   /** PR S — `@handle` de l'auteur, résolu côté backend au serialize. */
   authorHandle?: string | null;
+  authorGrade?: {
+    slug: string;
+    name: string;
+    short: string;
+    emoji: string;
+    motto: string;
+    theme: string;
+    color: string;
+    minXp: number;
+    xp: number;
+    progressXp: number;
+    nextXp: number | null;
+    override: boolean;
+  } | null;
   authorAvatar: string;
   content: string;
   parentId?: string | null;
@@ -104,6 +118,20 @@ export interface CommunityPost {
   authorName: string;
   /** PR S — `@handle` de l'auteur, résolu côté backend au serialize. */
   authorHandle?: string | null;
+  authorGrade?: {
+    slug: string;
+    name: string;
+    short: string;
+    emoji: string;
+    motto: string;
+    theme: string;
+    color: string;
+    minXp: number;
+    xp: number;
+    progressXp: number;
+    nextXp: number | null;
+    override: boolean;
+  } | null;
   authorAvatar: string;
   content: string;
   imageUrl?: string;

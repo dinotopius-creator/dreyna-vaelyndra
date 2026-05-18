@@ -41,6 +41,7 @@ import {
   apiToggleReaction,
   apiGetProfile,
   type UserProfileDto,
+  type StreamerGradeDto,
 } from "../lib/api";
 
 
@@ -74,6 +75,7 @@ export function Community() {
       username: string;
       handle: string | null;
       avatarImageUrl: string;
+      grade?: StreamerGradeDto | null;
       postCount: number;
       commentCount: number;
       reactionCount: number;
@@ -94,7 +96,7 @@ export function Community() {
             profile?.avatarImageUrl ||
             knownUser?.avatar ||
             member.avatarImageUrl,
-          grade: profile?.grade ?? null,
+          grade: profile?.grade ?? member.grade ?? null,
         };
       }),
     [activityLeaderboard, profilesById, usersById],
@@ -378,8 +380,11 @@ export function Community() {
                       >
                         {displayName}
                       </Link>
-                      {profile?.grade && (
-                        <StreamerGradeBadge grade={profile.grade} size="sm" />
+                      {(profile?.grade ?? post.authorGrade) && (
+                        <StreamerGradeBadge
+                          grade={(profile?.grade ?? post.authorGrade)!}
+                          size="sm"
+                        />
                       )}
                       {(() => {
                         const official = getOfficial(post.authorId);

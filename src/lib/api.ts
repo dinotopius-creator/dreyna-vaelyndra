@@ -153,6 +153,7 @@ export interface CommunityActivityEntryDto {
   id: string;
   username: string;
   handle: string | null;
+  grade: StreamerGradeDto | null;
   avatarImageUrl: string;
   postCount: number;
   commentCount: number;
