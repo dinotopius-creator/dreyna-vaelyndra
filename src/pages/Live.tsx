@@ -39,7 +39,11 @@ import { LIVE_CATEGORIES, getLiveCategory } from "../data/liveCategories";
 import { SectionHeading } from "../components/SectionHeading";
 import { GiftPanel } from "../components/GiftPanel";
 import { GiftFlight, type GiftFlightItem } from "../components/GiftFlight";
-import { LiveFamiliarOverlay } from "../components/LiveFamiliarOverlay";
+import { LiveStageOverlay } from "../components/LiveStageOverlay";
+import {
+  loadAvatar3DEnabled,
+  saveAvatar3DEnabled,
+} from "../lib/liveStage";
 import { LiveChatHistory } from "../components/LiveChatHistory";
 import { LiveChatOverlay } from "../components/LiveChatOverlay";
 import { LiveHeartsOverlay } from "../components/LiveHeartsOverlay";
@@ -560,6 +564,23 @@ function BroadcasterControls() {
     cameraSupported,
   ]);
 
+  // Préférence host : intégrer son avatar 3D existant dans le live. On
+  // n'instancie l'état que quand `user` est résolu pour éviter les
+  // hooks conditionnels sur le bail-out null plus bas — on ne lit donc
+  // localStorage que dans l'initial state.
+  const [avatar3dInLive, setAvatar3dInLive] = useState<boolean>(() =>
+    user ? loadAvatar3DEnabled(user.id) : false,
+  );
+  useEffect(() => {
+    if (!user) return;
+    setAvatar3dInLive(loadAvatar3DEnabled(user.id));
+  }, [user?.id]);
+  const onToggleAvatar3dInLive = (next: boolean) => {
+    if (!user) return;
+    setAvatar3dInLive(next);
+    saveAvatar3DEnabled(user.id, next);
+  };
+
   if (!user) return null;
   const broadcasterOverlayUserId = user.id;
 
@@ -940,6 +961,36 @@ function BroadcasterControls() {
         </div>
       )}
 
+      {/* Préparation du live : option pour intégrer l'avatar 3D existant.
+          On ne recrée PAS d'avatar — on coche pour qu'il soit affiché en
+          overlay au-dessus du flux, à côté du familier. Voir
+          `LiveStageOverlay` pour le rendu + drag & rotate côté host. */}
+      <fieldset className="mt-5 rounded-2xl border border-royal-500/30 bg-night-900/40 p-4">
+        <legend className="px-2 font-regal text-[11px] uppercase tracking-[0.22em] text-ivory/60">
+          Avatar 3D dans le live
+        </legend>
+        <label className="flex items-start gap-3">
+          <input
+            type="checkbox"
+            checked={avatar3dInLive}
+            onChange={(event) => onToggleAvatar3dInLive(event.target.checked)}
+            className="mt-1 h-4 w-4 cursor-pointer accent-gold-400"
+          />
+          <span>
+            <span className="block font-display text-sm text-gold-200">
+              Afficher mon avatar 3D pendant le live
+            </span>
+            <span className="mt-0.5 block text-[11px] leading-snug text-ivory/60">
+              Charge automatiquement l'avatar de ton profil et le pose
+              à côté de ton familier sur le live. Tu pourras déplacer,
+              tourner, mettre en miroir et verrouiller l'avatar et le
+              familier directement sur l'écran de diffusion. Compatible
+              caméra, partage d'écran, mobile et plein écran.
+            </span>
+          </span>
+        </label>
+      </fieldset>
+
       <div className="mt-6 flex flex-wrap items-center gap-3">
         {!isLive ? (
           <button onClick={goLive} className="btn-royal">
@@ -1092,6 +1143,23 @@ export function Live() {
     user?.id ??
     "";
   const amBroadcaster = !!user && !!broadcasterId && user.id === broadcasterId;
+
+  // Préférence host : afficher l'avatar 3D dans le live. On stocke en
+  // localStorage pour que ça reste actif d'un live à l'autre, et on lit
+  // la valeur du broadcaster courant (pas seulement du user connecté)
+  // pour que les viewers voient aussi l'avatar quand le host l'a activé.
+  const [avatar3dEnabled, setAvatar3dEnabled] = useState<boolean>(() =>
+    broadcasterId ? loadAvatar3DEnabled(broadcasterId) : false,
+  );
+  useEffect(() => {
+    setAvatar3dEnabled(
+      broadcasterId ? loadAvatar3DEnabled(broadcasterId) : false,
+    );
+    // L'option est aussi modifiable côté `BroadcasterControls` (panneau
+    // de préparation du live), où elle est persistée en localStorage.
+    // Ici on se contente de la lire pour le rendu côté `Live()`.
+  }, [broadcasterId]);
+
   // Résout le profil du broadcaster (pour nom/avatar/pseudo dans le HUD + GiftPanel).
   const broadcasterProfile = useMemo<User | null>(
     () => users.find((u) => u.id === broadcasterId) ?? null,
@@ -2331,14 +2399,21 @@ export function Live() {
               <LiveHeartsOverlay key={broadcasterId} events={heartEvents} />
               <GiftFlight items={giftFlights} />
 
-              {/* PR familiers#5 — familier du broadcaster en bas-gauche
-                  du player. Réagit aux cadeaux (saut + particules
-                  teintées) et aux cœurs (micro-rebond). Toujours visible
-                  côté host ET viewers via le même flux WebRTC. */}
+              {/* Scène live : familier (toujours) + avatar 3D existant
+                  (si le broadcaster l'a activé). Chaque sprite est
+                  déplaçable côté host (drag, rotation, miroir, lock),
+                  positions sauvegardées par broadcaster en localStorage.
+                  Côté viewers, lecture seule sur les mêmes positions. */}
               {broadcasterId && (
-                <LiveFamiliarOverlay
+                <LiveStageOverlay
                   key={broadcasterId}
                   broadcasterId={broadcasterId}
+                  broadcasterName={
+                    broadcasterProfile?.username ?? "le broadcaster"
+                  }
+                  fallbackAvatar={broadcasterProfile?.avatar ?? null}
+                  canEdit={amBroadcaster}
+                  showAvatar={avatar3dEnabled}
                   giftTick={giftTick}
                   lastGiftColor={lastGiftColor}
                   heartTick={heartTick}
