@@ -14,6 +14,7 @@ import {
   ExternalLink,
   Gift as GiftIcon,
   Video,
+  VideoOff,
   Camera,
   RefreshCw,
   Maximize,
@@ -1076,6 +1077,8 @@ export function Live() {
     isConnecting,
     switchCamera,
     cameraFacing,
+    cameraHidden,
+    toggleCameraHidden,
     saveLiveMetadata,
     joinAsViewer,
     liveRegistry,
@@ -2299,7 +2302,9 @@ export function Live() {
                       isHost={isHost}
                       localStream={localStream}
                       remoteStream={viewerRemoteStream}
-                      showCameraFlip={isHost && config.mode === "camera"}
+                      showCameraFlip={
+                        isHost && config.mode === "camera" && !cameraHidden
+                      }
                       cameraFacing={cameraFacing}
                       onFlipCamera={() => {
                         void switchCamera();
@@ -2513,21 +2518,26 @@ export function Live() {
                   <button
                     type="button"
                     onClick={() => {
-                      void switchCamera();
+                      void toggleCameraHidden();
                     }}
                     className="pointer-events-auto inline-flex h-8 w-8 items-center justify-center rounded-full bg-night-900/70 text-ivory/80 backdrop-blur transition hover:bg-night-900/90 hover:text-gold-200"
                     aria-label={
-                      cameraFacing === "user"
-                        ? "Passer en caméra arrière"
-                        : "Passer en caméra frontale"
+                      cameraHidden
+                        ? "Réactiver la caméra"
+                        : "Masquer la caméra (afficher mon avatar)"
                     }
+                    aria-pressed={cameraHidden}
                     title={
-                      cameraFacing === "user"
-                        ? "Passer en caméra arrière"
-                        : "Passer en caméra frontale"
+                      cameraHidden
+                        ? "Réactiver la caméra"
+                        : "Masquer la caméra et diffuser mon avatar"
                     }
                   >
-                    <RefreshCw className="h-4 w-4" />
+                    {cameraHidden ? (
+                      <Video className="h-4 w-4" />
+                    ) : (
+                      <VideoOff className="h-4 w-4" />
+                    )}
                   </button>
                 )}
                 {amBroadcaster && isActiveLive ? (
