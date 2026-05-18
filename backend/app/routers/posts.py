@@ -41,6 +41,7 @@ from ..schemas import (  # noqa: E402
     PostOut,
     ReactionToggle,
 )
+from .users import _grade_out  # noqa: E402
 
 
 # PR M — XP offert à l'auteur quand son post est publié. Volontairement bas
@@ -209,6 +210,7 @@ def _community_activity_rows(
                 "id": user_id,
                 "username": (profile.username if profile else "") or username or user_id,
                 "handle": profile.handle if profile else None,
+                "grade": _grade_out(profile) if profile else None,
                 "avatarImageUrl": (profile.avatar_image_url if profile else "") or avatar,
                 "postCount": 0,
                 "commentCount": 0,
@@ -221,6 +223,7 @@ def _community_activity_rows(
             if profile is not None:
                 current["username"] = profile.username or current["username"]
                 current["handle"] = profile.handle or current["handle"]
+                current["grade"] = _grade_out(profile)
                 current["avatarImageUrl"] = (
                     profile.avatar_image_url or current["avatarImageUrl"]
                 )
@@ -314,6 +317,7 @@ def _serialize_activity_entry(row: dict) -> CommunityActivityEntryOut:
         id=row["id"],
         username=row["username"],
         handle=row.get("handle"),
+        grade=row.get("grade"),
         avatarImageUrl=row.get("avatarImageUrl") or "",
         postCount=int(row.get("postCount") or 0),
         commentCount=int(row.get("commentCount") or 0),
@@ -384,18 +388,33 @@ def _resolve_handles(
     return {p.id: p.handle for p in rows if p.handle}
 
 
+def _resolve_grades(
+    session: Session, author_ids: List[str]
+) -> Dict[str, object]:
+    unique_ids = [uid for uid in {aid for aid in author_ids if aid} if uid]
+    if not unique_ids:
+        return {}
+    rows = session.exec(
+        select(UserProfile).where(UserProfile.id.in_(unique_ids))
+    ).all()
+    return {p.id: _grade_out(p) for p in rows}
+
+
 def _serialize_post(
     post: Post,
     reactions: Dict[str, List[str]],
     comments: List[Comment],
     handles: Dict[str, str] | None = None,
+    grades: Dict[str, object] | None = None,
 ) -> PostOut:
     handles = handles or {}
+    grades = grades or {}
     return PostOut(
         id=post.id,
         authorId=post.author_id,
         authorName=post.author_name,
         authorHandle=handles.get(post.author_id),
+        authorGrade=grades.get(post.author_id),
         authorAvatar=post.author_avatar,
         content=post.content,
         imageUrl=post.image_url,
@@ -408,6 +427,7 @@ def _serialize_post(
                 authorId=c.author_id,
                 authorName=c.author_name,
                 authorHandle=handles.get(c.author_id),
+                authorGrade=grades.get(c.author_id),
                 authorAvatar=c.author_avatar,
                 content=c.content,
                 parentId=c.parent_id,
@@ -453,6 +473,7 @@ def list_posts(session: Session = Depends(_session_dep)) -> List[PostOut]:
     for comment_list in comments_by_post.values():
         all_author_ids.extend(c.author_id for c in comment_list)
     handles = _resolve_handles(session, all_author_ids)
+    grades = _resolve_grades(session, all_author_ids)
 
     return [
         _serialize_post(
@@ -460,6 +481,7 @@ def list_posts(session: Session = Depends(_session_dep)) -> List[PostOut]:
             {emoji: users for emoji, users in reactions_by_post[p.id].items()},
             comments_by_post[p.id],
             handles,
+            grades,
         )
         for p in posts
     ]
@@ -525,7 +547,8 @@ def create_post(
     session.commit()
     session.refresh(post)
     handles = _resolve_handles(session, [post.author_id])
-    return _serialize_post(post, {}, [], handles)
+    grades = _resolve_grades(session, [post.author_id])
+    return _serialize_post(post, {}, [], handles, grades)
 
 
 @router.delete("/{post_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -603,7 +626,10 @@ def toggle_reaction(
     handles = _resolve_handles(
         session, [post.author_id, *[c.author_id for c in comments]]
     )
-    return _serialize_post(post, dict(by_emoji), comments, handles)
+    grades = _resolve_grades(
+        session, [post.author_id, *[c.author_id for c in comments]]
+    )
+    return _serialize_post(post, dict(by_emoji), comments, handles, grades)
 
 
 @router.post(
@@ -656,11 +682,13 @@ def add_comment(
     if comment.reply_to_author_id:
         handle_ids.append(comment.reply_to_author_id)
     handles = _resolve_handles(session, handle_ids)
+    grades = _resolve_grades(session, [comment.author_id])
     return CommentOut(
         id=comment.id,
         authorId=comment.author_id,
         authorName=comment.author_name,
         authorHandle=handles.get(comment.author_id),
+        authorGrade=grades.get(comment.author_id),
         authorAvatar=comment.author_avatar,
         content=comment.content,
         parentId=comment.parent_id,
