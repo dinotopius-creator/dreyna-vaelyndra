@@ -630,6 +630,11 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   // MediaStream concurrents et la première fuite (tracks jamais
   // `stop()`-ées → caméra/micro restent actifs en tâche de fond).
   const switchingCameraRef = useRef(false);
+  // Verrou pour la recuperation silencieuse declenchee par un "ended"
+  // (notamment iOS Safari quand l'user retourne son ecran : le track
+  // camera est brievement coupe par le navigateur). On evite plusieurs
+  // tentatives concurrentes qui creeraient des MediaStream fantomes.
+  const silentRecoveryRef = useRef(false);
   const liveStartTokenRef = useRef(0);
   const cameraDeviceIdRef = useRef<string | null>(null);
   // Ref miroir sur le flux local pour que `cleanup` puisse toujours couper
@@ -1856,6 +1861,137 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     isLiveStartTokenCurrent,
   ]);
 
+  /**
+   * Recuperation silencieuse de la camera apres un evenement "ended"
+   * inattendu. Cas typique : iOS Safari coupe brievement le track camera
+   * quand l'user retourne son ecran (changement d'orientation) ou bascule
+   * une autre app au premier plan puis revient. Avant cette fonction le
+   * live etait force en mode pause/reprise manuelle, ce qui est tres
+   * brutal pour un simple flip d'ecran. On tente d'abord de re-acquerir
+   * silencieusement la camera (meme facingMode) et de remplacer les
+   * tracks sur les viewers en cours via `replaceTrack` — sans nouvelle
+   * offre SDP, donc invisible pour les viewers. On ne retombe sur le
+   * mode pause/reprise que si la re-acquisition echoue (autorisation
+   * revoquee, materiel deconnecte, etc.).
+   *
+   * Renvoie true si la reprise silencieuse a reussi, false sinon.
+   */
+  const attemptSilentCameraRecovery = useCallback(async (): Promise<boolean> => {
+    const previous = localStreamRef.current;
+    if (!previous) return false;
+    if (configRef.current.mode !== "camera") return false;
+    if (silentRecoveryRef.current) return false;
+    if (
+      typeof navigator === "undefined" ||
+      !navigator.mediaDevices ||
+      typeof navigator.mediaDevices.getUserMedia !== "function"
+    ) {
+      return false;
+    }
+    silentRecoveryRef.current = true;
+    let nextStreamRaw: MediaStream | null = null;
+    try {
+      const facing: CameraFacing = cameraFacing;
+      try {
+        const videoDevices = await listVideoInputDevices();
+        const preferredDevice = videoDevices.find((device) =>
+          facing === "environment"
+            ? /back|rear|environment|triple|ultra/i.test(device.label)
+            : /front|user|facetime/i.test(device.label),
+        );
+        nextStreamRaw = await navigator.mediaDevices.getUserMedia({
+          video: buildCameraConstraints(facing, {
+            deviceId: preferredDevice?.deviceId ?? null,
+          }),
+          // Sur iOS Safari, redemander un track audio briefly volerait le
+          // micro a la session en cours. On garde l'audio existant et on
+          // ne reacquiert que la video.
+          audio: false,
+        });
+      } catch (err) {
+        console.warn("silent camera recovery: getUserMedia failed", err);
+        return false;
+      }
+
+      // Le live a pu etre arrete (stopLive) pendant le `await`. Si oui on
+      // jette le nouveau stream sans rien recoller.
+      if (localStreamRef.current !== previous) {
+        nextStreamRaw.getTracks().forEach((t) => t.stop());
+        return false;
+      }
+
+      const newVideoTrack = nextStreamRaw.getVideoTracks()[0];
+      if (!newVideoTrack) {
+        nextStreamRaw.getTracks().forEach((t) => t.stop());
+        return false;
+      }
+
+      const previousAudioTrack = previous.getAudioTracks()[0];
+      const viewersToRestart = new Set<string>();
+      await Promise.all(
+        Array.from(hostConnectionsRef.current).map(async (call) => {
+          const senders = call.peerConnection?.getSenders() ?? [];
+          let replacedVideo = false;
+          for (const sender of senders) {
+            if (sender.track?.kind === "video") {
+              try {
+                await sender.replaceTrack(newVideoTrack);
+                replacedVideo = true;
+              } catch {
+                viewersToRestart.add(call.peer);
+              }
+            }
+          }
+          if (!replacedVideo && senders.length > 0) {
+            viewersToRestart.add(call.peer);
+          }
+        }),
+      );
+
+      const merged = new MediaStream([
+        newVideoTrack,
+        ...(previousAudioTrack ? [previousAudioTrack] : []),
+      ]);
+
+      cameraDeviceIdRef.current =
+        newVideoTrack.getSettings().deviceId ?? null;
+      localStreamRef.current = merged;
+      setLocalStream(merged);
+
+      // Sur la prochaine "ended" inattendue on retentera la meme procedure.
+      newVideoTrack.addEventListener("ended", () => {
+        if (localStreamRef.current !== merged) return;
+        void (async () => {
+          const recovered = await attemptSilentCameraRecovery();
+          if (!recovered) {
+            pauseLiveForRecovery(
+              "camera",
+              "La camera a ete interrompue. Ton live reste annonce : relance la camera pour reprendre.",
+            );
+          }
+        })();
+      });
+
+      viewersToRestart.forEach((viewerPeerId) => {
+        restartOutboundCallForViewer(viewerPeerId);
+      });
+
+      // Stoppe l'ancien track video apres avoir bascule, pour eviter de
+      // declencher un "ended" sur l'ancien stream qui re-rentrerait dans
+      // ce meme code path.
+      previous.getVideoTracks().forEach((track) => track.stop());
+
+      return true;
+    } finally {
+      // Jette les tracks audio inutilises du nouveau stream brut (on a
+      // garde l'audio existant). Sans ca le micro reste alloue cote OS.
+      if (nextStreamRaw) {
+        nextStreamRaw.getAudioTracks().forEach((track) => track.stop());
+      }
+      silentRecoveryRef.current = false;
+    }
+  }, [cameraFacing, pauseLiveForRecovery, restartOutboundCallForViewer]);
+
   const startCameraShare = useCallback(
     async (facingMode: CameraFacing = "user") => {
       const me = userRef.current;
@@ -1905,19 +2041,34 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         stream.getVideoTracks()[0]?.getSettings().deviceId ?? null;
       stream.getVideoTracks().forEach((track) => {
         track.addEventListener("ended", () => {
-          if (localStreamRef.current === stream) {
-            pauseLiveForRecovery(
-              "camera",
-              "La camera a ete interrompue. Ton live reste annonce : relance la camera pour reprendre.",
-            );
-          }
+          if (localStreamRef.current !== stream) return;
+          // Cas typique iOS Safari : rotation/orientation, retour
+          // d'arriere-plan, etc. On tente d'abord une reprise silencieuse
+          // (re-getUserMedia + replaceTrack) avant de degrader vers la
+          // banniere "Le flux a ete interrompu" qui force l'user a
+          // recliquer pour reprendre.
+          void (async () => {
+            const recovered = await attemptSilentCameraRecovery();
+            if (!recovered) {
+              pauseLiveForRecovery(
+                "camera",
+                "La camera a ete interrompue. Ton live reste annonce : relance la camera pour reprendre.",
+              );
+            }
+          })();
         });
       });
       localStreamRef.current = stream;
       setLocalStream(stream);
       await attachStreamToPeer(stream, "camera", startToken);
     },
-    [attachStreamToPeer, pauseLiveForRecovery, bumpLiveStartToken, isLiveStartTokenCurrent],
+    [
+      attachStreamToPeer,
+      pauseLiveForRecovery,
+      bumpLiveStartToken,
+      isLiveStartTokenCurrent,
+      attemptSilentCameraRecovery,
+    ],
   );
 
   /**
@@ -2019,12 +2170,16 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         restartOutboundCallForViewer(viewerPeerId);
       });
       newVideoTrack.addEventListener("ended", () => {
-        if (localStreamRef.current === nextStream) {
-          pauseLiveForRecovery(
-            "camera",
-            "La camera a ete interrompue. Ton live reste annonce : relance la camera pour reprendre.",
-          );
-        }
+        if (localStreamRef.current !== nextStream) return;
+        void (async () => {
+          const recovered = await attemptSilentCameraRecovery();
+          if (!recovered) {
+            pauseLiveForRecovery(
+              "camera",
+              "La camera a ete interrompue. Ton live reste annonce : relance la camera pour reprendre.",
+            );
+          }
+        })();
       });
       // Bascule le flux actif AVANT de stopper l'ancienne camera. Sinon le
       // listener `ended` de l'ancienne track croit a une vraie interruption
@@ -2038,7 +2193,12 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       next?.getAudioTracks().forEach((track) => track.stop());
       switchingCameraRef.current = false;
     }
-  }, [cameraFacing, pauseLiveForRecovery, restartOutboundCallForViewer]);
+  }, [
+    cameraFacing,
+    pauseLiveForRecovery,
+    restartOutboundCallForViewer,
+    attemptSilentCameraRecovery,
+  ]);
 
   /**
    * Côté viewer : tente activement de rejoindre le live d'un broadcaster

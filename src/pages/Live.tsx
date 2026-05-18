@@ -1426,7 +1426,21 @@ export function Live() {
       } else if (videoEl?.webkitDisplayingFullscreen) {
         videoEl.webkitExitFullscreen?.();
         return;
-      } else if (el.requestFullscreen) {
+      }
+      // Sur iPhone / iPad Safari : on saute deliberement la Fullscreen API
+      // native (webkitEnterFullscreen sur la <video>) qui ferait passer
+      // l'iframe dans le lecteur natif d'iOS — lecteur qui n'expose pas
+      // notre DOM, donc on perdrait le compteur de viewers, le chat et
+      // les interactions. On bascule directement en mode "viewport"
+      // (overlay CSS plein ecran) ou nos overlays restent vivants. Voir
+      // retour Alexandre (PR a la suite du systeme familier) : il veut
+      // voir le chat et le nombre de spectateurs en plein ecran iOS.
+      if (isIosWebkitMobile()) {
+        setFullscreenMode("viewport");
+        notify("Mode plein écran optimisé pour Safari iPhone activé.", "info");
+        return;
+      }
+      if (el.requestFullscreen) {
         await el.requestFullscreen();
         return;
       } else if (fullscreenTarget.webkitRequestFullscreen) {
@@ -1434,10 +1448,6 @@ export function Live() {
         return;
       } else if (videoEl && typeof videoEl.webkitEnterFullscreen === "function") {
         videoEl.webkitEnterFullscreen();
-        return;
-      } else if (isIosWebkitMobile()) {
-        setFullscreenMode("viewport");
-        notify("Mode plein écran optimisé pour Safari iPhone activé.", "info");
         return;
       }
       notify("Le plein écran n'est pas disponible sur ce navigateur.", "info");
