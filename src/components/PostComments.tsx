@@ -8,10 +8,12 @@ import { useToast } from "../contexts/ToastContext";
 import { formatRelative } from "../lib/helpers";
 import { apiAddComment, apiDeleteComment, type UserProfileDto } from "../lib/api";
 import type { Comment } from "../types";
+import { getOfficial } from "../data/officials";
 import { Handle } from "./Handle";
 import { ReportButton } from "./ReportButton";
 import { AvatarImage } from "./AvatarImage";
 import StreamerGradeBadge from "./StreamerGradeBadge";
+import { UserBadges } from "./UserBadges";
 
 interface Props {
   postId: string;
@@ -189,6 +191,14 @@ export function PostComments({
               {displayGrade && (
                 <StreamerGradeBadge grade={displayGrade} size="sm" />
               )}
+              <UserBadges
+                role={profile?.role ?? getOfficial(comment.authorId)?.role}
+                creatureId={
+                  profile?.creature?.id ??
+                  usersById.get(comment.authorId)?.creatureId ??
+                  getOfficial(comment.authorId)?.creatureId
+                }
+              />
               <Link
                 to={profileHref(comment.authorId)}
                 className="transition hover:opacity-80"

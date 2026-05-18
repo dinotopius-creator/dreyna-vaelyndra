@@ -390,8 +390,12 @@ export function Community() {
                         const official = getOfficial(post.authorId);
                         return (
                           <UserBadges
-                            role={official?.role}
-                            creatureId={official?.creatureId}
+                            role={profile?.role ?? official?.role}
+                            creatureId={
+                              profile?.creature?.id ??
+                              usersById.get(post.authorId)?.creatureId ??
+                              official?.creatureId
+                            }
                           />
                         );
                       })()}
@@ -580,12 +584,20 @@ export function Community() {
                     />
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                      <p className="truncate font-display text-sm text-gold-200 group-hover:text-gold-100">
-                        {member.username}
-                      </p>
+                        <p className="truncate font-display text-sm text-gold-200 group-hover:text-gold-100">
+                          {member.username}
+                        </p>
                         {member.grade && (
                           <StreamerGradeBadge grade={member.grade} size="sm" />
                         )}
+                        <UserBadges
+                          role={profilesById[member.id]?.role ?? getOfficial(member.id)?.role}
+                          creatureId={
+                            profilesById[member.id]?.creature?.id ??
+                            usersById.get(member.id)?.creatureId ??
+                            getOfficial(member.id)?.creatureId
+                          }
+                        />
                       </div>
                       <Handle handle={member.handle} size="xs" />
                       <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-ivory/55">
