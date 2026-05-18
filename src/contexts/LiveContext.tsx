@@ -46,6 +46,10 @@ import {
   type NativeIceCandidate,
 } from "../lib/liveApi";
 import { publishCrossWindowLiveChat } from "../lib/liveChatBus";
+import {
+  createLiveAvatarStream,
+  type LiveAvatarStreamHandle,
+} from "../lib/liveAvatarStream";
 
 /**
  * Contexte dédié aux lives (queen + cour). Multi-utilisateur.
@@ -484,6 +488,18 @@ interface LiveCtx {
   switchCamera: () => Promise<void>;
   /** Côté host : orientation actuelle de la caméra (user = frontale). */
   cameraFacing: CameraFacing;
+  /**
+   * Côté host : true quand la caméra est volontairement coupée et qu'on
+   * diffuse à la place un flux d'avatar (canvas captureStream).
+   * Les viewers continuent à voir quelque chose (avatar + pseudo) sans
+   * coupure ni reconnexion. L'audio n'est pas affecté.
+   */
+  cameraHidden: boolean;
+  /**
+   * Côté host : bascule entre "caméra ouverte" et "caméra masquée par
+   * l'avatar". No-op hors du mode caméra.
+   */
+  toggleCameraHidden: () => Promise<void>;
   /** Côté host : arrêter mon live. */
   stopLive: () => void;
   /**
@@ -575,6 +591,22 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   const [isConnecting, setIsConnecting] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
   const [cameraFacing, setCameraFacing] = useState<CameraFacing>("user");
+  /**
+   * Host : caméra volontairement coupée, on diffuse à la place le canvas
+   * avatar. `cameraHiddenRef` est utilisé dans les callbacks asynchrones
+   * pour éviter les valeurs périmées.
+   */
+  const [cameraHidden, setCameraHidden] = useState(false);
+  const cameraHiddenRef = useRef(false);
+  cameraHiddenRef.current = cameraHidden;
+  /** Handle vers le flux canvas-avatar courant (pour le stopper). */
+  const avatarStreamRef = useRef<LiveAvatarStreamHandle | null>(null);
+  /**
+   * Track vidéo "réelle" caméra mise en pause par le toggle. On la garde
+   * stoppée (libère la caméra OS), et on en réacquiert une nouvelle quand
+   * l'utilisateur ré-active la caméra.
+   */
+  const switchingCameraHiddenRef = useRef(false);
   const [viewingMeta, setViewingMeta] = useState<{
     title: string;
     description: string;
@@ -1219,6 +1251,17 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     localStreamRef.current = null;
     cameraDeviceIdRef.current = null;
     setLocalStream(null);
+    // Si un flux avatar tournait encore (caméra masquée), on le libère.
+    if (avatarStreamRef.current) {
+      try {
+        avatarStreamRef.current.stop();
+      } catch {
+        // ignore
+      }
+      avatarStreamRef.current = null;
+    }
+    setCameraHidden(false);
+    cameraHiddenRef.current = false;
   }, [bumpLiveStartToken]);
 
   /** Ferme UNIQUEMENT les ressources côté viewer (peer + remoteStream). */
@@ -2261,6 +2304,187 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   ]);
 
   /**
+   * Côté host (mode caméra) : bascule entre caméra ouverte et caméra
+   * masquée par l'avatar.
+   *
+   * - Quand on masque : on stoppe la track caméra OS, on génère un flux
+   *   vidéo à partir du canvas avatar (`createLiveAvatarStream`), et on
+   *   `replaceTrack` sur tous les viewers. L'audio reste branché.
+   * - Quand on ré-affiche : on stoppe le flux canvas et on rouvre la
+   *   caméra (`getUserMedia` avec le même facing). Si l'utilisateur a
+   *   révoqué l'accès caméra entre temps, on retombe sur la bannière
+   *   pause/reprise classique.
+   *
+   * Côté viewer c'est invisible : pas de re-offer SDP, juste un swap
+   * de track. Le live reste annoncé pendant toute l'opération.
+   */
+  const toggleCameraHidden = useCallback(async (): Promise<void> => {
+    if (configRef.current.mode !== "camera") return;
+    const current = localStreamRef.current;
+    if (!current) return;
+    if (switchingCameraHiddenRef.current) return;
+    switchingCameraHiddenRef.current = true;
+
+    const swapVideoTrackOnPeers = async (
+      newVideoTrack: MediaStreamTrack,
+    ): Promise<Set<string>> => {
+      const viewersToRestart = new Set<string>();
+      await Promise.all(
+        Array.from(hostConnectionsRef.current).map(async (call) => {
+          const senders = call.peerConnection?.getSenders() ?? [];
+          let replaced = false;
+          for (const sender of senders) {
+            if (sender.track?.kind === "video") {
+              try {
+                await sender.replaceTrack(newVideoTrack);
+                replaced = true;
+              } catch {
+                viewersToRestart.add(call.peer);
+              }
+            }
+          }
+          if (!replaced && senders.length > 0) {
+            viewersToRestart.add(call.peer);
+          }
+        }),
+      );
+      return viewersToRestart;
+    };
+
+    try {
+      if (!cameraHiddenRef.current) {
+        // === Masquer la caméra → bascule sur l'avatar ===
+        const me = userRef.current;
+        let avatarHandle: LiveAvatarStreamHandle;
+        try {
+          avatarHandle = await createLiveAvatarStream({
+            avatarUrl: me?.avatar ?? null,
+            username: me?.username ?? "Vaelyndra",
+          });
+        } catch {
+          setLastError(
+            "Impossible de générer le flux d'avatar pour masquer la caméra.",
+          );
+          return;
+        }
+        // Le live a pu être arrêté pendant l'await — on ne touche à rien.
+        if (localStreamRef.current !== current) {
+          avatarHandle.stop();
+          return;
+        }
+        const avatarVideoTrack = avatarHandle.stream.getVideoTracks()[0];
+        if (!avatarVideoTrack) {
+          avatarHandle.stop();
+          return;
+        }
+        const viewersToRestart = await swapVideoTrackOnPeers(avatarVideoTrack);
+        // Si le live a été stoppé pendant la swap, on jette tout.
+        if (localStreamRef.current !== current) {
+          avatarHandle.stop();
+          return;
+        }
+        const nextStream = new MediaStream([
+          avatarVideoTrack,
+          ...current.getAudioTracks(),
+        ]);
+        viewersToRestart.forEach((viewerPeerId) => {
+          restartOutboundCallForViewer(viewerPeerId);
+        });
+        localStreamRef.current = nextStream;
+        setLocalStream(nextStream);
+        avatarStreamRef.current = avatarHandle;
+        setCameraHidden(true);
+        cameraHiddenRef.current = true;
+        // On stoppe la vraie track caméra : libère la LED + permet à iOS
+        // Safari de ne pas montrer l'indicateur "caméra utilisée".
+        current.getVideoTracks().forEach((track) => track.stop());
+      } else {
+        // === Ré-afficher la caméra → re-getUserMedia ===
+        if (
+          typeof navigator === "undefined" ||
+          !navigator.mediaDevices ||
+          typeof navigator.mediaDevices.getUserMedia !== "function"
+        ) {
+          return;
+        }
+        let next: MediaStream;
+        try {
+          next = await navigator.mediaDevices.getUserMedia({
+            video: buildCameraConstraints(cameraFacing, {
+              deviceId: cameraDeviceIdRef.current,
+              preferExactDevice: !isMobileMediaBrowser(),
+              allowExactFacing: !isMobileMediaBrowser(),
+            }),
+            audio: false,
+          });
+        } catch (err) {
+          setLastError(describeCameraAccessError(err, "start"));
+          return;
+        }
+        // Live arrêté pendant l'await → on jette tout.
+        if (localStreamRef.current !== current) {
+          next.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        const newVideoTrack = next.getVideoTracks()[0];
+        if (!newVideoTrack) {
+          next.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        const viewersToRestart = await swapVideoTrackOnPeers(newVideoTrack);
+        if (localStreamRef.current !== current) {
+          newVideoTrack.stop();
+          return;
+        }
+        const nextStream = new MediaStream([
+          newVideoTrack,
+          ...current.getAudioTracks(),
+        ]);
+        viewersToRestart.forEach((viewerPeerId) => {
+          restartOutboundCallForViewer(viewerPeerId);
+        });
+        // Listener `ended` standard : si la nouvelle caméra est coupée
+        // inopinément, on tente la reprise silencieuse résiliente.
+        newVideoTrack.addEventListener("ended", () => {
+          if (localStreamRef.current !== nextStream) return;
+          if (cameraHiddenRef.current) return;
+          void (async () => {
+            const recovered = await attemptSilentCameraRecoveryResilient();
+            if (!recovered) {
+              pauseLiveForRecovery(
+                "camera",
+                "La camera a ete interrompue. Ton live reste annonce : relance la camera pour reprendre.",
+              );
+            }
+          })();
+        });
+        cameraDeviceIdRef.current =
+          newVideoTrack.getSettings().deviceId ?? cameraDeviceIdRef.current;
+        localStreamRef.current = nextStream;
+        setLocalStream(nextStream);
+        // Coupe le canvas avatar.
+        if (avatarStreamRef.current) {
+          try {
+            avatarStreamRef.current.stop();
+          } catch {
+            // ignore
+          }
+          avatarStreamRef.current = null;
+        }
+        setCameraHidden(false);
+        cameraHiddenRef.current = false;
+      }
+    } finally {
+      switchingCameraHiddenRef.current = false;
+    }
+  }, [
+    cameraFacing,
+    pauseLiveForRecovery,
+    restartOutboundCallForViewer,
+    attemptSilentCameraRecoveryResilient,
+  ]);
+
+  /**
    * Côté viewer : tente activement de rejoindre le live d'un broadcaster
    * donné. Idempotent : si un viewerPeer existe déjà ou si on est le host
    * du broadcasterId ciblé, on ne refait rien.
@@ -2905,6 +3129,8 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       startCameraShare,
       switchCamera,
       cameraFacing,
+      cameraHidden,
+      toggleCameraHidden,
       stopLive,
       joinAsViewer,
       remoteStream,
@@ -2931,6 +3157,8 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       startCameraShare,
       switchCamera,
       cameraFacing,
+      cameraHidden,
+      toggleCameraHidden,
       stopLive,
       joinAsViewer,
       remoteStream,
