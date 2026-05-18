@@ -28,6 +28,7 @@ from .routers import (
     oracle,
     posts,
     reports,
+    stats,
     streamers,
     stripe_router,
     users,
@@ -298,6 +299,7 @@ app.include_router(users.router)
 app.include_router(users.creatures_router)
 app.include_router(users.admin_grades_router)
 app.include_router(streamers.router)
+app.include_router(stats.router)
 app.include_router(auth_router)
 app.include_router(admin.router)
 app.include_router(reports.router)

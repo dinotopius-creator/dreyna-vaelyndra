@@ -55,10 +55,8 @@ import {
   type SortLevel,
 } from "../components/SortDAppelCaster";
 import {
-  AUTO_CHAT_LINES,
   GIFT_CATALOGUE,
   INITIAL_LIVES,
-  SEED_CHAT,
 } from "../data/mock";
 import type {
   ChatMessage,
@@ -81,13 +79,6 @@ import {
 import { apiGetProfile } from "../lib/api";
 import { gradeBySlug } from "../data/grades";
 import { isNativeScreenShareAvailable } from "../lib/nativeScreenShare";
-import {
-  getBotCadence,
-  getViewerScale,
-  nextViewerValue,
-  pickInitialViewers,
-  pickNextBotDelay,
-} from "../lib/liveScaling";
 
 // PR familiers#5 — couleur d'ambiance par rareté pour teinter les
 // réactions du familier (overlay) à chaque cadeau reçu.
@@ -98,35 +89,6 @@ const GIFT_RARITY_COLORS: Record<string, string> = {
   legendaire: "#fbbf24",
   mythique: "#f472b6",
 };
-
-const BOT_AUTHORS = [
-  {
-    id: "user-lyria",
-    name: "Lyria",
-    avatar: "https://i.pravatar.cc/150?u=lyria",
-  },
-  {
-    id: "user-caelum",
-    name: "Caelum",
-    avatar: "https://i.pravatar.cc/150?u=caelum",
-  },
-  {
-    id: "user-aeris",
-    name: "Aëris",
-    avatar: "https://i.pravatar.cc/150?u=aeris",
-  },
-  {
-    id: "user-sylas",
-    name: "Sylas",
-    avatar: "https://i.pravatar.cc/150?u=sylas",
-  },
-  { id: "user-mira", name: "Mira", avatar: "https://i.pravatar.cc/150?u=mira" },
-  {
-    id: "user-thalia",
-    name: "Thalia",
-    avatar: "https://i.pravatar.cc/150?u=thalia",
-  },
-];
 
 function serverChatToMessage(row: LiveChatMessageOut): ChatMessage {
   return {
@@ -1235,21 +1197,20 @@ export function Live() {
     isActiveLive &&
     (isHost || hasRemote || (activeMode === "twitch" && !!twitchChannel));
 
-  const [messages, setMessages] = useState<ChatMessage[]>(SEED_CHAT);
-  // Grade du broadcaster — utilisé pour scaler le compteur de viewers
-  // fake et la cadence du chat bot. `null` tant qu'on n'a pas récupéré le
-  // profil → on part sur le défaut (novice). Idem `myGradeShort` pour le
-  // préfixe `[SHORT]` devant mon pseudo dans les messages que je publie.
+  // Demande client (Alexandre, 20/04) : aucun bot dans le chat, et
+  // chaque live démarre avec un chat vide (pas d'historique du live
+  // précédent). On part donc d'un buffer local vide ; il se remplit
+  // exclusivement avec les vrais messages reçus (WebRTC DataChannel +
+  // polling backend) une fois que le live est actif.
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  // Grade du broadcaster — utilisé pour afficher le badge sous le
+  // lecteur et le diminutif `[SHORT]` devant les pseudos. `null` tant
+  // qu'on n'a pas récupéré le profil. Idem `myGradeShort` pour le
+  // préfixe devant mon propre pseudo dans les messages que j'envoie.
   const [broadcasterGradeSlug, setBroadcasterGradeSlug] = useState<
     string | null
   >(null);
   const [myGradeShort, setMyGradeShort] = useState<string | null>(null);
-  // Compteur viewers fake — initialisé au tiers bas de la fourchette
-  // correspondant au grade du broadcaster, puis mis à jour toutes les
-  // ~N secondes avec un léger biais positif pour mimer l'arrivée des gens.
-  const [, setViewers] = useState(() =>
-    pickInitialViewers(getViewerScale(null)),
-  );
   // Modération (PR Q) : sanctions actives reçues depuis le backend pour le
   // user courant, sur *ce* live. Polled ~30 s depuis `apiMyModerationState`
   // pour détecter un mute/kick posé pendant qu'on regarde.
@@ -1550,8 +1511,10 @@ export function Live() {
 
   // Reset du chat + des cœurs + du leaderboard quand on change de
   // broadcaster pour éviter la confusion (tout est spécifique au live).
+  // Le chat repart à VIDE : pas de seed bot, pas d'historique d'un
+  // précédent live (demande client 20/04).
   useEffect(() => {
-    setMessages(SEED_CHAT);
+    setMessages([]);
     setHeartEvents([]);
     // Top soutien repart à vide à chaque changement de live : il ne
     // se remplit qu'à partir des vrais cadeaux reçus via WebRTC.
@@ -1840,70 +1803,6 @@ export function Live() {
       cancelled = true;
     };
   }, [user?.id]);
-
-  // Reseed le compteur viewers quand le grade du broadcaster est résolu
-  // (évite de garder l'ancienne valeur 1284 quand on arrive sur un live
-  // de Novice). On garde la valeur si elle est déjà dans la fourchette.
-  const viewerScale = useMemo(
-    () => getViewerScale(broadcasterGradeSlug),
-    [broadcasterGradeSlug],
-  );
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setViewers((v) => {
-      if (v >= viewerScale.min && v <= viewerScale.max) return v;
-      return pickInitialViewers(viewerScale);
-    });
-  }, [viewerScale]);
-
-  // Simulate viewers pulse — scalé par grade du broadcaster :
-  // Novice = petits mouvements rares, Légende = grosses variations rapides.
-  useEffect(() => {
-    const t = setInterval(() => {
-      setViewers((v) => nextViewerValue(v, viewerScale));
-    }, viewerScale.intervalMs);
-    return () => clearInterval(t);
-  }, [viewerScale]);
-
-  // Auto chat lines — cadence scalée par grade du broadcaster. On utilise
-  // setTimeout récursif (plutôt qu'un setInterval fixe) pour que chaque
-  // attente soit tirée au hasard dans [minMs, maxMs] du grade courant,
-  // ce qui sonne plus naturel qu'un tick mécanique.
-  useEffect(() => {
-    return;
-    const cadence = getBotCadence(broadcasterGradeSlug);
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const scheduleNext = () => {
-      timer = setTimeout(() => {
-        const line =
-          AUTO_CHAT_LINES[Math.floor(Math.random() * AUTO_CHAT_LINES.length)];
-        const bot = BOT_AUTHORS[Math.floor(Math.random() * BOT_AUTHORS.length)];
-        setMessages((m) =>
-          [
-            ...m,
-            {
-              id: generateId("msg"),
-              authorId: bot.id,
-              authorName: bot.name,
-              authorAvatar: bot.avatar,
-              content: line,
-              createdAt: new Date().toISOString(),
-              // Les bots adoptent le diminutif du broadcaster (ils
-              // "ressemblent" au public du live). Pas d'appel API : on
-              // dérive via le slug déjà en main.
-              gradeShort:
-                gradeBySlug(broadcasterGradeSlug ?? "")?.short ?? null,
-            },
-          ].slice(-CHAT_BUFFER_MAX),
-        );
-        scheduleNext();
-      }, pickNextBotDelay(cadence));
-    };
-    scheduleNext();
-    return () => {
-      if (timer) clearTimeout(timer);
-    };
-  }, [isActiveLive, broadcasterGradeSlug]);
 
   const replays = useMemo(() => {
     const seededReplayIds = new Set(INITIAL_LIVES.map((live) => live.id));
