@@ -29,8 +29,14 @@ interface MessagesCtx {
   threadOtherId: string | null;
   threadLoading: boolean;
   threadError: string | null;
+  /** Indique s'il existe encore des messages plus anciens à charger. */
+  threadHasMore: boolean;
+  /** En cours de chargement d'une page d'historique. */
+  threadLoadingMore: boolean;
   /** Ouvre un fil avec un autre user (charge + marque lus + écoute SSE). */
   openThread: (otherUserId: string) => Promise<void>;
+  /** Charge la tranche précédente du fil courant (anciens messages). */
+  loadOlderMessages: () => Promise<void>;
   /** Ferme le fil courant (libère la ref interne). */
   closeThread: () => void;
   /** Envoie un message dans le fil courant. Lève en cas d'erreur. */
@@ -49,8 +55,14 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
   const [threadOtherId, setThreadOtherId] = useState<string | null>(null);
   const [threadLoading, setThreadLoading] = useState(false);
   const [threadError, setThreadError] = useState<string | null>(null);
+  const [threadHasMore, setThreadHasMore] = useState(false);
+  const [threadLoadingMore, setThreadLoadingMore] = useState(false);
 
   const threadOtherRef = useRef<string | null>(null);
+  // Taille de page utilisée pour la pagination. Si le backend renvoie
+  // exactement `PAGE_SIZE` messages, on suppose qu'il en reste d'autres
+  // à charger.
+  const PAGE_SIZE = 200;
 
   const refreshConversations = useCallback(async () => {
     if (!user) return;
@@ -84,6 +96,8 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
       setUnreadCount(0);
       setThread([]);
       setThreadOtherId(null);
+      setThreadHasMore(false);
+      setThreadLoadingMore(false);
       threadOtherRef.current = null;
       return;
     }
@@ -144,13 +158,19 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
       setThreadOtherId(otherUserId);
       setThreadLoading(true);
       setThreadError(null);
+      setThreadHasMore(false);
+      setThreadLoadingMore(false);
       try {
-        const rows = await apiGetThread(otherUserId);
+        const rows = await apiGetThread(otherUserId, { limit: PAGE_SIZE });
         // Un switch rapide A → B peut inverser l'ordre d'arrivée des
         // réponses : si on est déjà passé à un autre fil, on ignore cette
         // réponse pour ne pas écraser les messages du fil actuel.
         if (threadOtherRef.current !== otherUserId) return;
         setThread(mergeAttachments(rows));
+        // S'il y a exactement une page pleine, on suppose qu'il en
+        // reste d'autres à charger (l'UI proposera "Charger plus
+        // anciens").
+        setThreadHasMore(rows.length >= PAGE_SIZE);
         // Les messages reçus viennent d'être marqués lus côté backend →
         // on resynchronise le badge et la liste.
         await Promise.all([refreshUnread(), refreshConversations()]);
@@ -169,11 +189,51 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
     [refreshUnread, refreshConversations],
   );
 
+  const loadOlderMessages = useCallback(async () => {
+    const otherId = threadOtherRef.current;
+    if (!otherId) return;
+    // On utilise l'état React courant via une lecture fonctionnelle pour
+    // éviter de dépendre d'une closure périmée.
+    let oldestId: number | null = null;
+    setThread((current) => {
+      if (current.length > 0) oldestId = current[0].id;
+      return current;
+    });
+    if (oldestId === null || oldestId <= 0) return;
+    setThreadLoadingMore(true);
+    try {
+      const rows = await apiGetThread(otherId, {
+        limit: PAGE_SIZE,
+        beforeId: oldestId,
+      });
+      if (threadOtherRef.current !== otherId) return;
+      if (rows.length === 0) {
+        setThreadHasMore(false);
+        return;
+      }
+      const enriched = mergeAttachments(rows);
+      setThread((current) => {
+        const existing = new Set(current.map((m) => m.id));
+        const fresh = enriched.filter((m) => !existing.has(m.id));
+        return [...fresh, ...current];
+      });
+      setThreadHasMore(rows.length >= PAGE_SIZE);
+    } catch {
+      // Silencieux : on n'écrase pas le fil déjà chargé.
+    } finally {
+      if (threadOtherRef.current === otherId) {
+        setThreadLoadingMore(false);
+      }
+    }
+  }, []);
+
   const closeThread = useCallback(() => {
     threadOtherRef.current = null;
     setThreadOtherId(null);
     setThread([]);
     setThreadError(null);
+    setThreadHasMore(false);
+    setThreadLoadingMore(false);
   }, []);
 
   const sendMessage = useCallback(
@@ -211,7 +271,10 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
       threadOtherId,
       threadLoading,
       threadError,
+      threadHasMore,
+      threadLoadingMore,
       openThread,
+      loadOlderMessages,
       closeThread,
       sendMessage,
       refreshConversations,
@@ -223,7 +286,10 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
       threadOtherId,
       threadLoading,
       threadError,
+      threadHasMore,
+      threadLoadingMore,
       openThread,
+      loadOlderMessages,
       closeThread,
       sendMessage,
       refreshConversations,

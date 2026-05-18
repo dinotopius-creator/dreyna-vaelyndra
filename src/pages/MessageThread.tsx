@@ -1,6 +1,7 @@
 import {
   type ChangeEvent,
   type FormEvent,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -8,7 +9,7 @@ import {
   useState,
 } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Send, Paperclip, X, FileText } from "lucide-react";
+import { ArrowLeft, ArrowUp, Send, Paperclip, X, FileText } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useMessages } from "../contexts/MessagesContext";
 import { useToast } from "../contexts/ToastContext";
@@ -74,7 +75,10 @@ export function MessageThread() {
     thread,
     threadLoading,
     threadError,
+    threadHasMore,
+    threadLoadingMore,
     openThread,
+    loadOlderMessages,
     closeThread,
     sendMessage,
   } = useMessages();
@@ -87,8 +91,10 @@ export function MessageThread() {
   const listRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const lastThreadKeyRef = useRef<string>("");
-  const lastMessageCountRef = useRef(0);
+  const lastThreadIdRef = useRef<string>("");
+  const lastOldestIdRef = useRef<number | null>(null);
+  const lastNewestIdRef = useRef<number | null>(null);
+  const preservedScrollHeightRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -119,20 +125,80 @@ export function MessageThread() {
     });
   }
 
-  // Quand on ouvre un nouveau fil, on doit arriver tout en bas, même si
-  // le rendu final dépend d'images/pièces jointes mesurées après paint.
+  // Détecte si l'utilisateur est déjà "en bas" de la liste (à 120px près).
+  // Sert à n'auto-scroller que quand on suit le fil, et à laisser tranquille
+  // quand on remonte dans l'historique.
+  function isNearBottom(): boolean {
+    const list = listRef.current;
+    if (!list) return true;
+    return list.scrollHeight - list.scrollTop - list.clientHeight < 120;
+  }
+
+  // Avant peinture : si on est sur le point d'insérer des messages plus
+  // anciens (oldest id change), on mémorise la hauteur courante pour
+  // pouvoir, juste après paint, restaurer le scroll afin que le message
+  // que l'utilisateur regardait reste à la même position visuelle.
   useLayoutEffect(() => {
-    const threadKey = thread.map((message) => message.id).join("|");
-    const threadChanged = threadKey !== lastThreadKeyRef.current;
-    const addedMessages = thread.length > lastMessageCountRef.current;
-
-    if (!threadLoading && (threadChanged || addedMessages)) {
-      scrollToLatest(threadChanged ? "auto" : "smooth");
+    const list = listRef.current;
+    if (!list) return;
+    const oldestId = thread.length > 0 ? thread[0].id : null;
+    if (
+      oldestId !== null &&
+      lastOldestIdRef.current !== null &&
+      oldestId < lastOldestIdRef.current
+    ) {
+      preservedScrollHeightRef.current = list.scrollHeight;
     }
+  }, [thread]);
 
-    lastThreadKeyRef.current = threadKey;
-    lastMessageCountRef.current = thread.length;
-  }, [thread, threadLoading]);
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+
+    // Identifie le fil par l'id de l'autre user (passé en URL), pas par
+    // l'empreinte des messages (qui change à chaque ajout).
+    const threadChanged = userId !== lastThreadIdRef.current;
+    const oldestId = thread.length > 0 ? thread[0].id : null;
+    const newestId = thread.length > 0 ? thread[thread.length - 1].id : null;
+    const olderPrepended =
+      oldestId !== null &&
+      lastOldestIdRef.current !== null &&
+      oldestId < lastOldestIdRef.current;
+    const newerAppended =
+      newestId !== null &&
+      lastNewestIdRef.current !== null &&
+      newestId > lastNewestIdRef.current;
+    const wasNearBottom = isNearBottom();
+
+    if (threadChanged && !threadLoading && thread.length > 0) {
+      // Nouveau fil ouvert → on saute tout en bas.
+      scrollToLatest("auto");
+    } else if (olderPrepended) {
+      // On vient d'insérer des messages anciens en haut. On ajuste le
+      // scrollTop pour que le message qui était visible le reste.
+      const prev = preservedScrollHeightRef.current;
+      if (prev !== null) {
+        const delta = list.scrollHeight - prev;
+        list.scrollTop = list.scrollTop + delta;
+      }
+      preservedScrollHeightRef.current = null;
+    } else if (newerAppended && wasNearBottom) {
+      // Nouveau message en bas et l'user suivait le fil → on suit aussi.
+      scrollToLatest("smooth");
+    }
+    // Sinon : on respecte la position de scroll de l'utilisateur (il est
+    // en train de lire dans l'historique), on ne touche à rien.
+
+    lastThreadIdRef.current = userId;
+    lastOldestIdRef.current = oldestId;
+    lastNewestIdRef.current = newestId;
+  }, [thread, threadLoading, userId]);
+
+  // Bouton "Charger les anciens" en haut.
+  const handleLoadOlder = useCallback(() => {
+    if (threadLoadingMore || !threadHasMore) return;
+    void loadOlderMessages();
+  }, [threadLoadingMore, threadHasMore, loadOlderMessages]);
 
   const otherName = otherProfile?.username ?? "Membre";
   const otherAvatar = otherProfile?.avatarImageUrl ?? "";
@@ -265,6 +331,19 @@ export function MessageThread() {
           </p>
         ) : (
           <ul className="flex flex-col gap-2">
+            {threadHasMore && (
+              <li className="flex justify-center pb-2">
+                <button
+                  type="button"
+                  onClick={handleLoadOlder}
+                  disabled={threadLoadingMore}
+                  className="inline-flex items-center gap-2 rounded-full border border-royal-500/30 bg-night-800/70 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-ivory/70 transition hover:border-gold-400/40 hover:text-gold-200 disabled:cursor-wait disabled:opacity-60"
+                >
+                  <ArrowUp className="h-3 w-3" />
+                  {threadLoadingMore ? "Chargement…" : "Charger les anciens messages"}
+                </button>
+              </li>
+            )}
             {thread.map((m) => {
               const mine = m.sender_id === user.id;
               const showReadBelow =
