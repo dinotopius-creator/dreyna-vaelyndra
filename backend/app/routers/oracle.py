@@ -1,12 +1,15 @@
 """Mini-jeu Oracle des Runes : gains journaliers Lueurs / Sylvins."""
 from __future__ import annotations
 
+import logging
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import Session, select
+
+logger = logging.getLogger("oracle")
 
 from ..db import get_session
 from ..models import OracleGameSession, UserProfile
@@ -130,9 +133,19 @@ def get_oracle_status(
         ).all()
     )
     plays_left = max(0, MAX_DAILY_PLAYS - used_today)
+    next_reset = _next_reset_iso()
+    logger.info(
+        "oracle.status user=%s day=%s used=%d left=%d banned=%s next_reset=%s",
+        user_id,
+        day_key,
+        used_today,
+        plays_left,
+        profile.banned_at is not None,
+        next_reset,
+    )
     return OracleStatusOut(
         dayKey=day_key,
-        nextResetAt=_next_reset_iso(),
+        nextResetAt=next_reset,
         playsUsedToday=used_today,
         playsLeftToday=plays_left,
         maxDailyPlays=MAX_DAILY_PLAYS,
@@ -224,6 +237,16 @@ def play_oracle(
 
     plays_used = used_today + 1
     plays_left = max(0, MAX_DAILY_PLAYS - plays_used)
+    logger.info(
+        "oracle.play user=%s day=%s rune=%s reward=%s/%d used=%d left=%d",
+        payload.user_id,
+        day_key,
+        payload.rune_key,
+        reward.currency,
+        reward.amount,
+        plays_used,
+        plays_left,
+    )
     return OraclePlayOut(
         dayKey=day_key,
         nextResetAt=_next_reset_iso(),
