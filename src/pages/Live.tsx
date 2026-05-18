@@ -1278,6 +1278,25 @@ export function Live() {
   const [broadcasterGradeSlug, setBroadcasterGradeSlug] = useState<
     string | null
   >(null);
+  // Avatar + handle du broadcaster, source de vérité serveur. Le cache
+  // local `users` (StoredUser dans AuthContext) n'est rafraîchi que
+  // pour l'utilisateur courant — pour TOUS les autres on tombe sur la
+  // valeur seed (souvent vide pour les comptes créés après le seed),
+  // ce qui faisait afficher un placeholder "?" sur la fiche du
+  // broadcaster (cf. retour Alexandre 23/04).
+  const [broadcasterServerAvatar, setBroadcasterServerAvatar] = useState<
+    string | null
+  >(null);
+  // URL d'avatar finale du broadcaster : priorité au serveur, fallback
+  // sur le cache local `users`, puis DiceBear pour ne JAMAIS afficher
+  // le placeholder "?" cassé.
+  const broadcasterAvatarUrl = useMemo<string>(() => {
+    if (broadcasterServerAvatar) return broadcasterServerAvatar;
+    if (broadcasterProfile?.avatar) return broadcasterProfile.avatar;
+    if (broadcasterId)
+      return `https://i.pravatar.cc/150?u=${encodeURIComponent(broadcasterId)}`;
+    return `https://i.pravatar.cc/150?u=vaelyndra`;
+  }, [broadcasterServerAvatar, broadcasterProfile?.avatar, broadcasterId]);
   const [myGradeShort, setMyGradeShort] = useState<string | null>(null);
   // Modération (PR Q) : sanctions actives reçues depuis le backend pour le
   // user courant, sur *ce* live. Polled ~30 s depuis `apiMyModerationState`
@@ -1836,13 +1855,23 @@ export function Live() {
     // grade. On retombe sur la courbe Novice par défaut en attendant.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setBroadcasterGradeSlug(null);
+    setBroadcasterServerAvatar(null);
     let cancelled = false;
     apiGetProfile(broadcasterId)
       .then((p) => {
-        if (!cancelled) setBroadcasterGradeSlug(p.grade?.slug ?? null);
+        if (cancelled) return;
+        setBroadcasterGradeSlug(p.grade?.slug ?? null);
+        // Source de vérité serveur pour l'avatar du broadcaster : le
+        // cache local `users` peut être vide / périmé pour les comptes
+        // qu'on n'a jamais croisés. Sans ça la fiche affiche un
+        // placeholder "?" alors que l'avatar existe en base.
+        setBroadcasterServerAvatar(p.avatarImageUrl ?? null);
       })
       .catch(() => {
-        if (!cancelled) setBroadcasterGradeSlug(null);
+        if (!cancelled) {
+          setBroadcasterGradeSlug(null);
+          setBroadcasterServerAvatar(null);
+        }
       });
     return () => {
       cancelled = true;
@@ -2167,9 +2196,10 @@ export function Live() {
             <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-ivory/80">
               <div className="flex items-center gap-2">
                 <img
-                  src={broadcasterProfile.avatar}
+                  src={broadcasterAvatarUrl}
                   alt=""
                   className="h-6 w-6 rounded-full border border-gold-400/40 object-cover"
+                  referrerPolicy="no-referrer"
                 />
                 <span>
                   avec{" "}
@@ -2411,7 +2441,7 @@ export function Live() {
                   broadcasterName={
                     broadcasterProfile?.username ?? "le broadcaster"
                   }
-                  fallbackAvatar={broadcasterProfile?.avatar ?? null}
+                  fallbackAvatar={broadcasterAvatarUrl}
                   canEdit={amBroadcaster}
                   showAvatar={avatar3dEnabled}
                   giftTick={giftTick}
@@ -2845,17 +2875,14 @@ export function Live() {
           {broadcasterProfile && (
             <div className="mt-4 flex flex-wrap items-center gap-4 rounded-2xl border border-gold-400/25 bg-night-900/60 p-4 sm:p-5">
               <Link
-                to={
-                  broadcasterProfile.handle
-                    ? `/profil/@${broadcasterProfile.handle}`
-                    : `/profil/${broadcasterProfile.id}`
-                }
+                to={`/u/${encodeURIComponent(broadcasterProfile.id)}`}
                 className="group flex items-center gap-4"
               >
                 <img
-                  src={broadcasterProfile.avatar}
+                  src={broadcasterAvatarUrl}
                   alt=""
                   className="h-14 w-14 rounded-full border-2 border-gold-400/60 object-cover transition group-hover:border-gold-300 sm:h-16 sm:w-16"
+                  referrerPolicy="no-referrer"
                 />
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
