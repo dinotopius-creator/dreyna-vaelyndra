@@ -1958,11 +1958,12 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       localStreamRef.current = merged;
       setLocalStream(merged);
 
-      // Sur la prochaine "ended" inattendue on retentera la meme procedure.
+      // Sur la prochaine "ended" inattendue on retentera la meme procedure
+      // (avec plusieurs tentatives + attente de la visibilite du document).
       newVideoTrack.addEventListener("ended", () => {
         if (localStreamRef.current !== merged) return;
         void (async () => {
-          const recovered = await attemptSilentCameraRecovery();
+          const recovered = await attemptSilentCameraRecoveryResilient();
           if (!recovered) {
             pauseLiveForRecovery(
               "camera",
@@ -1991,6 +1992,65 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       silentRecoveryRef.current = false;
     }
   }, [cameraFacing, pauseLiveForRecovery, restartOutboundCallForViewer]);
+
+  /**
+   * Wrapper resilient autour de `attemptSilentCameraRecovery` :
+   *
+   * - Attend que le document soit visible avant la 1ere tentative
+   *   (sur iOS Safari la page passe brievement en hidden pendant une
+   *   rotation ou un retour d'arriere-plan, et getUserMedia echoue dans
+   *   cet etat).
+   * - Boucle jusqu'a 8 tentatives espacees de 500 ms (~4 s au total).
+   *   Cela suffit largement a couvrir la duree d'une rotation iOS Safari
+   *   ou d'un retour d'arriere-plan, sans coller un spinner visible.
+   * - Stoppe immediatement si le live a ete arrete (localStream parti) ou
+   *   si une autre recuperation a deja reussi.
+   *
+   * Objectif fonctionnel : sur iPhone/iPad Safari, un changement
+   * d'orientation NE doit PAS faire apparaitre la banniere
+   * "Reprendre ton live ?". On reussit la reprise silencieuse meme si
+   * elle prend quelques secondes.
+   */
+  const attemptSilentCameraRecoveryResilient = useCallback(async (): Promise<boolean> => {
+    const stillHostingCamera = () =>
+      configRef.current.mode === "camera" && !!localStreamRef.current;
+
+    // Attend la visibilite du document (avec timeout safety).
+    if (typeof document !== "undefined" && document.hidden) {
+      await new Promise<void>((resolve) => {
+        let done = false;
+        const finish = () => {
+          if (done) return;
+          done = true;
+          document.removeEventListener("visibilitychange", onChange);
+          resolve();
+        };
+        const onChange = () => {
+          if (!document.hidden) finish();
+        };
+        document.addEventListener("visibilitychange", onChange);
+        // Filet de securite : meme si la visibilite ne revient pas (cas
+        // tres rare), on debloquera la suite apres 3 secondes.
+        setTimeout(finish, 3000);
+      });
+    }
+
+    const MAX_ATTEMPTS = 8;
+    const DELAY_MS = 500;
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      if (!stillHostingCamera()) return false;
+      // Si une track video est encore "live", inutile de tenter (le live
+      // a deja recupere via un autre chemin, par ex. un autre listener).
+      const currentVideo = localStreamRef.current?.getVideoTracks()[0];
+      if (currentVideo && currentVideo.readyState === "live") {
+        return true;
+      }
+      const ok = await attemptSilentCameraRecovery();
+      if (ok) return true;
+      await new Promise((r) => setTimeout(r, DELAY_MS));
+    }
+    return false;
+  }, [attemptSilentCameraRecovery]);
 
   const startCameraShare = useCallback(
     async (facingMode: CameraFacing = "user") => {
@@ -2048,7 +2108,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
           // banniere "Le flux a ete interrompu" qui force l'user a
           // recliquer pour reprendre.
           void (async () => {
-            const recovered = await attemptSilentCameraRecovery();
+            const recovered = await attemptSilentCameraRecoveryResilient();
             if (!recovered) {
               pauseLiveForRecovery(
                 "camera",
@@ -2067,7 +2127,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       pauseLiveForRecovery,
       bumpLiveStartToken,
       isLiveStartTokenCurrent,
-      attemptSilentCameraRecovery,
+      attemptSilentCameraRecoveryResilient,
     ],
   );
 
@@ -2172,7 +2232,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       newVideoTrack.addEventListener("ended", () => {
         if (localStreamRef.current !== nextStream) return;
         void (async () => {
-          const recovered = await attemptSilentCameraRecovery();
+          const recovered = await attemptSilentCameraRecoveryResilient();
           if (!recovered) {
             pauseLiveForRecovery(
               "camera",
@@ -2197,7 +2257,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     cameraFacing,
     pauseLiveForRecovery,
     restartOutboundCallForViewer,
-    attemptSilentCameraRecovery,
+    attemptSilentCameraRecoveryResilient,
   ]);
 
   /**
