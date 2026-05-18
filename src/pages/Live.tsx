@@ -1359,13 +1359,64 @@ export function Live() {
     const previousBodyOverflow = body.style.overflow;
     const previousHtmlOverflow = documentElement.style.overflow;
     const previousBodyTouchAction = body.style.touchAction;
+    const previousBodyPosition = body.style.position;
+    const previousBodyTop = body.style.top;
+    const previousBodyLeft = body.style.left;
+    const previousBodyRight = body.style.right;
+    const previousBodyWidth = body.style.width;
+    const previousScrollY = window.scrollY;
+
+    // Sur iOS Safari, l'API Fullscreen ne s'applique pas aux `<div>` :
+    // impossible de masquer franchement l'URL bar et la barre d'outils
+    // du navigateur. La seule maniere d'arriver a un rendu "vraiment
+    // plein ecran" pour un overlay DOM est de simuler ce que fait Safari
+    // quand l'utilisateur scrolle : minimiser l'URL bar. On combine donc
+    // 1) un scroll programmatique pour declencher la mise en compact de
+    //    la barre d'adresse, puis 2) un verrou `position: fixed` sur le
+    //    `<body>` qui empeche l'URL bar de revenir. Ainsi l'overlay
+    //    `100lvh` (large viewport height) couvre vraiment toute la zone
+    //    visible de l'ecran iPhone.
+    const ua = navigator.userAgent || "";
+    const isIos =
+      /iPhone|iPad|iPod/i.test(ua) ||
+      (/Macintosh/i.test(ua) &&
+        typeof navigator.maxTouchPoints === "number" &&
+        navigator.maxTouchPoints > 1);
+
+    if (isIos) {
+      // Force Safari a passer en mode URL bar compacte (le `scrollTo` ne
+      // marche que si la page est scrollable, donc on s'autorise un peu
+      // de hauteur en dessous puis on verrouille). On scroll un poil
+      // au-dela de la hauteur de l'URL bar (~ 60-100 px).
+      try {
+        window.scrollTo({ top: 120, left: 0, behavior: "instant" as ScrollBehavior });
+      } catch {
+        window.scrollTo(0, 120);
+      }
+      body.style.position = "fixed";
+      body.style.top = `-${previousScrollY}px`;
+      body.style.left = "0";
+      body.style.right = "0";
+      body.style.width = "100%";
+    }
     body.style.overflow = "hidden";
     documentElement.style.overflow = "hidden";
     body.style.touchAction = "none";
+
     return () => {
       body.style.overflow = previousBodyOverflow;
       documentElement.style.overflow = previousHtmlOverflow;
       body.style.touchAction = previousBodyTouchAction;
+      body.style.position = previousBodyPosition;
+      body.style.top = previousBodyTop;
+      body.style.left = previousBodyLeft;
+      body.style.right = previousBodyRight;
+      body.style.width = previousBodyWidth;
+      if (isIos) {
+        // Restaure la position de scroll initiale apres avoir relache
+        // `position: fixed` sur le body.
+        window.scrollTo(0, previousScrollY);
+      }
     };
   }, [isViewportFullscreen]);
 
@@ -2229,14 +2280,14 @@ export function Live() {
             className={`relative overflow-hidden ${
               fullscreenActive
                 ? isViewportFullscreen
-                  ? "fixed inset-0 z-[120] h-[100dvh] w-screen rounded-none border-0 bg-night-900 shadow-none"
+                  ? "fixed inset-0 z-[120] h-[100lvh] min-h-[100dvh] w-screen rounded-none border-0 bg-night-900 shadow-none"
                   : "z-[120] h-full w-full rounded-none border-0 bg-night-900 shadow-none"
                 : "card-royal"
             } ${fullscreenActive ? "bg-night-900" : ""}`}
           >
             <div
               className={`relative w-full overflow-hidden bg-night-900 ${
-                fullscreenActive ? "h-full min-h-[100dvh]" : "aspect-video"
+                fullscreenActive ? "h-full min-h-[100lvh]" : "aspect-video"
               }`}
             >
               {showViewer ? (
