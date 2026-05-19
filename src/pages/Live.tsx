@@ -41,6 +41,8 @@ import { GiftPanel } from "../components/GiftPanel";
 import { GiftFlight, type GiftFlightItem } from "../components/GiftFlight";
 import { LiveStageOverlay } from "../components/LiveStageOverlay";
 import {
+  LIVE_AVATAR3D_ENABLED_EVENT,
+  LIVE_AVATAR3D_PREF_STORAGE_KEY,
   loadAvatar3DEnabled,
   saveAvatar3DEnabled,
 } from "../lib/liveStage";
@@ -1152,12 +1154,45 @@ export function Live() {
     broadcasterId ? loadAvatar3DEnabled(broadcasterId) : false,
   );
   useEffect(() => {
-    setAvatar3dEnabled(
-      broadcasterId ? loadAvatar3DEnabled(broadcasterId) : false,
+    const syncAvatar3dPreference = () => {
+      setAvatar3dEnabled(
+        broadcasterId ? loadAvatar3DEnabled(broadcasterId) : false,
+      );
+    };
+    syncAvatar3dPreference();
+
+    const handleStorage = (event: StorageEvent) => {
+      if (
+        event.key &&
+        event.key !== LIVE_AVATAR3D_PREF_STORAGE_KEY
+      ) {
+        return;
+      }
+      syncAvatar3dPreference();
+    };
+
+    const handleAvatar3dPreferenceChanged = (event: Event) => {
+      const detail = (
+        event as CustomEvent<{ userId?: string; enabled?: boolean }>
+      ).detail;
+      if (detail?.userId && detail.userId !== broadcasterId) return;
+      syncAvatar3dPreference();
+    };
+
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener(
+      LIVE_AVATAR3D_ENABLED_EVENT,
+      handleAvatar3dPreferenceChanged as EventListener,
     );
-    // L'option est aussi modifiable côté `BroadcasterControls` (panneau
-    // de préparation du live), où elle est persistée en localStorage.
-    // Ici on se contente de la lire pour le rendu côté `Live()`.
+    // L'option est modifiable côté `BroadcasterControls` pendant le live :
+    // on resynchronise donc immédiatement le rendu du player sans reload.
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener(
+        LIVE_AVATAR3D_ENABLED_EVENT,
+        handleAvatar3dPreferenceChanged as EventListener,
+      );
+    };
   }, [broadcasterId]);
 
   // Résout le profil du broadcaster (pour nom/avatar/pseudo dans le HUD + GiftPanel).

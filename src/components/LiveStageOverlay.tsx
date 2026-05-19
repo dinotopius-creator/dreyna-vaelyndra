@@ -99,6 +99,7 @@ export function LiveStageOverlay({
   lastGiftColor,
   heartTick,
 }: Props) {
+  const stageRef = useRef<HTMLDivElement | null>(null);
   const [familiar, setFamiliar] = useState<OwnedFamiliar | null>(null);
   const [profile, setProfile] = useState<UserProfileDto | null>(null);
 
@@ -253,11 +254,12 @@ export function LiveStageOverlay({
   if (!shouldRenderAnything) return null;
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-20">
+    <div ref={stageRef} className="pointer-events-none absolute inset-0 z-20">
       {/* Sprite : avatar 3D du broadcaster. */}
       {shouldShowAvatar && hasAvatarSource && (
         <StageSprite
           id="avatar"
+          stageContainerRef={stageRef}
           state={stage.avatar}
           canEdit={canEdit}
           isActive={activeSprite === "avatar"}
@@ -319,6 +321,7 @@ export function LiveStageOverlay({
       {familiar && (
         <StageSprite
           id="familiar"
+          stageContainerRef={stageRef}
           state={stage.familiar}
           canEdit={canEdit}
           isActive={activeSprite === "familiar"}
@@ -442,6 +445,7 @@ interface SpriteAction {
 
 interface StageSpriteProps {
   id: string;
+  stageContainerRef: React.RefObject<HTMLDivElement | null>;
   state: LiveStageSpriteState;
   canEdit: boolean;
   isActive: boolean;
@@ -458,6 +462,7 @@ interface StageSpriteProps {
 
 function StageSprite({
   id,
+  stageContainerRef,
   state,
   canEdit,
   isActive,
@@ -489,7 +494,7 @@ function StageSprite({
     if (event.button !== undefined && event.button !== 0) return;
     const sprite = spriteRef.current;
     if (!sprite) return;
-    const parent = sprite.parentElement?.parentElement; // le wrapper absolute inset-0
+    const parent = stageContainerRef.current;
     if (!parent) return;
     dragRef.current = {
       pointerId: event.pointerId,
@@ -501,6 +506,7 @@ function StageSprite({
     } catch {
       // Safari/iOS plus ancien — on continue sans capture.
     }
+    event.preventDefault();
     event.stopPropagation();
   };
 
@@ -513,6 +519,7 @@ function StageSprite({
     const nx = (event.clientX - parent.left) / w;
     const ny = (event.clientY - parent.top) / h;
     lastNorm.current = { x: nx, y: ny };
+    event.preventDefault();
     if (rafPending.current === null) {
       rafPending.current = requestAnimationFrame(() => {
         rafPending.current = null;
@@ -534,6 +541,7 @@ function StageSprite({
       onMove(lastNorm.current.x, lastNorm.current.y);
       lastNorm.current = null;
     }
+    event.preventDefault();
     const sprite = spriteRef.current;
     try {
       sprite?.releasePointerCapture(event.pointerId);

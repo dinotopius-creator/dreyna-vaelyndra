@@ -38,6 +38,10 @@ export interface LiveStageState {
 }
 
 const STORAGE_KEY = "vaelyndra_live_stage_v1";
+export const LIVE_AVATAR3D_PREF_STORAGE_KEY =
+  "vaelyndra_live_avatar3d_enabled_v1";
+export const LIVE_AVATAR3D_ENABLED_EVENT =
+  "vaelyndra:live-avatar3d-enabled";
 
 /** Positions par défaut : familier en bas-gauche, avatar juste à sa droite. */
 export const DEFAULT_LIVE_STAGE: LiveStageState = {
@@ -118,12 +122,10 @@ export function saveLiveStage(broadcasterId: string, state: LiveStageState) {
  * Persiste séparément des positions pour qu'on puisse choisir d'utiliser
  * l'avatar **avant** de lancer son premier live.
  */
-const PREF_KEY = "vaelyndra_live_avatar3d_enabled_v1";
-
 export function loadAvatar3DEnabled(userId: string): boolean {
   if (typeof window === "undefined") return false;
   try {
-    const raw = window.localStorage.getItem(PREF_KEY);
+    const raw = window.localStorage.getItem(LIVE_AVATAR3D_PREF_STORAGE_KEY);
     if (!raw) return false;
     const all = JSON.parse(raw) as Record<string, unknown>;
     return all?.[userId] === true;
@@ -135,10 +137,18 @@ export function loadAvatar3DEnabled(userId: string): boolean {
 export function saveAvatar3DEnabled(userId: string, enabled: boolean) {
   if (typeof window === "undefined") return;
   try {
-    const raw = window.localStorage.getItem(PREF_KEY);
+    const raw = window.localStorage.getItem(LIVE_AVATAR3D_PREF_STORAGE_KEY);
     const all = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
     all[userId] = enabled;
-    window.localStorage.setItem(PREF_KEY, JSON.stringify(all));
+    window.localStorage.setItem(
+      LIVE_AVATAR3D_PREF_STORAGE_KEY,
+      JSON.stringify(all),
+    );
+    window.dispatchEvent(
+      new CustomEvent(LIVE_AVATAR3D_ENABLED_EVENT, {
+        detail: { userId, enabled },
+      }),
+    );
   } catch {
     // ignore
   }
