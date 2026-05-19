@@ -11,6 +11,10 @@ import {
   Sparkles,
   Users,
   Heart,
+  Play,
+  Wand2,
+  Gem,
+  MessageCircleHeart,
 } from "lucide-react";
 import { useStore } from "../contexts/StoreContext";
 import { useAuth } from "../contexts/AuthContext";
@@ -31,14 +35,9 @@ export function Home() {
   const featuredArticle = articles[0];
   const topProducts = products.filter((p) => p.featured).slice(0, 3);
 
-  // Demande client (Alexandre, 20/04) : "plus aucun bot sur le site, ce
-  // doit être des vrais membres". On agrège ici les chiffres / top fans
-  // réellement issus de la base au boot de la page, puis on passe le
-  // résultat aux composants. Si l'API échoue ou renvoie 0 entrée, les
-  // composants enfants se replient sur des libellés neutres (pas de
-  // fallback bot).
   const [stats, setStats] = useState<CommunityStatsOverviewDto | null>(null);
   const [topFans, setTopFans] = useState<CommunityTopFanDto[]>([]);
+
   useEffect(() => {
     let cancelled = false;
     void apiGetCommunityStats()
@@ -68,7 +67,7 @@ export function Home() {
         topFans={topFans}
       />
       <StatsBar stats={stats} />
-      <RuneDivider label="✦ Les portes de Vaelyndra ✦" />
+      <RuneDivider label="Les portes de Vaelyndra" />
       <Pillars />
       <FeaturedArticle article={featuredArticle} />
       <ShopShowcase products={topProducts} />
@@ -88,27 +87,26 @@ function Hero({
   topFans: CommunityTopFanDto[];
 }) {
   return (
-    <section className="relative overflow-hidden pb-20 pt-12 sm:pb-24 sm:pt-14 md:pt-24">
+    <section className="relative overflow-hidden pb-20 pt-10 sm:pb-24 sm:pt-14 md:pt-20">
       <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 sm:px-6 lg:grid-cols-2">
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.9, ease: "easeOut" }}
         >
-          <span className="tag-gold">
-            <Crown className="h-3 w-3" /> Mini réseau social
+          <span className="chip-app border-gold-400/25 bg-gold-400/10 text-gold-100">
+            <Crown className="h-3 w-3" /> Experience avatar-first
           </span>
-          <h1 className="heading-gold mt-6 text-4xl leading-[1.05] sm:text-5xl md:text-7xl">
-            Bienvenue à<br />
-            Vaelyndra
+          <h1 className="heading-gold mt-6 text-4xl leading-[1.02] sm:text-5xl md:text-7xl">
+            Vaelyndra devient
+            <br />
+            plus vivant
           </h1>
           <p className="mt-5 max-w-xl text-base leading-7 text-ivory/80 sm:text-lg md:text-xl">
-            Le mini-réseau social magique où{" "}
-            <span className="text-mystic font-semibold">
-              chacun peut percer
-            </span>{" "}
-            — lance tes lives, poste, tisse des liens d'âme, grimpe dans les 6
-            grades de streamer. Ton histoire commence ici.
+            Une app sociale fantasy centree sur les{" "}
+            <span className="text-mystic font-semibold">lives, les avatars</span>{" "}
+            et les interactions. Entre en scene, retrouve ton familier, faconne
+            ton identite et fais vivre ton royaume depuis mobile ou desktop.
           </p>
           <div className="mt-8 flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center">
             {isRegistered ? (
@@ -117,7 +115,7 @@ function Hero({
               </Link>
             ) : (
               <Link to="/inscription" className="btn-gold w-full sm:w-auto">
-                <Crown className="h-4 w-4" /> Créer mon compte
+                <Crown className="h-4 w-4" /> Creer mon compte
               </Link>
             )}
             <Link to="/live" className="btn-royal w-full sm:w-auto">
@@ -130,7 +128,21 @@ function Hero({
               <Users className="h-4 w-4" /> Le fil communautaire
             </Link>
           </div>
-          <div className="mt-10 flex flex-col items-start gap-4 text-sm text-ivory/60 sm:flex-row sm:items-center sm:gap-6">
+          <div className="mt-10 grid max-w-xl grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="metric-app">
+              <p className="metric-app-value">Live</p>
+              <p className="metric-app-label">salons immersifs</p>
+            </div>
+            <div className="metric-app">
+              <p className="metric-app-value">Avatar</p>
+              <p className="metric-app-label">studio identitaire</p>
+            </div>
+            <div className="metric-app">
+              <p className="metric-app-value">Familiers</p>
+              <p className="metric-app-label">compagnons visibles</p>
+            </div>
+          </div>
+          <div className="mt-6 flex flex-col items-start gap-4 text-sm text-ivory/60 sm:flex-row sm:items-center sm:gap-6">
             {topFans.length > 0 && (
               <div className="flex -space-x-3">
                 {topFans.slice(0, 4).map((f) => (
@@ -138,12 +150,15 @@ function Hero({
                     key={f.userId}
                     src={f.avatarImageUrl || "/crown.svg"}
                     alt={f.username}
-                    className="h-9 w-9 rounded-full border-2 border-night-900 object-cover"
+                    className="h-10 w-10 rounded-full border-2 border-[#140d24] object-cover ring-1 ring-white/10"
                   />
                 ))}
               </div>
             )}
-            <p>Chaque membre écrit sa propre page de Vaelyndra.</p>
+            <p>
+              Des profils, des scenes live et des liens sociaux penses comme
+              une vraie app.
+            </p>
           </div>
         </motion.div>
 
@@ -151,36 +166,111 @@ function Hero({
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 1, ease: "easeOut" }}
-          className="relative mx-auto aspect-[3/4] w-full max-w-md"
+          className="relative mx-auto w-full max-w-xl"
         >
-          <div className="absolute -inset-4 rounded-[2.5rem] bg-gradient-to-br from-gold-400/40 via-royal-500/30 to-celeste-500/30 blur-2xl" />
-          <div className="card-royal relative flex h-full w-full flex-col items-center justify-center overflow-hidden rounded-[2rem] p-10 text-center">
-            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_30%,rgba(212,175,55,0.2),transparent_60%)]" />
-            <span className="relative flex h-20 w-20 items-center justify-center rounded-full border border-gold-400/50 bg-gold-500/10 text-gold-300 shadow-glow-gold">
-              <Crown className="h-9 w-9" />
-            </span>
-            <h3 className="relative mt-6 font-display text-3xl text-gold-200">
-              Un réseau pour tous
-            </h3>
-            <p className="relative mt-3 max-w-xs text-sm text-ivory/70">
-              Streame, poste, vote, offre des Sylvins, gravis les six grades
-              spirituels. Chacun peut devenir une Légende de Vaelyndra.
-            </p>
-            <div className="relative mt-6 flex flex-wrap items-center justify-center gap-2 text-[10px] tracking-[0.22em]">
-              <span className="rounded-full border border-royal-500/30 bg-night-900/40 px-3 py-1 text-royal-200">
-                🌱 NOVICE
-              </span>
-              <span className="rounded-full border border-gold-400/30 bg-night-900/40 px-3 py-1 text-gold-300">
-                👑 LÉGENDE
-              </span>
+          <div className="absolute -inset-6 rounded-[3rem] bg-[radial-gradient(circle_at_50%_30%,rgba(166,114,255,0.38),transparent_42%),radial-gradient(circle_at_70%_80%,rgba(255,194,94,0.18),transparent_36%)] blur-3xl" />
+          <div className="phone-stage">
+            <div className="phone-stage-screen ambient-grid">
+              <div className="absolute inset-x-0 top-0 h-32 bg-[linear-gradient(180deg,rgba(174,118,255,0.26),transparent)]" />
+
+              <div className="relative z-10 flex items-center justify-between p-4">
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.24em] text-ivory/45">
+                    Live & avatar
+                  </p>
+                  <p className="font-display text-lg text-gold-100">
+                    Vaelyndra
+                  </p>
+                </div>
+                <span className="chip-app text-rose-200">
+                  <span className="h-2 w-2 rounded-full bg-rose-400" />
+                  {isLiveOn ? "En direct" : "Pret"}
+                </span>
+              </div>
+
+              <div className="relative z-10 px-4">
+                <div className="panel-app-soft overflow-hidden">
+                  <div className="h-44 bg-[radial-gradient(circle_at_50%_18%,rgba(255,255,255,0.14),transparent_28%),linear-gradient(135deg,#271344_0%,#0d0917_42%,#0a1229_100%)] p-4">
+                    <div className="flex items-start justify-between">
+                      <span className="chip-app border-gold-400/20 bg-gold-400/10 text-gold-100">
+                        <Play className="h-3.5 w-3.5" />
+                        Salle live
+                      </span>
+                      <span className="chip-app">mobile-first</span>
+                    </div>
+                    <div className="mt-6 flex items-end justify-between gap-4">
+                      <div>
+                        <p className="font-display text-2xl text-gold-100">
+                          Presence mystique
+                        </p>
+                        <p className="mt-2 max-w-[12rem] text-sm text-ivory/65">
+                          Avatar, familier, chat et ambiance dans une seule
+                          scene.
+                        </p>
+                      </div>
+                      <div className="panel-app-soft flex h-16 w-16 items-center justify-center rounded-2xl border-gold-400/25 bg-gold-400/10 text-gold-200">
+                        <Wand2 className="h-7 w-7" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="relative z-10 mt-4 space-y-3 px-4 pb-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="panel-app-soft p-4">
+                    <div className="flex items-center gap-2 text-gold-200">
+                      <Gem className="h-4 w-4" />
+                      <span className="text-xs uppercase tracking-[0.18em] text-ivory/55">
+                        Avatar
+                      </span>
+                    </div>
+                    <p className="mt-3 font-display text-xl text-gold-100">
+                      Studio 3D
+                    </p>
+                    <p className="mt-1 text-sm text-ivory/60">
+                      silhouette, scene, tenues
+                    </p>
+                  </div>
+                  <div className="panel-app-soft p-4">
+                    <div className="flex items-center gap-2 text-celeste-300">
+                      <MessageCircleHeart className="h-4 w-4" />
+                      <span className="text-xs uppercase tracking-[0.18em] text-ivory/55">
+                        Communaute
+                      </span>
+                    </div>
+                    <p className="mt-3 font-display text-xl text-gold-100">
+                      Fil social
+                    </p>
+                    <p className="mt-1 text-sm text-ivory/60">
+                      posts, reactions, soutien
+                    </p>
+                  </div>
+                </div>
+
+                <div className="panel-app-soft flex items-center justify-between p-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-ivory/50">
+                      Familiers visibles
+                    </p>
+                    <p className="mt-1 font-display text-lg text-gold-100">
+                      Une scene plus incarnee
+                    </p>
+                  </div>
+                  <div className="flex -space-x-2">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-[#201236] text-lg">
+                      ✨
+                    </span>
+                    <span className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-[#191026] text-lg">
+                      🐾
+                    </span>
+                    <span className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-[#0f162b] text-lg">
+                      💜
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
-            <motion.div
-              className="absolute right-4 top-4 rounded-full bg-night-900/70 p-2 text-gold-300 backdrop-blur"
-              animate={{ rotate: [0, 8, -8, 0] }}
-              transition={{ duration: 6, repeat: Infinity }}
-            >
-              <Sparkles className="h-5 w-5" />
-            </motion.div>
           </div>
         </motion.div>
       </div>
@@ -192,15 +282,11 @@ type StatItem = {
   value: string | number;
   label: string;
   icon: React.ReactNode;
-  live?: boolean;
 };
 
 function StatsBar({ stats }: { stats: CommunityStatsOverviewDto | null }) {
-  // Compteur de membres : valeur réelle du backend si dispo (>= 1),
-  // sinon libellé neutre "Bientôt" — plus de "∞" cosmétique déconnecté
-  // de la réalité (demande client 20/04).
   const membersValue =
-    stats && stats.membersCount > 0 ? formatNumber(stats.membersCount) : "—";
+    stats && stats.membersCount > 0 ? formatNumber(stats.membersCount) : "-";
   const livesValue =
     stats && stats.liveCount > 0 ? `${stats.liveCount} en direct` : "24/7";
   const items: StatItem[] = [
@@ -211,7 +297,7 @@ function StatsBar({ stats }: { stats: CommunityStatsOverviewDto | null }) {
     },
     {
       value: stats?.currenciesCount ?? 2,
-      label: "Monnaies — Lueurs & Sylvins",
+      label: "Monnaies - Lueurs & Sylvins",
       icon: <Heart className="h-4 w-4" />,
     },
     {
@@ -227,10 +313,10 @@ function StatsBar({ stats }: { stats: CommunityStatsOverviewDto | null }) {
   ];
   return (
     <section className="mx-auto max-w-7xl px-4 sm:px-6">
-      <div className="card-royal grid grid-cols-1 gap-4 p-5 min-[380px]:grid-cols-2 md:grid-cols-4">
+      <div className="panel-app grid grid-cols-1 gap-4 p-5 min-[380px]:grid-cols-2 md:grid-cols-4">
         {items.map((it) => (
-          <div key={it.label} className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-full border border-gold-400/40 bg-gold-500/10 text-gold-300">
+          <div key={it.label} className="panel-app-soft flex items-center gap-3 p-4">
+            <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-gold-400/20 bg-gold-500/10 text-gold-300">
               {it.icon}
             </span>
             <div>
@@ -251,14 +337,14 @@ function Pillars() {
     {
       title: "Le Grimoire",
       to: "/blog",
-      desc: "Chroniques, lore et révélations — l'histoire vivante du royaume.",
+      desc: "Chroniques, lore et revelations - l'histoire vivante du royaume.",
       icon: <BookOpen className="h-5 w-5" />,
       tint: "from-royal-500/20 to-royal-700/10",
     },
     {
       title: "La Boutique Royale",
       to: "/boutique",
-      desc: "Merch fantasy, tenues numériques, accès VIP à la cour privée.",
+      desc: "Merch fantasy, tenues numeriques, acces VIP a la cour privee.",
       icon: <ShoppingBag className="h-5 w-5" />,
       tint: "from-gold-400/20 to-gold-700/10",
     },
@@ -272,7 +358,7 @@ function Pillars() {
     {
       title: "Le fil communautaire",
       to: "/communaute",
-      desc: "Le fil social de Vaelyndra. Poster, réagir, se suivre.",
+      desc: "Le fil social de Vaelyndra. Poster, reagir, se suivre.",
       icon: <Users className="h-5 w-5" />,
       tint: "from-royal-400/25 to-gold-500/10",
     },
@@ -286,7 +372,7 @@ function Pillars() {
             Quatre espaces pour <span className="text-mystic">percer</span>
           </>
         }
-        subtitle="Choisis ton chemin. Chacun mène à une part du réseau."
+        subtitle="Choisis ton chemin. Chacun mene a une part du reseau."
       />
       <div className="mt-12 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
         {cards.map((c, i) => (
@@ -299,13 +385,13 @@ function Pillars() {
           >
             <Link
               to={c.to}
-              className="card-royal group relative block h-full p-6 transition hover:-translate-y-1"
+              className="panel-app group relative block h-full p-6 transition hover:-translate-y-1"
             >
               <div
                 className={`absolute inset-0 bg-gradient-to-br ${c.tint} opacity-0 transition group-hover:opacity-100`}
               />
               <div className="relative">
-                <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-night-900/70 text-gold-300 shadow-glow-violet">
+                <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-white/[0.06] text-gold-300 shadow-glow-violet">
                   {c.icon}
                 </span>
                 <h3 className="mt-5 font-display text-xl text-gold-200">
@@ -333,7 +419,7 @@ function FeaturedArticle({
   return (
     <section className="mx-auto max-w-7xl px-4 pt-20 sm:px-6 sm:pt-24">
       <SectionHeading
-        eyebrow="Dernière chronique"
+        eyebrow="Derniere chronique"
         title={<>Le royaume raconte</>}
         subtitle="Les chapitres qui animent la cour en ce moment."
         align="center"
@@ -343,7 +429,7 @@ function FeaturedArticle({
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="card-royal group relative overflow-hidden lg:col-span-3"
+          className="panel-app group relative overflow-hidden lg:col-span-3"
         >
           <Link to={`/blog/${article.slug}`} className="block">
             <div className="relative aspect-[16/9]">
@@ -376,26 +462,26 @@ function FeaturedArticle({
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
               transition={{ delay: i * 0.1 }}
-              className="card-royal p-5"
+              className="panel-app p-5"
             >
               <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
-                ✦ Saga du royaume
+                Saga du royaume
               </p>
               <h4 className="mt-2 font-display text-lg text-gold-200">
                 {
                   [
                     "Les chevaliers d'argent de la Cour",
                     "Rituel de la Nuit d'Elennor",
-                    "La Prophétie de l'Aube",
+                    "La Prophetie de l'Aube",
                   ][i - 1]
                 }
               </h4>
               <p className="mt-1 text-sm text-ivory/65">
                 {
                   [
-                    "Portrait de celles et ceux qui veillent à vos côtés.",
-                    "Pourquoi la lumière d'Elennor change tout.",
-                    "Un chapitre secret, révélé lors du prochain live.",
+                    "Portrait de celles et ceux qui veillent a vos cotes.",
+                    "Pourquoi la lumiere d'Elennor change tout.",
+                    "Un chapitre secret, revele lors du prochain live.",
                   ][i - 1]
                 }
               </p>
@@ -419,8 +505,8 @@ function ShopShowcase({
     <section className="mx-auto max-w-7xl px-4 pt-20 sm:px-6 sm:pt-24">
       <SectionHeading
         eyebrow="Boutique Royale"
-        title={<>Objets sacrés & drops exclusifs</>}
-        subtitle="Items en édition limitée, collections numériques et accès VIP — signés par la cour."
+        title={<>Objets sacres & drops exclusifs</>}
+        subtitle="Items en edition limitee, collections numeriques et acces VIP signes par la cour."
       />
       <div className="mt-12 grid gap-6 md:grid-cols-3">
         {products.map((p, i) => (
@@ -430,7 +516,7 @@ function ShopShowcase({
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: i * 0.08 }}
-            className="card-royal group relative overflow-hidden"
+            className="panel-app group relative overflow-hidden"
           >
             <div className="relative aspect-square overflow-hidden">
               <img
@@ -479,18 +565,18 @@ function CommunityTeaser({
 }) {
   return (
     <section className="mx-auto max-w-7xl px-4 pt-20 sm:px-6 sm:pt-24">
-      <div className="card-royal relative overflow-hidden p-6 sm:p-10 md:p-14">
+      <div className="panel-app relative overflow-hidden p-6 sm:p-10 md:p-14">
         <div className="relative z-10 grid items-center gap-8 md:grid-cols-2">
           <div>
             <SectionHeading
               align="left"
-              eyebrow="Communauté Vaelyndra"
+              eyebrow="Communaute Vaelyndra"
               title={
                 <>
-                  Rejoins la <span className="text-mystic">communauté</span>
+                  Rejoins la <span className="text-mystic">communaute</span>
                 </>
               }
-              subtitle="Publie, réagis, suis tes streamers préférés, débloque des badges et monte dans les 6 grades."
+              subtitle="Publie, reagis, suis tes streamers preferes, debloque des badges et monte dans les 6 grades."
             />
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               {isRegistered ? (
@@ -499,7 +585,7 @@ function CommunityTeaser({
                 </Link>
               ) : (
                 <Link to="/inscription" className="btn-gold w-full sm:w-auto">
-                  Créer mon compte
+                  Creer mon compte
                 </Link>
               )}
               <Link to="/communaute" className="btn-ghost w-full sm:w-auto">
@@ -516,7 +602,7 @@ function CommunityTeaser({
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                   transition={{ delay: i * 0.08 }}
-                  className="flex items-center gap-3 rounded-2xl border border-royal-500/30 bg-night-800/60 p-3"
+                  className="panel-app-soft flex items-center gap-3 p-3"
                 >
                   <img
                     src={f.avatarImageUrl || "/crown.svg"}
@@ -535,9 +621,9 @@ function CommunityTeaser({
               ))}
             </div>
           ) : (
-            <div className="rounded-2xl border border-royal-500/30 bg-night-800/60 p-5 text-center text-sm text-ivory/65">
-              Les premiers donateurs de la communauté apparaîtront ici —
-              soutiens ton streamer préféré pour figurer dans le tableau.
+            <div className="panel-app-soft p-5 text-center text-sm text-ivory/65">
+              Les premiers donateurs de la communaute apparaitront ici -
+              soutiens ton streamer prefere pour figurer dans le tableau.
             </div>
           )}
         </div>
@@ -553,7 +639,7 @@ function CTA({ isRegistered }: { isRegistered: boolean }) {
         initial={{ opacity: 0, scale: 0.95 }}
         whileInView={{ opacity: 1, scale: 1 }}
         viewport={{ once: true }}
-        className="card-royal p-6 sm:p-10 md:p-14"
+        className="panel-app p-6 sm:p-10 md:p-14"
       >
         <Sparkles className="mx-auto h-8 w-8 text-gold-300" />
         <h2 className="heading-gold mt-4 text-3xl md:text-5xl">
@@ -562,11 +648,11 @@ function CTA({ isRegistered }: { isRegistered: boolean }) {
         {isRegistered ? (
           <p className="mt-4 text-ivory/75 md:text-lg">
             Reprends ta place dans le royaume, lance un live ou retrouve la
-            communauté.
+            communaute.
           </p>
         ) : (
           <p className="mt-4 text-ivory/75 md:text-lg">
-            Crée ton compte, choisis ta créature, lance ton premier live.
+            Cree ton compte, choisis ta creature, lance ton premier live.
           </p>
         )}
         <div className="mt-6 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:flex-wrap sm:items-center">
@@ -576,11 +662,11 @@ function CTA({ isRegistered }: { isRegistered: boolean }) {
             </Link>
           ) : (
             <Link to="/inscription" className="btn-gold w-full sm:w-auto">
-              Créer mon compte
+              Creer mon compte
             </Link>
           )}
           <Link to="/communaute" className="btn-royal w-full sm:w-auto">
-            Voir la communauté
+            Voir la communaute
           </Link>
         </div>
       </motion.div>
