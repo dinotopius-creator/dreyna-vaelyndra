@@ -5,16 +5,16 @@ import { motion } from "framer-motion";
 import {
   ArrowRight,
   BookOpen,
+  Crown,
+  Gem,
+  Heart,
+  MessageCircleHeart,
+  Play,
   Radio,
   ShoppingBag,
-  Crown,
   Sparkles,
   Users,
-  Heart,
-  Play,
   Wand2,
-  Gem,
-  MessageCircleHeart,
 } from "lucide-react";
 import { useStore } from "../contexts/StoreContext";
 import { useAuth } from "../contexts/AuthContext";
@@ -61,11 +61,7 @@ export function Home() {
 
   return (
     <div>
-      <Hero
-        isLiveOn={isLiveOn}
-        isRegistered={isRegistered}
-        topFans={topFans}
-      />
+      <Hero isLiveOn={isLiveOn} isRegistered={isRegistered} topFans={topFans} />
       <StatsBar stats={stats} />
       <RuneDivider label="Les portes de Vaelyndra" />
       <Pillars />
@@ -86,13 +82,47 @@ function Hero({
   isRegistered: boolean;
   topFans: CommunityTopFanDto[];
 }) {
+  const studioLink = isRegistered ? "/live/studio" : "/connexion";
+  const avatarLink = isRegistered ? "/avatar" : "/connexion";
+  const familiarLink = isRegistered ? "/familier" : "/connexion";
+
+  const quickLinks = [
+    {
+      title: "Entrer en live",
+      desc: "Lancer ou rejoindre une scene active",
+      to: studioLink,
+      icon: <Radio className="h-5 w-5" />,
+    },
+    {
+      title: "Sculpter l'avatar",
+      desc: "Retrouver le studio identitaire",
+      to: avatarLink,
+      icon: <Gem className="h-5 w-5" />,
+    },
+    {
+      title: "Voir le familier",
+      desc: "Afficher et gerer ton compagnon",
+      to: familiarLink,
+      icon: <Heart className="h-5 w-5" />,
+    },
+    {
+      title: "Explorer les mondes",
+      desc: "Basculer vers les espaces interactifs",
+      to: "/mondes",
+      icon: <Sparkles className="h-5 w-5" />,
+    },
+  ];
+
   return (
     <section className="relative overflow-hidden pb-20 pt-10 sm:pb-24 sm:pt-14 md:pt-20">
-      <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 sm:px-6 lg:grid-cols-2">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(167,114,255,0.2),transparent_38%),radial-gradient(circle_at_80%_18%,rgba(255,205,112,0.12),transparent_24%),linear-gradient(180deg,rgba(9,6,18,0.36),transparent_44%)]" />
+      <div className="absolute left-1/2 top-20 h-80 w-80 -translate-x-1/2 rounded-full bg-royal-500/15 blur-[140px]" />
+      <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 sm:px-6 lg:grid-cols-[1.1fr_0.9fr]">
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.9, ease: "easeOut" }}
+          className="relative z-10"
         >
           <span className="chip-app border-gold-400/25 bg-gold-400/10 text-gold-100">
             <Crown className="h-3 w-3" /> Experience avatar-first
@@ -100,7 +130,7 @@ function Hero({
           <h1 className="heading-gold mt-6 text-4xl leading-[1.02] sm:text-5xl md:text-7xl">
             Vaelyndra devient
             <br />
-            plus vivant
+            une scene vivante
           </h1>
           <p className="mt-5 max-w-xl text-base leading-7 text-ivory/80 sm:text-lg md:text-xl">
             Une app sociale fantasy centree sur les{" "}
@@ -129,29 +159,44 @@ function Hero({
             </Link>
           </div>
           <div className="mt-10 grid max-w-xl grid-cols-1 gap-3 sm:grid-cols-3">
-            <div className="metric-app">
+            <Link
+              to="/live"
+              className="metric-app transition hover:-translate-y-0.5 hover:border-gold-300/30"
+            >
               <p className="metric-app-value">Live</p>
               <p className="metric-app-label">salons immersifs</p>
-            </div>
-            <div className="metric-app">
+            </Link>
+            <Link
+              to={avatarLink}
+              className="metric-app transition hover:-translate-y-0.5 hover:border-gold-300/30"
+            >
               <p className="metric-app-value">Avatar</p>
               <p className="metric-app-label">studio identitaire</p>
-            </div>
-            <div className="metric-app">
+            </Link>
+            <Link
+              to={familiarLink}
+              className="metric-app transition hover:-translate-y-0.5 hover:border-gold-300/30"
+            >
               <p className="metric-app-value">Familiers</p>
               <p className="metric-app-label">compagnons visibles</p>
-            </div>
+            </Link>
           </div>
           <div className="mt-6 flex flex-col items-start gap-4 text-sm text-ivory/60 sm:flex-row sm:items-center sm:gap-6">
             {topFans.length > 0 && (
               <div className="flex -space-x-3">
                 {topFans.slice(0, 4).map((f) => (
-                  <img
+                  <Link
                     key={f.userId}
-                    src={f.avatarImageUrl || "/crown.svg"}
-                    alt={f.username}
-                    className="h-10 w-10 rounded-full border-2 border-[#140d24] object-cover ring-1 ring-white/10"
-                  />
+                    to={`/u/${encodeURIComponent(f.userId)}`}
+                    className="transition hover:-translate-y-0.5"
+                    aria-label={`Voir le profil de ${f.username}`}
+                  >
+                    <img
+                      src={f.avatarImageUrl || "/crown.svg"}
+                      alt={f.username}
+                      className="h-10 w-10 rounded-full border-2 border-[#140d24] object-cover ring-1 ring-white/10"
+                    />
+                  </Link>
                 ))}
               </div>
             )}
@@ -160,15 +205,37 @@ function Hero({
               une vraie app.
             </p>
           </div>
+          <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {quickLinks.map((link) => (
+              <Link
+                key={link.title}
+                to={link.to}
+                className="panel-app-soft group p-4 transition hover:-translate-y-1 hover:border-gold-300/30"
+              >
+                <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05] text-gold-200 transition group-hover:bg-gold-500/10">
+                  {link.icon}
+                </span>
+                <p className="mt-4 font-display text-lg text-gold-100">
+                  {link.title}
+                </p>
+                <p className="mt-1 text-sm text-ivory/62">{link.desc}</p>
+                <span className="mt-4 inline-flex items-center gap-1 font-regal text-[10px] tracking-[0.22em] text-gold-300">
+                  Ouvrir <ArrowRight className="h-3 w-3" />
+                </span>
+              </Link>
+            ))}
+          </div>
         </motion.div>
 
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 1, ease: "easeOut" }}
-          className="relative mx-auto w-full max-w-xl"
+          className="relative mx-auto w-full max-w-xl lg:max-w-2xl"
         >
           <div className="absolute -inset-6 rounded-[3rem] bg-[radial-gradient(circle_at_50%_30%,rgba(166,114,255,0.38),transparent_42%),radial-gradient(circle_at_70%_80%,rgba(255,194,94,0.18),transparent_36%)] blur-3xl" />
+          <div className="absolute -left-10 top-16 hidden h-28 w-28 rounded-[2rem] border border-gold-400/20 bg-gold-500/10 shadow-glow-gold blur-[1px] lg:block" />
+          <div className="absolute -right-8 bottom-20 hidden h-24 w-24 rounded-full border border-fuchsia-400/20 bg-fuchsia-500/10 shadow-glow-violet lg:block" />
           <div className="phone-stage">
             <div className="phone-stage-screen ambient-grid">
               <div className="absolute inset-x-0 top-0 h-32 bg-[linear-gradient(180deg,rgba(174,118,255,0.26),transparent)]" />
@@ -211,6 +278,17 @@ function Hero({
                       <div className="panel-app-soft flex h-16 w-16 items-center justify-center rounded-2xl border-gold-400/25 bg-gold-400/10 text-gold-200">
                         <Wand2 className="h-7 w-7" />
                       </div>
+                    </div>
+                    <div className="mt-5 flex items-center gap-2">
+                      <span className="chip-app border-white/10 bg-white/[0.04]">
+                        avatar
+                      </span>
+                      <span className="chip-app border-white/10 bg-white/[0.04]">
+                        familier
+                      </span>
+                      <span className="chip-app border-white/10 bg-white/[0.04]">
+                        chat
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -259,15 +337,51 @@ function Hero({
                   </div>
                   <div className="flex -space-x-2">
                     <span className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-[#201236] text-lg">
-                      ✨
+                      *
                     </span>
                     <span className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-[#191026] text-lg">
-                      🐾
+                      P
                     </span>
                     <span className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-[#0f162b] text-lg">
-                      💜
+                      O
                     </span>
                   </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <Link
+                    to={studioLink}
+                    className="panel-app-soft p-3 text-left transition hover:border-gold-300/30"
+                  >
+                    <p className="text-[10px] uppercase tracking-[0.2em] text-ivory/45">
+                      direct
+                    </p>
+                    <p className="mt-2 font-display text-base text-gold-100">
+                      Studio live
+                    </p>
+                  </Link>
+                  <Link
+                    to={avatarLink}
+                    className="panel-app-soft p-3 text-left transition hover:border-gold-300/30"
+                  >
+                    <p className="text-[10px] uppercase tracking-[0.2em] text-ivory/45">
+                      avatar
+                    </p>
+                    <p className="mt-2 font-display text-base text-gold-100">
+                      Atelier
+                    </p>
+                  </Link>
+                  <Link
+                    to="/communaute"
+                    className="panel-app-soft p-3 text-left transition hover:border-gold-300/30"
+                  >
+                    <p className="text-[10px] uppercase tracking-[0.2em] text-ivory/45">
+                      social
+                    </p>
+                    <p className="mt-2 font-display text-base text-gold-100">
+                      Communaute
+                    </p>
+                  </Link>
                 </div>
               </div>
             </div>
@@ -282,6 +396,7 @@ type StatItem = {
   value: string | number;
   label: string;
   icon: React.ReactNode;
+  to: string;
 };
 
 function StatsBar({ stats }: { stats: CommunityStatsOverviewDto | null }) {
@@ -294,28 +409,36 @@ function StatsBar({ stats }: { stats: CommunityStatsOverviewDto | null }) {
       value: membersValue,
       label: "Membres de Vaelyndra",
       icon: <Users className="h-4 w-4" />,
+      to: "/communaute",
     },
     {
       value: stats?.currenciesCount ?? 2,
       label: "Monnaies - Lueurs & Sylvins",
       icon: <Heart className="h-4 w-4" />,
+      to: "/boutique",
     },
     {
       value: stats?.gradesCount ?? 6,
       label: "Grades streamers",
       icon: <Sparkles className="h-4 w-4" />,
+      to: "/live",
     },
     {
       value: livesValue,
       label: "Lives possibles",
       icon: <Radio className="h-4 w-4" />,
+      to: "/live",
     },
   ];
   return (
     <section className="mx-auto max-w-7xl px-4 sm:px-6">
       <div className="panel-app grid grid-cols-1 gap-4 p-5 min-[380px]:grid-cols-2 md:grid-cols-4">
         {items.map((it) => (
-          <div key={it.label} className="panel-app-soft flex items-center gap-3 p-4">
+          <Link
+            key={it.label}
+            to={it.to}
+            className="panel-app-soft flex items-center gap-3 p-4 transition hover:-translate-y-0.5 hover:border-gold-300/30"
+          >
             <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-gold-400/20 bg-gold-500/10 text-gold-300">
               {it.icon}
             </span>
@@ -325,7 +448,7 @@ function StatsBar({ stats }: { stats: CommunityStatsOverviewDto | null }) {
                 {it.label}
               </p>
             </div>
-          </div>
+          </Link>
         ))}
       </div>
     </section>
@@ -416,6 +539,22 @@ function FeaturedArticle({
   article?: (typeof import("../data/mock").INITIAL_ARTICLES)[number];
 }) {
   if (!article) return null;
+
+  const sideStories = [
+    {
+      title: "Les chevaliers d'argent de la Cour",
+      desc: "Portrait de celles et ceux qui veillent a vos cotes.",
+    },
+    {
+      title: "Rituel de la Nuit d'Elennor",
+      desc: "Pourquoi la lumiere d'Elennor change tout.",
+    },
+    {
+      title: "La Prophetie de l'Aube",
+      desc: "Un chapitre secret, revele lors du prochain live.",
+    },
+  ];
+
   return (
     <section className="mx-auto max-w-7xl px-4 pt-20 sm:px-6 sm:pt-24">
       <SectionHeading
@@ -455,36 +594,27 @@ function FeaturedArticle({
           </Link>
         </motion.article>
         <div className="space-y-5 lg:col-span-2">
-          {[1, 2, 3].map((i) => (
+          {sideStories.map((story, i) => (
             <motion.div
-              key={i}
+              key={story.title}
               initial={{ opacity: 0, x: 20 }}
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
-              transition={{ delay: i * 0.1 }}
-              className="panel-app p-5"
+              transition={{ delay: (i + 1) * 0.1 }}
+              className="panel-app transition hover:-translate-y-1"
             >
-              <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
-                Saga du royaume
-              </p>
-              <h4 className="mt-2 font-display text-lg text-gold-200">
-                {
-                  [
-                    "Les chevaliers d'argent de la Cour",
-                    "Rituel de la Nuit d'Elennor",
-                    "La Prophetie de l'Aube",
-                  ][i - 1]
-                }
-              </h4>
-              <p className="mt-1 text-sm text-ivory/65">
-                {
-                  [
-                    "Portrait de celles et ceux qui veillent a vos cotes.",
-                    "Pourquoi la lumiere d'Elennor change tout.",
-                    "Un chapitre secret, revele lors du prochain live.",
-                  ][i - 1]
-                }
-              </p>
+              <Link to="/blog" className="block p-5">
+                <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
+                  Saga du royaume
+                </p>
+                <h4 className="mt-2 font-display text-lg text-gold-200">
+                  {story.title}
+                </h4>
+                <p className="mt-1 text-sm text-ivory/65">{story.desc}</p>
+                <span className="mt-4 inline-flex items-center gap-1 font-regal text-[10px] tracking-[0.22em] text-gold-300">
+                  Ouvrir <ArrowRight className="h-3 w-3" />
+                </span>
+              </Link>
             </motion.div>
           ))}
           <Link to="/blog" className="btn-ghost w-full justify-center">
@@ -539,7 +669,10 @@ function ShopShowcase({
                   {p.price}
                   {p.currency}
                 </span>
-                <Link to="/boutique" className="btn-ghost w-full justify-center sm:w-auto">
+                <Link
+                  to="/boutique"
+                  className="btn-ghost w-full justify-center sm:w-auto"
+                >
                   Voir
                 </Link>
               </div>
@@ -602,21 +735,26 @@ function CommunityTeaser({
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                   transition={{ delay: i * 0.08 }}
-                  className="panel-app-soft flex items-center gap-3 p-3"
+                  className="panel-app-soft transition hover:-translate-y-0.5 hover:border-gold-300/30"
                 >
-                  <img
-                    src={f.avatarImageUrl || "/crown.svg"}
-                    alt={f.username}
-                    className="h-10 w-10 rounded-full object-cover ring-2 ring-gold-400/60"
-                  />
-                  <div>
-                    <p className="font-display text-sm text-gold-200">
-                      {f.username}
-                    </p>
-                    <p className="font-regal text-[10px] tracking-[0.22em] text-ivory/60">
-                      {formatNumber(f.totalSylvinsGiven)} Sylvins offerts
-                    </p>
-                  </div>
+                  <Link
+                    to={`/u/${encodeURIComponent(f.userId)}`}
+                    className="flex items-center gap-3 p-3"
+                  >
+                    <img
+                      src={f.avatarImageUrl || "/crown.svg"}
+                      alt={f.username}
+                      className="h-10 w-10 rounded-full object-cover ring-2 ring-gold-400/60"
+                    />
+                    <div>
+                      <p className="font-display text-sm text-gold-200">
+                        {f.username}
+                      </p>
+                      <p className="font-regal text-[10px] tracking-[0.22em] text-ivory/60">
+                        {formatNumber(f.totalSylvinsGiven)} Sylvins offerts
+                      </p>
+                    </div>
+                  </Link>
                 </motion.div>
               ))}
             </div>
@@ -667,6 +805,12 @@ function CTA({ isRegistered }: { isRegistered: boolean }) {
           )}
           <Link to="/communaute" className="btn-royal w-full sm:w-auto">
             Voir la communaute
+          </Link>
+          <Link
+            to={isRegistered ? "/live/studio" : "/live"}
+            className="btn-ghost w-full sm:w-auto"
+          >
+            {isRegistered ? "Lancer le studio live" : "Voir les lives"}
           </Link>
         </div>
       </motion.div>
