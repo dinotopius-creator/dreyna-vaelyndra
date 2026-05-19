@@ -47,12 +47,20 @@ import java.util.Set;
 public class NativeWebRtcScreenStreamer {
     private static boolean factoryInitialized = false;
     private static final long HEARTBEAT_INTERVAL_MS = 15_000;
+    private static final int CAPTURE_WIDTH = 540;
+    private static final int CAPTURE_HEIGHT = 960;
+    private static final int CAPTURE_FPS = 24;
     private static final String TAG = "VaelyndraNativeLive";
+
+    public interface Listener {
+        void onStreamerStopped(String reason, boolean recoverable);
+    }
 
     private final Context context;
     private final Intent mediaProjectionData;
     private final String apiBase;
     private final String broadcastToken;
+    private final Listener listener;
     private final EglBase eglBase;
     private final PeerConnectionFactory peerConnectionFactory;
     private final Map<String, PeerConnection> peerConnections = new HashMap<>();
@@ -74,12 +82,14 @@ public class NativeWebRtcScreenStreamer {
         Context context,
         Intent mediaProjectionData,
         String apiBase,
-        String broadcastToken
+        String broadcastToken,
+        Listener listener
     ) {
         this.context = context.getApplicationContext();
         this.mediaProjectionData = mediaProjectionData;
         this.apiBase = apiBase.replaceAll("/+$", "");
         this.broadcastToken = broadcastToken;
+        this.listener = listener;
 
         if (!factoryInitialized) {
             PeerConnectionFactory.initialize(
@@ -112,7 +122,7 @@ public class NativeWebRtcScreenStreamer {
                 @Override
                 public void onStop() {
                     Log.w(TAG, "Android MediaProjection stopped by system or user");
-                    stop();
+                    stopInternal("media_projection_stopped", true);
                 }
             }
         );
@@ -128,7 +138,7 @@ public class NativeWebRtcScreenStreamer {
             context,
             videoSource.getCapturerObserver()
         );
-        screenCapturer.startCapture(720, 1280, 30);
+        screenCapturer.startCapture(CAPTURE_WIDTH, CAPTURE_HEIGHT, CAPTURE_FPS);
         videoTrack = peerConnectionFactory.createVideoTrack(
             "vaelyndra-screen-video",
             videoSource
@@ -149,7 +159,7 @@ public class NativeWebRtcScreenStreamer {
             }
         } catch (Throwable t) {
             Log.e(TAG, "Unable to start Android screen capture", t);
-            stop();
+            stopInternal("capture_start_failed", false);
             return;
         }
 
@@ -157,7 +167,7 @@ public class NativeWebRtcScreenStreamer {
         signalingThread = new Thread(this::pollSignalingLoop, "VaelyndraNativeWebRtc");
         signalingThread.setUncaughtExceptionHandler((thread, throwable) -> {
             Log.e(TAG, "Native signaling thread crashed", throwable);
-            stop();
+            stopInternal("signaling_thread_crashed", true);
         });
         signalingThread.start();
         Log.i(TAG, "Native WebRTC screen streamer started");
@@ -171,11 +181,21 @@ public class NativeWebRtcScreenStreamer {
         return audioTrack;
     }
 
+    public boolean isRunning() {
+        return running && !stopped;
+    }
+
     public void stop() {
+        stopInternal("requested_stop", false);
+    }
+
+    private void stopInternal(String reason, boolean recoverable) {
+        boolean shouldNotify = false;
         synchronized (stopLock) {
             if (stopped) return;
             stopped = true;
             running = false;
+            shouldNotify = true;
             if (signalingThread != null) {
                 signalingThread.interrupt();
                 signalingThread = null;
@@ -225,6 +245,9 @@ public class NativeWebRtcScreenStreamer {
             }
             peerConnectionFactory.dispose();
             eglBase.release();
+        }
+        if (shouldNotify && listener != null) {
+            listener.onStreamerStopped(reason, recoverable);
         }
     }
 

@@ -40,6 +40,7 @@ public class NativeScreenShareService extends Service {
     private static volatile String liveTitle = "";
     private static volatile String liveCategory = "";
     private static volatile long startedAtMs = 0;
+    private static volatile String lastStopReason = "";
     private static volatile Intent lastStartIntent = null;
     private static volatile boolean explicitStopRequested = false;
 
@@ -66,6 +67,7 @@ public class NativeScreenShareService extends Service {
             liveTitle = "";
             liveCategory = "";
             startedAtMs = 0;
+            lastStopReason = "explicit_stop";
             stopCurrentSession();
             stopForeground(STOP_FOREGROUND_REMOVE);
             stopSelf();
@@ -116,6 +118,7 @@ public class NativeScreenShareService extends Service {
         liveTitle = title == null ? "" : title;
         liveCategory = category == null ? "" : category;
         startedAtMs = System.currentTimeMillis();
+        lastStopReason = "";
         running = true;
         acquireWakeLock();
         acquireWifiLock();
@@ -162,6 +165,10 @@ public class NativeScreenShareService extends Service {
         return startedAtMs;
     }
 
+    public static String getLastStopReason() {
+        return lastStopReason;
+    }
+
     private void stopCurrentSession() {
         synchronized (sessionLock) {
             if (startupThread != null) {
@@ -195,9 +202,15 @@ public class NativeScreenShareService extends Service {
                         this,
                         resultData,
                         apiBase,
-                        broadcastToken
+                        broadcastToken,
+                        this::handleStreamerStopped
                     );
                     streamer.start();
+                    if (!streamer.isRunning()) {
+                        Log.e(TAG, "Native screen streamer stopped during startup");
+                        stopSelf();
+                        return;
+                    }
                     if (Thread.currentThread().isInterrupted()) {
                         streamer.stop();
                         return;
@@ -340,6 +353,26 @@ public class NativeScreenShareService extends Service {
         if (Build.VERSION.SDK_INT < 23) return true;
         return checkSelfPermission(Manifest.permission.RECORD_AUDIO) ==
             PackageManager.PERMISSION_GRANTED;
+    }
+
+    private void handleStreamerStopped(String reason, boolean recoverable) {
+        lastStopReason = reason == null ? "unknown" : reason;
+        synchronized (sessionLock) {
+            screenStreamer = null;
+        }
+        if (explicitStopRequested) {
+            return;
+        }
+        Log.w(
+            TAG,
+            "Native streamer stopped unexpectedly (reason=" + lastStopReason +
+                ", recoverable=" + recoverable + ")"
+        );
+        if (recoverable && lastStartIntent != null) {
+            stopSelf();
+            return;
+        }
+        running = false;
     }
 
     private void scheduleServiceRestart() {

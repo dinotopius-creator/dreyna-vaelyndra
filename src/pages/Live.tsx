@@ -1203,7 +1203,6 @@ export function Live() {
   );
 
   const registryEntry = liveRegistry[broadcasterId] ?? null;
-  const isHost = amBroadcaster && !!localStream;
   const { resetBroadcast: resetInviteBroadcast } = useLiveInvites();
   const realViewers = useMemo<LiveViewerSummary[]>(
     () =>
@@ -1226,7 +1225,9 @@ export function Live() {
   remoteStreamRef.current = remoteStream;
   isConnectingRef.current = isConnecting;
   useEffect(() => {
-    if (amBroadcaster) return;
+    const isSelfWatchingNativeAndroidLive =
+      amBroadcaster && registryEntry?.mode === "android-screen";
+    if (amBroadcaster && !isSelfWatchingNativeAndroidLive) return;
     // Si c'est un live Twitch (pas WebRTC), pas de joinAsViewer à tenter.
     if (registryEntry?.mode === "twitch") return;
     const startJoinAttempt = () => {
@@ -1264,6 +1265,9 @@ export function Live() {
     (amBroadcaster ? config.mode : "screen");
   const isActiveLive =
     !!registryEntry || (amBroadcaster && config.status === "live");
+  const isNativeAndroidHost =
+    amBroadcaster && activeMode === "android-screen" && config.status === "live";
+  const isHost = amBroadcaster && (!!localStream || isNativeAndroidHost);
   useEffect(() => {
     if (!amBroadcaster || !isActiveLive) {
       setIsViewerListOpen(false);

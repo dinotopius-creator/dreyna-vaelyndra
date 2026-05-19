@@ -8,6 +8,7 @@ type NativeScreenSharePlugin = {
     title?: string;
     category?: string;
     startedAtMs?: number;
+    lastStopReason?: string;
   }>;
   requestBatteryOptimizationBypass(): Promise<{
     requested: boolean;
@@ -122,9 +123,16 @@ export async function getNativeScreenShareStatus(): Promise<{
   title: string;
   category: string;
   startedAt: string | null;
+  lastStopReason: string;
 }> {
   if (!isNativeAndroidApp()) {
-    return { active: false, title: "", category: "", startedAt: null };
+    return {
+      active: false,
+      title: "",
+      category: "",
+      startedAt: null,
+      lastStopReason: "",
+    };
   }
   try {
     const result = await NativeScreenShare.status();
@@ -137,9 +145,16 @@ export async function getNativeScreenShareStatus(): Promise<{
         Number.isFinite(startedAtMs) && startedAtMs > 0
           ? new Date(startedAtMs).toISOString()
           : null,
+      lastStopReason: result.lastStopReason ?? "",
     };
   } catch {
-    return { active: false, title: "", category: "", startedAt: null };
+    return {
+      active: false,
+      title: "",
+      category: "",
+      startedAt: null,
+      lastStopReason: "",
+    };
   }
 }
 
