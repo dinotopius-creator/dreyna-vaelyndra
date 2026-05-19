@@ -2293,7 +2293,7 @@ export function Live() {
           normal — en plein écran on bascule sur l'overlay.
         */}
         {!asOverlay && isActiveLive && (
-          <aside className="rounded-2xl border border-gold-400/25 bg-night-900/40 p-4 sm:p-5">
+          <aside className="panel-app-soft p-4 sm:p-5">
             <LiveLeaderboardOverlay
               key={`lb-panel-${broadcasterId}`}
               entries={Object.values(tributes)}
@@ -2337,7 +2337,7 @@ export function Live() {
                 ? isViewportFullscreen
                   ? "fixed inset-0 z-[120] h-[100lvh] min-h-[100dvh] w-screen rounded-none border-0 bg-night-900 shadow-none"
                   : "z-[120] h-full w-full rounded-none border-0 bg-night-900 shadow-none"
-                : "card-royal"
+                : "panel-app"
             } ${fullscreenActive ? "bg-night-900" : ""}`}
           >
             <div
@@ -2379,15 +2379,8 @@ export function Live() {
                 (activeMode === "screen" ||
                   activeMode === "android-screen" ||
                   activeMode === "camera") ? (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-center">
-                  {broadcasterProfile?.avatar && (
-                    <img
-                      src={broadcasterProfile.avatar}
-                      alt=""
-                      className="absolute inset-0 h-full w-full scale-105 object-cover opacity-40 blur-sm"
-                    />
-                  )}
-                  <div className="relative z-10 flex flex-col items-center gap-3">
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-[radial-gradient(circle_at_50%_20%,rgba(174,118,255,0.18),transparent_32%),linear-gradient(180deg,#100b1c_0%,#090611_100%)] text-center">
+                  <div className="panel-app-soft relative z-10 flex max-w-lg flex-col items-center gap-3 px-6 py-8">
                     <Radio className="h-10 w-10 animate-pulse text-rose-300" />
                     <p className="font-display text-2xl text-gold-200">
                       {isConnecting ? "Live en cours" : "Le live est annonce"}
