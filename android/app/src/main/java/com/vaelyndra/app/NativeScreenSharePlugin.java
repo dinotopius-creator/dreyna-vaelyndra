@@ -37,6 +37,7 @@ public class NativeScreenSharePlugin extends Plugin {
         ret.put("title", NativeScreenShareService.getLiveTitle());
         ret.put("category", NativeScreenShareService.getLiveCategory());
         ret.put("startedAtMs", NativeScreenShareService.getStartedAtMs());
+        ret.put("lastStopReason", NativeScreenShareService.getLastStopReason());
         call.resolve(ret);
     }
 

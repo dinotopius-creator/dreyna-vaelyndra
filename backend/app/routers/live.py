@@ -635,11 +635,6 @@ def create_native_offer(
     payload: NativeSignalOfferIn,
     user: Optional[UserProfile] = Depends(optional_user),
 ) -> NativeSignalOut:
-    if user is not None and payload.broadcaster_id == user.id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"message": "cannot_watch_own_native_live"},
-        )
     now = datetime.now(timezone.utc).isoformat()
     with get_session() as session:
         _purge_stale_native_signals(session)
