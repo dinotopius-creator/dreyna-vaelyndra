@@ -85,6 +85,7 @@ import {
 import { apiGetProfile } from "../lib/api";
 import { gradeBySlug } from "../data/grades";
 import { isNativeScreenShareAvailable } from "../lib/nativeScreenShare";
+import { useWakeLock } from "../hooks/useWakeLock";
 
 // PR familiers#5 — couleur d'ambiance par rareté pour teinter les
 // réactions du familier (overlay) à chaque cadeau reçu.
@@ -1300,6 +1301,7 @@ export function Live() {
   const showViewer =
     isActiveLive &&
     (isHost || hasRemote || (activeMode === "twitch" && !!twitchChannel));
+  useWakeLock(isActiveLive && (amBroadcaster || showViewer));
 
   // Demande client (Alexandre, 20/04) : aucun bot dans le chat, et
   // chaque live démarre avec un chat vide (pas d'historique du live
