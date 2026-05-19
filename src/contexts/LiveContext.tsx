@@ -640,6 +640,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   // au push "live-meta" initial (titre/description) et à la diffusion
   // des messages de chat en temps réel.
   const hostDataConnectionsRef = useRef<Set<DataConnection>>(new Set());
+  const allowPageUnloadRef = useRef(true);
   // Viewer : sa DataConnection vers le host courant. Utilisée pour
   // envoyer ses propres messages de chat au host (qui les rediffuse).
   const viewerDataConnRef = useRef<DataConnection | null>(null);
@@ -1324,6 +1325,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
 
   const stopLive = useCallback(() => {
     const me = userRef.current;
+    allowPageUnloadRef.current = true;
     // IMPORTANT : ne ferme QUE le côté host, pour ne pas casser le stream
     // qu'on est en train de regarder sur un autre user (viewerPeerRef).
     stopHosting({ stopNative: true });
@@ -2868,15 +2870,25 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Volontairement aucun handler `beforeunload` / `pagehide` : un simple
-  // refresh de la page (F5, pull-to-refresh mobile) ne doit PAS tuer le
-  // live du broadcaster, c'était le bug #54 signalé. Le backend purge
-  // automatiquement les entrées orphelines via le TTL heartbeat (90 s
-  // côté serveur), ce qui couvre la fermeture définitive d'onglet sans
-  // pénaliser les refresh volontaires. Le broadcaster peut restaurer
-  // son live en relançant le partage d'écran après refresh — l'entrée
-  // serveur reste vivante entre-temps, donc les viewers voient
-  // "Reconnexion…" au lieu de "Live terminé".
+  // On empêche désormais le refresh / la fermeture involontaires tant que
+  // le live est actif. Sans ce garde-fou navigateur, certains contextes
+  // mobile/desktop peuvent déclencher un reload non désiré et forcer une
+  // reprise du live. Ici, seul un arrêt volontaire du live ré-autorise
+  // l'unload silencieux de la page.
+  useEffect(() => {
+    allowPageUnloadRef.current = config.status !== "live";
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (allowPageUnloadRef.current) return undefined;
+      if (configRef.current.status !== "live") return undefined;
+      event.preventDefault();
+      event.returnValue = "";
+      return "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", onBeforeUnload);
+    };
+  }, [config.status]);
 
   // Heartbeat : l'onglet qui diffuse rafraîchit `lastHeartbeat` toutes les
   // 30s. Combiné au filtrage dans `readRegistry` (seuil 90s), ça élimine
