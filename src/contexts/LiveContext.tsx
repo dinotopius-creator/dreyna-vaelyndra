@@ -19,6 +19,7 @@ import {
   getNativeScreenShareStatus,
   isNativeAndroidApp,
   markNativeScreenShareAuthGrace,
+  requestNativeLiveBatteryBypass,
   startNativeScreenShare,
   stopNativeScreenShare,
 } from "../lib/nativeScreenShare";
@@ -1767,6 +1768,9 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             return;
           }
           const nativeStatus = await getNativeScreenShareStatus();
+          void requestNativeLiveBatteryBypass().catch(() => {
+            // Best effort Android only. Some vendors block the settings intent.
+          });
           setConfig((c) => ({
             ...c,
             status: "live",
