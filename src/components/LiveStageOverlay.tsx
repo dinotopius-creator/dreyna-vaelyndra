@@ -51,6 +51,7 @@ import {
 } from "../lib/familiarsApi";
 import { apiGetProfile, type UserProfileDto } from "../lib/api";
 import { AvatarViewer } from "./AvatarViewer";
+import { isFlatImageUrl } from "../lib/dicebear";
 import {
   DEFAULT_LIVE_STAGE,
   clampNormalized,
@@ -119,6 +120,11 @@ export function LiveStageOverlay({
   const lastGiftSeen = useRef(giftTick);
   const lastHeartSeen = useRef(heartTick ?? 0);
 
+  const activeFamiliar = useMemo(() => {
+    if (!familiar) return null;
+    return familiar;
+  }, [familiar]);
+
   // Recharge l'état dès qu'on change de broadcaster.
   useEffect(() => {
     setStage(loadLiveStage(broadcasterId));
@@ -132,7 +138,12 @@ export function LiveStageOverlay({
       .then((col) => {
         if (cancelled) return;
         const active =
-          col.owned.find((f) => f.familiarId === col.activeFamiliarId) ?? null;
+          col.owned.find(
+            (f) =>
+              f.isActive ||
+              f.id === col.activeUserFamiliarId ||
+              f.familiarId === col.activeFamiliarId,
+          ) ?? null;
         setFamiliar(active);
       })
       .catch(() => {
@@ -161,11 +172,11 @@ export function LiveStageOverlay({
 
   // Burst sur cadeau reçu : rebond + particules (familier seulement).
   useEffect(() => {
-    if (!familiar) return;
+    if (!activeFamiliar) return;
     if (giftTick === lastGiftSeen.current) return;
     lastGiftSeen.current = giftTick;
     setReactionKey((k) => k + 1);
-    const energy = familiar.stats?.energy ?? 0;
+    const energy = activeFamiliar.stats?.energy ?? 0;
     const particleCount = 4 + Math.floor(energy / 12);
     const now = Date.now();
     const next: Particle[] = Array.from({ length: particleCount }).map(
@@ -183,20 +194,23 @@ export function LiveStageOverlay({
       setParticles((p) => p.filter((x) => !toClean.includes(x.id)));
     }, 1400);
     return () => window.clearTimeout(t);
-  }, [giftTick, familiar]);
+  }, [giftTick, activeFamiliar]);
 
   // Micro-rebond sur cœur.
   useEffect(() => {
-    if (!familiar) return;
+    if (!activeFamiliar) return;
     if (heartTick === undefined) return;
     if (heartTick === lastHeartSeen.current) return;
     lastHeartSeen.current = heartTick;
     setReactionKey((k) => k + 1);
-  }, [heartTick, familiar]);
+  }, [heartTick, activeFamiliar]);
 
   const evolution = useMemo(
-    () => (familiar ? EVOLUTION_TIERS[familiar.evolution.id] ?? null : null),
-    [familiar],
+    () =>
+      activeFamiliar
+        ? EVOLUTION_TIERS[activeFamiliar.evolution.id] ?? null
+        : null,
+    [activeFamiliar],
   );
 
   const updateSprite = useCallback(
@@ -248,15 +262,18 @@ export function LiveStageOverlay({
   // pollue pas le DOM. (Mais si le familier charge plus tard, on le
   // montera quand il sera là — donc on ne return pas trop tôt si on
   // doit afficher l'avatar.)
+  const hasTrueAvatar3DSource = !!(
+    profile?.avatarUrl && !isFlatImageUrl(profile.avatarUrl)
+  );
   const shouldShowAvatar = showAvatar && stage.avatarVisible;
-  const hasAvatarSource = !!(profile?.avatarUrl || profile?.avatarImageUrl || fallbackAvatar);
-  const shouldRenderAnything = familiar || (shouldShowAvatar && hasAvatarSource);
+  const shouldRenderAvatar = shouldShowAvatar && hasTrueAvatar3DSource;
+  const shouldRenderAnything = activeFamiliar || shouldRenderAvatar;
   if (!shouldRenderAnything) return null;
 
   return (
     <div ref={stageRef} className="pointer-events-none absolute inset-0 z-20">
       {/* Sprite : avatar 3D du broadcaster. */}
-      {shouldShowAvatar && hasAvatarSource && (
+      {shouldRenderAvatar && (
         <StageSprite
           id="avatar"
           stageContainerRef={stageRef}
@@ -306,7 +323,8 @@ export function LiveStageOverlay({
               alt={`Avatar de ${broadcasterName}`}
               size="square"
               framing="face"
-              autoRotate={false}
+              autoRotate
+              interactive={false}
               equippedFrameId={profile?.equipped?.frame ?? null}
               equippedSceneId={profile?.equipped?.scene ?? null}
               equippedOutfit3DId={profile?.equipped?.outfit3d ?? null}
@@ -318,7 +336,7 @@ export function LiveStageOverlay({
       )}
 
       {/* Sprite : familier du broadcaster + particules de réactions. */}
-      {familiar && (
+      {activeFamiliar && (
         <StageSprite
           id="familiar"
           stageContainerRef={stageRef}
@@ -358,16 +376,16 @@ export function LiveStageOverlay({
                 ]
               : []
           }
-          label={familiar.nickname ?? familiar.name}
+          label={activeFamiliar.nickname ?? activeFamiliar.name}
         >
           <div className="relative h-16 w-16 sm:h-20 sm:w-20">
             <motion.div
               key={reactionKey}
               className="absolute inset-0 flex items-center justify-center rounded-full text-3xl sm:text-4xl"
               style={{
-                background: `radial-gradient(circle at 50% 40%, ${familiar.color}44, ${familiar.color}11 60%, transparent)`,
-                boxShadow: `0 0 24px -4px ${familiar.color}`,
-                border: `1px solid ${familiar.color}55`,
+                background: `radial-gradient(circle at 50% 40%, ${activeFamiliar.color}44, ${activeFamiliar.color}11 60%, transparent)`,
+                boxShadow: `0 0 24px -4px ${activeFamiliar.color}`,
+                border: `1px solid ${activeFamiliar.color}55`,
               }}
               initial={{ scale: 0.85 }}
               animate={{
@@ -378,7 +396,9 @@ export function LiveStageOverlay({
               transition={{ duration: 0.7, ease: "easeOut" }}
             >
               <motion.span
-                style={{ filter: `drop-shadow(0 0 8px ${familiar.color})` }}
+                style={{
+                  filter: `drop-shadow(0 0 8px ${activeFamiliar.color})`,
+                }}
                 animate={{ y: [0, -3, 0] }}
                 transition={{
                   duration: 3,
@@ -386,7 +406,7 @@ export function LiveStageOverlay({
                   ease: "easeInOut",
                 }}
               >
-                {familiar.icon}
+                {activeFamiliar.icon}
               </motion.span>
             </motion.div>
             <AnimatePresence>
@@ -395,7 +415,7 @@ export function LiveStageOverlay({
                   key={p.id}
                   className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-base sm:text-lg"
                   style={{
-                    filter: `drop-shadow(0 0 4px ${lastGiftColor ?? familiar.color})`,
+                    filter: `drop-shadow(0 0 4px ${lastGiftColor ?? activeFamiliar.color})`,
                   }}
                   initial={{ opacity: 0, x: 0, y: 0, scale: 0.6 }}
                   animate={{
@@ -415,14 +435,14 @@ export function LiveStageOverlay({
               className="absolute -bottom-4 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border border-gold-400/30 bg-night-950/70 px-1.5 py-0.5 text-[9px] uppercase tracking-widest text-ivory/80 shadow"
               aria-hidden
             >
-              {evolution?.emoji ?? "✨"} Niv {familiar.level}
+              {evolution?.emoji ?? "✨"} Niv {activeFamiliar.level}
             </div>
           </div>
         </StageSprite>
       )}
 
       {/* Bouton "réafficher l'avatar" si le host l'a masqué. */}
-      {canEdit && showAvatar && !stage.avatarVisible && (
+      {canEdit && showAvatar && hasTrueAvatar3DSource && !stage.avatarVisible && (
         <button
           type="button"
           onClick={() => setAvatarVisible(true)}
@@ -585,7 +605,12 @@ function StageSprite({
         {canEdit && (
           <button
             type="button"
+            onPointerDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
             onClick={(event) => {
+              event.preventDefault();
               event.stopPropagation();
               onActivate();
             }}
@@ -677,8 +702,13 @@ function SpriteButton({
     <button
       type="button"
       onClick={(event) => {
+        event.preventDefault();
         event.stopPropagation();
         if (!disabled) onClick();
+      }}
+      onPointerDown={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
       }}
       aria-label={label}
       title={label}
