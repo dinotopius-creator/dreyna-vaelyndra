@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="315"
+                android:startColor="#12081F"
+                android:centerColor="#090513"
+                android:endColor="#25104A" />
+        </shape>
+    </item>
+
+    <item android:top="84dp" android:left="48dp" android:right="48dp" android:bottom="84dp">
+        <inset android:insetLeft="24dp" android:insetRight="24dp" android:insetTop="96dp" android:insetBottom="160dp">
+            <shape android:shape="rectangle">
+                <corners android:radius="32dp" />
+                <solid android:color="#0EF7E2B3" />
+            </shape>
+        </inset>
+    </item>
+
+    <item android:gravity="center" android:drawable="@drawable/vaelyndra_launcher_foreground" />
+</layer-list>

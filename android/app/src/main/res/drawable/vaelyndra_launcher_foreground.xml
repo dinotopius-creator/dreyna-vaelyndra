@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:pathData="M54,18L60,27L71,27L64,35L67,46L54,39L41,46L44,35L37,27L48,27Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="40"
+                android:startY="18"
+                android:endX="70"
+                android:endY="46">
+                <item android:offset="0" android:color="#FFF7E2" />
+                <item android:offset="0.55" android:color="#F0CC78" />
+                <item android:offset="1" android:color="#D4A94A" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path
+        android:pathData="M31,30L38,24L44,31L49,24L54,31L59,24L64,31L70,24L77,30L74,43C73,48 70,53 65,56L54,63L43,56C38,53 35,48 34,43Z"
+        android:fillColor="#14FFF6E6" />
+    <path
+        android:pathData="M30,30L36,24L41,30L46,22L54,30L62,22L67,30L72,24L78,30L75,43C74,50 70,56 63,60L54,66L45,60C38,56 34,50 33,43Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="32"
+                android:startY="24"
+                android:endX="76"
+                android:endY="64">
+                <item android:offset="0" android:color="#FFF9EA" />
+                <item android:offset="0.48" android:color="#E9C46F" />
+                <item android:offset="1" android:color="#C38C23" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path
+        android:pathData="M54,40L63,52L58,52L65,69L72,48L77,48L66,85L60,85L52,65L44,85L38,85L27,48L32,48L39,69L46,52L41,52Z"
+        android:fillColor="#FFF9EE" />
+    <path
+        android:pathData="M25,86C31,80 41,77 54,77C67,77 77,80 83,86C77,92 67,95 54,95C41,95 31,92 25,86Z"
+        android:fillColor="#20FFFFFF" />
+</vector>
