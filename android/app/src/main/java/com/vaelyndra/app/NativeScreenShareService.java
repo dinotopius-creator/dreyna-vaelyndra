@@ -1,11 +1,9 @@
 package com.vaelyndra.app;
 
 import android.Manifest;
-import android.app.AlarmManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
-import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
@@ -15,7 +13,6 @@ import android.media.projection.MediaProjectionManager;
 import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.IBinder;
-import android.os.SystemClock;
 import android.os.PowerManager;
 import android.util.Log;
 
@@ -34,7 +31,6 @@ public class NativeScreenShareService extends Service {
 
     private static final String CHANNEL_ID = "vaelyndra_screen_share";
     private static final int NOTIFICATION_ID = 4217;
-    private static final int RESTART_REQUEST_CODE = 4218;
     private static final String TAG = "VaelyndraNativeLive";
     private static volatile boolean running = false;
     private static volatile String liveTitle = "";
@@ -59,6 +55,14 @@ public class NativeScreenShareService extends Service {
             Log.w(TAG, "Native live service restarted without intent; reusing last session state");
         }
 
+        try {
+            startAsForegroundService();
+        } catch (Exception e) {
+            Log.e(TAG, "Unable to promote native live service to foreground", e);
+            stopSelf();
+            return START_NOT_STICKY;
+        }
+
         if (effectiveIntent != null && ACTION_STOP.equals(effectiveIntent.getAction())) {
             Log.i(TAG, "Stopping native live service on explicit request");
             explicitStopRequested = true;
@@ -70,14 +74,6 @@ public class NativeScreenShareService extends Service {
             lastStopReason = "explicit_stop";
             stopCurrentSession();
             stopForeground(STOP_FOREGROUND_REMOVE);
-            stopSelf();
-            return START_NOT_STICKY;
-        }
-
-        try {
-            startAsForegroundService();
-        } catch (Exception e) {
-            Log.e(TAG, "Unable to promote native live service to foreground", e);
             stopSelf();
             return START_NOT_STICKY;
         }
@@ -130,7 +126,6 @@ public class NativeScreenShareService extends Service {
 
     @Override
     public void onDestroy() {
-        boolean shouldRecover = running && !explicitStopRequested && lastStartIntent != null;
         try {
             stopCurrentSession();
             releaseWakeLock();
@@ -143,8 +138,6 @@ public class NativeScreenShareService extends Service {
             liveTitle = "";
             liveCategory = "";
             startedAtMs = 0;
-        } else if (shouldRecover) {
-            scheduleServiceRestart();
         }
         super.onDestroy();
     }
@@ -288,10 +281,7 @@ public class NativeScreenShareService extends Service {
 
     @Override
     public void onTaskRemoved(Intent rootIntent) {
-        if (running && !explicitStopRequested && lastStartIntent != null) {
-            Log.w(TAG, "Vaelyndra task removed while native live is active; scheduling recovery");
-            scheduleServiceRestart();
-        }
+        Log.i(TAG, "Vaelyndra task removed while native live service is active");
         super.onTaskRemoved(rootIntent);
     }
 
@@ -369,31 +359,29 @@ public class NativeScreenShareService extends Service {
                 ", recoverable=" + recoverable + ")"
         );
         if (recoverable && lastStartIntent != null) {
-            stopSelf();
+            Intent restartIntent = new Intent(lastStartIntent);
+            Intent resultData = restartIntent.getParcelableExtra(EXTRA_RESULT_DATA);
+            if (resultData == null) {
+                running = false;
+                stopForeground(STOP_FOREGROUND_REMOVE);
+                stopSelf();
+                return;
+            }
+            String apiBase = restartIntent.getStringExtra(EXTRA_API_BASE);
+            if (apiBase == null || apiBase.trim().isEmpty()) {
+                apiBase = "https://api.vaelyndra.com";
+            }
+            String broadcastToken = restartIntent.getStringExtra(EXTRA_BROADCAST_TOKEN);
+            if (broadcastToken == null) {
+                broadcastToken = "";
+            }
+            Log.i(TAG, "Attempting in-process native live recovery");
+            running = true;
+            startNativeSession(resultData, apiBase, broadcastToken);
             return;
         }
         running = false;
-    }
-
-    private void scheduleServiceRestart() {
-        Intent restartIntent = lastStartIntent == null ? null : new Intent(lastStartIntent);
-        if (restartIntent == null) return;
-        try {
-            AlarmManager alarmManager = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
-            if (alarmManager == null) return;
-            PendingIntent pendingIntent = PendingIntent.getService(
-                this,
-                RESTART_REQUEST_CODE,
-                restartIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-            );
-            alarmManager.setExactAndAllowWhileIdle(
-                AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                SystemClock.elapsedRealtime() + 1500,
-                pendingIntent
-            );
-        } catch (Throwable t) {
-            Log.w(TAG, "Unable to schedule native live recovery", t);
-        }
+        stopForeground(STOP_FOREGROUND_REMOVE);
+        stopSelf();
     }
 }
