@@ -2659,7 +2659,7 @@ export function Live() {
               </div>
               {amBroadcaster && isActiveLive && isLiveSettingsOpen && (
                 <div
-                  className="absolute right-3 top-14 z-40 w-[min(25rem,calc(100%-1.5rem))] rounded-3xl border border-gold-400/25 bg-night-950/92 p-4 shadow-2xl backdrop-blur-md sm:right-4 sm:top-16"
+                  className="absolute right-3 top-14 z-40 flex max-h-[min(78vh,calc(100%-4rem))] w-[min(25rem,calc(100%-1.5rem))] flex-col overflow-hidden rounded-3xl border border-gold-400/25 bg-night-950/92 p-4 shadow-2xl backdrop-blur-md sm:right-4 sm:top-16"
                   style={
                     isViewportFullscreen
                       ? {
@@ -2687,7 +2687,7 @@ export function Live() {
                     </button>
                   </div>
 
-                  <div className="mt-4 space-y-4">
+                  <div className="mt-4 min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain pr-1">
                     <label className="block">
                       <span className="mb-1 flex items-center justify-between text-[11px] uppercase tracking-[0.2em] text-ivory/55">
                         Titre du live
@@ -2747,7 +2747,7 @@ export function Live() {
                       </div>
                     </label>
 
-                    <div className="flex flex-wrap items-center justify-end gap-2">
+                    <div className="sticky bottom-0 flex flex-wrap items-center justify-end gap-2 border-t border-gold-400/10 bg-night-950/95 pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-3">
                       <button
                         type="button"
                         onClick={() => {
