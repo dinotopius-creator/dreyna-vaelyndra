@@ -517,7 +517,12 @@ interface LiveCtx {
   /** Dernière erreur éventuelle (à afficher en toast). */
   lastError: string | null;
   /** Métadonnées du live actuellement regardé (titre/description/etc). */
-  viewingMeta: { title: string; description: string; mode: LiveMode } | null;
+  viewingMeta: {
+    title: string;
+    description: string;
+    category: LiveCategoryId;
+    mode: LiveMode;
+  } | null;
   /**
    * Publie un message de chat sur le live courant.
    *
@@ -610,6 +615,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   const [viewingMeta, setViewingMeta] = useState<{
     title: string;
     description: string;
+    category: LiveCategoryId;
     mode: LiveMode;
   } | null>(null);
   // Marker de reprise de live (post-refresh). Initialisé à partir de
@@ -800,6 +806,21 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         ...patch,
         category: nextCategory,
       }));
+
+      hostDataConnectionsRef.current.forEach((dataConn) => {
+        if (!dataConn.open) return;
+        try {
+          dataConn.send({
+            type: "live-meta",
+            title: nextTitle,
+            description: nextDescription,
+            category: nextCategory,
+            mode: configRef.current.mode,
+          });
+        } catch {
+          // ignore
+        }
+      });
 
       if (!me || configRef.current.status !== "live") return;
 
@@ -1595,6 +1616,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
                 type: "live-meta",
                 title: configRef.current.title,
                 description: configRef.current.description,
+                category: configRef.current.category,
                 mode,
               });
               dataConn.send({
@@ -2733,6 +2755,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
                 const meta = payload as {
                   title?: string;
                   description?: string;
+                  category?: string;
                   mode?: LiveMode;
                 };
                 setViewingMeta({
@@ -2741,6 +2764,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
                     typeof meta.description === "string"
                       ? meta.description
                       : "",
+                  category: normalizeLiveCategory(meta.category),
                   mode:
                     meta.mode === "twitch" ||
                     meta.mode === "screen" ||
@@ -3113,10 +3137,44 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       await startScreenShare();
       return;
     }
+    if (marker.mode === "android-screen") {
+      if (isNativeAndroidApp()) {
+        const nativeStatus = await getNativeScreenShareStatus();
+        if (nativeStatus.active) {
+          const startedAt =
+            nativeStatus.startedAt ?? configRef.current.startedAt ?? new Date().toISOString();
+          setConfig((c) => ({
+            ...c,
+            status: "live",
+            mode: "android-screen",
+            startedAt,
+          }));
+          updateRegistry((r) => ({
+            ...r,
+            [me.id]: {
+              userId: me.id,
+              username: me.username,
+              avatar: me.avatar,
+              title: marker.title.trim() || `${me.username} en direct`,
+              description: marker.description.trim(),
+              mode: "android-screen",
+              category: marker.category,
+              twitchChannel: "",
+              startedAt,
+              lastHeartbeat: new Date().toISOString(),
+            },
+          }));
+          setResumableLive(marker);
+          return;
+        }
+      }
+      await startScreenShare();
+      return;
+    }
     // camera
     setCameraFacing(marker.facing);
     await startCameraShare(marker.facing);
-  }, [announceTwitchLive, startScreenShare, startCameraShare]);
+  }, [announceTwitchLive, startScreenShare, startCameraShare, updateRegistry]);
 
   const value = useMemo<LiveCtx>(
     () => ({
