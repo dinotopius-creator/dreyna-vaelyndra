@@ -52,6 +52,7 @@ import {
 import { apiGetProfile, type UserProfileDto } from "../lib/api";
 import { AvatarViewer } from "./AvatarViewer";
 import { isFlatImageUrl } from "../lib/dicebear";
+import { isAvatar3DUrl } from "../lib/avatar3d";
 import {
   DEFAULT_LIVE_STAGE,
   clampNormalized,
@@ -263,7 +264,8 @@ export function LiveStageOverlay({
   // montera quand il sera là — donc on ne return pas trop tôt si on
   // doit afficher l'avatar.)
   const hasTrueAvatar3DSource = !!(
-    profile?.avatarUrl && !isFlatImageUrl(profile.avatarUrl)
+    profile?.avatarUrl &&
+    (isAvatar3DUrl(profile.avatarUrl) || !isFlatImageUrl(profile.avatarUrl))
   );
   const shouldShowAvatar = showAvatar && stage.avatarVisible;
   const shouldRenderAvatar = shouldShowAvatar && hasTrueAvatar3DSource;
@@ -316,13 +318,13 @@ export function LiveStageOverlay({
           }
           label={`Avatar de ${broadcasterName}`}
         >
-          <div className="relative h-24 w-24 sm:h-28 sm:w-28">
+          <div className="relative h-32 w-24 sm:h-40 sm:w-28">
             <AvatarViewer
               src={profile?.avatarUrl ?? null}
               fallbackImage={profile?.avatarImageUrl ?? fallbackAvatar ?? null}
               alt={`Avatar de ${broadcasterName}`}
-              size="square"
-              framing="face"
+              size="portrait"
+              framing="body"
               autoRotate
               interactive={false}
               equippedFrameId={profile?.equipped?.frame ?? null}
