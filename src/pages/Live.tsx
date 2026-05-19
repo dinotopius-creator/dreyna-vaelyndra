@@ -1235,6 +1235,7 @@ export function Live() {
   }, [amBroadcaster, isActiveLive, broadcasterId]);
   const shouldOfferLiveResume =
     amBroadcaster &&
+    config.status !== "live" &&
     !localStream &&
     !!resumableLive &&
     !!user &&
@@ -1472,17 +1473,15 @@ export function Live() {
   }, [isViewportFullscreen]);
 
   useEffect(() => {
-    if (!fullscreenActive) {
+    if (!amBroadcaster || !isActiveLive) {
       setIsLiveSettingsOpen(false);
       return;
     }
-    if (amBroadcaster) {
-      setLiveSettingsDraft({
-        title: config.title,
-        category: config.category,
-      });
-    }
-  }, [fullscreenActive, amBroadcaster, config.title, config.category]);
+    setLiveSettingsDraft({
+      title: config.title,
+      category: config.category,
+    });
+  }, [amBroadcaster, isActiveLive, config.title, config.category]);
 
   useEffect(() => {
     if (!isLiveSettingsOpen) return;
@@ -1490,10 +1489,29 @@ export function Live() {
   }, [isLiveSettingsOpen]);
 
   useEffect(() => {
-    if (!amBroadcaster || !isActiveLive || !fullscreenActive) {
+    if (!amBroadcaster || !isActiveLive) {
       setIsLiveSettingsOpen(false);
     }
-  }, [amBroadcaster, isActiveLive, fullscreenActive]);
+  }, [amBroadcaster, isActiveLive]);
+
+  const autoResumeAttemptRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!shouldOfferLiveResume || !resumableLive) {
+      autoResumeAttemptRef.current = null;
+      return;
+    }
+    if (
+      resumableLive.mode !== "camera" &&
+      resumableLive.mode !== "twitch" &&
+      resumableLive.mode !== "android-screen"
+    ) {
+      return;
+    }
+    const key = `${resumableLive.userId}:${resumableLive.mode}:${resumableLive.savedAt}`;
+    if (autoResumeAttemptRef.current === key) return;
+    autoResumeAttemptRef.current = key;
+    void resumeLive();
+  }, [resumeLive, resumableLive, shouldOfferLiveResume]);
 
   async function toggleFullscreen() {
     const el = playerCardRef.current;
@@ -2134,7 +2152,9 @@ export function Live() {
   // pas encore (host qui est en train de démarrer), on retombe sur le
   // state local du host courant.
   const heroCategory = getLiveCategory(
-    registryEntry?.category ?? (amBroadcaster ? config.category : undefined),
+    registryEntry?.category ??
+      viewingMeta?.category ??
+      (amBroadcaster ? config.category : undefined),
   );
   const heroDescription =
     registryEntry?.description?.trim() ||
@@ -2497,7 +2517,7 @@ export function Live() {
                     : undefined
                 }
               >
-                {fullscreenActive && amBroadcaster && isActiveLive && (
+                {amBroadcaster && isActiveLive && (
                   <button
                     type="button"
                     onClick={() => setIsLiveSettingsOpen((open) => !open)}
@@ -2637,7 +2657,7 @@ export function Live() {
                   )}
                 </button>
               </div>
-              {fullscreenActive && amBroadcaster && isActiveLive && isLiveSettingsOpen && (
+              {amBroadcaster && isActiveLive && isLiveSettingsOpen && (
                 <div
                   className="absolute right-3 top-14 z-40 w-[min(25rem,calc(100%-1.5rem))] rounded-3xl border border-gold-400/25 bg-night-950/92 p-4 shadow-2xl backdrop-blur-md sm:right-4 sm:top-16"
                   style={
