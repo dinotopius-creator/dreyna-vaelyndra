@@ -160,6 +160,55 @@
     pointer-events: none;
   }
 
+  .panel-app {
+    @apply relative overflow-hidden rounded-[2rem] border border-white/10 bg-night-900/90 backdrop-blur-2xl shadow-[0_24px_70px_-30px_rgba(0,0,0,0.9)];
+  }
+
+  .panel-app::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(circle at top, rgba(255,255,255,0.09), transparent 30%),
+      linear-gradient(160deg, rgba(255,255,255,0.03), transparent 45%);
+    pointer-events: none;
+  }
+
+  .panel-app-soft {
+    @apply rounded-[1.5rem] border border-white/10 bg-white/5 backdrop-blur-xl shadow-[0_18px_40px_-28px_rgba(0,0,0,0.9)];
+  }
+
+  .chip-app {
+    @apply inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-medium tracking-[0.08em] text-ivory/80 backdrop-blur;
+  }
+
+  .metric-app {
+    @apply panel-app-soft p-4;
+  }
+
+  .metric-app-value {
+    @apply font-display text-2xl text-gold-200;
+  }
+
+  .metric-app-label {
+    @apply mt-1 text-[11px] uppercase tracking-[0.16em] text-ivory/55;
+  }
+
+  .phone-stage {
+    @apply panel-app relative mx-auto aspect-[9/18] w-full max-w-[23rem] p-3;
+  }
+
+  .phone-stage-screen {
+    @apply relative h-full overflow-hidden rounded-[1.6rem] border border-white/10 bg-[#0d0917];
+  }
+
+  .ambient-grid {
+    background-image:
+      linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px);
+    background-size: 22px 22px;
+  }
+
   .btn-royal {
     @apply relative inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-4 py-3 font-regal text-xs font-semibold tracking-[0.14em] transition-all duration-300 sm:px-6 sm:text-sm sm:tracking-[0.2em];
     background: linear-gradient(135deg, #6a2fc7 0%, #4d1f96 50%, #2a0f4f 100%);
