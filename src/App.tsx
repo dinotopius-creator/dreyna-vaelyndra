@@ -10,6 +10,7 @@ import { Guarded } from "./components/Guarded";
 import { EasterEggs } from "./components/EasterEggs";
 import { CookieBanner } from "./components/CookieBanner";
 import { FamiliarOnboardingGate } from "./components/FamiliarOnboardingGate";
+import { NativeAppBootstrap } from "./components/NativeAppBootstrap";
 
 const BlogList = lazy(async () => {
   const mod = await import("./pages/BlogList");
@@ -313,6 +314,7 @@ function App() {
 
   return (
     <div className="relative flex min-h-screen flex-col">
+      <NativeAppBootstrap />
       <MagicBackground />
       <EasterEggs />
       <Navbar />

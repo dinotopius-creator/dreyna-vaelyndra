@@ -1,0 +1,25 @@
+{
+  "name": "Vaelyndra",
+  "short_name": "Vaelyndra",
+  "description": "Experience sociale fantasy mobile-first avec lives, avatars, familiers et mondes immersifs.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#07030f",
+  "theme_color": "#07030f",
+  "lang": "fr",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/crown.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

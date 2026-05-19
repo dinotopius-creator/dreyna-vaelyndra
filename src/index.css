@@ -20,6 +20,7 @@
   html {
     text-size-adjust: 100%;
     -webkit-text-size-adjust: 100%;
+    background: #07030f;
   }
 
   body {
@@ -46,6 +47,16 @@
     min-width: 0;
     overflow-x: hidden;
     -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: none;
+  }
+
+  html.native-app,
+  body.native-app-body {
+    background: #07030f;
+  }
+
+  html.native-app body {
+    min-height: 100dvh;
   }
 
   *,
@@ -80,6 +91,12 @@
   [role='button'],
   a {
     touch-action: manipulation;
+  }
+
+  input,
+  textarea,
+  select {
+    scroll-margin-block: calc(env(safe-area-inset-top) + 1rem);
   }
 
   ::selection {
@@ -402,6 +419,12 @@
 }
 
 @media (max-width: 640px) {
+  html,
+  body,
+  #root {
+    min-height: 100dvh;
+  }
+
   .font-regal {
     letter-spacing: 0.05em;
   }
