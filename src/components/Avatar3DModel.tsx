@@ -33,6 +33,7 @@ interface Props {
   outfit?: OutfitTheme;
   accessory?: AccessoryTheme;
   autoRotate?: boolean;
+  interactive?: boolean;
   className?: string;
 }
 
@@ -204,6 +205,7 @@ export function Avatar3DModel({
   outfit = "base",
   accessory = null,
   autoRotate = true,
+  interactive = true,
   className = "",
 }: Props) {
   const [yaw, setYaw] = useState(-18);
@@ -250,6 +252,7 @@ export function Avatar3DModel({
         : { top: "58%", scale: 0.94 };
 
   function onPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!interactive) return;
     dragRef.current = {
       x: event.clientX,
       y: event.clientY,
@@ -260,6 +263,7 @@ export function Avatar3DModel({
   }
 
   function onPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!interactive) return;
     if (!dragRef.current) return;
     const dx = event.clientX - dragRef.current.x;
     const dy = event.clientY - dragRef.current.y;
@@ -268,6 +272,7 @@ export function Avatar3DModel({
   }
 
   function onPointerUp(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!interactive) return;
     dragRef.current = null;
     event.currentTarget.releasePointerCapture(event.pointerId);
   }
@@ -279,7 +284,11 @@ export function Avatar3DModel({
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
-      style={{ touchAction: "none", cursor: "grab", perspective: "1200px" }}
+      style={{
+        touchAction: interactive ? "none" : "auto",
+        cursor: interactive ? "grab" : "default",
+        perspective: "1200px",
+      }}
     >
       <div className="absolute inset-x-0 bottom-5 h-8 rounded-full bg-black/30 blur-xl" />
       <div

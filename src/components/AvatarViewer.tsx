@@ -126,6 +126,7 @@ interface Props {
   equippedSceneId?: string | null;
   equippedOutfit3DId?: string | null;
   equippedAccessory3DId?: string | null;
+  interactive?: boolean;
 }
 
 function FrameOverlay({ itemId }: { itemId: string }) {
@@ -186,6 +187,7 @@ export function AvatarViewer({
   equippedSceneId,
   equippedOutfit3DId,
   equippedAccessory3DId,
+  interactive = true,
 }: Props) {
   const sceneItem = equippedSceneId ? CATALOG_BY_ID[equippedSceneId] : null;
   const sceneId = sceneItem?.sceneId ?? null;
@@ -250,6 +252,7 @@ export function AvatarViewer({
           size={size}
           framing={framing}
           autoRotate={autoRotate}
+          interactive={interactive}
           outfit={outfitTheme}
           accessory={accessoryTheme}
           className={clsx(
@@ -333,7 +336,7 @@ export function AvatarViewer({
         src={src}
         alt={alt}
         poster={fallbackImage ?? undefined}
-        camera-controls
+        camera-controls={interactive ? true : undefined}
         auto-rotate={autoRotate ? "" : undefined}
         auto-rotate-delay="1500"
         shadow-intensity="1"
