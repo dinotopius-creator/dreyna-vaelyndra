@@ -96,7 +96,7 @@ export function Avatar() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-14">
+    <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14">
       <div className="mb-8 flex items-center justify-between">
         <Link
           to="/moi"
@@ -121,7 +121,7 @@ export function Avatar() {
         <motion.aside
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          className="card-royal space-y-5 p-6"
+          className="panel-app space-y-5 p-5 sm:p-6 lg:sticky lg:top-24"
         >
           <AvatarViewer
             src={currentAvatar}
@@ -139,7 +139,7 @@ export function Avatar() {
             }
           />
 
-          <div>
+          <div className="panel-app-soft p-4">
             <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
               ✦ Aperçu
             </p>
@@ -180,7 +180,7 @@ export function Avatar() {
               </div>
             )}
             {!hasDraft && profile?.avatarUrl && (
-              <p className="pt-1 text-center text-[10px] uppercase tracking-[0.22em] text-gold-300/70">
+              <p className="panel-app-soft pt-3 pb-2 text-center text-[10px] uppercase tracking-[0.22em] text-gold-300/70">
                 <Sparkles className="mr-1 inline h-3 w-3" /> Avatar enregistré —
                 modifiez puis cliquez sur Enregistrer
               </p>
@@ -216,7 +216,7 @@ export function Avatar() {
               onClose={() => setEditing(false)}
             />
           ) : (
-            <div className="card-royal flex h-full flex-col justify-center gap-4 p-8 text-center">
+            <div className="panel-app flex h-full flex-col justify-center gap-4 p-6 text-center sm:p-8">
               <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
                 ✦ Comment ça marche
               </p>
