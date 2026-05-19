@@ -122,7 +122,7 @@ public class NativeWebRtcScreenStreamer {
                 @Override
                 public void onStop() {
                     Log.w(TAG, "Android MediaProjection stopped by system or user");
-                    stopInternal("media_projection_stopped", true);
+                    stopInternal("media_projection_stopped", false);
                 }
             }
         );
