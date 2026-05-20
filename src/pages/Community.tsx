@@ -15,7 +15,7 @@ import {
   Wand2,
   X,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useStore } from "../contexts/StoreContext";
 import { useAuth } from "../contexts/AuthContext";
 import { useProfile } from "../contexts/ProfileContext";
@@ -62,6 +62,7 @@ export function Community() {
   const { user, users, isQueen } = useAuth();
   const { refresh: refreshProfile } = useProfile();
   const { notify } = useToast();
+  const location = useLocation();
   const usersById = useMemo(
     () => new Map(users.map((member) => [member.id, member])),
     [users],
@@ -230,6 +231,39 @@ export function Community() {
       cancelled = true;
     };
   }, [notify, refreshProfile, user]);
+
+  useEffect(() => {
+    const hash = location.hash.replace(/^#/, "").trim();
+    if (!hash.startsWith("comment-")) return;
+    const commentId = hash.slice("comment-".length);
+    if (!commentId) return;
+    const parentPost = posts.find((post) =>
+      post.comments.some((comment) => comment.id === commentId),
+    );
+    if (!parentPost) return;
+
+    setOpenComments((current) => ({
+      ...current,
+      [parentPost.id]: true,
+    }));
+
+    const scrollToComment = () => {
+      const element = document.getElementById(`comment-${commentId}`);
+      if (!element) return false;
+      element.scrollIntoView({ behavior: "smooth", block: "center" });
+      return true;
+    };
+
+    if (scrollToComment()) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      window.setTimeout(() => {
+        scrollToComment();
+      }, 80);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [location.hash, posts]);
 
   async function publish(e: React.FormEvent) {
     e.preventDefault();
@@ -519,6 +553,7 @@ export function Community() {
               return (
                 <motion.li
                   key={post.id}
+                  id={`post-${post.id}`}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.04 }}

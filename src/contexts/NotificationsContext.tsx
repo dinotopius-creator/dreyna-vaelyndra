@@ -209,7 +209,7 @@ function collectCommunityEvents(
           kind: "community_comment",
           title: "Nouveau commentaire",
           body: `${comment.authorName} a commente ta publication.`,
-          url: postUrl,
+          url: `/communaute#comment-${comment.id}`,
           actorId: comment.authorId,
           actorName: comment.authorName,
           actorAvatar:
@@ -224,7 +224,7 @@ function collectCommunityEvents(
           kind: "community_mention",
           title: "Tu as ete identifie",
           body: `${comment.authorName} t'a identifie en commentaire.`,
-          url: postUrl,
+          url: `/communaute#comment-${comment.id}`,
           actorId: comment.authorId,
           actorName: comment.authorName,
           actorAvatar:
