@@ -1,7 +1,7 @@
 {
   "name": "dreyna-vaelyndra",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,6 +11,7 @@
     "android:run": "npm run android:sync && npx cap run android",
     "android:build:debug": "npm run android:sync && cd android && gradlew.bat assembleDebug",
     "android:build:release": "npm run android:sync && cd android && gradlew.bat assembleRelease",
+    "android:build:bundle": "npm run android:sync && cd android && gradlew.bat bundleRelease",
     "lint": "eslint .",
     "preview": "vite preview"
   },

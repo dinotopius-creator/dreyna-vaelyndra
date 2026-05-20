@@ -14,13 +14,7 @@ import { useStore } from "./StoreContext";
 import { useAuth } from "./AuthContext";
 import { getIceServers, getPeerOptions } from "../lib/peerConfig";
 import {
-  cacheNativeBroadcastToken,
-  getCachedNativeBroadcastToken,
-  getNativeScreenShareStatus,
   isNativeAndroidApp,
-  markNativeScreenShareAuthGrace,
-  requestNativeLiveBatteryBypass,
-  startNativeScreenShare,
   stopNativeScreenShare,
 } from "../lib/nativeScreenShare";
 import type {
@@ -37,7 +31,6 @@ import {
 import {
   apiListLive,
   apiAddNativeViewerIce,
-  apiCreateNativeBroadcastToken,
   apiCreateNativeLiveOffer,
   apiGetNativeLiveOffer,
   apiHeartbeatNativeViewer,
@@ -1728,99 +1721,9 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       typeof navigator.mediaDevices.getDisplayMedia !== "function"
     ) {
       if (isNativeAndroidApp()) {
-        try {
-          markNativeScreenShareAuthGrace();
-          const startedAt = new Date().toISOString();
-          const title =
-            configRef.current.title.trim() || `${me.username} en direct`;
-          const description = configRef.current.description.trim();
-          const category = configRef.current.category;
-          let broadcastToken = getCachedNativeBroadcastToken();
-          try {
-            const nativeToken = await apiCreateNativeBroadcastToken();
-            broadcastToken = nativeToken.token;
-            cacheNativeBroadcastToken({
-              token: nativeToken.token,
-              expiresAt: nativeToken.expires_at,
-            });
-          } catch (tokenError) {
-            if (!broadcastToken) throw tokenError;
-          }
-          apiLiveHeartbeat({
-            title,
-            description,
-            category,
-            mode: "android-screen",
-            twitchChannel: "",
-          }).catch(() => {
-            // Si Android vient de basculer hors WebView et que le cookie web
-            // saute, le service natif maintient le live via son bearer token.
-          });
-          await startNativeScreenShare({
-            broadcastToken,
-            title,
-            category,
-          });
-          if (!isLiveStartTokenCurrent(startToken)) {
-            await stopNativeScreenShare().catch(() => {
-              // ignore
-            });
-            return;
-          }
-          const nativeStatus = await getNativeScreenShareStatus();
-          void requestNativeLiveBatteryBypass().catch(() => {
-            // Best effort Android only. Some vendors block the settings intent.
-          });
-          setConfig((c) => ({
-            ...c,
-            status: "live",
-            mode: "android-screen",
-            startedAt: nativeStatus.startedAt ?? startedAt,
-          }));
-          updateRegistry((r) => ({
-            ...r,
-            [me.id]: {
-              userId: me.id,
-              username: me.username,
-              avatar: me.avatar,
-              title,
-              description,
-              mode: "android-screen",
-              category,
-              twitchChannel: "",
-              startedAt: nativeStatus.startedAt ?? startedAt,
-              lastHeartbeat: new Date().toISOString(),
-            },
-          }));
-          const marker: LiveResumeMarker = {
-            userId: me.id,
-            mode: "android-screen",
-            facing: cameraFacing,
-            title: configRef.current.title,
-            description: configRef.current.description,
-            category,
-            twitchChannel: "",
-            savedAt: startedAt,
-          };
-          writeResumeMarker(marker);
-          setResumableLive(marker);
-          setLastError(
-            "Partage d'ecran Android lance. Ton live reste actif meme si tu passes sur une autre application.",
-          );
-        } catch (err) {
-          if (err instanceof Error) {
-            if (err.message === "screen_capture_denied") {
-              setLastError(
-                "Partage d'ecran Android refuse. Autorise la capture d'ecran pour lancer le live.",
-              );
-            } else {
-              const message = err.message.includes("Authentification requise")
-                ? "Vaelyndra a perdu l'auth web pendant le basculement Android. Reste connecte et relance le partage."
-                : `Partage d'ecran Android interrompu : ${err.message}`;
-              setLastError(message);
-            }
-          }
-        }
+        setLastError(
+          "Le partage d'ecran mobile est desactive pour cette version Play Store. Utilise le mode camera pour lancer ton live Android.",
+        );
         return;
       }
       // iOS Safari (<= 18) et la plupart des navigateurs Android n'exposent
@@ -3154,37 +3057,19 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       return;
     }
     if (marker.mode === "android-screen") {
-      if (isNativeAndroidApp()) {
-        const nativeStatus = await getNativeScreenShareStatus();
-        if (nativeStatus.active) {
-          const startedAt =
-            nativeStatus.startedAt ?? configRef.current.startedAt ?? new Date().toISOString();
-          setConfig((c) => ({
-            ...c,
-            status: "live",
-            mode: "android-screen",
-            startedAt,
-          }));
-          updateRegistry((r) => ({
-            ...r,
-            [me.id]: {
-              userId: me.id,
-              username: me.username,
-              avatar: me.avatar,
-              title: marker.title.trim() || `${me.username} en direct`,
-              description: marker.description.trim(),
-              mode: "android-screen",
-              category: marker.category,
-              twitchChannel: "",
-              startedAt,
-              lastHeartbeat: new Date().toISOString(),
-            },
-          }));
-          setResumableLive(marker);
-          return;
-        }
-      }
-      await startScreenShare();
+      setConfig((c) => ({
+        ...c,
+        mode: "camera",
+      }));
+      setResumableLive({
+        ...marker,
+        mode: "camera",
+      });
+      setLastError(
+        "Le partage d'ecran mobile reste desactive pour cette version. Vaelyndra repasse sur la camera pour garder ton live stable.",
+      );
+      setCameraFacing(marker.facing);
+      await startCameraShare(marker.facing);
       return;
     }
     // camera
