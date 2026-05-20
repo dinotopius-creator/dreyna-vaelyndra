@@ -168,6 +168,7 @@ export function PostComments({
     return (
       <li
         key={comment.id}
+        id={`comment-${comment.id}`}
         className={`flex items-start gap-3 ${nested ? "ml-5 sm:ml-8" : ""}`}
       >
         <Link to={profileHref(comment.authorId)} className="shrink-0">
@@ -245,7 +246,7 @@ export function PostComments({
                 targetType="comment"
                 targetId={comment.id}
                 targetLabel={`Commentaire de ${displayName}`}
-                targetUrl={`/communaute#post-${postId}`}
+                targetUrl={`/communaute#comment-${comment.id}`}
                 compact
                 className="text-ivory/30 hover:text-rose-300"
               />
