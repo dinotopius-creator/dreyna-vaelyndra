@@ -3,7 +3,6 @@ import { useAuth } from "../contexts/AuthContext";
 import { useStore } from "../contexts/StoreContext";
 import { useMessages } from "../contexts/MessagesContext";
 import { useNotifications } from "../contexts/NotificationsContext";
-import { AvatarImage } from "./AvatarImage";
 import {
   Bell,
   Crown,
@@ -231,17 +230,15 @@ export function Navbar() {
                                     : "bg-gold-500/10",
                                 )}
                               >
-                                <AvatarImage
-                                  candidates={[notification.actorAvatar]}
-                                  fallbackSeed={
-                                    notification.actorId ??
-                                    notification.actorName ??
-                                    notification.id
-                                  }
-                                  fallbackSrc="/favicon.svg"
-                                  alt={notification.actorName ?? "Notification"}
-                                  className="h-9 w-9 flex-none rounded-full object-cover ring-1 ring-gold-400/40"
-                                />
+                                {notification.actorAvatar ? (
+                                  <img
+                                    src={notification.actorAvatar}
+                                    alt={notification.actorName ?? "Notification"}
+                                    className="h-9 w-9 flex-none rounded-full object-cover ring-1 ring-gold-400/40"
+                                  />
+                                ) : (
+                                  <div className="h-9 w-9 flex-none rounded-full bg-night-800 ring-1 ring-gold-400/20" />
+                                )}
                                 <div className="min-w-0 flex-1">
                                   <Link
                                     to={notification.url ?? "/communaute"}
