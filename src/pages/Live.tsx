@@ -518,8 +518,7 @@ function BroadcasterControls() {
   // renvoie une `NotAllowedError` / une track morte. On désactive donc
   // le mode screen sur tous les mobiles, indépendamment du test de
   // capacité API (qui donne de faux positifs sur Samsung Internet).
-  const screenEffectiveSupported =
-    (screenShareSupported && !isMobile) || nativeScreenShareSupported;
+  const screenEffectiveSupported = screenShareSupported && !isMobile;
 
   const isLive = config.status === "live";
   const { refresh: refreshProfile } = useProfile();
@@ -553,7 +552,7 @@ function BroadcasterControls() {
   useEffect(() => {
     if (!user) return;
     if (
-      config.mode === "screen" &&
+      (config.mode === "screen" || config.mode === "android-screen") &&
       !screenEffectiveSupported &&
       cameraSupported
     ) {
@@ -841,9 +840,7 @@ function BroadcasterControls() {
               <p className="font-display text-base text-gold-200">
                 Partage d'écran
                 <span className="ml-2 rounded-full border border-sky-300/40 bg-sky-500/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.2em] text-sky-200">
-                  {nativeScreenShareSupported
-                    ? "android beta"
-                    : "pc uniquement"}
+                  pc uniquement
                 </span>
               </p>
               <p className="mt-1 text-xs text-ivory/60">
@@ -885,9 +882,9 @@ function BroadcasterControls() {
         {isMobile && (
           <div className="mt-3 rounded-2xl border border-gold-300/20 bg-gold-500/10 px-4 py-3 text-xs leading-5 text-gold-100/90">
             Sur telephone, le mode <strong>Camera</strong> reste le plus stable.
-            Le partage d'ecran depend fortement du navigateur et de l'appareil.
-            Quand Android ou iPhone ne le supportent pas proprement, Vaelyndra
-            te bascule sur un message clair au lieu de laisser le live se bloquer.
+            Le partage d'ecran mobile est volontairement desactive pour cette
+            version Play Store afin d'eviter les coupures et les faux demarrages.
+            Le partage d'ecran ordinateur reste conserve.
           </div>
         )}
       </fieldset>
@@ -1543,8 +1540,7 @@ export function Live() {
     }
     if (
       resumableLive.mode !== "camera" &&
-      resumableLive.mode !== "twitch" &&
-      resumableLive.mode !== "android-screen"
+      resumableLive.mode !== "twitch"
     ) {
       return;
     }

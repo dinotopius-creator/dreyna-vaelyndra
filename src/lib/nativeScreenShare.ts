@@ -26,6 +26,10 @@ type NativeScreenSharePlugin = {
 const NativeScreenShare =
   registerPlugin<NativeScreenSharePlugin>("NativeScreenShare");
 
+// Publication Play Store : le partage d'écran Android natif reste gelé
+// tant que la couche MediaProjection n'est pas jugée assez stable.
+const NATIVE_ANDROID_SCREEN_SHARE_ENABLED = false;
+
 const NATIVE_SCREEN_SHARE_AUTH_GRACE_KEY =
   "vaelyndra_native_screen_share_auth_grace_until";
 const NATIVE_SCREEN_SHARE_TOKEN_KEY = "vaelyndra_native_screen_share_token_v1";
@@ -109,7 +113,7 @@ export function isNativeScreenShareAuthGraceActive(): boolean {
 }
 
 export async function isNativeScreenShareAvailable(): Promise<boolean> {
-  if (!isNativeAndroidApp()) return false;
+  if (!isNativeAndroidApp() || !NATIVE_ANDROID_SCREEN_SHARE_ENABLED) return false;
   try {
     const result = await NativeScreenShare.isAvailable();
     return result.available;
@@ -125,7 +129,7 @@ export async function getNativeScreenShareStatus(): Promise<{
   startedAt: string | null;
   lastStopReason: string;
 }> {
-  if (!isNativeAndroidApp()) {
+  if (!isNativeAndroidApp() || !NATIVE_ANDROID_SCREEN_SHARE_ENABLED) {
     return {
       active: false,
       title: "",
@@ -159,7 +163,7 @@ export async function getNativeScreenShareStatus(): Promise<{
 }
 
 export async function requestNativeLiveBatteryBypass(): Promise<void> {
-  if (!isNativeAndroidApp()) return;
+  if (!isNativeAndroidApp() || !NATIVE_ANDROID_SCREEN_SHARE_ENABLED) return;
   await NativeScreenShare.requestBatteryOptimizationBypass().catch(() => {
     // Best effort only. Some vendors block this intent.
   });
@@ -172,6 +176,9 @@ export async function startNativeScreenShare(input: {
 }): Promise<void> {
   if (!isNativeAndroidApp()) {
     throw new Error("native_screen_share_unavailable");
+  }
+  if (!NATIVE_ANDROID_SCREEN_SHARE_ENABLED) {
+    throw new Error("native_screen_share_disabled");
   }
   markNativeScreenShareAuthGrace();
   try {
