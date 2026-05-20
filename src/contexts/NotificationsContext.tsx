@@ -201,6 +201,27 @@ function collectCommunityEvents(
     }
 
     post.comments.forEach((comment) => {
+      const commentUrl = `/communaute#comment-${comment.id}`;
+
+      if (comment.authorId === currentUser.id) {
+        comment.likes
+          .filter((likerId) => likerId !== currentUser.id)
+          .forEach((likerId) => {
+            const actorName = nameFor(likerId, usersById);
+            const profileAvatar = profilesById.get(likerId)?.avatarImageUrl;
+            events.push({
+              id: `community-comment-like:${post.id}:${comment.id}:${likerId}`,
+              kind: "community_like",
+              title: "Nouveau like sur ton commentaire",
+              body: `${actorName} a aimé ton commentaire.`,
+              url: commentUrl,
+              actorId: likerId,
+              actorName,
+              actorAvatar: profileAvatar || avatarFor(likerId, usersById),
+            });
+          });
+      }
+
       if (comment.authorId === currentUser.id) return;
 
       if (post.authorId === currentUser.id) {
@@ -209,7 +230,22 @@ function collectCommunityEvents(
           kind: "community_comment",
           title: "Nouveau commentaire",
           body: `${comment.authorName} a commente ta publication.`,
-          url: `/communaute#comment-${comment.id}`,
+          url: commentUrl,
+          actorId: comment.authorId,
+          actorName: comment.authorName,
+          actorAvatar:
+            profilesById.get(comment.authorId)?.avatarImageUrl ||
+            avatarFor(comment.authorId, usersById) || comment.authorAvatar,
+        });
+      }
+
+      if (comment.replyToAuthorId === currentUser.id) {
+        events.push({
+          id: `community-comment-reply:${post.id}:${comment.id}`,
+          kind: "community_comment",
+          title: "Nouvelle réponse",
+          body: `${comment.authorName} a répondu à ton commentaire.`,
+          url: commentUrl,
           actorId: comment.authorId,
           actorName: comment.authorName,
           actorAvatar:
@@ -224,7 +260,7 @@ function collectCommunityEvents(
           kind: "community_mention",
           title: "Tu as ete identifie",
           body: `${comment.authorName} t'a identifie en commentaire.`,
-          url: `/communaute#comment-${comment.id}`,
+          url: commentUrl,
           actorId: comment.authorId,
           actorName: comment.authorName,
           actorAvatar:
@@ -439,6 +475,41 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     const usersById = new Map(users.map((member) => [member.id, member]));
     const profileMap = new Map(Object.entries(profilesById));
     const events = collectCommunityEvents(posts, user, usersById, profileMap);
+    const eventsById = new Map(
+      events
+        .filter((event) => event.id)
+        .map((event) => [event.id as string, event]),
+    );
+
+    setNotifications((current) => {
+      let changed = false;
+      const next = current.map((notification) => {
+        const event = eventsById.get(notification.id);
+        if (!event) return notification;
+        const updated = {
+          ...notification,
+          title: event.title,
+          body: event.body,
+          url: event.url ?? notification.url,
+          actorId: event.actorId ?? notification.actorId,
+          actorName: event.actorName ?? notification.actorName,
+          actorAvatar: event.actorAvatar ?? notification.actorAvatar,
+        };
+        if (
+          updated.title === notification.title &&
+          updated.body === notification.body &&
+          updated.url === notification.url &&
+          updated.actorId === notification.actorId &&
+          updated.actorName === notification.actorName &&
+          updated.actorAvatar === notification.actorAvatar
+        ) {
+          return notification;
+        }
+        changed = true;
+        return updated;
+      });
+      return changed ? next : current;
+    });
 
     if (bootstrappedUserRef.current !== user.id) {
       seenEventIdsRef.current = new Set([
