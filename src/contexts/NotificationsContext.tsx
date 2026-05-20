@@ -143,7 +143,10 @@ function shouldFetchProfileAvatar(avatar: string | null | undefined) {
   if (!avatar) return true;
   const trimmed = avatar.trim();
   if (!trimmed) return true;
-  return /i\.pravatar\.cc/i.test(trimmed);
+  if (/i\.pravatar\.cc/i.test(trimmed)) return true;
+  if (trimmed === "/favicon.svg") return true;
+  if (trimmed.startsWith("/")) return true;
+  return false;
 }
 
 function collectCommunityEvents(
