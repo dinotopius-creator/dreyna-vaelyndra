@@ -12,6 +12,7 @@ import { useAuth } from "./AuthContext";
 import { useStore } from "./StoreContext";
 import { useToast } from "./ToastContext";
 import type { CommunityPost, User } from "../types";
+import { apiGetProfile, type UserProfileDto } from "../lib/api";
 
 export type NotificationKind =
   | "community_like"
@@ -138,10 +139,18 @@ function avatarFor(userId: string, usersById: Map<string, User>) {
   return usersById.get(userId)?.avatar;
 }
 
+function shouldFetchProfileAvatar(avatar: string | null | undefined) {
+  if (!avatar) return true;
+  const trimmed = avatar.trim();
+  if (!trimmed) return true;
+  return /i\.pravatar\.cc/i.test(trimmed);
+}
+
 function collectCommunityEvents(
   posts: CommunityPost[],
   currentUser: User,
   usersById: Map<string, User>,
+  profilesById: Map<string, UserProfileDto>,
 ) {
   const events: NotificationInput[] = [];
 
@@ -154,6 +163,7 @@ function collectCommunityEvents(
           .filter((reactorId) => reactorId !== currentUser.id)
           .forEach((reactorId) => {
             const actorName = nameFor(reactorId, usersById);
+            const profileAvatar = profilesById.get(reactorId)?.avatarImageUrl;
             events.push({
               id: `community-like:${post.id}:${emoji}:${reactorId}`,
               kind: "community_like",
@@ -162,7 +172,7 @@ function collectCommunityEvents(
               url: postUrl,
               actorId: reactorId,
               actorName,
-              actorAvatar: avatarFor(reactorId, usersById),
+              actorAvatar: profileAvatar || avatarFor(reactorId, usersById),
             });
           });
       });
@@ -180,7 +190,10 @@ function collectCommunityEvents(
         url: postUrl,
         actorId: post.authorId,
         actorName: post.authorName,
-        actorAvatar: avatarFor(post.authorId, usersById) || post.authorAvatar,
+        actorAvatar:
+          profilesById.get(post.authorId)?.avatarImageUrl ||
+          avatarFor(post.authorId, usersById) ||
+          post.authorAvatar,
       });
     }
 
@@ -197,6 +210,7 @@ function collectCommunityEvents(
           actorId: comment.authorId,
           actorName: comment.authorName,
           actorAvatar:
+            profilesById.get(comment.authorId)?.avatarImageUrl ||
             avatarFor(comment.authorId, usersById) || comment.authorAvatar,
         });
       }
@@ -211,6 +225,7 @@ function collectCommunityEvents(
           actorId: comment.authorId,
           actorName: comment.authorName,
           actorAvatar:
+            profilesById.get(comment.authorId)?.avatarImageUrl ||
             avatarFor(comment.authorId, usersById) || comment.authorAvatar,
         });
       }
@@ -235,6 +250,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const { posts } = useStore();
   const { notify } = useToast();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [profilesById, setProfilesById] = useState<Record<string, UserProfileDto>>(
+    {},
+  );
   const [preferences, setPreferences] =
     useState<NotificationPreferences>(DEFAULT_PREFERENCES);
   const [permission, setPermission] = useState<
@@ -251,6 +269,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     if (!user) {
       setNotifications([]);
       setPreferences(DEFAULT_PREFERENCES);
+      setProfilesById({});
       seenEventIdsRef.current = new Set();
       bootstrappedUserRef.current = null;
       return;
@@ -266,11 +285,78 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     );
     setNotifications(savedNotifications);
     setPreferences(savedPreferences);
+    setProfilesById({});
     seenEventIdsRef.current = new Set(
       savedNotifications.map((item) => item.id),
     );
     bootstrappedUserRef.current = null;
   }, [user?.id]);
+
+  useEffect(() => {
+    if (!user) return;
+    const candidateIds = new Set<string>();
+    notifications.forEach((notification) => {
+      if (notification.actorId && shouldFetchProfileAvatar(notification.actorAvatar)) {
+        candidateIds.add(notification.actorId);
+      }
+    });
+    posts.forEach((post) => {
+      if (post.authorId && shouldFetchProfileAvatar(post.authorAvatar)) {
+        candidateIds.add(post.authorId);
+      }
+      post.comments.forEach((comment) => {
+        if (comment.authorId && shouldFetchProfileAvatar(comment.authorAvatar)) {
+          candidateIds.add(comment.authorId);
+        }
+      });
+      Object.values(post.reactions).forEach((userIds) => {
+        userIds.forEach((userId) => {
+          if (userId) candidateIds.add(userId);
+        });
+      });
+    });
+    const missingIds = Array.from(candidateIds).filter(
+      (userId) => !profilesById[userId],
+    );
+    if (missingIds.length === 0) return;
+
+    let cancelled = false;
+    Promise.allSettled(missingIds.map((userId) => apiGetProfile(userId))).then(
+      (results) => {
+        if (cancelled) return;
+        const next: Record<string, UserProfileDto> = {};
+        results.forEach((result, index) => {
+          if (result.status !== "fulfilled") return;
+          next[missingIds[index]] = result.value;
+        });
+        if (Object.keys(next).length === 0) return;
+        setProfilesById((current) => ({ ...current, ...next }));
+      },
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [notifications, posts, profilesById, user]);
+
+  useEffect(() => {
+    if (!user) return;
+    if (Object.keys(profilesById).length === 0) return;
+    setNotifications((current) => {
+      let changed = false;
+      const next = current.map((notification) => {
+        const actorId = notification.actorId;
+        if (!actorId) return notification;
+        const profileAvatar = profilesById[actorId]?.avatarImageUrl?.trim();
+        if (!profileAvatar || profileAvatar === notification.actorAvatar) {
+          return notification;
+        }
+        changed = true;
+        return { ...notification, actorAvatar: profileAvatar };
+      });
+      return changed ? next : current;
+    });
+  }, [profilesById, user]);
 
   useEffect(() => {
     if (!user) return;
@@ -348,7 +434,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user) return;
     const usersById = new Map(users.map((member) => [member.id, member]));
-    const events = collectCommunityEvents(posts, user, usersById);
+    const profileMap = new Map(Object.entries(profilesById));
+    const events = collectCommunityEvents(posts, user, usersById, profileMap);
 
     if (bootstrappedUserRef.current !== user.id) {
       seenEventIdsRef.current = new Set([
@@ -366,7 +453,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       seenEventIdsRef.current.add(event.id);
       pushNotification(event);
     });
-  }, [posts, pushNotification, user, users]);
+  }, [posts, profilesById, pushNotification, user, users]);
 
   const markRead = useCallback((id: string) => {
     setNotifications((current) =>
