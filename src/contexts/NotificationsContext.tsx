@@ -180,7 +180,7 @@ function collectCommunityEvents(
         url: postUrl,
         actorId: post.authorId,
         actorName: post.authorName,
-        actorAvatar: post.authorAvatar,
+        actorAvatar: avatarFor(post.authorId, usersById) || post.authorAvatar,
       });
     }
 
@@ -196,7 +196,8 @@ function collectCommunityEvents(
           url: postUrl,
           actorId: comment.authorId,
           actorName: comment.authorName,
-          actorAvatar: comment.authorAvatar,
+          actorAvatar:
+            avatarFor(comment.authorId, usersById) || comment.authorAvatar,
         });
       }
 
@@ -209,7 +210,8 @@ function collectCommunityEvents(
           url: postUrl,
           actorId: comment.authorId,
           actorName: comment.authorName,
-          actorAvatar: comment.authorAvatar,
+          actorAvatar:
+            avatarFor(comment.authorId, usersById) || comment.authorAvatar,
         });
       }
     });

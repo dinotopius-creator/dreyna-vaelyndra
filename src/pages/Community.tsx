@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
   ExternalLink,
@@ -7,11 +7,13 @@ import {
   Gift,
   Image,
   MessageCircle,
+  Search,
   Send,
   Sparkles,
   Trash2,
   Trophy,
   Wand2,
+  X,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useStore } from "../contexts/StoreContext";
@@ -31,7 +33,6 @@ import {
   formatRelative,
   parsePostImageUrl,
   parseVideoUrl,
-  validatePostImageUrl,
 } from "../lib/helpers";
 import {
   apiCreatePost,
@@ -40,9 +41,13 @@ import {
   apiSyncCommunityActivityRewards,
   apiToggleReaction,
   apiGetProfile,
+  apiSearchUsers,
+  apiUploadCommunityImage,
   type UserProfileDto,
+  type UserSearchHitDto,
   type StreamerGradeDto,
 } from "../lib/api";
+import { isImageFile, validateFile } from "../lib/fileUtils";
 
 
 const QUICK_EMOJIS = ["✨", "👑", "🌿", "⚔️", "🌙", "🔮"];
@@ -61,9 +66,14 @@ export function Community() {
     () => new Map(users.map((member) => [member.id, member])),
     [users],
   );
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [draft, setDraft] = useState("");
-  const [imageUrl, setImageUrl] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [videoUrl, setVideoUrl] = useState("");
+  const [tagQuery, setTagQuery] = useState("");
+  const [tagResults, setTagResults] = useState<UserSearchHitDto[]>([]);
+  const [tagLoading, setTagLoading] = useState(false);
   const [openComments, setOpenComments] = useState<Record<string, boolean>>({});
   const [brokenImages, setBrokenImages] = useState<Record<string, boolean>>({});
   const [profilesById, setProfilesById] = useState<Record<string, UserProfileDto>>(
@@ -110,6 +120,42 @@ export function Community() {
       ),
     [posts],
   );
+
+  useEffect(() => {
+    if (!imagePreviewUrl) return;
+    return () => {
+      URL.revokeObjectURL(imagePreviewUrl);
+    };
+  }, [imagePreviewUrl]);
+
+  useEffect(() => {
+    const q = tagQuery.trim();
+    if (q.length < 1) {
+      setTagResults([]);
+      setTagLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setTagLoading(true);
+    const handle = window.setTimeout(() => {
+      apiSearchUsers(q, 6)
+        .then((hits) => {
+          if (cancelled) return;
+          setTagResults(hits.filter((hit) => hit.id !== user?.id));
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setTagResults([]);
+        })
+        .finally(() => {
+          if (!cancelled) setTagLoading(false);
+        });
+    }, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(handle);
+    };
+  }, [tagQuery, user?.id]);
 
   useEffect(() => {
     const authorIds = new Set<string>();
@@ -203,15 +249,12 @@ export function Community() {
         return;
       }
     }
-    const cleanedImage = imageUrl.trim();
-    if (cleanedImage) {
-      const checkedImage = await validatePostImageUrl(cleanedImage);
-      if (!checkedImage.ok) {
-        notify(checkedImage.message, "error");
-        return;
-      }
-    }
     try {
+      let uploadedImageUrl: string | undefined;
+      if (imageFile) {
+        const uploaded = await apiUploadCommunityImage(imageFile);
+        uploadedImageUrl = uploaded.imageUrl;
+      }
       const post = await apiCreatePost({
         author: {
           author_id: user.id,
@@ -219,13 +262,18 @@ export function Community() {
           author_avatar: user.avatar,
         },
         content: draft.trim(),
-        imageUrl: cleanedImage || undefined,
+        imageUrl: uploadedImageUrl,
         videoUrl: cleanedVideo || undefined,
       });
       dispatch({ type: "addPost", post });
       setDraft("");
-      setImageUrl("");
+      if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+      setImageFile(null);
+      setImagePreviewUrl(null);
       setVideoUrl("");
+      setTagQuery("");
+      setTagResults([]);
+      if (fileInputRef.current) fileInputRef.current.value = "";
       notify("Publication envoyée ✨");
       // Rafraîchit le profil pour afficher l'XP gagné par le familier
       // (le backend a grant +20 XP au familier actif côté API).
@@ -274,6 +322,46 @@ export function Community() {
     return profilesById[authorId] ?? null;
   }
 
+  function clearSelectedImage() {
+    if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+    setImageFile(null);
+    setImagePreviewUrl(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function appendMention(hit: UserSearchHitDto) {
+    const mention = `@${hit.handle || hit.username.replace(/\s+/g, "")}`;
+    setDraft((current) => {
+      const trimmed = current.trimEnd();
+      const alreadyPresent = trimmed
+        .split(/\s+/)
+        .some((token) => token.toLowerCase() === mention.toLowerCase());
+      if (alreadyPresent) return current;
+      return trimmed ? `${trimmed} ${mention} ` : `${mention} `;
+    });
+    setTagQuery("");
+    setTagResults([]);
+  }
+
+  function onPickImage(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      validateFile(file);
+      if (!isImageFile(file.type)) {
+        throw new Error("Choisis une image JPG, PNG, GIF ou WEBP.");
+      }
+      if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+      setImageFile(file);
+      setImagePreviewUrl(URL.createObjectURL(file));
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Image impossible a utiliser.";
+      notify(message, "error");
+      event.target.value = "";
+    }
+  }
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-14">
       <SectionHeading
@@ -312,28 +400,108 @@ export function Community() {
                   rows={3}
                   className="glass-input resize-none"
                 />
-                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-                  <div className="relative min-w-0 flex-1">
-                    <Image className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ivory/40" />
-                    <input
-                      value={imageUrl}
-                      onChange={(e) => setImageUrl(e.target.value)}
-                      placeholder="URL directe d'image (.jpg, .png, .webp)"
-                      className="glass-input pl-9"
-                    />
+                <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr),220px]">
+                  <div className="space-y-3">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/gif"
+                        onChange={onPickImage}
+                        className="hidden"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-royal-500/30 px-4 py-2 text-sm text-ivory/80 transition hover:border-gold-400/60 hover:text-gold-200"
+                      >
+                        <Image className="h-4 w-4" />
+                        Importer une image
+                      </button>
+                      <div className="relative min-w-0 flex-1">
+                        <Film className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ivory/40" />
+                        <input
+                          value={videoUrl}
+                          onChange={(e) => setVideoUrl(e.target.value)}
+                          placeholder="URL video YouTube / TikTok / MP4 (optionnel)"
+                          className="glass-input pl-9"
+                        />
+                      </div>
+                      <button type="submit" className="btn-gold w-full justify-center sm:w-auto">
+                        <Send className="h-4 w-4" /> Publier
+                      </button>
+                    </div>
+                    <p className="text-xs text-ivory/45">
+                      Import direct depuis ton telephone ou ton PC. Le champ URL d'image a ete retire.
+                    </p>
+                    {imagePreviewUrl && (
+                      <div className="rounded-2xl border border-royal-500/30 bg-night-900/55 p-3">
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                          <p className="truncate text-xs text-ivory/65">
+                            {imageFile?.name}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={clearSelectedImage}
+                            className="rounded-full p-1 text-ivory/45 transition hover:text-rose-300"
+                            aria-label="Retirer l'image"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                        <img
+                          src={imagePreviewUrl}
+                          alt="Apercu du post"
+                          className="max-h-56 w-full rounded-xl object-cover"
+                        />
+                      </div>
+                    )}
                   </div>
-                  <div className="relative min-w-0 flex-1">
-                    <Film className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ivory/40" />
-                    <input
-                      value={videoUrl}
-                      onChange={(e) => setVideoUrl(e.target.value)}
-                      placeholder="URL video YouTube / TikTok / MP4 (optionnel)"
-                      className="glass-input pl-9"
-                    />
+                  <div className="rounded-2xl border border-royal-500/20 bg-night-900/40 p-3">
+                    <label className="block text-[11px] uppercase tracking-[0.22em] text-gold-200">
+                      Taguer un membre
+                    </label>
+                    <div className="relative mt-2">
+                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ivory/35" />
+                      <input
+                        value={tagQuery}
+                        onChange={(e) => setTagQuery(e.target.value)}
+                        placeholder="@handle ou pseudo"
+                        className="glass-input pl-9"
+                        autoComplete="off"
+                      />
+                    </div>
+                    <div className="mt-2 space-y-2">
+                      {tagLoading && (
+                        <p className="text-xs text-ivory/45">Recherche...</p>
+                      )}
+                      {!tagLoading && tagQuery.trim().length > 0 && tagResults.length === 0 && (
+                        <p className="text-xs text-ivory/45">Aucun membre trouve.</p>
+                      )}
+                      {tagResults.slice(0, 4).map((hit) => (
+                        <button
+                          key={hit.id}
+                          type="button"
+                          onClick={() => appendMention(hit)}
+                          className="flex w-full items-center gap-3 rounded-2xl border border-royal-500/20 bg-night-950/45 px-3 py-2 text-left transition hover:border-gold-400/45"
+                        >
+                          <AvatarImage
+                            candidates={[hit.avatarImageUrl]}
+                            fallbackSeed={hit.id}
+                            alt={hit.username}
+                            className="h-9 w-9 rounded-full object-cover"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm text-gold-200">{hit.username}</p>
+                            <Handle handle={hit.handle} size="xs" />
+                          </div>
+                        </button>
+                      ))}
+                      <p className="text-xs text-ivory/45">
+                        Clique sur un membre pour ajouter son @handle dans le post.
+                      </p>
+                    </div>
                   </div>
-                  <button type="submit" className="btn-gold w-full justify-center sm:w-auto">
-                    <Send className="h-4 w-4" /> Publier
-                  </button>
                 </div>
               </div>
             </div>

@@ -6,3 +6,4 @@ __pycache__/
 *.db-journal
 .fly/
 vaelyndra_backend.egg-info/
+uploads/
