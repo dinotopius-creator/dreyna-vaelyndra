@@ -3,11 +3,13 @@ from __future__ import annotations
 
 import logging
 import os
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from slowapi.errors import RateLimitExceeded
 from sqlmodel import select
 
@@ -36,6 +38,9 @@ from .routers import (
 )
 
 app = FastAPI(title="Vaelyndra API", version="0.1.0")
+MEDIA_ROOT = Path(__file__).resolve().parent.parent / "uploads"
+MEDIA_ROOT.mkdir(parents=True, exist_ok=True)
+app.mount("/media", StaticFiles(directory=str(MEDIA_ROOT)), name="media")
 
 # Rate limiter (slowapi) — partagé entre tous les routeurs sensibles.
 app.state.limiter = limiter

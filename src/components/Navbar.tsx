@@ -3,6 +3,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useStore } from "../contexts/StoreContext";
 import { useMessages } from "../contexts/MessagesContext";
 import { useNotifications } from "../contexts/NotificationsContext";
+import { AvatarImage } from "./AvatarImage";
 import {
   Bell,
   Crown,
@@ -230,9 +231,14 @@ export function Navbar() {
                                     : "bg-gold-500/10",
                                 )}
                               >
-                                <img
-                                  src={notification.actorAvatar || "/vite.svg"}
-                                  alt=""
+                                <AvatarImage
+                                  candidates={[notification.actorAvatar]}
+                                  fallbackSeed={
+                                    notification.actorId ??
+                                    notification.actorName ??
+                                    notification.id
+                                  }
+                                  alt={notification.actorName ?? "Notification"}
                                   className="h-9 w-9 flex-none rounded-full object-cover ring-1 ring-gold-400/40"
                                 />
                                 <div className="min-w-0 flex-1">

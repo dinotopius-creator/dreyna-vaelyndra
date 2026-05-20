@@ -33,10 +33,12 @@ async function request<T>(
   path: string,
   init: RequestInit = {},
 ): Promise<T | null> {
+  const isFormData =
+    typeof FormData !== "undefined" && init.body instanceof FormData;
   const res = await fetch(`${BASE}${path}`, {
     ...init,
     headers: {
-      "Content-Type": "application/json",
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
       ...(init.headers ?? {}),
     },
   });
@@ -71,6 +73,24 @@ export async function apiCreatePost(input: {
     method: "POST",
     body: JSON.stringify(body),
   })) as CommunityPost;
+}
+
+export interface CommunityImageUploadDto {
+  imageUrl: string;
+  filename: string;
+  contentType: string;
+  size: number;
+}
+
+export async function apiUploadCommunityImage(
+  file: File,
+): Promise<CommunityImageUploadDto> {
+  const body = new FormData();
+  body.append("image", file);
+  return (await request<CommunityImageUploadDto>("/posts/uploads/image", {
+    method: "POST",
+    body,
+  })) as CommunityImageUploadDto;
 }
 
 export async function apiDeletePost(

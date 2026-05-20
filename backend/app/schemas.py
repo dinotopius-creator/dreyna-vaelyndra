@@ -80,6 +80,13 @@ class PostOut(BaseModel):
     comments: List[CommentOut] = []
 
 
+class PostImageUploadOut(BaseModel):
+    imageUrl: str
+    filename: str
+    contentType: str
+    size: int
+
+
 class CommunityActivityRewardOut(BaseModel):
     weekStartIso: str
     userId: str

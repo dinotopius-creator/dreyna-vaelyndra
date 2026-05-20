@@ -5,10 +5,11 @@ import os
 import uuid
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Dict, List
 from urllib.parse import urlparse
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from sqlmodel import Session, select
 
 # Ensemble des identifiants autorisés à modérer n'importe quel contenu du fil
@@ -38,6 +39,7 @@ from ..schemas import (  # noqa: E402
     CommunityActivityRewardOut,
     CommunityActivityRewardSyncOut,
     PostCreate,
+    PostImageUploadOut,
     PostOut,
     ReactionToggle,
 )
@@ -67,6 +69,15 @@ _UNSUPPORTED_IMAGE_PAGE_HOSTS = {
     "x.com",
     "facebook.com",
 }
+_COMMUNITY_UPLOAD_DIR = Path(__file__).resolve().parents[2] / "uploads" / "community"
+_COMMUNITY_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+_COMMUNITY_IMAGE_CONTENT_TYPES = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+}
+_MAX_COMMUNITY_IMAGE_BYTES = 8 * 1024 * 1024
 
 
 def _is_queen(user_id: str) -> bool:
@@ -154,6 +165,10 @@ def _sanitize_post_image_url(raw: str | None) -> str | None:
             ),
         )
     return value
+
+
+def _build_uploaded_media_url(request: Request, filename: str) -> str:
+    return str(request.url_for("media", path=f"community/{filename}"))
 
 
 def _parse_iso(raw: str | None) -> datetime | None:
@@ -549,6 +564,46 @@ def create_post(
     handles = _resolve_handles(session, [post.author_id])
     grades = _resolve_grades(session, [post.author_id])
     return _serialize_post(post, {}, [], handles, grades)
+
+
+@router.post(
+    "/uploads/image",
+    response_model=PostImageUploadOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_post_image(
+    request: Request,
+    image: UploadFile = File(...),
+) -> PostImageUploadOut:
+    content_type = (image.content_type or "").lower().strip()
+    extension = _COMMUNITY_IMAGE_CONTENT_TYPES.get(content_type)
+    if extension is None:
+        raise HTTPException(
+            status_code=415,
+            detail="Format image non supporte. Utilise JPG, PNG, WEBP ou GIF.",
+        )
+
+    payload = await image.read()
+    size = len(payload)
+    await image.close()
+    if size <= 0:
+        raise HTTPException(status_code=400, detail="Image vide.")
+    if size > _MAX_COMMUNITY_IMAGE_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail="Image trop lourde. Limite 8 Mo.",
+        )
+
+    filename = f"{uuid.uuid4().hex}{extension}"
+    destination = _COMMUNITY_UPLOAD_DIR / filename
+    destination.write_bytes(payload)
+
+    return PostImageUploadOut(
+        imageUrl=_build_uploaded_media_url(request, filename),
+        filename=filename,
+        contentType=content_type,
+        size=size,
+    )
 
 
 @router.delete("/{post_id}", status_code=status.HTTP_204_NO_CONTENT)
