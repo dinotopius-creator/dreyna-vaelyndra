@@ -238,6 +238,7 @@ export function Navbar() {
                                     notification.actorName ??
                                     notification.id
                                   }
+                                  fallbackSrc="/favicon.svg"
                                   alt={notification.actorName ?? "Notification"}
                                   className="h-9 w-9 flex-none rounded-full object-cover ring-1 ring-gold-400/40"
                                 />
