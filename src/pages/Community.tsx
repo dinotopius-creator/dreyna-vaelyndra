@@ -27,6 +27,7 @@ import { UserBadges } from "../components/UserBadges";
 import { Handle } from "../components/Handle";
 import { MemberSearch } from "../components/MemberSearch";
 import { AvatarImage } from "../components/AvatarImage";
+import { RichMentionText, buildMentionLookup } from "../components/RichMentionText";
 import StreamerGradeBadge from "../components/StreamerGradeBadge";
 import { getOfficial } from "../data/officials";
 import {
@@ -112,6 +113,31 @@ export function Community() {
       }),
     [activityLeaderboard, profilesById, usersById],
   );
+
+  const mentionTargets = useMemo(() => {
+    return buildMentionLookup([
+      ...users.map((member) => ({
+        userId: member.id,
+        handle: member.handle ?? null,
+        username: member.username,
+      })),
+      ...Object.entries(profilesById).map(([userId, profile]) => ({
+        userId,
+        handle: profile.handle ?? null,
+        username: profile.username ?? null,
+      })),
+      ...displayLeaderboard.map((member) => ({
+        userId: member.id,
+        handle: member.handle ?? null,
+        username: member.username,
+      })),
+      ...posts.map((post) => ({
+        userId: post.authorId,
+        handle: post.authorHandle ?? null,
+        username: post.authorName,
+      })),
+    ]);
+  }, [displayLeaderboard, posts, profilesById, users]);
 
   const sorted = useMemo(
     () =>
@@ -612,9 +638,12 @@ export function Community() {
                     >
                       <Handle handle={displayHandle} />
                     </Link>
-                    <p className="mt-1 whitespace-pre-wrap text-sm text-ivory/85">
-                      {post.content}
-                    </p>
+                    <RichMentionText
+                      content={post.content}
+                      mentionsByHandle={mentionTargets}
+                      profileHref={profileHref}
+                      className="mt-1 whitespace-pre-wrap break-words text-sm text-ivory/85"
+                    />
                   </div>
                   <div className="ml-auto flex items-center gap-1.5">
                     {user && user.id !== post.authorId && (

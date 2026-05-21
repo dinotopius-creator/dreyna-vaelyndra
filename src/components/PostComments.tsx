@@ -12,6 +12,7 @@ import { getOfficial } from "../data/officials";
 import { Handle } from "./Handle";
 import { ReportButton } from "./ReportButton";
 import { AvatarImage } from "./AvatarImage";
+import { RichMentionText, buildMentionLookup } from "./RichMentionText";
 import StreamerGradeBadge from "./StreamerGradeBadge";
 import { UserBadges } from "./UserBadges";
 
@@ -54,6 +55,32 @@ export function PostComments({
       }, {}),
     [comments],
   );
+  const mentionTargets = useMemo(() => {
+    return buildMentionLookup([
+      ...users.map((entry) => ({
+        userId: entry.id,
+        handle: entry.handle ?? null,
+        username: entry.username,
+      })),
+      ...Object.entries(profileOverrides).map(([userId, profile]) => ({
+        userId,
+        handle: profile.handle ?? null,
+        username: profile.username ?? null,
+      })),
+      ...comments.flatMap((comment) => [
+        {
+          userId: comment.authorId,
+          handle: comment.authorHandle ?? null,
+          username: comment.authorName,
+        },
+        {
+          userId: comment.replyToAuthorId ?? "",
+          handle: comment.replyToAuthorHandle ?? null,
+          username: comment.replyToAuthorName ?? null,
+        },
+      ]),
+    ]);
+  }, [comments, profileOverrides, users]);
 
   function profileHref(authorId: string) {
     return `/u/${authorId}`;
@@ -227,9 +254,12 @@ export function PostComments({
               </p>
             )}
 
-            <p className="mt-1 whitespace-pre-wrap break-words text-sm text-ivory/85">
-              {comment.content}
-            </p>
+            <RichMentionText
+              content={comment.content}
+              mentionsByHandle={mentionTargets}
+              profileHref={profileHref}
+              className="mt-1 whitespace-pre-wrap break-words text-sm text-ivory/85"
+            />
           </div>
 
           <div className="mt-1.5 flex flex-wrap items-center gap-2 px-1 text-[11px] text-ivory/50">
