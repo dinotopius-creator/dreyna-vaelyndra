@@ -94,14 +94,14 @@ export function Navbar() {
             </span>
           </Link>
 
-          <nav className="hidden min-w-0 flex-1 items-center justify-center gap-2 px-4 lg:flex xl:gap-3 xl:px-6 2xl:gap-4">
+          <nav className="hidden min-w-0 flex-1 items-center justify-center gap-5 px-6 lg:flex xl:gap-7 xl:px-8 2xl:gap-9">
             {NAV.map((n) => (
               <NavLink
                 key={n.to}
                 to={n.to}
                 className={({ isActive }) =>
                   clsx(
-                    "whitespace-nowrap rounded-full px-4 py-2.5 font-regal text-[11px] font-semibold tracking-[0.2em] transition xl:px-5",
+                    "whitespace-nowrap rounded-full px-5 py-2.5 font-regal text-[11px] font-semibold tracking-[0.2em] transition xl:px-6",
                     isActive
                       ? "bg-gold-500/15 text-gold-200 shadow-[inset_0_0_0_1px_rgba(230,194,116,0.4)]"
                       : "text-ivory/70 hover:bg-white/[0.03] hover:text-gold-200",
