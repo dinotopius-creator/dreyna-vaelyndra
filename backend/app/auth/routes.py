@@ -28,6 +28,7 @@ import json
 import logging
 import re
 import secrets as secrets_module
+import unicodedata
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -77,7 +78,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 # --- Helpers --------------------------------------------------------------
 
-USERNAME_REGEX = re.compile(r"^[A-Za-z0-9À-ÿ_\- ]{2,30}$")
+_BLOCKED_USERNAME_CHARS = frozenset("\U0001F346")  # 🍆
 PASSWORD_MIN_LEN = 10
 
 
@@ -134,11 +135,13 @@ def _check_password_strength(password: str) -> None:
 
 def _check_username(username: str) -> str:
     username = username.strip()
-    if not USERNAME_REGEX.match(username):
-        raise HTTPException(
-            400,
-            "Pseudo invalide (2–30 caractères, lettres/chiffres/espaces/_-).",
-        )
+    if len(username) < 2 or len(username) > 30:
+        raise HTTPException(400, "Pseudo invalide (2–30 caractères).")
+    for ch in username:
+        if ch in _BLOCKED_USERNAME_CHARS:
+            raise HTTPException(400, "Ce caractère n'est pas autorisé dans un pseudo.")
+        if unicodedata.category(ch) in ("Cc", "Cs"):
+            raise HTTPException(400, "Pseudo invalide (caractères de contrôle interdits).")
     return username
 
 
