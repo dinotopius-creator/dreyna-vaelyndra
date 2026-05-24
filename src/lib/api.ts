@@ -93,6 +93,25 @@ export async function apiUploadCommunityImage(
   })) as CommunityImageUploadDto;
 }
 
+export async function apiUpdatePost(
+  postId: string,
+  input: {
+    userId: string;
+    content?: string;
+    imageUrl?: string;
+    videoUrl?: string;
+  },
+): Promise<CommunityPost> {
+  const body: Record<string, string> = { user_id: input.userId };
+  if (input.content !== undefined) body.content = input.content;
+  if (input.imageUrl !== undefined) body.image_url = input.imageUrl;
+  if (input.videoUrl !== undefined) body.video_url = input.videoUrl;
+  return (await request<CommunityPost>(
+    `/posts/${encodeURIComponent(postId)}`,
+    { method: "PATCH", body: JSON.stringify(body) },
+  )) as CommunityPost;
+}
+
 export async function apiDeletePost(
   postId: string,
   userId: string,
@@ -153,6 +172,20 @@ export async function apiDeleteComment(
     )}?user_id=${encodeURIComponent(userId)}`,
     { method: "DELETE" },
   );
+}
+
+export async function apiToggleCommentLike(
+  postId: string,
+  commentId: string,
+  userId: string,
+): Promise<Comment> {
+  return (await request<Comment>(
+    `/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}/likes`,
+    {
+      method: "POST",
+      body: JSON.stringify({ user_id: userId, emoji: "like" }),
+    },
+  )) as Comment;
 }
 
 export interface CommunityActivityRewardDto {

@@ -40,6 +40,11 @@ class Comment(SQLModel, table=True):
     created_at: str = Field(default_factory=_now_iso)
 
 
+class CommentLike(SQLModel, table=True):
+    comment_id: str = Field(foreign_key="comment.id", primary_key=True)
+    user_id: str = Field(primary_key=True)
+
+
 class Reaction(SQLModel, table=True):
     """Une ligne = une réaction d'un utilisateur à un post avec un emoji donné."""
 

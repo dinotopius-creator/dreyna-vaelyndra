@@ -90,6 +90,8 @@ type Action =
   | { type: "reactPost"; postId: string; emoji: string; userId: string }
   | { type: "addPostComment"; postId: string; comment: Comment }
   | { type: "deletePostComment"; postId: string; commentId: string }
+  | { type: "toggleCommentLike"; postId: string; commentId: string; userId: string }
+  | { type: "replaceComment"; postId: string; comment: Comment }
   | { type: "addLive"; live: LiveSession }
   | { type: "deleteLive"; id: string }
   | {
@@ -271,6 +273,40 @@ function reducer(state: StoreState, action: Action): StoreState {
             ? {
                 ...p,
                 comments: p.comments.filter((c) => c.id !== action.commentId),
+              }
+            : p,
+        ),
+      };
+    case "toggleCommentLike":
+      return {
+        ...state,
+        posts: state.posts.map((p) => {
+          if (p.id !== action.postId) return p;
+          return {
+            ...p,
+            comments: p.comments.map((c) => {
+              if (c.id !== action.commentId) return c;
+              const has = c.likes.includes(action.userId);
+              return {
+                ...c,
+                likes: has
+                  ? c.likes.filter((uid) => uid !== action.userId)
+                  : [...c.likes, action.userId],
+              };
+            }),
+          };
+        }),
+      };
+    case "replaceComment":
+      return {
+        ...state,
+        posts: state.posts.map((p) =>
+          p.id === action.postId
+            ? {
+                ...p,
+                comments: p.comments.map((c) =>
+                  c.id === action.comment.id ? action.comment : c,
+                ),
               }
             : p,
         ),

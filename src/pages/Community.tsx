@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
+  Check,
   ExternalLink,
   Film,
   Flame,
   Gift,
   Image,
   MessageCircle,
+  Pencil,
   Search,
   Send,
   Sparkles,
@@ -38,6 +40,7 @@ import {
 import {
   apiCreatePost,
   apiDeletePost,
+  apiUpdatePost,
   apiGetCommunityActivityLeaderboard,
   apiSyncCommunityActivityRewards,
   apiToggleReaction,
@@ -77,6 +80,8 @@ export function Community() {
   const [tagResults, setTagResults] = useState<UserSearchHitDto[]>([]);
   const [tagLoading, setTagLoading] = useState(false);
   const [openComments, setOpenComments] = useState<Record<string, boolean>>({});
+  const [editingPost, setEditingPost] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
   const [brokenImages, setBrokenImages] = useState<Record<string, boolean>>({});
   const [profilesById, setProfilesById] = useState<Record<string, UserProfileDto>>(
     {},
@@ -374,6 +379,30 @@ export function Community() {
     }
   }
 
+  function startEditPost(post: { id: string; content: string }) {
+    setEditingPost(post.id);
+    setEditDraft(post.content);
+  }
+
+  async function saveEditPost(postId: string) {
+    if (!user) return;
+    const trimmed = editDraft.trim();
+    if (!trimmed) return;
+    try {
+      const updated = await apiUpdatePost(postId, {
+        userId: user.id,
+        content: trimmed,
+      });
+      dispatch({ type: "replacePost", post: updated });
+      setEditingPost(null);
+      setEditDraft("");
+      notify("Post modifié.", "success");
+    } catch (err) {
+      console.warn(err);
+      notify("Modification refusée.", "error");
+    }
+  }
+
   function profileHref(authorId: string) {
     return `/u/${authorId}`;
   }
@@ -638,12 +667,43 @@ export function Community() {
                     >
                       <Handle handle={displayHandle} />
                     </Link>
-                    <RichMentionText
-                      content={post.content}
-                      mentionsByHandle={mentionTargets}
-                      profileHref={profileHref}
-                      className="mt-1 whitespace-pre-wrap break-words text-sm text-ivory/85"
-                    />
+                    {editingPost === post.id ? (
+                      <div className="mt-2">
+                        <textarea
+                          value={editDraft}
+                          onChange={(e) => setEditDraft(e.target.value)}
+                          className="w-full resize-none rounded-xl border border-royal-500/30 bg-night-800/60 px-3 py-2 text-sm text-ivory/90 outline-none focus:border-gold-400/60"
+                          rows={3}
+                          maxLength={2000}
+                        />
+                        <div className="mt-2 flex items-center gap-2">
+                          <button
+                            onClick={() => saveEditPost(post.id)}
+                            className="inline-flex items-center gap-1.5 rounded-full bg-gold-500/20 px-3 py-1.5 text-xs font-semibold text-gold-200 transition hover:bg-gold-500/30"
+                          >
+                            <Check className="h-3.5 w-3.5" />
+                            Enregistrer
+                          </button>
+                          <button
+                            onClick={() => {
+                              setEditingPost(null);
+                              setEditDraft("");
+                            }}
+                            className="inline-flex items-center gap-1.5 rounded-full border border-royal-500/30 px-3 py-1.5 text-xs text-ivory/60 transition hover:text-ivory/90"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                            Annuler
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <RichMentionText
+                        content={post.content}
+                        mentionsByHandle={mentionTargets}
+                        profileHref={profileHref}
+                        className="mt-1 whitespace-pre-wrap break-words text-sm text-ivory/85"
+                      />
+                    )}
                   </div>
                   <div className="ml-auto flex items-center gap-1.5">
                     {user && user.id !== post.authorId && (
@@ -654,6 +714,15 @@ export function Community() {
                         targetUrl={`/communaute#post-${post.id}`}
                         compact
                       />
+                    )}
+                    {user?.id === post.authorId && editingPost !== post.id && (
+                      <button
+                        onClick={() => startEditPost(post)}
+                        className="text-ivory/40 hover:text-gold-200"
+                        title="Modifier"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
                     )}
                     {(user?.id === post.authorId || isQueen) && (
                       <button

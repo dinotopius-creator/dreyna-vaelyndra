@@ -31,6 +31,13 @@ class PostCreate(AuthorIn):
     video_url: Optional[str] = Field(default=None, max_length=1024)
 
 
+class PostUpdate(BaseModel):
+    user_id: str = Field(..., min_length=1, max_length=128)
+    content: Optional[str] = Field(default=None, min_length=1, max_length=2000)
+    image_url: Optional[str] = Field(default=None, max_length=1024)
+    video_url: Optional[str] = Field(default=None, max_length=1024)
+
+
 class CommentCreate(AuthorIn):
     content: str = Field(..., min_length=1, max_length=1000)
     parent_id: Optional[str] = Field(default=None, min_length=1, max_length=64)

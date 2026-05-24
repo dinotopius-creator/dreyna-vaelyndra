@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { CornerUpLeft, Send, Trash2, X } from "lucide-react";
+import { CornerUpLeft, Heart, Send, Trash2, X } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useProfile } from "../contexts/ProfileContext";
 import { useStore } from "../contexts/StoreContext";
 import { useToast } from "../contexts/ToastContext";
 import { formatRelative } from "../lib/helpers";
-import { apiAddComment, apiDeleteComment, type UserProfileDto } from "../lib/api";
+import { apiAddComment, apiDeleteComment, apiToggleCommentLike, type UserProfileDto } from "../lib/api";
 import type { Comment } from "../types";
 import { getOfficial } from "../data/officials";
 import { Handle } from "./Handle";
@@ -176,6 +176,19 @@ export function PostComments({
     }
   }
 
+  async function toggleLike(commentId: string) {
+    if (!user) return;
+    dispatch({ type: "toggleCommentLike", postId, commentId, userId: user.id });
+    try {
+      const updated = await apiToggleCommentLike(postId, commentId, user.id);
+      dispatch({ type: "replaceComment", postId, comment: updated });
+    } catch (err) {
+      console.warn(err);
+      dispatch({ type: "toggleCommentLike", postId, commentId, userId: user.id });
+      notify("Like perdu en route.", "error");
+    }
+  }
+
   function renderComment(comment: Comment, nested = false) {
     const canDelete =
       isQueen || user?.id === comment.authorId || user?.id === postAuthorId;
@@ -271,6 +284,31 @@ export function PostComments({
               <CornerUpLeft className="h-3.5 w-3.5" />
               Repondre
             </button>
+            {user && (
+              <button
+                type="button"
+                onClick={() => toggleLike(comment.id)}
+                className={`inline-flex items-center gap-1 transition ${
+                  comment.likes.includes(user.id)
+                    ? "text-rose-400"
+                    : "hover:text-rose-300"
+                }`}
+              >
+                <Heart
+                  className="h-3.5 w-3.5"
+                  fill={comment.likes.includes(user.id) ? "currentColor" : "none"}
+                />
+                {comment.likes.length > 0 && (
+                  <span>{comment.likes.length}</span>
+                )}
+              </button>
+            )}
+            {!user && comment.likes.length > 0 && (
+              <span className="inline-flex items-center gap-1">
+                <Heart className="h-3.5 w-3.5" />
+                {comment.likes.length}
+              </span>
+            )}
             {user && user.id !== comment.authorId && (
               <ReportButton
                 targetType="comment"
