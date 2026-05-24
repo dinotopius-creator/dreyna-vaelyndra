@@ -3014,7 +3014,7 @@ export function Live() {
             liveRegistry={liveRegistry}
           />
 
-          <BroadcasterControls />
+          {amBroadcaster && <BroadcasterControls />}
 
             {replays.length > 0 ? (
               <section className="mt-12">
