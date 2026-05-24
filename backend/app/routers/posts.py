@@ -26,6 +26,7 @@ from ..db import get_session  # noqa: E402
 from ..familiars_xp import grant_social_xp  # noqa: E402
 from ..models import (  # noqa: E402
     Comment,
+    CommentLike,
     CommunityActivityReward,
     Post,
     Reaction,
@@ -41,6 +42,7 @@ from ..schemas import (  # noqa: E402
     PostCreate,
     PostImageUploadOut,
     PostOut,
+    PostUpdate,
     ReactionToggle,
 )
 from .users import _grade_out  # noqa: E402
@@ -421,9 +423,11 @@ def _serialize_post(
     comments: List[Comment],
     handles: Dict[str, str] | None = None,
     grades: Dict[str, object] | None = None,
+    comment_likes: Dict[str, List[str]] | None = None,
 ) -> PostOut:
     handles = handles or {}
     grades = grades or {}
+    comment_likes = comment_likes or {}
     return PostOut(
         id=post.id,
         authorId=post.author_id,
@@ -450,7 +454,7 @@ def _serialize_post(
                 replyToAuthorName=c.reply_to_author_name,
                 replyToAuthorHandle=handles.get(c.reply_to_author_id or ""),
                 createdAt=c.created_at,
-                likes=[],
+                likes=comment_likes.get(c.id, []),
             )
             for c in comments
         ],
@@ -485,10 +489,20 @@ def list_posts(session: Session = Depends(_session_dep)) -> List[PostOut]:
 
     # PR S — on résout les handles en 1 requête pour tout l'affichage.
     all_author_ids: List[str] = [p.author_id for p in posts]
+    all_comment_ids: List[str] = []
     for comment_list in comments_by_post.values():
         all_author_ids.extend(c.author_id for c in comment_list)
+        all_comment_ids.extend(c.id for c in comment_list)
     handles = _resolve_handles(session, all_author_ids)
     grades = _resolve_grades(session, all_author_ids)
+
+    likes_by_comment: Dict[str, List[str]] = defaultdict(list)
+    if all_comment_ids:
+        all_likes = session.exec(
+            select(CommentLike).where(CommentLike.comment_id.in_(all_comment_ids))
+        ).all()
+        for like in all_likes:
+            likes_by_comment[like.comment_id].append(like.user_id)
 
     return [
         _serialize_post(
@@ -497,6 +511,7 @@ def list_posts(session: Session = Depends(_session_dep)) -> List[PostOut]:
             comments_by_post[p.id],
             handles,
             grades,
+            likes_by_comment,
         )
         for p in posts
     ]
@@ -606,6 +621,48 @@ async def upload_post_image(
     )
 
 
+@router.patch("/{post_id}", response_model=PostOut)
+def update_post(
+    post_id: str,
+    payload: PostUpdate,
+    session: Session = Depends(_session_dep),
+) -> PostOut:
+    post = session.get(Post, post_id)
+    if not post:
+        raise HTTPException(status_code=404, detail="Post introuvable.")
+    if post.author_id != payload.user_id:
+        raise HTTPException(status_code=403, detail="Seul l'auteur peut modifier ce post.")
+    if payload.content is not None:
+        post.content = payload.content
+    if payload.image_url is not None:
+        post.image_url = _sanitize_post_image_url(payload.image_url)
+    if payload.video_url is not None:
+        post.video_url = payload.video_url
+    session.commit()
+    session.refresh(post)
+
+    comments = session.exec(
+        select(Comment).where(Comment.post_id == post_id).order_by(Comment.created_at.asc())
+    ).all()
+    reactions = session.exec(
+        select(Reaction).where(Reaction.post_id == post_id)
+    ).all()
+    by_emoji: Dict[str, List[str]] = defaultdict(list)
+    for r in reactions:
+        by_emoji[r.emoji].append(r.user_id)
+    comment_ids = [c.id for c in comments]
+    likes_by_comment: Dict[str, List[str]] = defaultdict(list)
+    if comment_ids:
+        for like in session.exec(
+            select(CommentLike).where(CommentLike.comment_id.in_(comment_ids))
+        ).all():
+            likes_by_comment[like.comment_id].append(like.user_id)
+    author_ids = [post.author_id, *[c.author_id for c in comments]]
+    handles = _resolve_handles(session, author_ids)
+    grades = _resolve_grades(session, author_ids)
+    return _serialize_post(post, dict(by_emoji), comments, handles, grades, likes_by_comment)
+
+
 @router.delete("/{post_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_post(
     post_id: str,
@@ -619,6 +676,16 @@ def delete_post(
     if post.author_id != user_id and not _is_moderator(session, user_id):
         raise HTTPException(status_code=403, detail="Interdit.")
 
+    comment_ids = [
+        c.id
+        for c in session.exec(select(Comment).where(Comment.post_id == post_id)).all()
+    ]
+    if comment_ids:
+        session.exec(
+            CommentLike.__table__.delete().where(  # type: ignore[attr-defined]
+                CommentLike.comment_id.in_(comment_ids)
+            )
+        )
     session.exec(
         Comment.__table__.delete().where(Comment.post_id == post_id)  # type: ignore[attr-defined]
     )
@@ -678,13 +745,20 @@ def toggle_reaction(
         .where(Comment.post_id == post_id)
         .order_by(Comment.created_at.asc())
     ).all()
+    comment_ids = [c.id for c in comments]
+    likes_by_comment: Dict[str, List[str]] = defaultdict(list)
+    if comment_ids:
+        for like in session.exec(
+            select(CommentLike).where(CommentLike.comment_id.in_(comment_ids))
+        ).all():
+            likes_by_comment[like.comment_id].append(like.user_id)
     handles = _resolve_handles(
         session, [post.author_id, *[c.author_id for c in comments]]
     )
     grades = _resolve_grades(
         session, [post.author_id, *[c.author_id for c in comments]]
     )
-    return _serialize_post(post, dict(by_emoji), comments, handles, grades)
+    return _serialize_post(post, dict(by_emoji), comments, handles, grades, likes_by_comment)
 
 
 @router.post(
@@ -795,6 +869,64 @@ def delete_comment(
         to_delete.append(current)
         stack.extend(descendants_by_parent.get(current.id, []))
 
+    delete_ids = [row.id for row in to_delete]
+    if delete_ids:
+        session.exec(
+            CommentLike.__table__.delete().where(  # type: ignore[attr-defined]
+                CommentLike.comment_id.in_(delete_ids)
+            )
+        )
     for row in to_delete:
         session.delete(row)
     session.commit()
+
+
+@router.post(
+    "/{post_id}/comments/{comment_id}/likes",
+    response_model=CommentOut,
+)
+def toggle_comment_like(
+    post_id: str,
+    comment_id: str,
+    payload: ReactionToggle,
+    session: Session = Depends(_session_dep),
+) -> CommentOut:
+    comment = session.get(Comment, comment_id)
+    if not comment or comment.post_id != post_id:
+        raise HTTPException(status_code=404, detail="Commentaire introuvable.")
+
+    existing = session.exec(
+        select(CommentLike).where(
+            CommentLike.comment_id == comment_id,
+            CommentLike.user_id == payload.user_id,
+        )
+    ).first()
+    if existing:
+        session.delete(existing)
+    else:
+        session.add(CommentLike(comment_id=comment_id, user_id=payload.user_id))
+    session.commit()
+
+    likes = session.exec(
+        select(CommentLike).where(CommentLike.comment_id == comment_id)
+    ).all()
+    handle_ids = [comment.author_id]
+    if comment.reply_to_author_id:
+        handle_ids.append(comment.reply_to_author_id)
+    handles = _resolve_handles(session, handle_ids)
+    grades = _resolve_grades(session, [comment.author_id])
+    return CommentOut(
+        id=comment.id,
+        authorId=comment.author_id,
+        authorName=comment.author_name,
+        authorHandle=handles.get(comment.author_id),
+        authorGrade=grades.get(comment.author_id),
+        authorAvatar=comment.author_avatar,
+        content=comment.content,
+        parentId=comment.parent_id,
+        replyToAuthorId=comment.reply_to_author_id,
+        replyToAuthorName=comment.reply_to_author_name,
+        replyToAuthorHandle=handles.get(comment.reply_to_author_id or ""),
+        createdAt=comment.created_at,
+        likes=[like.user_id for like in likes],
+    )
