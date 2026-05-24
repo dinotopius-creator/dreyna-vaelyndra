@@ -11,6 +11,7 @@ import {
   Pencil,
   Search,
   Send,
+  Share2,
   Sparkles,
   Trash2,
   Trophy,
@@ -821,6 +822,26 @@ export function Community() {
                     )}
                   </div>
                   <div className="ml-auto flex items-center gap-1.5">
+                    <button
+                      onClick={() => {
+                        const url = `${window.location.origin}/communaute#post-${post.id}`;
+                        if (navigator.share) {
+                          navigator.share({
+                            title: `Post de ${post.authorName}`,
+                            url,
+                          }).catch(() => {});
+                        } else {
+                          navigator.clipboard.writeText(url).then(
+                            () => notify("Lien copié !", "success"),
+                            () => notify("Impossible de copier le lien.", "error"),
+                          );
+                        }
+                      }}
+                      className="text-ivory/40 hover:text-gold-200"
+                      title="Partager"
+                    >
+                      <Share2 className="h-4 w-4" />
+                    </button>
                     {user && user.id !== post.authorId && (
                       <ReportButton
                         targetType="post"
