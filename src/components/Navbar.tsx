@@ -94,14 +94,14 @@ export function Navbar() {
             </span>
           </Link>
 
-          <nav className="hidden min-w-0 flex-1 items-center justify-center gap-5 px-6 lg:flex xl:gap-7 xl:px-8 2xl:gap-9">
+          <nav className="hidden min-w-0 flex-1 items-center justify-center gap-2 px-4 lg:flex xl:gap-4 xl:px-6 2xl:gap-6 2xl:px-8">
             {NAV.map((n) => (
               <NavLink
                 key={n.to}
                 to={n.to}
                 className={({ isActive }) =>
                   clsx(
-                    "whitespace-nowrap rounded-full px-5 py-2.5 font-regal text-[11px] font-semibold tracking-[0.2em] transition xl:px-6",
+                    "whitespace-nowrap rounded-full px-3 py-1.5 font-regal text-[11px] font-semibold tracking-[0.2em] transition xl:px-5 xl:py-2.5",
                     isActive
                       ? "bg-gold-500/15 text-gold-200 shadow-[inset_0_0_0_1px_rgba(230,194,116,0.4)]"
                       : "text-ivory/70 hover:bg-white/[0.03] hover:text-gold-200",
@@ -117,7 +117,7 @@ export function Navbar() {
           <div className="flex min-w-0 items-center gap-1 sm:gap-2">
             <Link
               to={user ? "/live/studio" : "/connexion"}
-              className="hidden items-center gap-1.5 rounded-full border border-royal-500/30 px-3 py-2 text-xs text-ivory/80 transition hover:border-gold-400/60 hover:text-gold-200 md:inline-flex"
+              className="hidden items-center gap-1.5 rounded-full border border-royal-500/30 px-3 py-2 text-xs text-ivory/80 transition hover:border-gold-400/60 hover:text-gold-200 md:inline-flex lg:hidden xl:inline-flex"
               aria-label="Espace live streamer"
             >
               <Radio className="h-4 w-4" />
@@ -132,12 +132,12 @@ export function Navbar() {
                       return !value;
                     });
                   }}
-                  className="relative inline-flex h-10 w-10 items-center justify-center gap-1.5 rounded-full border border-royal-500/30 p-0 text-xs text-ivory/80 transition hover:border-gold-400/60 hover:text-gold-200 sm:w-auto sm:px-3"
+                  className="relative inline-flex h-10 w-10 items-center justify-center gap-1.5 rounded-full border border-royal-500/30 p-0 text-xs text-ivory/80 transition hover:border-gold-400/60 hover:text-gold-200 sm:w-auto sm:px-3 lg:w-10 lg:p-0 2xl:w-auto 2xl:px-3"
                   aria-label="Notifications"
                   aria-expanded={notificationsOpen}
                 >
                   <Bell className="h-4 w-4" />
-                  <span className="hidden sm:inline">Notifs</span>
+                  <span className="hidden sm:inline lg:hidden 2xl:inline">Notifs</span>
                   {notificationUnreadCount > 0 && (
                     <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-gold-shine px-1 text-[10px] font-bold text-night-900">
                       {notificationUnreadCount > 99
@@ -392,11 +392,11 @@ export function Navbar() {
             {user && (
               <Link
                 to="/messages"
-                className="relative inline-flex h-10 w-10 items-center justify-center gap-1.5 rounded-full border border-royal-500/30 p-0 text-xs text-ivory/80 transition hover:border-gold-400/60 hover:text-gold-200 sm:w-auto sm:px-3"
+                className="relative inline-flex h-10 w-10 items-center justify-center gap-1.5 rounded-full border border-royal-500/30 p-0 text-xs text-ivory/80 transition hover:border-gold-400/60 hover:text-gold-200 sm:w-auto sm:px-3 lg:w-10 lg:p-0 2xl:w-auto 2xl:px-3"
                 aria-label="Messagerie privée"
               >
                 <MessageCircle className="h-4 w-4" />
-                <span className="hidden sm:inline">Messages</span>
+                <span className="hidden sm:inline lg:hidden 2xl:inline">Messages</span>
                 {unreadCount > 0 && (
                   <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-gold-shine px-1 text-[10px] font-bold text-night-900">
                     {unreadCount > 99 ? "99+" : unreadCount}
@@ -406,10 +406,10 @@ export function Navbar() {
             )}
             <Link
               to="/panier"
-              className="relative inline-flex h-10 w-10 items-center justify-center gap-1.5 rounded-full border border-royal-500/30 p-0 text-xs text-ivory/80 transition hover:border-gold-400/60 hover:text-gold-200 sm:w-auto sm:px-3"
+              className="relative inline-flex h-10 w-10 items-center justify-center gap-1.5 rounded-full border border-royal-500/30 p-0 text-xs text-ivory/80 transition hover:border-gold-400/60 hover:text-gold-200 sm:w-auto sm:px-3 lg:w-10 lg:p-0 2xl:w-auto 2xl:px-3"
             >
               <ShoppingBag className="h-4 w-4" />
-              <span className="hidden sm:inline">Panier</span>
+              <span className="hidden sm:inline lg:hidden 2xl:inline">Panier</span>
               {cartCount > 0 && (
                 <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-gold-shine px-1 text-[10px] font-bold text-night-900">
                   {cartCount}
@@ -421,14 +421,14 @@ export function Navbar() {
                 {canAccessAdmin && (
                   <Link
                     to="/admin"
-                    className="hidden items-center gap-1.5 rounded-full border border-gold-400/40 bg-gold-500/10 px-3 py-2 text-xs font-semibold text-gold-200 hover:bg-gold-500/20 md:inline-flex"
+                    className="hidden items-center gap-1.5 rounded-full border border-gold-400/40 bg-gold-500/10 px-3 py-2 text-xs font-semibold text-gold-200 hover:bg-gold-500/20 md:inline-flex lg:hidden xl:inline-flex"
                   >
                     <ShieldCheck className="h-4 w-4" /> {adminLabel}
                   </Link>
                 )}
                 <Link
                   to="/moi"
-                  className="relative flex h-10 items-center gap-2 rounded-full border border-royal-500/30 bg-night-800/60 py-1 pl-1 pr-1 sm:pr-3"
+                  className="relative flex h-10 items-center gap-2 rounded-full border border-royal-500/30 bg-night-800/60 py-1 pl-1 pr-1 sm:pr-3 lg:pr-1 xl:pr-3"
                   title={
                     backendMe?.totp_enabled
                       ? "Double authentification activée"
@@ -442,7 +442,7 @@ export function Navbar() {
                     alt={user.username}
                     className="h-7 w-7 rounded-full object-cover ring-2 ring-gold-400/60"
                   />
-                  <span className="hidden text-xs font-medium text-ivory/90 sm:inline">
+                  <span className="hidden text-xs font-medium text-ivory/90 sm:inline lg:hidden xl:inline">
                     {user.username}
                   </span>
                   {backendMe?.totp_enabled && (
