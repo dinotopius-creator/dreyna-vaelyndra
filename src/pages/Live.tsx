@@ -1194,10 +1194,26 @@ export function Live() {
   }, [broadcasterId]);
 
   // Résout le profil du broadcaster (pour nom/avatar/pseudo dans le HUD + GiftPanel).
-  const broadcasterProfile = useMemo<User | null>(
-    () => users.find((u) => u.id === broadcasterId) ?? null,
-    [broadcasterId, users],
-  );
+  // Priorité au cache local `users` (StoredUser), sinon fallback sur le
+  // profil serveur chargé via apiGetProfile (les viewers qui n'ont jamais
+  // croisé le broadcaster n'ont pas son entrée dans localStorage).
+  const [broadcasterServerProfile, setBroadcasterServerProfile] =
+    useState<{ id: string; username: string; avatar: string } | null>(null);
+  const broadcasterProfile = useMemo<User | null>(() => {
+    const local = users.find((u) => u.id === broadcasterId) ?? null;
+    if (local) return local;
+    if (broadcasterServerProfile && broadcasterServerProfile.id === broadcasterId) {
+      return {
+        id: broadcasterServerProfile.id,
+        username: broadcasterServerProfile.username,
+        avatar: broadcasterServerProfile.avatar,
+        email: "",
+        role: "elf" as const,
+        joinedAt: "",
+      };
+    }
+    return null;
+  }, [broadcasterId, users, broadcasterServerProfile]);
 
   const registryEntry = liveRegistry[broadcasterId] ?? null;
   const { resetBroadcast: resetInviteBroadcast } = useLiveInvites();
@@ -1911,6 +1927,7 @@ export function Live() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setBroadcasterGradeSlug(null);
     setBroadcasterServerAvatar(null);
+    setBroadcasterServerProfile(null);
     let cancelled = false;
     apiGetProfile(broadcasterId)
       .then((p) => {
@@ -1921,11 +1938,17 @@ export function Live() {
         // qu'on n'a jamais croisés. Sans ça la fiche affiche un
         // placeholder "?" alors que l'avatar existe en base.
         setBroadcasterServerAvatar(p.avatarImageUrl ?? null);
+        setBroadcasterServerProfile({
+          id: p.id,
+          username: p.username,
+          avatar: p.avatarImageUrl,
+        });
       })
       .catch(() => {
         if (!cancelled) {
           setBroadcasterGradeSlug(null);
           setBroadcasterServerAvatar(null);
+          setBroadcasterServerProfile(null);
         }
       });
     return () => {
