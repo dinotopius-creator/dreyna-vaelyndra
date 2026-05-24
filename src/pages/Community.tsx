@@ -82,6 +82,11 @@ export function Community() {
   const [openComments, setOpenComments] = useState<Record<string, boolean>>({});
   const [editingPost, setEditingPost] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
+  const editFileInputRef = useRef<HTMLInputElement>(null);
+  const [editImageFile, setEditImageFile] = useState<File | null>(null);
+  const [editImagePreviewUrl, setEditImagePreviewUrl] = useState<string | null>(null);
+  const [editImageRemoved, setEditImageRemoved] = useState(false);
+  const [editOriginalImageUrl, setEditOriginalImageUrl] = useState<string | undefined>(undefined);
   const [brokenImages, setBrokenImages] = useState<Record<string, boolean>>({});
   const [profilesById, setProfilesById] = useState<Record<string, UserProfileDto>>(
     {},
@@ -379,9 +384,14 @@ export function Community() {
     }
   }
 
-  function startEditPost(post: { id: string; content: string }) {
+  function startEditPost(post: { id: string; content: string; imageUrl?: string }) {
     setEditingPost(post.id);
     setEditDraft(post.content);
+    setEditImageFile(null);
+    if (editImagePreviewUrl) URL.revokeObjectURL(editImagePreviewUrl);
+    setEditImagePreviewUrl(null);
+    setEditImageRemoved(false);
+    setEditOriginalImageUrl(post.imageUrl);
   }
 
   async function saveEditPost(postId: string) {
@@ -389,18 +399,59 @@ export function Community() {
     const trimmed = editDraft.trim();
     if (!trimmed) return;
     try {
+      let newImageUrl: string | undefined;
+      if (editImageFile) {
+        const uploaded = await apiUploadCommunityImage(editImageFile);
+        newImageUrl = uploaded.imageUrl;
+      } else if (editImageRemoved) {
+        newImageUrl = "";
+      }
       const updated = await apiUpdatePost(postId, {
         userId: user.id,
         content: trimmed,
+        imageUrl: newImageUrl,
       });
       dispatch({ type: "replacePost", post: updated });
       setEditingPost(null);
       setEditDraft("");
+      if (editImagePreviewUrl) URL.revokeObjectURL(editImagePreviewUrl);
+      setEditImageFile(null);
+      setEditImagePreviewUrl(null);
+      setEditImageRemoved(false);
+      setEditOriginalImageUrl(undefined);
       notify("Post modifié.", "success");
     } catch (err) {
       console.warn(err);
       notify("Modification refusée.", "error");
     }
+  }
+
+  function onPickEditImage(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      validateFile(file);
+      if (!isImageFile(file.type)) {
+        throw new Error("Choisis une image JPG, PNG, GIF ou WEBP.");
+      }
+      if (editImagePreviewUrl) URL.revokeObjectURL(editImagePreviewUrl);
+      setEditImageFile(file);
+      setEditImagePreviewUrl(URL.createObjectURL(file));
+      setEditImageRemoved(false);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Image impossible a utiliser.";
+      notify(message, "error");
+      event.target.value = "";
+    }
+  }
+
+  function clearEditImage() {
+    if (editImagePreviewUrl) URL.revokeObjectURL(editImagePreviewUrl);
+    setEditImageFile(null);
+    setEditImagePreviewUrl(null);
+    setEditImageRemoved(true);
+    if (editFileInputRef.current) editFileInputRef.current.value = "";
   }
 
   function profileHref(authorId: string) {
@@ -676,7 +727,66 @@ export function Community() {
                           rows={3}
                           maxLength={2000}
                         />
+                        {/* Image editing */}
+                        <input
+                          ref={editFileInputRef}
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp,image/gif"
+                          onChange={onPickEditImage}
+                          className="hidden"
+                        />
+                        {editImagePreviewUrl ? (
+                          <div className="mt-2 rounded-xl border border-royal-500/30 bg-night-900/55 p-2">
+                            <div className="mb-1 flex items-center justify-between gap-2">
+                              <p className="truncate text-xs text-ivory/65">
+                                {editImageFile?.name ?? "Nouvelle image"}
+                              </p>
+                              <button
+                                type="button"
+                                onClick={clearEditImage}
+                                className="rounded-full p-1 text-ivory/45 transition hover:text-rose-300"
+                                aria-label="Retirer l'image"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                            <img
+                              src={editImagePreviewUrl}
+                              alt="Nouvelle image"
+                              className="max-h-40 w-full rounded-lg object-cover"
+                            />
+                          </div>
+                        ) : !editImageRemoved && editOriginalImageUrl ? (
+                          <div className="mt-2 rounded-xl border border-royal-500/30 bg-night-900/55 p-2">
+                            <div className="mb-1 flex items-center justify-between gap-2">
+                              <p className="text-xs text-ivory/65">Image actuelle</p>
+                              <button
+                                type="button"
+                                onClick={clearEditImage}
+                                className="rounded-full p-1 text-ivory/45 transition hover:text-rose-300"
+                                aria-label="Retirer l'image"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                            <img
+                              src={editOriginalImageUrl}
+                              alt="Image actuelle"
+                              className="max-h-40 w-full rounded-lg object-cover"
+                            />
+                          </div>
+                        ) : null}
                         <div className="mt-2 flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => editFileInputRef.current?.click()}
+                            className="inline-flex items-center gap-1.5 rounded-full border border-royal-500/30 px-3 py-1.5 text-xs text-ivory/60 transition hover:border-gold-400/60 hover:text-gold-200"
+                          >
+                            <Image className="h-3.5 w-3.5" />
+                            {editOriginalImageUrl && !editImageRemoved && !editImageFile
+                              ? "Changer l'image"
+                              : "Ajouter une image"}
+                          </button>
                           <button
                             onClick={() => saveEditPost(post.id)}
                             className="inline-flex items-center gap-1.5 rounded-full bg-gold-500/20 px-3 py-1.5 text-xs font-semibold text-gold-200 transition hover:bg-gold-500/30"
@@ -688,6 +798,11 @@ export function Community() {
                             onClick={() => {
                               setEditingPost(null);
                               setEditDraft("");
+                              if (editImagePreviewUrl) URL.revokeObjectURL(editImagePreviewUrl);
+                              setEditImageFile(null);
+                              setEditImagePreviewUrl(null);
+                              setEditImageRemoved(false);
+                              setEditOriginalImageUrl(undefined);
                             }}
                             className="inline-flex items-center gap-1.5 rounded-full border border-royal-500/30 px-3 py-1.5 text-xs text-ivory/60 transition hover:text-ivory/90"
                           >
