@@ -897,33 +897,35 @@ function PostImageAttachment({
     return null;
   }
 
-  if (parsed.kind === "external" || failed) {
+  const src = parsed.kind === "image" ? parsed.src : parsed.url;
+
+  if (!failed) {
     return (
-      <div className="mt-4 rounded-2xl border border-royal-500/30 bg-night-900/60 p-4 text-sm text-ivory/75">
-        <p className="font-medium text-ivory/90">
-          Cette publication contient un lien externe, pas une image affichable.
-        </p>
-        <a
-          href={imageUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="mt-2 inline-flex items-center gap-2 text-gold-200 transition hover:text-gold-100"
-        >
-          <ExternalLink className="h-4 w-4" />
-          Ouvrir le lien joint
-        </a>
-      </div>
+      <img
+        key={postId}
+        src={src}
+        alt="Illustration du post"
+        className="mt-4 max-h-[400px] w-full rounded-xl object-cover"
+        onError={onError}
+      />
     );
   }
 
   return (
-    <img
-      key={postId}
-      src={parsed.src}
-      alt="Illustration du post"
-      className="mt-4 max-h-[400px] w-full rounded-xl object-cover"
-      onError={onError}
-    />
+    <div className="mt-4 rounded-2xl border border-royal-500/30 bg-night-900/60 p-4 text-sm text-ivory/75">
+      <p className="font-medium text-ivory/90">
+        Cette publication contient un lien externe, pas une image affichable.
+      </p>
+      <a
+        href={imageUrl}
+        target="_blank"
+        rel="noreferrer"
+        className="mt-2 inline-flex items-center gap-2 text-gold-200 transition hover:text-gold-100"
+      >
+        <ExternalLink className="h-4 w-4" />
+        Ouvrir le lien joint
+      </a>
+    </div>
   );
 }
 
