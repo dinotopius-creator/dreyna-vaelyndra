@@ -31,6 +31,7 @@ from ..familiars import (
     get_familiar,
     progress_in_level,
 )
+from ..familiars_xp import grant_gift_received_xp, grant_gift_sent_xp
 from ..models import (
     FamiliarSwitchLedger,
     UserFamiliar,
@@ -130,6 +131,11 @@ class NicknamePayload(BaseModel):
 
 class OnboardingPayload(BaseModel):
     familiarId: str = Field(..., min_length=1, max_length=64)
+
+
+class GiftFamiliarPayload(BaseModel):
+    senderId: str = Field(..., min_length=1, max_length=128)
+    amount: int = Field(..., gt=0, le=10000)
 
 
 # --- Helpers --------------------------------------------------------------
@@ -716,3 +722,82 @@ def rename_specific_familiar(
     p.updated_at = _now_iso()
     session.commit()
     return _collection_out(session, user_id)
+
+
+class GiftFamiliarOut(BaseModel):
+    xpGranted: int
+    newLevel: int
+    newXp: int
+    familiarName: str
+    familiarIcon: str
+
+
+@user_router.post(
+    "/{user_id}/familiers/gift", response_model=GiftFamiliarOut
+)
+def gift_familiar(
+    user_id: str,
+    payload: GiftFamiliarPayload,
+    session: Session = Depends(_session_dep),
+) -> GiftFamiliarOut:
+    """Offrir des Sylvins au familier actif d'un autre utilisateur.
+
+    Le sender paie `amount` Sylvins (PROMO puis PAID). Le familier actif
+    du receiver gagne `amount` XP (ratio 1:1, capé 1000 XP/jour). Le
+    sender gagne aussi de l'XP sur son propre familier (amount // 3,
+    capé 200 XP/jour).
+    """
+    if payload.senderId == user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tu ne peux pas offrir à ton propre familier.",
+        )
+    sender_profile = session.get(UserProfile, payload.senderId)
+    if not sender_profile:
+        raise HTTPException(status_code=404, detail="Profil envoyeur introuvable.")
+    receiver_profile = session.get(UserProfile, user_id)
+    if not receiver_profile:
+        raise HTTPException(status_code=404, detail="Profil destinataire introuvable.")
+
+    active = _active_row(session, user_id)
+    if active is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ce membre n'a pas de familier actif.",
+        )
+
+    reference_id = f"famgift-{int(datetime.now(timezone.utc).timestamp() * 1000)}-{payload.senderId[-6:]}"
+
+    take_promo, take_paid = _consume_sylvins(sender_profile, payload.amount)
+    _record_purchase_ledger(
+        session,
+        payload.senderId,
+        take_promo,
+        take_paid,
+        sender_profile.sylvins,
+        sender_profile.sylvins_paid,
+        reason=f"familier:gift:{user_id}",
+        reference_id=reference_id,
+    )
+
+    xp_granted = grant_gift_received_xp(
+        session, user_id, payload.amount, reference_id
+    )
+    grant_gift_sent_xp(
+        session, payload.senderId, payload.amount, reference_id
+    )
+
+    sender_profile.updated_at = _now_iso()
+    receiver_profile.updated_at = _now_iso()
+    session.commit()
+    session.refresh(active)
+
+    fam = get_familiar(active.familiar_id)
+    level, _, _ = progress_in_level(active.xp)
+    return GiftFamiliarOut(
+        xpGranted=xp_granted,
+        newLevel=level,
+        newXp=active.xp,
+        familiarName=fam["name"] if fam else active.familiar_id,
+        familiarIcon=fam.get("icon", "❓") if fam else "❓",
+    )
