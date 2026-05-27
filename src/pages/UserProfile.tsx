@@ -434,56 +434,74 @@ export function UserProfile() {
                 </div>
 
                 {currentUser && currentUser.id !== userId && (
-                  <div className="mt-4 flex flex-wrap items-center gap-2">
-                    <input
-                      type="number"
-                      min={1}
-                      max={10000}
-                      placeholder="Sylvins"
-                      value={giftAmount}
-                      onChange={(e) => setGiftAmount(e.target.value)}
-                      className="w-28 rounded-full border border-royal-500/30 bg-night-800/60 px-3 py-1.5 text-center text-sm text-ivory/90 outline-none focus:border-gold-400/60"
-                    />
-                    <button
-                      type="button"
-                      disabled={giftSending || !giftAmount || Number(giftAmount) < 1}
-                      onClick={async () => {
-                        const amt = Number(giftAmount);
-                        if (!currentUser || amt < 1) return;
-                        setGiftSending(true);
-                        try {
-                          const result = await giftFamiliar(userId, currentUser.id, amt);
-                          notify(
-                            `${result.familiarIcon} +${result.xpGranted} XP pour ${result.familiarName} ! (Niveau ${result.newLevel})`,
-                            "success",
-                          );
-                          setGiftAmount("");
-                          setActiveFamiliar((prev) =>
-                            prev
-                              ? { ...prev, xp: result.newXp, level: result.newLevel }
-                              : prev,
-                          );
-                          // Refresh to get accurate xpIntoLevel/xpToNextLevel
-                          fetchUserFamiliars(userId).then((col) => {
-                            setActiveFamiliar(col.owned.find((f) => f.isActive) ?? null);
-                          }).catch(() => {});
-                        } catch (e: unknown) {
-                          const msg = e instanceof Error && e.message ? e.message : "Échec de l'offrande.";
-                          notify(msg, "error");
-                        } finally {
-                          setGiftSending(false);
-                        }
-                      }}
-                      className="inline-flex items-center gap-1.5 rounded-full bg-gold-500/20 px-4 py-1.5 text-xs font-semibold text-gold-200 transition hover:bg-gold-500/30 disabled:opacity-50"
-                    >
-                      {giftSending ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Gift className="h-3.5 w-3.5" />
-                      )}
-                      Offrir au familier
-                    </button>
-                    <p className="w-full text-[11px] text-ivory/40">
+                  <div className="mt-4 space-y-2">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {[10, 50, 100, 500].map((preset) => (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() => setGiftAmount(String(preset))}
+                          className={`rounded-full border px-3 py-1 text-xs transition ${
+                            giftAmount === String(preset)
+                              ? "border-gold-400/70 bg-gold-500/20 text-gold-200"
+                              : "border-royal-500/30 text-ivory/60 hover:border-gold-400/40 hover:text-gold-200"
+                          }`}
+                        >
+                          {preset}
+                        </button>
+                      ))}
+                      <input
+                        type="number"
+                        min={1}
+                        max={10000}
+                        placeholder="Autre"
+                        value={giftAmount}
+                        onChange={(e) => setGiftAmount(e.target.value)}
+                        className="w-20 rounded-full border border-royal-500/30 bg-night-800/60 px-3 py-1 text-center text-xs text-ivory/90 outline-none focus:border-gold-400/60"
+                      />
+                      <span className="text-[11px] text-ivory/40">Sylvins</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={giftSending || !giftAmount || Number(giftAmount) < 1}
+                        onClick={async () => {
+                          const amt = Number(giftAmount);
+                          if (!currentUser || amt < 1) return;
+                          setGiftSending(true);
+                          try {
+                            const result = await giftFamiliar(userId, currentUser.id, amt);
+                            notify(
+                              `${result.familiarIcon} +${result.xpGranted} XP pour ${result.familiarName} ! (Niveau ${result.newLevel})`,
+                              "success",
+                            );
+                            setGiftAmount("");
+                            setActiveFamiliar((prev) =>
+                              prev
+                                ? { ...prev, xp: result.newXp, level: result.newLevel }
+                                : prev,
+                            );
+                            fetchUserFamiliars(userId).then((col) => {
+                              setActiveFamiliar(col.owned.find((f) => f.isActive) ?? null);
+                            }).catch(() => {});
+                          } catch (e: unknown) {
+                            const msg = e instanceof Error && e.message ? e.message : "Échec de l'offrande.";
+                            notify(msg, "error");
+                          } finally {
+                            setGiftSending(false);
+                          }
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-full bg-gold-500/20 px-4 py-1.5 text-xs font-semibold text-gold-200 transition hover:bg-gold-500/30 disabled:opacity-50"
+                      >
+                        {giftSending ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Gift className="h-3.5 w-3.5" />
+                        )}
+                        Offrir {giftAmount ? `${giftAmount} Sylvins` : "au familier"}
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-ivory/40">
                       1 Sylvin = 1 XP pour le familier. Ton familier gagne aussi 1 XP tous les 3 Sylvins offerts.
                     </p>
                   </div>
