@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { Link, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Banknote, Coins, ArrowLeft, MessageCircle, Sparkles } from "lucide-react";
+import { Banknote, Coins, ArrowLeft, Gift, Loader2, MessageCircle, Sparkles } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useStore } from "../contexts/StoreContext";
 import { SectionHeading } from "../components/SectionHeading";
@@ -18,12 +18,21 @@ import { formatDate, formatRelative } from "../lib/helpers";
 import { roleLabelWithIcon } from "../lib/roleLabel";
 import { formatSylvins } from "../lib/sylvins";
 import { apiGetProfile, type UserProfileDto } from "../lib/api";
+import {
+  fetchUserFamiliars,
+  giftFamiliar,
+  EVOLUTION_TIERS,
+  RARITY_LABELS,
+  type OwnedFamiliar,
+} from "../lib/familiarsApi";
+import { useToast } from "../contexts/ToastContext";
 import type { User } from "../types";
 
 export function UserProfile() {
   const { userId = "" } = useParams();
   const { users, user: currentUser } = useAuth();
   const { posts, walletOf } = useStore();
+  const { notify } = useToast();
 
   const localProfile = useMemo(
     () => users.find((u) => u.id === userId),
@@ -44,6 +53,25 @@ export function UserProfile() {
   const [bondsTab, setBondsTab] = useState<"followers" | "following" | null>(
     null,
   );
+  const [activeFamiliar, setActiveFamiliar] = useState<OwnedFamiliar | null>(null);
+  const [giftAmount, setGiftAmount] = useState("");
+  const [giftSending, setGiftSending] = useState(false);
+
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    fetchUserFamiliars(userId)
+      .then((col) => {
+        if (!cancelled) {
+          setActiveFamiliar(col.owned.find((f) => f.isActive) ?? null);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setActiveFamiliar(null);
+      });
+    return () => { cancelled = true; };
+  }, [userId]);
+
   useEffect(() => {
     if (!userId) return;
     // Reset immédiat : sinon l'ancien avatar serveur reste affiché pendant
@@ -329,6 +357,142 @@ export function UserProfile() {
           </p>
         </div>
       </section>
+
+      {activeFamiliar && (
+        <section className="mt-10">
+          <SectionHeading
+            align="left"
+            eyebrow="Familier"
+            title={`${activeFamiliar.nickname || activeFamiliar.name}`}
+          />
+          <motion.div
+            className="card-royal mt-4 overflow-hidden p-6"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <div
+              className="pointer-events-none absolute inset-0 opacity-30"
+              style={{
+                background: `radial-gradient(circle at 50% 0%, ${activeFamiliar.color}44, transparent 70%)`,
+              }}
+              aria-hidden
+            />
+            <div className="relative flex flex-col items-center gap-4 sm:flex-row sm:items-start sm:gap-6">
+              <motion.div
+                className="relative flex h-24 w-24 shrink-0 items-center justify-center rounded-3xl border text-5xl"
+                style={{
+                  background: `radial-gradient(circle at 50% 40%, ${activeFamiliar.color}40, ${activeFamiliar.color}11 60%, transparent)`,
+                  borderColor: `${activeFamiliar.color}55`,
+                  boxShadow: `0 0 24px -8px ${activeFamiliar.color}`,
+                }}
+                animate={{ y: [0, -4, 0] }}
+                transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+                aria-hidden
+              >
+                <span style={{ filter: `drop-shadow(0 0 10px ${activeFamiliar.color})` }}>
+                  {activeFamiliar.icon}
+                </span>
+              </motion.div>
+
+              <div className="flex-1 text-center sm:text-left">
+                <h3 className="font-display text-xl text-gold-200">
+                  {activeFamiliar.nickname || activeFamiliar.name}
+                </h3>
+                <p className="mt-0.5 text-xs text-ivory/55">
+                  {activeFamiliar.name} — {RARITY_LABELS[activeFamiliar.rarity] ?? activeFamiliar.rarity}
+                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-3">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-gold-400/40 bg-gold-500/10 px-3 py-1 text-xs font-semibold text-gold-200">
+                    Niveau {activeFamiliar.level}
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full border border-ivory/15 bg-night-700/60 px-3 py-1 text-xs text-ivory/70">
+                    {(EVOLUTION_TIERS[activeFamiliar.evolution.id] ?? { emoji: "✨", label: activeFamiliar.evolution.name }).emoji}{" "}
+                    {(EVOLUTION_TIERS[activeFamiliar.evolution.id] ?? { label: activeFamiliar.evolution.name }).label}
+                  </span>
+                </div>
+                <div className="mt-3">
+                  <div className="flex items-center justify-between text-[11px] text-ivory/50">
+                    <span>Progression</span>
+                    <span>
+                      {activeFamiliar.xpIntoLevel} / {activeFamiliar.xpToNextLevel > 0 ? activeFamiliar.xpToNextLevel : "MAX"} XP
+                    </span>
+                  </div>
+                  <div className="mt-1 h-2 overflow-hidden rounded-full bg-night-700">
+                    <motion.div
+                      className="h-full rounded-full"
+                      style={{ background: `linear-gradient(90deg, ${activeFamiliar.color}, ${activeFamiliar.color}cc)` }}
+                      initial={{ width: 0 }}
+                      animate={{
+                        width: `${activeFamiliar.xpToNextLevel <= 0 ? 100 : Math.min(100, Math.round((activeFamiliar.xpIntoLevel / activeFamiliar.xpToNextLevel) * 100))}%`,
+                      }}
+                      transition={{ duration: 0.8, ease: "easeOut" }}
+                    />
+                  </div>
+                  <p className="mt-1 text-[11px] text-ivory/40">
+                    XP totale : {activeFamiliar.xp}
+                  </p>
+                </div>
+
+                {currentUser && currentUser.id !== userId && (
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <input
+                      type="number"
+                      min={1}
+                      max={10000}
+                      placeholder="Sylvins"
+                      value={giftAmount}
+                      onChange={(e) => setGiftAmount(e.target.value)}
+                      className="w-28 rounded-full border border-royal-500/30 bg-night-800/60 px-3 py-1.5 text-center text-sm text-ivory/90 outline-none focus:border-gold-400/60"
+                    />
+                    <button
+                      type="button"
+                      disabled={giftSending || !giftAmount || Number(giftAmount) < 1}
+                      onClick={async () => {
+                        const amt = Number(giftAmount);
+                        if (!currentUser || amt < 1) return;
+                        setGiftSending(true);
+                        try {
+                          const result = await giftFamiliar(userId, currentUser.id, amt);
+                          notify(
+                            `${result.familiarIcon} +${result.xpGranted} XP pour ${result.familiarName} ! (Niveau ${result.newLevel})`,
+                            "success",
+                          );
+                          setGiftAmount("");
+                          setActiveFamiliar((prev) =>
+                            prev
+                              ? { ...prev, xp: result.newXp, level: result.newLevel }
+                              : prev,
+                          );
+                          // Refresh to get accurate xpIntoLevel/xpToNextLevel
+                          fetchUserFamiliars(userId).then((col) => {
+                            setActiveFamiliar(col.owned.find((f) => f.isActive) ?? null);
+                          }).catch(() => {});
+                        } catch (e: unknown) {
+                          const msg = e instanceof Error && e.message ? e.message : "Échec de l'offrande.";
+                          notify(msg, "error");
+                        } finally {
+                          setGiftSending(false);
+                        }
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-gold-500/20 px-4 py-1.5 text-xs font-semibold text-gold-200 transition hover:bg-gold-500/30 disabled:opacity-50"
+                    >
+                      {giftSending ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Gift className="h-3.5 w-3.5" />
+                      )}
+                      Offrir au familier
+                    </button>
+                    <p className="w-full text-[11px] text-ivory/40">
+                      1 Sylvin = 1 XP pour le familier. Ton familier gagne aussi 1 XP tous les 3 Sylvins offerts.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        </section>
+      )}
 
       {serverProfile && (
         <section className="mt-10">

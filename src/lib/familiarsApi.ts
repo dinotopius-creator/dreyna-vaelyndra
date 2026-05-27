@@ -135,6 +135,25 @@ export async function setFamiliarNickname(
   );
 }
 
+export interface FamiliarGiftResult {
+  xpGranted: number;
+  newLevel: number;
+  newXp: number;
+  familiarName: string;
+  familiarIcon: string;
+}
+
+export async function giftFamiliar(
+  targetUserId: string,
+  senderId: string,
+  amount: number,
+): Promise<FamiliarGiftResult> {
+  return familiarRequest<FamiliarGiftResult>(
+    `/users/${encodeURIComponent(targetUserId)}/familiers/gift`,
+    { method: "POST", body: JSON.stringify({ senderId, amount }) },
+  );
+}
+
 /** Libellés FR pour les paliers d'évolution. */
 export const EVOLUTION_TIERS: Record<string, { label: string; emoji: string }> =
   {
