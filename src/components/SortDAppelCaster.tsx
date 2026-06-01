@@ -100,6 +100,10 @@ function readPersistedSortState(storageKey?: string): PersistedSortState {
   }
 }
 
+function isDefaultSortState(state: PersistedSortState): boolean {
+  return state.nextIndex === 0 && state.cooldownUntil === 0;
+}
+
 function writePersistedSortState(
   storageKey: string | undefined,
   state: PersistedSortState,
@@ -150,11 +154,26 @@ export function SortDAppelCaster({
   );
   const [now, setNow] = useState(() => Date.now());
   const skipNextPersistRef = useRef(false);
+  const previousPersistenceKeyRef = useRef(persistenceKey);
 
   const nextTier = SORT_LEVELS[nextIndex];
 
   useEffect(() => {
-    const persisted = readPersistedSortState(persistenceKey);
+    let persisted = readPersistedSortState(persistenceKey);
+    const previousKey = previousPersistenceKeyRef.current;
+    if (
+      persistenceKey &&
+      previousKey &&
+      previousKey !== persistenceKey &&
+      isDefaultSortState(persisted)
+    ) {
+      const previous = readPersistedSortState(previousKey);
+      if (!isDefaultSortState(previous)) {
+        persisted = previous;
+        writePersistedSortState(persistenceKey, previous);
+      }
+    }
+    previousPersistenceKeyRef.current = persistenceKey;
     skipNextPersistRef.current = true;
     setNextIndex(persisted.nextIndex);
     setCooldownUntil(persisted.cooldownUntil);
