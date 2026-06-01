@@ -179,7 +179,7 @@ function collectCommunityEvents(
               id: `community-like:${post.id}:${emoji}:${reactorId}`,
               kind: "community_like",
               title: "Nouveau like sur ta publication",
-              body: `${actorName} a reagit ${emoji} a ta publication.`,
+              body: `${actorName} a réagi ${emoji} à ta publication.`,
               url: postUrl,
               actorId: reactorId,
               actorName,
@@ -196,8 +196,8 @@ function collectCommunityEvents(
       events.push({
         id: `community-mention:${post.id}:${post.authorId}:${post.createdAt}`,
         kind: "community_mention",
-        title: "Tu as ete identifie",
-        body: `${post.authorName} t'a identifie dans une publication.`,
+        title: "Tu as été identifié",
+        body: `${post.authorName} t'a identifié dans une publication.`,
         url: postUrl,
         actorId: post.authorId,
         actorName: post.authorName,
@@ -237,7 +237,7 @@ function collectCommunityEvents(
           id: `community-comment:${post.id}:${comment.id}`,
           kind: "community_comment",
           title: "Nouveau commentaire",
-          body: `${comment.authorName} a commente ta publication.`,
+          body: `${comment.authorName} a commenté ta publication.`,
           url: commentUrl,
           actorId: comment.authorId,
           actorName: comment.authorName,
@@ -266,8 +266,8 @@ function collectCommunityEvents(
         events.push({
           id: `community-comment-mention:${post.id}:${comment.id}`,
           kind: "community_mention",
-          title: "Tu as ete identifie",
-          body: `${comment.authorName} t'a identifie en commentaire.`,
+          title: "Tu as été identifié",
+          body: `${comment.authorName} t'a identifié en commentaire.`,
           url: commentUrl,
           actorId: comment.authorId,
           actorName: comment.authorName,
@@ -417,7 +417,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         JSON.stringify(notifications.slice(0, MAX_NOTIFICATIONS)),
       );
     } catch {
-      // Le centre reste disponible en memoire si le stockage local refuse.
+      // Le centre reste disponible en mémoire si le stockage local refuse.
     }
   }, [notifications, user]);
 

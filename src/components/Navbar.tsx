@@ -56,7 +56,7 @@ export function Navbar() {
   const canAccessAdmin =
     isQueen || backendMe?.role === "admin" || backendMe?.role === "animator";
   const adminLabel =
-    backendMe?.role === "animator" ? "Chroniques" : "Salle du Trone";
+    backendMe?.role === "animator" ? "Chroniques" : "Salle du Trône";
 
   useEffect(() => {
     if (!notificationsOpen) return;
@@ -181,7 +181,7 @@ export function Navbar() {
                                   ? "border-gold-400/60 bg-gold-500/10 text-gold-200"
                                   : "border-royal-500/30 text-ivory/70 hover:border-gold-400/60 hover:text-gold-200",
                               )}
-                              aria-label="Reglages notifications"
+                              aria-label="Réglages notifications"
                               aria-pressed={notificationSettingsOpen}
                             >
                               <Settings className="h-4 w-4" />
@@ -311,7 +311,7 @@ export function Navbar() {
                               onClick={() => setNotificationSettingsOpen(true)}
                               className="flex min-h-10 w-full items-center justify-between rounded-xl px-1 text-left text-xs text-ivory/65 transition hover:text-gold-200"
                             >
-                              <span>Reglages notifications</span>
+                              <span>Réglages notifications</span>
                               <Settings className="h-4 w-4" />
                             </button>
                           )}
@@ -331,7 +331,7 @@ export function Navbar() {
                                 />
                               </label>
                               <label className="flex min-h-10 items-center justify-between gap-3 text-xs text-ivory/75">
-                                Likes communaute
+                                Likes communauté
                                 <input
                                   type="checkbox"
                                   checked={preferences.communityLikes}
@@ -573,7 +573,7 @@ export function Navbar() {
                     }}
                     className="rounded-2xl border border-royal-500/30 px-4 py-3 text-left font-regal text-xs font-semibold tracking-[0.18em] text-ivory/80"
                   >
-                    Deconnexion
+                    Déconnexion
                   </button>
                 </>
               )}

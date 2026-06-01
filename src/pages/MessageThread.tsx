@@ -391,7 +391,7 @@ export function MessageThread() {
                     >
                       <img
                         src={directImageUrl}
-                        alt="Image envoyee"
+                        alt="Image envoyée"
                         className="max-h-[22rem] w-full object-cover"
                         loading="lazy"
                       />

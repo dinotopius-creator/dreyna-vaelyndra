@@ -172,7 +172,7 @@ export function PostComments({
       }
     } catch (err) {
       console.warn(err);
-      notify("Suppression refusee par le royaume.", "error");
+      notify("Suppression refusée par le royaume.", "error");
     }
   }
 
@@ -253,7 +253,7 @@ export function PostComments({
 
             {comment.replyToAuthorName && (
               <p className="mt-1 text-[11px] text-gold-300/85">
-                Reponse a{" "}
+                Réponse à{" "}
                 {comment.replyToAuthorId ? (
                   <Link
                     to={profileHref(comment.replyToAuthorId)}
@@ -282,7 +282,7 @@ export function PostComments({
               className="inline-flex items-center gap-1 transition hover:text-gold-200"
             >
               <CornerUpLeft className="h-3.5 w-3.5" />
-              Repondre
+              Répondre
             </button>
             {user && (
               <button
@@ -365,13 +365,13 @@ export function PostComments({
           {replyTo && (
             <div className="mb-2 flex items-center justify-between gap-2 rounded-2xl border border-gold-400/20 bg-gold-500/10 px-3 py-2 text-xs text-gold-100">
               <span className="truncate">
-                Reponse a <strong>{replyDraftLabel}</strong>
+                Réponse à <strong>{replyDraftLabel}</strong>
               </span>
               <button
                 type="button"
                 onClick={resetReply}
                 className="rounded-full border border-gold-300/25 p-1 transition hover:border-gold-200/45"
-                title="Annuler la reponse"
+                title="Annuler la réponse"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
@@ -385,7 +385,7 @@ export function PostComments({
               placeholder={
                 user
                   ? replyTo
-                    ? `Repondre a ${replyDraftLabel}...`
+                    ? `Répondre à ${replyDraftLabel}...`
                     : "Commenter cette parole..."
                   : "Connecte-toi pour commenter..."
               }

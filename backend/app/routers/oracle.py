@@ -26,9 +26,9 @@ router = APIRouter(prefix="/oracle", tags=["oracle"])
 MAX_DAILY_PLAYS = 3
 VALID_RUNES = {"lune", "flamme", "couronne"}
 REWARD_TABLE: list[tuple[int, str, int, str, str]] = [
-    (34, "lueurs", 15, "15 lueurs captees", "soft"),
-    (26, "lueurs", 25, "25 lueurs reveillees", "soft"),
-    (17, "lueurs", 40, "40 lueurs scellees", "bright"),
+    (34, "lueurs", 15, "15 lueurs captées", "soft"),
+    (26, "lueurs", 25, "25 lueurs réveillées", "soft"),
+    (17, "lueurs", 40, "40 lueurs scellées", "bright"),
     (9, "lueurs", 70, "70 lueurs astrales", "bright"),
     (5, "lueurs", 120, "120 lueurs royales", "epic"),
     (8, "none", 0, "Le voile reste silencieux", "void"),
@@ -182,7 +182,7 @@ def play_oracle(
     if used_today >= MAX_DAILY_PLAYS:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Rituel journalier deja epuise.",
+            detail="Rituel journalier déjà épuisé.",
         )
 
     reward = _roll_reward()

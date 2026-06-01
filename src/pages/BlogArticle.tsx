@@ -248,7 +248,7 @@ export function BlogArticle() {
               </Link>
               {comment.replyToAuthorName && (
                 <span className="rounded-full border border-gold-400/25 bg-gold-400/10 px-2 py-0.5 text-[10px] text-gold-100">
-                  repond a {comment.replyToAuthorName}
+                  répond à {comment.replyToAuthorName}
                 </span>
               )}
               <span className="text-xs text-ivory/40">
@@ -423,7 +423,7 @@ export function BlogArticle() {
                   type="button"
                   onClick={() => setReplyTo(null)}
                   className="text-gold-100/70 transition hover:text-gold-100"
-                  aria-label="Annuler la reponse"
+                  aria-label="Annuler la réponse"
                 >
                   <X className="h-4 w-4" />
                 </button>

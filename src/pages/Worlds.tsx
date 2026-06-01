@@ -183,7 +183,7 @@ const DISTRICTS: District[] = [
     flora: "Lianes, fleurs lumineuses et prairie neon",
     signature: "Serres creatives",
     orb: "Soleil couchant",
-    ambience: "Les vitrines flottent dans un jardin electrique, entoure d'herbe vive et de fleurs qui reprennent les couleurs des creations.",
+    ambience: "Les vitrines flottent dans un jardin électrique, entouré d'herbe vive et de fleurs qui reprennent les couleurs des créations.",
     badge: "Galerie vivante",
   },
   {
@@ -240,16 +240,16 @@ const DISTRICT_LUEURS: Record<
     { id: "arcade-lueur-2", x: 28, y: 48, value: 1, rarity: "common", label: "verre chanteur", respawnMs: 19000 },
     { id: "arcade-lueur-3", x: 40, y: 63, value: 2, rarity: "rare", label: "echo de vitrine", respawnMs: 24000 },
     { id: "arcade-lueur-4", x: 56, y: 41, value: 1, rarity: "common", label: "fil cyan", respawnMs: 17000 },
-    { id: "arcade-lueur-5", x: 67, y: 70, value: 1, rarity: "common", label: "petale electrique", respawnMs: 18000 },
+    { id: "arcade-lueur-5", x: 67, y: 70, value: 1, rarity: "common", label: "pétale électrique", respawnMs: 18000 },
     { id: "arcade-lueur-6", x: 78, y: 52, value: 3, rarity: "epic", label: "maquette inspiree", respawnMs: 34000 },
   ],
   observatory: [
     { id: "obs-lueur-1", x: 16, y: 64, value: 1, rarity: "common", label: "poussiere d'etoile", respawnMs: 18000 },
     { id: "obs-lueur-2", x: 29, y: 38, value: 2, rarity: "rare", label: "givre astral", respawnMs: 25000 },
     { id: "obs-lueur-3", x: 45, y: 60, value: 1, rarity: "common", label: "halo lunaire", respawnMs: 19000 },
-    { id: "obs-lueur-4", x: 58, y: 34, value: 2, rarity: "rare", label: "comete lente", respawnMs: 26000 },
+    { id: "obs-lueur-4", x: 58, y: 34, value: 2, rarity: "rare", label: "comète lente", respawnMs: 26000 },
     { id: "obs-lueur-5", x: 72, y: 72, value: 1, rarity: "common", label: "filament froid", respawnMs: 18000 },
-    { id: "obs-lueur-6", x: 84, y: 50, value: 3, rarity: "epic", label: "eclat de meteore", respawnMs: 36000 },
+    { id: "obs-lueur-6", x: 84, y: 50, value: 3, rarity: "epic", label: "éclat de météore", respawnMs: 36000 },
   ],
 };
 
@@ -272,7 +272,7 @@ const DISTRICT_HOTSPOTS: Record<DistrictId, WorldHotspot[]> = {
       id: "place-garden",
       district: "place",
       title: "Roseraie des serments",
-      hint: "Les fleurs repondent aux membres patients.",
+      hint: "Les fleurs répondent aux membres patients.",
       description: "Une bordure fleurie cache de petites lueurs entre les herbes hautes.",
       x: 23,
       y: 76,
@@ -288,7 +288,7 @@ const DISTRICT_HOTSPOTS: Record<DistrictId, WorldHotspot[]> = {
       district: "arcades",
       title: "Miroir des createurs",
       hint: "Le verre garde les idees qui vibrent le plus fort.",
-      description: "Les vitrines retiennent des impulsions de couleur et relachent parfois une serie d'eclats.",
+      description: "Les vitrines retiennent des impulsions de couleur et relâchent parfois une série d'éclats.",
       x: 62,
       y: 30,
       radius: 11,
@@ -307,7 +307,7 @@ const DISTRICT_HOTSPOTS: Record<DistrictId, WorldHotspot[]> = {
       radius: 10,
       reward: 4,
       glyph: "A",
-      resonance: "Une pulsation cyan traverse les panneaux et reveille des lueurs de vitrine.",
+      resonance: "Une pulsation cyan traverse les panneaux et réveille des lueurs de vitrine.",
     },
   ],
   observatory: [
@@ -315,19 +315,19 @@ const DISTRICT_HOTSPOTS: Record<DistrictId, WorldHotspot[]> = {
       id: "observatory-moonwell",
       district: "observatory",
       title: "Puits lunaire",
-      hint: "La pierre refracte les meteorites lentes.",
+      hint: "La pierre réfracte les météorites lentes.",
       description: "Un puits de nuit retient les fragments tombes des constellations.",
       x: 64,
       y: 35,
       radius: 11,
       reward: 6,
       glyph: "L",
-      resonance: "Le dome reflète la lune et fait pleuvoir quelques eclats rares.",
+      resonance: "Le dôme reflète la lune et fait pleuvoir quelques éclats rares.",
     },
     {
       id: "observatory-rail",
       district: "observatory",
-      title: "Rail des cometes",
+      title: "Rail des comètes",
       hint: "Quand le ciel change, les rails se remettent a murmurer.",
       description: "Les passerelles celestes accumulent une charge lumineuse qui ne se montre pas a tout le monde.",
       x: 24,
@@ -335,7 +335,7 @@ const DISTRICT_HOTSPOTS: Record<DistrictId, WorldHotspot[]> = {
       radius: 10,
       reward: 4,
       glyph: "C",
-      resonance: "Une trame froide traverse le balcon et reveille la bordure du ciel.",
+      resonance: "Une trame froide traverse le balcon et réveille la bordure du ciel.",
     },
   ],
 };
@@ -364,7 +364,7 @@ const DISTRICT_AMBIENT_EVENTS: Record<DistrictId, WorldAmbientEvent[]> = {
       id: "arcades-neon-surge",
       district: "arcades",
       title: "Surge neon",
-      copy: "Les vitrines se synchronisent. Quelques eclats de creation deviennent visibles.",
+      copy: "Les vitrines se synchronisent. Quelques éclats de création deviennent visibles.",
       bonusLueurs: 2,
       durationMs: 9000,
     },
@@ -381,8 +381,8 @@ const DISTRICT_AMBIENT_EVENTS: Record<DistrictId, WorldAmbientEvent[]> = {
     {
       id: "observatory-meteor-drift",
       district: "observatory",
-      title: "Derive meteore",
-      copy: "Une trainee lente coupe le dome et reveille des lueurs plus rares.",
+      title: "Dérive météore",
+      copy: "Une traînée lente coupe le dôme et réveille des lueurs plus rares.",
       bonusLueurs: 2,
       durationMs: 8500,
     },
@@ -453,13 +453,13 @@ const WORLD_INTERACTION_META: Record<
   dance: {
     label: "Danser ensemble",
     emoji: "✨",
-    toast: "Invitation a danser envoyee.",
+    toast: "Invitation à danser envoyée.",
     copy: (actor, target) => `${actor} lance une danse complice avec ${target}.`,
   },
   lueur: {
     label: "Envoyer une petite lueur",
     emoji: "🪄",
-    toast: "Petite lueur envoyee.",
+    toast: "Petite lueur envoyée.",
     copy: (actor, target) => `${actor} envoie une petite lueur scintillante a ${target}.`,
   },
 };
@@ -718,7 +718,7 @@ export function Worlds() {
     }
     if (lastIncomingInviteRef.current === pendingIncomingVoiceInvite.userId) return;
     lastIncomingInviteRef.current = pendingIncomingVoiceInvite.userId;
-    notify(`${pendingIncomingVoiceInvite.username} souhaite discuter en vocal prive.`, "info");
+    notify(`${pendingIncomingVoiceInvite.username} souhaite discuter en vocal privé.`, "info");
     if (selectedMember?.member.id === pendingIncomingVoiceInvite.userId) return;
     const member =
       stageMembers.find((entry) => entry.id === pendingIncomingVoiceInvite.userId) ?? null;
@@ -860,7 +860,7 @@ export function Worlds() {
         setProfile(updated);
         setQueuedLueurs((current) => Math.max(0, current - amount));
       } catch {
-        notify("Les lueurs vibrent encore hors ligne. Elles seront retentees.", "info");
+        notify("Les lueurs vibrent encore hors ligne. Elles seront retentées.", "info");
       } finally {
         setSyncingLueurs(false);
       }
@@ -987,14 +987,14 @@ export function Worlds() {
   useEffect(() => {
     if (!worldVoiceError) return;
     if (worldVoiceError === "duplicate-peer") {
-      notify("Le vocal du monde est deja ouvert dans un autre onglet.", "info");
+      notify("Le vocal du monde est déjà ouvert dans un autre onglet.", "info");
       return;
     }
     if (worldVoiceError === "audio-unsupported") {
-      notify("Le vocal du monde n'est pas supporte sur cet appareil.", "error");
+      notify("Le vocal du monde n'est pas supporté sur cet appareil.", "error");
       return;
     }
-    notify("Le vocal du monde a rencontre une erreur. Verifie ton micro.", "error");
+    notify("Le vocal du monde a rencontré une erreur. Vérifie ton micro.", "error");
   }, [notify, worldVoiceError]);
 
   function moveBy(deltaX: number, deltaY: number) {
@@ -1087,10 +1087,10 @@ export function Worlds() {
     try {
       await apiRequestPrivateWorldVoice(WORLD_ID, targetUserId);
       await refreshWorldPresence();
-      notify("Invitation au vocal prive envoyee.", "success");
+      notify("Invitation au vocal privé envoyée.", "success");
     } catch (err) {
       notify(
-        toApiDetail(err, "Impossible de lancer le vocal prive pour le moment."),
+        toApiDetail(err, "Impossible de lancer le vocal privé pour le moment."),
         "error",
       );
     } finally {
@@ -1104,7 +1104,7 @@ export function Worlds() {
       await apiRespondPrivateWorldVoice(WORLD_ID, { requesterUserId, accept });
       await refreshWorldPresence();
       notify(
-        accept ? "Vocal prive active." : "Invitation au vocal prive refusee.",
+        accept ? "Vocal privé activé." : "Invitation au vocal privé refusée.",
         accept ? "success" : "info",
       );
     } catch {
@@ -1121,7 +1121,7 @@ export function Worlds() {
       await refreshWorldPresence();
       notify("Retour au vocal normal du monde.", "success");
     } catch {
-      notify("Impossible de quitter le vocal prive pour le moment.", "error");
+      notify("Impossible de quitter le vocal privé pour le moment.", "error");
     } finally {
       setPrivateVoiceBusy(false);
     }
@@ -1132,7 +1132,7 @@ export function Worlds() {
     const remaining = Math.max(0, WORLD_LUEUR_DAILY_CAP - dailyWorldLueurs);
     const granted = Math.min(rawAmount, remaining);
     if (!granted) {
-      notify("Le flux quotidien de lueurs a deja ete capte pour aujourd'hui.", "info");
+      notify("Le flux quotidien de lueurs a déjà été capté pour aujourd'hui.", "info");
       return 0;
     }
 
@@ -1160,7 +1160,7 @@ export function Worlds() {
     }
 
     if (granted >= 3) {
-      addWorldMessage("Lueurs", `${reason} reveille ${granted} lueurs autour de toi.`);
+      addWorldMessage("Lueurs", `${reason} réveille ${granted} lueurs autour de toi.`);
     }
 
     return granted;
@@ -1286,7 +1286,7 @@ export function Worlds() {
     if (granted) {
       notify(
         isFirstDiscovery
-          ? `${hotspot.title} revele +${granted} lueurs.`
+          ? `${hotspot.title} révèle +${granted} lueurs.`
           : `${hotspot.title} laisse encore filer une lueur.`,
         "success",
       );
@@ -1756,7 +1756,7 @@ export function Worlds() {
                 <div className="mt-2 text-[10px] uppercase tracking-[0.18em] text-ivory/45">
                   {voiceEnabled
                     ? currentChannelId.startsWith("private:")
-                      ? "discussion privee active"
+                      ? "discussion privée active"
                       : `${worldVoiceConnections} presence${worldVoiceConnections > 1 ? "s" : ""} audio reliee${worldVoiceConnections > 1 ? "s" : ""}`
                     : "micro local en veille"}
                 </div>
@@ -1781,7 +1781,7 @@ export function Worlds() {
                     onClick={() => void leavePrivateVoice()}
                     className="mt-3 w-full rounded-full border border-rose-400/35 px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-rose-100 transition hover:border-rose-300/70 disabled:opacity-60"
                   >
-                    Quitter le prive
+                    Quitter le privé
                   </button>
                 )}
               </div>
@@ -1796,7 +1796,7 @@ export function Worlds() {
               <h3 className="font-display text-xl text-gold-100">Bourse de lueurs</h3>
             </div>
             <p className="mt-2 text-sm text-ivory/65">
-              Explore, reveille les zones secretes et laisse les evenements du monde guider ta collecte.
+              Explore, réveille les zones secrètes et laisse les événements du monde guider ta collecte.
             </p>
 
             <div className="mt-4 grid grid-cols-2 gap-3">
@@ -1822,7 +1822,7 @@ export function Worlds() {
                   ? "Synchronisation des lueurs en cours..."
                   : queuedLueurs > 0
                     ? `${queuedLueurs} lueur${queuedLueurs > 1 ? "s" : ""} en attente de scellement.`
-                    : "Toutes tes lueurs visibles sont deja scellees."}
+                    : "Toutes tes lueurs visibles sont déjà scellées."}
               </div>
             </div>
 
@@ -1969,7 +1969,7 @@ export function Worlds() {
                       En cours dans {labelForDistrict(ambientEvent.district)}
                     </div>
                     <span className="rounded-full border border-gold-300/35 px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-gold-100">
-                      +{ambientEvent.bonusLueurs} lueurs reveillees
+                      +{ambientEvent.bonusLueurs} lueurs réveillées
                     </span>
                   </div>
                   <div className="mt-2 font-display text-gold-100">{ambientEvent.title}</div>
@@ -2178,10 +2178,10 @@ export function Worlds() {
               <div className="rounded-[22px] border border-white/10 bg-night-950/55 p-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-[11px] uppercase tracking-[0.22em] text-gold-200/70">
-                    Discussion vocale privee
+                    Discussion vocale privée
                   </div>
                   <div className="text-[10px] uppercase tracking-[0.18em] text-ivory/45">
-                    {currentChannelId.startsWith("private:") ? "canal prive" : "canal de zone"}
+                    {currentChannelId.startsWith("private:") ? "canal privé" : "canal de zone"}
                   </div>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -2212,7 +2212,7 @@ export function Worlds() {
                       className="inline-flex items-center gap-2 rounded-full border border-rose-400/45 bg-rose-400/10 px-3 py-2 text-sm text-rose-100 transition hover:border-rose-300/70 disabled:opacity-60"
                     >
                       <Volume2 className="h-4 w-4" />
-                      Quitter le vocal prive
+                      Quitter le vocal privé
                     </button>
                   ) : (
                     <button
@@ -2228,8 +2228,8 @@ export function Worlds() {
                     >
                       <Volume2 className="h-4 w-4" />
                       {myWorldPresence?.pendingVoiceInviteToUserId === selectedMember.member.id
-                        ? "Invitation envoyee"
-                        : "Discussion vocale privee"}
+                        ? "Invitation envoyée"
+                        : "Discussion vocale privée"}
                     </button>
                   )}
                 </div>
@@ -2265,10 +2265,10 @@ export function Worlds() {
         <section className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-[24px] border border-cyan-300/25 bg-[linear-gradient(135deg,rgba(15,23,42,0.92),rgba(8,47,73,0.82))] px-4 py-4">
           <div>
             <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-200/75">
-              Invitation vocale privee
+              Invitation vocale privée
             </div>
             <div className="mt-1 text-sm text-ivory/80">
-              {pendingIncomingVoiceInvite.username} souhaite discuter en tete-a-tete.
+              {pendingIncomingVoiceInvite.username} souhaite discuter en tête-à-tête.
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -2311,7 +2311,7 @@ export function Worlds() {
         <WorldFact
           icon={<Sparkles className="h-4 w-4" />}
           title="Lueurs a collecter"
-          copy="Chaque monde revele ses propres eclats, secrets et mini-evenements pour recompenser l'exploration."
+          copy="Chaque monde révèle ses propres éclats, secrets et mini-événements pour récompenser l'exploration."
         />
       </section>
     </div>

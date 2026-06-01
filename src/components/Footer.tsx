@@ -114,7 +114,7 @@ export function Footer() {
           <p>© {new Date().getFullYear()} Royaume de Vaelyndra. Tous droits reserves.</p>
           <p className="text-[11px]">
             Site independant. Les marques tierces mentionnees restent la
-            propriete de leurs detenteurs respectifs.
+            propriété de leurs détenteurs respectifs.
           </p>
         </div>
       </div>

@@ -150,7 +150,7 @@ def _sanitize_post_image_url(raw: str | None) -> str | None:
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         raise HTTPException(
             status_code=422,
-            detail="image_url doit etre une URL http(s) d'image valide.",
+            detail="image_url doit être une URL http(s) d'image valide.",
         )
 
     hostname = parsed.netloc.lower()
@@ -160,7 +160,7 @@ def _sanitize_post_image_url(raw: str | None) -> str | None:
         raise HTTPException(
             status_code=422,
             detail=(
-                "image_url doit etre une image directe, pas un lien de post "
+                "image_url doit être une image directe, pas un lien de post "
                 "Instagram/TikTok/YouTube."
             ),
         )

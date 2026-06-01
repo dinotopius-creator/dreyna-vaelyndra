@@ -28,7 +28,7 @@ export const LIVE_CATEGORIES: LiveCategoryMeta[] = [
     id: "just-chatting",
     label: "Just Chatting",
     description:
-      "Discussion libre, reactions en direct et moment de scene avec la communaute.",
+      "Discussion libre, réactions en direct et moment de scène avec la communauté.",
     icon: "💬",
     chipClass: "border-sky-400/50 bg-sky-500/15 text-sky-100",
   },
@@ -50,9 +50,9 @@ export const LIVE_CATEGORIES: LiveCategoryMeta[] = [
   },
   {
     id: "community",
-    label: "Communaute",
+    label: "Communauté",
     description:
-      "Annonces, FAQ, rencontres et moments reserves a la communaute.",
+      "Annonces, FAQ, rencontres et moments réservés à la communauté.",
     icon: "🌿",
     chipClass: "border-emerald-400/50 bg-emerald-500/15 text-emerald-100",
   },
@@ -66,9 +66,9 @@ export const LIVE_CATEGORIES: LiveCategoryMeta[] = [
   },
   {
     id: "creative",
-    label: "Creatif",
+    label: "Créatif",
     description:
-      "Creation artistique, dessin, design, montage ou fabrication en live.",
+      "Création artistique, dessin, design, montage ou fabrication en live.",
     icon: "🎨",
     chipClass: "border-amber-400/50 bg-amber-500/15 text-amber-100",
   },
@@ -84,7 +84,7 @@ export const LIVE_CATEGORIES: LiveCategoryMeta[] = [
     id: "other",
     label: "Autre",
     description:
-      "Format libre quand le live ne rentre pas dans une categorie classique.",
+      "Format libre quand le live ne rentre pas dans une catégorie classique.",
     icon: "🪄",
     chipClass: "border-slate-300/45 bg-slate-400/10 text-slate-100",
   },
