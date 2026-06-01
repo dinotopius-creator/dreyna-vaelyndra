@@ -381,7 +381,7 @@ export function Community() {
       dispatch({ type: "deletePost", id: postId });
     } catch (err) {
       console.warn(err);
-      notify("Suppression refusee.", "error");
+      notify("Suppression refusée.", "error");
     }
   }
 
@@ -512,7 +512,7 @@ export function Community() {
             Le <span className="text-mystic">fil</span> de Vaelyndra
           </>
         }
-        subtitle="Poste tes creations, pensees et annonces. Tous les membres se croisent ici."
+        subtitle="Poste tes créations, pensées et annonces. Tous les membres se croisent ici."
       />
 
       <div className="mx-auto mt-8 max-w-2xl">
@@ -535,7 +535,7 @@ export function Community() {
                   onChange={(e) => setDraft(e.target.value)}
                   placeholder={
                     user
-                      ? "Partage quelque chose avec la communaute..."
+                      ? "Partage quelque chose avec la communauté..."
                       : "Connecte-toi pour poster..."
                   }
                   rows={3}

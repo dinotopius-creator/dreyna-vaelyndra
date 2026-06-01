@@ -882,9 +882,9 @@ function BroadcasterControls() {
         {isMobile && (
           <div className="mt-3 rounded-2xl border border-gold-300/20 bg-gold-500/10 px-4 py-3 text-xs leading-5 text-gold-100/90">
             Sur telephone, le mode <strong>Camera</strong> reste le plus stable.
-            Le partage d'ecran mobile est volontairement desactive pour cette
+            Le partage d'écran mobile est volontairement désactivé pour cette
             version Play Store afin d'eviter les coupures et les faux demarrages.
-            Le partage d'ecran ordinateur reste conserve.
+            Le partage d'écran ordinateur reste conservé.
           </div>
         )}
       </fieldset>
@@ -2408,11 +2408,11 @@ export function Live() {
                   <div className="panel-app-soft relative z-10 flex max-w-lg flex-col items-center gap-3 px-6 py-8">
                     <Radio className="h-10 w-10 animate-pulse text-rose-300" />
                     <p className="font-display text-2xl text-gold-200">
-                      {isConnecting ? "Live en cours" : "Le live est annonce"}
+                      {isConnecting ? "Live en cours" : "Le live est annoncé"}
                     </p>
                     <p className="max-w-md text-sm text-ivory/65">
                       {isConnecting
-                        ? "Stabilisation du flux video mobile."
+                        ? "Stabilisation du flux vidéo mobile."
                         : `${broadcasterProfile?.username ?? "Le broadcaster"} prepare son flux. Reste ici, la reprise est automatique.`}
                     </p>
                   </div>

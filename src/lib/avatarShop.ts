@@ -709,7 +709,7 @@ export const SHOP_CATALOG: ShopItem[] = [
     id: "scene-jade-temple",
     category: "scene",
     name: "Temple de jade",
-    description: "Brume verte et eclats de sanctuaire.",
+    description: "Brume verte et éclats de sanctuaire.",
     icon: "🍃",
     currency: "lueurs",
     price: 360,

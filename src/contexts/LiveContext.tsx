@@ -244,33 +244,33 @@ function describeCameraAccessError(
 ): string {
   if (isPermissionDeniedError(err)) {
     return fallback === "switch"
-      ? "Autorise a nouveau la camera pour changer d'objectif."
-      : "Autorise l'acces a la camera et au micro pour lancer ton live.";
+      ? "Autorise à nouveau la caméra pour changer d'objectif."
+      : "Autorise l'accès à la caméra et au micro pour lancer ton live.";
   }
   if (err instanceof Error) {
     if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") {
-      return "Aucune camera compatible n'a ete detectee sur cet appareil.";
+      return "Aucune caméra compatible n'a été détectée sur cet appareil.";
     }
     if (err.name === "NotReadableError" || err.name === "TrackStartError") {
-      return "La camera est deja utilisee par une autre application. Ferme-la puis reessaie.";
+      return "La caméra est déjà utilisée par une autre application. Ferme-la puis réessaie.";
     }
     if (
       err.name === "OverconstrainedError" ||
       err.name === "ConstraintNotSatisfiedError"
     ) {
       return fallback === "switch"
-        ? "Cette camera ne peut pas etre ouverte avec les reglages demandes. Vaelyndra repasse sur un mode compatible."
-        : "Cet appareil refuse les reglages video demandes. Reessaie depuis un navigateur a jour.";
+        ? "Cette caméra ne peut pas être ouverte avec les réglages demandés. Vaelyndra repasse sur un mode compatible."
+        : "Cet appareil refuse les réglages vidéo demandés. Réessaie depuis un navigateur à jour.";
     }
     return `${
       fallback === "switch"
-        ? "Impossible de changer de camera"
-        : "Impossible d'acceder a la camera"
+        ? "Impossible de changer de caméra"
+        : "Impossible d'accéder à la caméra"
     } : ${err.message}`;
   }
   return fallback === "switch"
-    ? "Impossible de changer de camera."
-    : "Impossible d'acceder a la camera.";
+    ? "Impossible de changer de caméra."
+    : "Impossible d'accéder à la caméra.";
 }
 
 function readConfig(): LiveConfig {
@@ -1346,7 +1346,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   const pauseLiveForRecovery = useCallback(
     (
       mode: Extract<LiveMode, "screen" | "camera">,
-      message = "Le flux a ete interrompu. Ton live reste annonce : relance le partage pour reprendre.",
+      message = "Le flux a été interrompu. Ton live reste annoncé : relance le partage pour reprendre.",
     ) => {
       const me = userRef.current;
       if (!me) return;
@@ -1555,7 +1555,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             } catch {
               pauseLiveForRecovery(
                 mode,
-                "Le relais live a decroche. Ton live reste annonce : relance le partage pour reprendre.",
+                "Le relais live a décroché. Ton live reste annoncé : relance le partage pour reprendre.",
               );
             }
           }
@@ -1722,7 +1722,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     ) {
       if (isNativeAndroidApp()) {
         setLastError(
-          "Le partage d'ecran mobile est desactive pour cette version Play Store. Utilise le mode camera pour lancer ton live Android.",
+          "Le partage d'écran mobile est désactivé pour cette version Play Store. Utilise le mode caméra pour lancer ton live Android.",
         );
         return;
       }
@@ -1740,7 +1740,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       if (err instanceof Error && err.name === "NotAllowedError") {
         setLastError(
-          "Partage d'ecran annule. Si tu es sur Android ou iPhone, utilise le mode camera quand le navigateur ne prend pas en charge cette fonction.",
+          "Partage d'écran annulé. Si tu es sur Android ou iPhone, utilise le mode caméra quand le navigateur ne prend pas en charge cette fonction.",
         );
       } else if (err instanceof Error) {
         setLastError(`Impossible d'accéder à l'écran : ${err.message}`);
@@ -1767,7 +1767,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         if (localStreamRef.current === stream) {
           pauseLiveForRecovery(
             "screen",
-            "Le partage d'ecran a ete interrompu. Ton live reste annonce : relance le partage pour reprendre.",
+            "Le partage d'écran a été interrompu. Ton live reste annoncé : relance le partage pour reprendre.",
           );
         }
       });
@@ -1941,7 +1941,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
           if (!recovered) {
             pauseLiveForRecovery(
               "camera",
-              "La camera a ete interrompue. Ton live reste annonce : relance la camera pour reprendre.",
+              "La caméra a été interrompue. Ton live reste annoncé : relance la caméra pour reprendre.",
             );
           }
         })();
@@ -2086,7 +2086,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             if (!recovered) {
               pauseLiveForRecovery(
                 "camera",
-                "La camera a ete interrompue. Ton live reste annonce : relance la camera pour reprendre.",
+                "La caméra a été interrompue. Ton live reste annoncé : relance la caméra pour reprendre.",
               );
             }
           })();
@@ -2210,7 +2210,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
           if (!recovered) {
             pauseLiveForRecovery(
               "camera",
-              "La camera a ete interrompue. Ton live reste annonce : relance la camera pour reprendre.",
+              "La caméra a été interrompue. Ton live reste annoncé : relance la caméra pour reprendre.",
             );
           }
         })();
@@ -2384,7 +2384,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             if (!recovered) {
               pauseLiveForRecovery(
                 "camera",
-                "La camera a ete interrompue. Ton live reste annonce : relance la camera pour reprendre.",
+                "La caméra a été interrompue. Ton live reste annoncé : relance la caméra pour reprendre.",
               );
             }
           })();
@@ -3066,7 +3066,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         mode: "camera",
       });
       setLastError(
-        "Le partage d'ecran mobile reste desactive pour cette version. Vaelyndra repasse sur la camera pour garder ton live stable.",
+        "Le partage d'écran mobile reste désactivé pour cette version. Vaelyndra repasse sur la caméra pour garder ton live stable.",
       );
       setCameraFacing(marker.facing);
       await startCameraShare(marker.facing);
