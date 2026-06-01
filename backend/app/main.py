@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import logging
 import os
-from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -19,6 +18,7 @@ _validation_log.setLevel(logging.INFO)
 from .auth.rate_limit import limiter
 from .auth.routes import router as auth_router
 from .db import get_session, init_db
+from .media_storage import MEDIA_ROOT
 from .handles import slugify_handle, suggest_unique_handle
 from .models import UserProfile
 from .routers import (
@@ -38,8 +38,8 @@ from .routers import (
 )
 
 app = FastAPI(title="Vaelyndra API", version="0.1.0")
-MEDIA_ROOT = Path(__file__).resolve().parent.parent / "uploads"
-MEDIA_ROOT.mkdir(parents=True, exist_ok=True)
+# MEDIA_ROOT vit sur le volume persistant `/data` en prod (cf. media_storage)
+# afin que les images uploadées survivent aux redéploiements.
 app.mount("/media", StaticFiles(directory=str(MEDIA_ROOT)), name="media")
 
 # Rate limiter (slowapi) — partagé entre tous les routeurs sensibles.
