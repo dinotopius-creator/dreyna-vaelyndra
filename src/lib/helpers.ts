@@ -150,6 +150,14 @@ export function parsePostImageUrl(raw: string): PostImageSource | null {
     if (UNSUPPORTED_POST_IMAGE_HOSTS.has(hostname)) {
       return { kind: "external", url: value, hostname };
     }
+    // Le site est servi en HTTPS : un <img src="http://…"> est bloqué par le
+    // navigateur (mixed content). On upgrade donc systématiquement en HTTPS.
+    // Si l'hôte ne supportait que HTTP, l'image aurait de toute façon été
+    // bloquée — l'upgrade ne peut donc qu'améliorer les choses.
+    if (url.protocol === "http:") {
+      url.protocol = "https:";
+      return { kind: "image", src: url.toString() };
+    }
     return { kind: "image", src: value };
   } catch {
     return { kind: "invalid", url: value };

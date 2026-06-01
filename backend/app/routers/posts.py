@@ -5,7 +5,6 @@ import os
 import uuid
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from typing import Dict, List
 from urllib.parse import urlparse
 
@@ -24,6 +23,7 @@ _QUEEN_IDS = {
 
 from ..db import get_session  # noqa: E402
 from ..familiars_xp import grant_social_xp  # noqa: E402
+from ..media_storage import COMMUNITY_DIR, build_media_url  # noqa: E402
 from ..models import (  # noqa: E402
     Comment,
     CommentLike,
@@ -71,8 +71,6 @@ _UNSUPPORTED_IMAGE_PAGE_HOSTS = {
     "x.com",
     "facebook.com",
 }
-_COMMUNITY_UPLOAD_DIR = Path(__file__).resolve().parents[2] / "uploads" / "community"
-_COMMUNITY_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 _COMMUNITY_IMAGE_CONTENT_TYPES = {
     "image/jpeg": ".jpg",
     "image/png": ".png",
@@ -170,7 +168,9 @@ def _sanitize_post_image_url(raw: str | None) -> str | None:
 
 
 def _build_uploaded_media_url(request: Request, filename: str) -> str:
-    return str(request.url_for("media", path=f"community/{filename}"))
+    # build_media_url force le schéma HTTPS en prod (le proxy Fly parle HTTP à
+    # l'app, donc request.url_for renverrait un http:// bloqué en mixed-content).
+    return build_media_url(request, f"community/{filename}")
 
 
 def _parse_iso(raw: str | None) -> datetime | None:
@@ -610,7 +610,7 @@ async def upload_post_image(
         )
 
     filename = f"{uuid.uuid4().hex}{extension}"
-    destination = _COMMUNITY_UPLOAD_DIR / filename
+    destination = COMMUNITY_DIR / filename
     destination.write_bytes(payload)
 
     return PostImageUploadOut(
