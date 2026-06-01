@@ -154,6 +154,25 @@ export async function giftFamiliar(
   );
 }
 
+/** Une offrande Sylvins reçue par le familier de l'utilisateur courant. */
+export interface ReceivedFamiliarGift {
+  id: number;
+  senderId: string;
+  senderName: string;
+  senderAvatar: string;
+  amount: number;
+  xpGranted: number;
+  createdAt: string;
+}
+
+export async function fetchReceivedFamiliarGifts(
+  userId: string,
+): Promise<ReceivedFamiliarGift[]> {
+  return familiarRequest<ReceivedFamiliarGift[]>(
+    `/users/${encodeURIComponent(userId)}/familiers/gifts/received`,
+  );
+}
+
 /** Libellés FR pour les paliers d'évolution. */
 export const EVOLUTION_TIERS: Record<string, { label: string; emoji: string }> =
   {

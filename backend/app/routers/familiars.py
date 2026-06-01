@@ -33,6 +33,7 @@ from ..familiars import (
 )
 from ..familiars_xp import grant_gift_received_xp, grant_gift_sent_xp
 from ..models import (
+    FamiliarGiftLedger,
     FamiliarSwitchLedger,
     UserFamiliar,
     UserProfile,
@@ -787,6 +788,20 @@ def gift_familiar(
         session, payload.senderId, payload.amount, reference_id
     )
 
+    # Trace sociale pour notifier le destinataire ("X a offert N Sylvins à
+    # ton familier") et lui proposer d'offrir en retour.
+    session.add(
+        FamiliarGiftLedger(
+            sender_id=payload.senderId,
+            sender_name=sender_profile.username or payload.senderId,
+            receiver_id=user_id,
+            receiver_familiar_id=active.id or 0,
+            amount=payload.amount,
+            xp_granted=xp_granted,
+            reference_id=reference_id,
+        )
+    )
+
     sender_profile.updated_at = _now_iso()
     receiver_profile.updated_at = _now_iso()
     session.commit()
@@ -801,3 +816,69 @@ def gift_familiar(
         familiarName=fam["name"] if fam else active.familiar_id,
         familiarIcon=fam.get("icon", "❓") if fam else "❓",
     )
+
+
+class ReceivedFamiliarGiftOut(BaseModel):
+    """Une offrande reçue par le familier d'un membre.
+
+    Alimente le centre de notifications du destinataire (qui a offert,
+    combien, quand) et le bouton "Offrir en retour" qui pointe vers le
+    profil de l'envoyeur (`senderId`).
+    """
+
+    id: int
+    senderId: str
+    senderName: str
+    senderAvatar: str
+    amount: int
+    xpGranted: int
+    createdAt: str
+
+
+@user_router.get(
+    "/{user_id}/familiers/gifts/received",
+    response_model=List[ReceivedFamiliarGiftOut],
+)
+def list_received_familiar_gifts(
+    user_id: str,
+    limit: int = 50,
+    session: Session = Depends(_session_dep),
+) -> List[ReceivedFamiliarGiftOut]:
+    """Liste les offrandes Sylvins reçues par le familier du membre.
+
+    Trié du plus récent au plus ancien. Le client poll cet endpoint pour
+    générer les notifications "X a offert N Sylvins à ton familier".
+    """
+    capped = max(1, min(limit, 100))
+    rows = session.exec(
+        select(FamiliarGiftLedger)
+        .where(FamiliarGiftLedger.receiver_id == user_id)
+        .order_by(FamiliarGiftLedger.created_at.desc())
+        .limit(capped)
+    ).all()
+
+    sender_ids = {row.sender_id for row in rows}
+    profiles: dict[str, UserProfile] = {}
+    if sender_ids:
+        for prof in session.exec(
+            select(UserProfile).where(UserProfile.id.in_(sender_ids))
+        ).all():
+            profiles[prof.id] = prof
+
+    out: List[ReceivedFamiliarGiftOut] = []
+    for row in rows:
+        prof = profiles.get(row.sender_id)
+        name = (prof.username if prof else "") or row.sender_name or row.sender_id
+        avatar = (prof.avatar_image_url if prof else "") or ""
+        out.append(
+            ReceivedFamiliarGiftOut(
+                id=row.id or 0,
+                senderId=row.sender_id,
+                senderName=name,
+                senderAvatar=avatar,
+                amount=row.amount,
+                xpGranted=row.xp_granted,
+                createdAt=row.created_at,
+            )
+        )
+    return out

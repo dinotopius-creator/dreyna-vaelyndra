@@ -719,3 +719,27 @@ class FamiliarXPLedger(SQLModel, table=True):
     reason: str = Field(default="", index=True)
     reference_id: Optional[str] = Field(default=None, index=True)
     created_at: str = Field(default_factory=_now_iso, index=True)
+
+
+class FamiliarGiftLedger(SQLModel, table=True):
+    """Journal des offrandes de Sylvins faites au familier d'un membre.
+
+    Sépare le suivi "social" (qui a offert à qui) des journaux purement
+    comptables (`WalletLedger`) et XP (`FamiliarXPLedger`). Sert à notifier
+    le destinataire ("X a offert N Sylvins à ton familier") et à lui
+    proposer d'offrir en retour. Une ligne par offrande.
+
+    `sender_name` est un instantané du pseudo au moment de l'offrande
+    (fallback d'affichage si le profil n'est plus résolvable) ;
+    `receiver_familiar_id` pointe le `UserFamiliar` qui a encaissé l'XP.
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    sender_id: str = Field(index=True)
+    sender_name: str = Field(default="", max_length=80)
+    receiver_id: str = Field(index=True)
+    receiver_familiar_id: int = Field(index=True)
+    amount: int
+    xp_granted: int = Field(default=0)
+    reference_id: Optional[str] = Field(default=None, index=True)
+    created_at: str = Field(default_factory=_now_iso, index=True)
