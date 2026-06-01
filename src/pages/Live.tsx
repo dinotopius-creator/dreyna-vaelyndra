@@ -185,6 +185,8 @@ function LiveVideoStage({
     let cancelled = false;
     const el = videoRef.current;
     if (!el) return;
+    el.playsInline = true;
+    el.autoplay = true;
     el.srcObject = stream;
     if (!stream) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -195,23 +197,54 @@ function LiveVideoStage({
     }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setNeedsUnmute(false);
-    el.play().catch(() => {
-      if (cancelled || isHost) return;
-      // Fallback viewer : on essaie de démarrer en muted (autoplay sans
-      // son, toujours autorisé). Comme ça au moins la vidéo tourne, et
-      // on affiche un bouton "Activer le son" pour récupérer l'audio
-      // après un tap utilisateur.
-      el.muted = true;
-      el.play()
-        .then(() => {
-          if (!cancelled) setNeedsUnmute(true);
-        })
-        .catch(() => {
-          if (!cancelled) setNeedsUnmute(true);
-        });
-    });
+    const attemptPlay = () => {
+      if (cancelled || !stream) return;
+      el.play().catch(() => {
+        if (cancelled || isHost) return;
+        // Fallback viewer : on essaie de démarrer en muted (autoplay sans
+        // son, toujours autorisé). Comme ça au moins la vidéo tourne, et
+        // on affiche un bouton "Activer le son" pour récupérer l'audio
+        // après un tap utilisateur.
+        el.muted = true;
+        el.play()
+          .then(() => {
+            if (!cancelled) setNeedsUnmute(true);
+          })
+          .catch(() => {
+            if (!cancelled) setNeedsUnmute(true);
+          });
+      });
+    };
+    const attemptPlayIfVisible = () => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      attemptPlay();
+    };
+    const handlePause = () => {
+      if (!el.ended && stream.active) window.setTimeout(attemptPlayIfVisible, 250);
+    };
+    const handleVisibility = () => {
+      if (typeof document !== "undefined" && !document.hidden) {
+        window.setTimeout(attemptPlay, 150);
+      }
+    };
+    el.addEventListener("loadedmetadata", attemptPlay);
+    el.addEventListener("canplay", attemptPlay);
+    el.addEventListener("stalled", attemptPlayIfVisible);
+    el.addEventListener("waiting", attemptPlayIfVisible);
+    el.addEventListener("pause", handlePause);
+    document.addEventListener("visibilitychange", handleVisibility);
+    attemptPlay();
     return () => {
       cancelled = true;
+      el.removeEventListener("loadedmetadata", attemptPlay);
+      el.removeEventListener("canplay", attemptPlay);
+      el.removeEventListener("stalled", attemptPlayIfVisible);
+      el.removeEventListener("waiting", attemptPlayIfVisible);
+      el.removeEventListener("pause", handlePause);
+      document.removeEventListener("visibilitychange", handleVisibility);
+      if (el.srcObject === stream) {
+        el.srcObject = null;
+      }
     };
   }, [stream, isHost]);
 
@@ -1248,11 +1281,11 @@ export function Live() {
       return joinAsViewer(broadcasterId);
     };
     let cleanup: (() => void) | null = startJoinAttempt();
-    const retryMs = registryEntry?.mode === "android-screen" ? 30_000 : 15_000;
+    const retryMs = registryEntry?.mode === "android-screen" ? 30_000 : 6_000;
     const retry = window.setInterval(() => {
       if (remoteStreamRef.current) return;
       const mode = registryEntry?.mode;
-      const maxConnectMs = mode === "android-screen" ? 180_000 : 45_000;
+      const maxConnectMs = mode === "android-screen" ? 180_000 : 18_000;
       const attemptAge = Date.now() - joinAttemptStartedAtRef.current;
       const shouldRetry =
         mode === "android-screen"
