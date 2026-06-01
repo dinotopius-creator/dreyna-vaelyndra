@@ -13,11 +13,13 @@ import { useStore } from "./StoreContext";
 import { useToast } from "./ToastContext";
 import type { CommunityPost, User } from "../types";
 import { apiGetProfile, type UserProfileDto } from "../lib/api";
+import { fetchReceivedFamiliarGifts } from "../lib/familiarsApi";
 
 export type NotificationKind =
   | "community_like"
   | "community_comment"
   | "community_mention"
+  | "familiar_gift"
   | "system";
 
 export interface AppNotification {
@@ -31,6 +33,8 @@ export interface AppNotification {
   actorId?: string;
   actorName?: string;
   actorAvatar?: string;
+  actionLabel?: string;
+  actionUrl?: string;
 }
 
 export interface NotificationPreferences {
@@ -39,6 +43,7 @@ export interface NotificationPreferences {
   communityLikes: boolean;
   communityComments: boolean;
   mentions: boolean;
+  familiarGifts: boolean;
 }
 
 interface NotificationInput {
@@ -50,6 +55,8 @@ interface NotificationInput {
   actorId?: string;
   actorName?: string;
   actorAvatar?: string;
+  actionLabel?: string;
+  actionUrl?: string;
 }
 
 interface NotificationsCtx {
@@ -75,6 +82,7 @@ const DEFAULT_PREFERENCES: NotificationPreferences = {
   communityLikes: true,
   communityComments: true,
   mentions: true,
+  familiarGifts: true,
 };
 
 const MAX_NOTIFICATIONS = 80;
@@ -281,6 +289,7 @@ function isKindEnabled(
   if (kind === "community_like") return preferences.communityLikes;
   if (kind === "community_comment") return preferences.communityComments;
   if (kind === "community_mention") return preferences.mentions;
+  if (kind === "familiar_gift") return preferences.familiarGifts;
   return true;
 }
 
@@ -299,6 +308,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   >(() => getPermission());
   const seenEventIdsRef = useRef<Set<string>>(new Set());
   const bootstrappedUserRef = useRef<string | null>(null);
+  const giftsBootstrappedRef = useRef<string | null>(null);
 
   useEffect(() => {
     setPermission(getPermission());
@@ -311,6 +321,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       setProfilesById({});
       seenEventIdsRef.current = new Set();
       bootstrappedUserRef.current = null;
+      giftsBootstrappedRef.current = null;
       return;
     }
 
@@ -329,6 +340,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       savedNotifications.map((item) => item.id),
     );
     bootstrappedUserRef.current = null;
+    giftsBootstrappedRef.current = null;
   }, [user?.id]);
 
   useEffect(() => {
@@ -528,6 +540,67 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       pushNotification(event);
     });
   }, [posts, profilesById, pushNotification, user, users]);
+
+  // Offrandes Sylvins reçues sur le familier : pas dérivables des posts,
+  // on poll un endpoint dédié. La dédup passe par `seenEventIdsRef`
+  // (réamorcé depuis les notifications persistées) : une offrande déjà
+  // notifiée lors d'une session précédente ne re-notifie pas, mais une
+  // offrande reçue hors-ligne est bien signalée à la prochaine connexion.
+  useEffect(() => {
+    if (!user) return;
+    const userId = user.id;
+    let cancelled = false;
+
+    const poll = async () => {
+      let gifts;
+      try {
+        gifts = await fetchReceivedFamiliarGifts(userId);
+      } catch {
+        return;
+      }
+      if (cancelled) return;
+
+      // Premier passage pour ce membre : on marque les offrandes déjà
+      // existantes comme vues sans spammer (évite un déluge de toasts au
+      // chargement, surtout pour les offrandes antérieures à cette
+      // fonctionnalité). Les offrandes suivantes notifieront en direct.
+      if (giftsBootstrappedRef.current !== userId) {
+        gifts.forEach((gift) =>
+          seenEventIdsRef.current.add(`familiar-gift:${gift.id}`),
+        );
+        giftsBootstrappedRef.current = userId;
+        return;
+      }
+
+      // L'API renvoie du plus récent au plus ancien : on traite à l'envers
+      // pour que la plus récente finisse en tête de la pile.
+      [...gifts].reverse().forEach((gift) => {
+        const id = `familiar-gift:${gift.id}`;
+        if (seenEventIdsRef.current.has(id)) return;
+        seenEventIdsRef.current.add(id);
+        const profileUrl = `/u/${gift.senderId}`;
+        pushNotification({
+          id,
+          kind: "familiar_gift",
+          title: "Offrande à ton familier 🎁",
+          body: `${gift.senderName} a offert ${gift.amount} Sylvins à ton familier (+${gift.xpGranted} XP).`,
+          url: profileUrl,
+          actionLabel: "Offrir en retour",
+          actionUrl: profileUrl,
+          actorId: gift.senderId,
+          actorName: gift.senderName,
+          actorAvatar: gift.senderAvatar || undefined,
+        });
+      });
+    };
+
+    poll();
+    const interval = window.setInterval(poll, 45000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [pushNotification, user]);
 
   const markRead = useCallback((id: string) => {
     setNotifications((current) =>

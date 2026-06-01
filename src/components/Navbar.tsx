@@ -7,6 +7,7 @@ import {
   Bell,
   Crown,
   CheckCheck,
+  Gift,
   Menu,
   MessageCircle,
   ShoppingBag,
@@ -266,6 +267,20 @@ export function Navbar() {
                                       })}
                                     </p>
                                   </Link>
+                                  {notification.actionUrl && (
+                                    <Link
+                                      to={notification.actionUrl}
+                                      onClick={() => {
+                                        markRead(notification.id);
+                                        setNotificationsOpen(false);
+                                        setNotificationSettingsOpen(false);
+                                      }}
+                                      className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-gold-500/15 px-3 py-1 text-[11px] font-semibold text-gold-200 ring-1 ring-gold-400/30 transition hover:bg-gold-500/25"
+                                    >
+                                      <Gift className="h-3.5 w-3.5" />
+                                      {notification.actionLabel ?? "Voir"}
+                                    </Link>
+                                  )}
                                 </div>
                                 <button
                                   type="button"
@@ -349,6 +364,19 @@ export function Navbar() {
                                   onChange={(event) =>
                                     updatePreferences({
                                       mentions: event.target.checked,
+                                    })
+                                  }
+                                  className="h-4 w-4 accent-gold-400"
+                                />
+                              </label>
+                              <label className="flex min-h-10 items-center justify-between gap-3 text-xs text-ivory/75">
+                                Offrandes familier
+                                <input
+                                  type="checkbox"
+                                  checked={preferences.familiarGifts}
+                                  onChange={(event) =>
+                                    updatePreferences({
+                                      familiarGifts: event.target.checked,
                                     })
                                   }
                                   className="h-4 w-4 accent-gold-400"
