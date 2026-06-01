@@ -519,8 +519,8 @@ export function Community() {
         <MemberSearch />
       </div>
 
-      <div className="mt-10 grid gap-8 lg:grid-cols-[minmax(0,1fr),320px]">
-        <div>
+      <div className="mt-10 grid gap-x-8 gap-y-6 lg:grid-cols-[minmax(0,1fr),320px] lg:items-start">
+        <div className="order-3 lg:order-none lg:col-start-1 lg:row-start-1">
           <form onSubmit={publish} className="card-royal p-5">
             <div className="flex flex-col gap-3 sm:flex-row">
               <AvatarImage
@@ -941,8 +941,8 @@ export function Community() {
           </ul>
         </div>
 
-        <aside className="space-y-6">
-          <section className="card-royal overflow-hidden p-5">
+        <aside className="contents lg:block lg:space-y-6 lg:col-start-2 lg:row-start-1">
+          <section className="order-1 card-royal overflow-hidden p-5">
             <div className="relative rounded-[26px] border border-gold-400/20 bg-night-950/85 p-5">
               <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(214,170,70,0.22),_transparent_44%),radial-gradient(circle_at_bottom_left,_rgba(74,52,122,0.28),_transparent_42%)]" />
               <div className="relative">
@@ -975,7 +975,7 @@ export function Community() {
             </div>
           </section>
 
-          <section className="card-royal p-5">
+          <section className="order-2 card-royal p-5">
             <div className="flex items-center gap-2">
               <Trophy className="h-4 w-4 text-gold-300" />
               <h3 className="font-display text-lg text-gold-200">
@@ -1068,7 +1068,7 @@ export function Community() {
             </ul>
           </section>
 
-          <div className="card-royal p-5">
+          <div className="order-4 card-royal p-5">
             <h3 className="font-display text-lg text-gold-200">
               Regles du reseau
             </h3>
