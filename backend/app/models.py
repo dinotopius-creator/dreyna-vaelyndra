@@ -430,6 +430,8 @@ class CatalogProduct(SQLModel, table=True):
     category: str = Field(default="Merch", index=True)
     # Null sauf pour les packs Sylvins (montant crédité à l'achat).
     sylvins: Optional[int] = None
+    # Null sauf pour les packs Lueurs vendus en euros.
+    lueurs: Optional[int] = None
     rating: float = Field(default=5.0)
     stock: int = Field(default=0)
     featured: bool = Field(default=False, index=True)
@@ -505,8 +507,9 @@ class StripePayment(SQLModel, table=True):
     (Stripe peut renvoyer le même événement à cause d'un retry réseau).
 
     - `user_id` : qui a payé.
-    - `product_id` : id du `CatalogProduct` (catégorie "Sylvins") acheté.
+    - `product_id` : id du `CatalogProduct` (catégorie "Sylvins"/"Lueurs") acheté.
     - `sylvins_amount` : nombre de Sylvins à créditer sur le pot PAID.
+    - `lueurs_amount` : nombre de Lueurs à créditer.
     - `amount_cents` / `currency` : montant brut de la transaction (pour audit).
     - `status` : `"pending"` à la création, `"paid"` après webhook, `"failed"`
       si Stripe rapporte un échec.
@@ -516,6 +519,7 @@ class StripePayment(SQLModel, table=True):
     user_id: str = Field(index=True)
     product_id: str = Field(index=True)
     sylvins_amount: int
+    lueurs_amount: int = Field(default=0)
     amount_cents: int
     currency: str = "eur"
     status: str = Field(default="pending", index=True)

@@ -98,6 +98,12 @@ def _apply_migrations() -> None:
             ("reply_to_author_id", "TEXT"),
             ("reply_to_author_name", "TEXT"),
         ],
+        "catalogproduct": [
+            ("lueurs", "INTEGER"),
+        ],
+        "stripepayment": [
+            ("lueurs_amount", "INTEGER NOT NULL DEFAULT 0"),
+        ],
     }
     with engine.begin() as conn:
         for table, columns in required.items():

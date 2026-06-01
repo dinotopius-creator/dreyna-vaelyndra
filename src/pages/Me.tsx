@@ -56,12 +56,13 @@ export function Me() {
   /**
    * Au retour d'un paiement Stripe, le flag `?payment=success` reste dans
    * l'URL. Le webhook Stripe peut prendre quelques secondes à tomber et
-   * crédite seulement ensuite le `sylvins_paid`. On relance `refreshBackendMe`
+   * crédite seulement ensuite le wallet. On relance `refreshBackendMe`
    * quelques fois (toutes les 2 s pendant ~20 s) pour rafraîchir le wallet
    * affiché sans que l'utilisateur ait à faire F5 manuellement. Une fois
-   * que le pot PAID a bougé (ou au bout de 20 s), on retire le flag de l'URL.
+   * que les Sylvins payés ou les Lueurs ont bougé, on retire le flag de l'URL.
    */
   const startPaidRef = useRef<number | null>(null);
+  const startLueursRef = useRef<number | null>(null);
   const backendMeLoaded = backendMe !== null;
   useEffect(() => {
     if (paymentStatus !== "success") return;
@@ -75,20 +76,30 @@ export function Me() {
     if (startPaidRef.current === null) {
       startPaidRef.current = backendMe?.sylvins_paid ?? 0;
     }
+    if (startLueursRef.current === null) {
+      startLueursRef.current = backendMe?.lueurs ?? 0;
+    }
     let tries = 0;
     const interval = setInterval(async () => {
       tries += 1;
       const fresh = await refreshBackendMe().catch(() => null);
       const nowPaid = fresh?.sylvins_paid ?? backendMe?.sylvins_paid ?? 0;
+      const nowLueurs = fresh?.lueurs ?? backendMe?.lueurs ?? 0;
       const startPaid = startPaidRef.current ?? 0;
-      if (nowPaid > startPaid || tries >= 10) {
+      const startLueurs = startLueursRef.current ?? 0;
+      if (nowPaid > startPaid || nowLueurs > startLueurs || tries >= 10) {
         clearInterval(interval);
         const next = new URLSearchParams(searchParams);
         next.delete("payment");
         next.delete("session_id");
         setSearchParams(next, { replace: true });
-        if (nowPaid > startPaid) {
-          notify("Paiement confirmé, Sylvins crédités ✨", "success");
+        if (nowPaid > startPaid || nowLueurs > startLueurs) {
+          notify(
+            nowLueurs > startLueurs
+              ? "Paiement confirmé, Lueurs créditées ✨"
+              : "Paiement confirmé, Sylvins crédités ✨",
+            "success",
+          );
         }
       }
     }, 2000);

@@ -5,7 +5,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
 import { SectionHeading } from "../components/SectionHeading";
 import { formatPrice, generateId } from "../lib/helpers";
-import { apiCreateSylvinsCheckout } from "../lib/stripeApi";
+import { apiCreateCurrencyCheckout } from "../lib/stripeApi";
 import { useState } from "react";
 
 export function Cart() {
@@ -21,23 +21,29 @@ export function Cart() {
   });
 
   /**
-   * Packs de Sylvins dans le panier (paiement réel via Stripe).
+   * Packs de monnaie dans le panier (paiement réel via Stripe).
    * Les autres catégories (Merch, Digital, VIP, Exclusif) restent sur le
    * chemin historique "sceller la commande en simulé" le temps qu'on
    * bâtisse un flux multi-line-item côté Stripe.
    */
-  const sylvinsInCart = cart.filter((c) => {
+  const currencyPacksInCart = cart.filter((c) => {
     const p = products.find((pp) => pp.id === c.productId);
-    return p?.category === "Sylvins" && (p?.sylvins ?? 0) > 0;
+    return (
+      (p?.category === "Sylvins" && (p?.sylvins ?? 0) > 0) ||
+      (p?.category === "Lueurs" && (p?.lueurs ?? 0) > 0)
+    );
   });
   const otherInCart = cart.filter((c) => {
     const p = products.find((pp) => pp.id === c.productId);
-    return !(p?.category === "Sylvins");
+    return !(
+      (p?.category === "Sylvins" && (p?.sylvins ?? 0) > 0) ||
+      (p?.category === "Lueurs" && (p?.lueurs ?? 0) > 0)
+    );
   });
 
-  async function checkoutStripeSylvinsSingle(productId: string) {
+  async function checkoutStripeCurrencySingle(productId: string) {
     try {
-      const out = await apiCreateSylvinsCheckout(productId);
+      const out = await apiCreateCurrencyCheckout(productId);
       // Redirection complete vers Stripe Checkout (Stripe-hosted).
       window.location.href = out.url;
     } catch (err: unknown) {
@@ -54,13 +60,13 @@ export function Cart() {
       return;
     }
 
-    // Si le panier contient au moins un pack Sylvins, on passe par Stripe.
-    // MVP : un seul pack Sylvins à la fois (le plus coûteux si plusieurs).
+    // Si le panier contient au moins un pack de monnaie, on passe par Stripe.
+    // MVP : un seul pack à la fois (le plus coûteux si plusieurs).
     // Les autres items restent en panier après le retour du paiement.
-    if (sylvinsInCart.length > 0) {
+    if (currencyPacksInCart.length > 0) {
       // On redirige sur le pack le plus cher du panier (l'utilisateur
       // peut virer les autres s'il ne veut pas celui-là).
-      const firstSylvin = [...sylvinsInCart].sort((a, b) => {
+      const firstPack = [...currencyPacksInCart].sort((a, b) => {
         const pa = products.find((pp) => pp.id === a.productId);
         const pb = products.find((pp) => pp.id === b.productId);
         return (pb?.price ?? 0) - (pa?.price ?? 0);
@@ -71,25 +77,25 @@ export function Cart() {
       //     sur Stripe → restent en panier après paiement).
       //  2) Il y a plusieurs packs Sylvins différents (on n'en
       //     encaisse qu'un, le plus cher).
-      //  3) Un seul pack Sylvins mais avec une quantité > 1 : le
+      //  3) Un seul pack de monnaie mais avec une quantité > 1 : le
       //     backend force `quantity: 1` dans la session Stripe (cf.
       //     `backend/app/routers/stripe_router.py` "quantity": 1) → on
       //     ne facture qu'une unité. L'utilisateur doit le savoir.
-      const firstSylvinQty = firstSylvin?.quantity ?? 1;
+      const firstPackQty = firstPack?.quantity ?? 1;
       const needsWarning =
         otherInCart.length > 0 ||
-        sylvinsInCart.length > 1 ||
-        firstSylvinQty > 1;
+        currencyPacksInCart.length > 1 ||
+        firstPackQty > 1;
       if (needsWarning) {
         notify(
-          "Stripe ne gère pour l'instant qu'un pack Sylvins (qté 1) à la fois. " +
+          "Stripe ne gère pour l'instant qu'un pack de monnaie (qté 1) à la fois. " +
             "Le reste du panier (autres packs, quantités > 1, autres objets) " +
             "restera dans ton panier après le paiement.",
           "info",
         );
       }
       setProcessing(true);
-      await checkoutStripeSylvinsSingle(firstSylvin.productId);
+      await checkoutStripeCurrencySingle(firstPack.productId);
       return;
     }
 
@@ -253,13 +259,13 @@ export function Cart() {
             >
               {processing
                 ? "Sortilège en cours..."
-                : sylvinsInCart.length > 0
+                : currencyPacksInCart.length > 0
                   ? "Payer par carte (Stripe)"
                   : "Payer (simulé)"}
             </button>
             <p className="mt-3 text-center text-xs text-ivory/40">
-              {sylvinsInCart.length > 0
-                ? "Paiement sécurisé via Stripe. Les Sylvins sont crédités sur ton compte après confirmation."
+              {currencyPacksInCart.length > 0
+                ? "Paiement sécurisé via Stripe. Les Lueurs ou Sylvins sont crédités sur ton compte après confirmation."
                 : "Paiement simulé. Prêt à brancher Stripe en production."}
             </p>
           </aside>

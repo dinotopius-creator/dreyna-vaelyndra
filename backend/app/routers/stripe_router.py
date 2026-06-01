@@ -332,21 +332,27 @@ def create_sylvins_checkout(
     user: UserProfile = Depends(require_auth),
     session: Session = Depends(_session_dep),
 ) -> CheckoutSylvinsOut:
-    """Crée une session Stripe Checkout pour un pack de Sylvins."""
+    """Crée une session Stripe Checkout pour un pack de Sylvins ou Lueurs."""
     stripe.api_key = _stripe_secret()
 
     product = session.get(CatalogProduct, payload.product_id)
     if product is None:
         raise HTTPException(status_code=404, detail="Produit introuvable.")
-    if product.category != "Sylvins":
+    is_sylvins_pack = product.category == "Sylvins"
+    is_lueurs_pack = product.category == "Lueurs"
+    if not is_sylvins_pack and not is_lueurs_pack:
         raise HTTPException(
             status_code=400,
-            detail="Seuls les packs de Sylvins sont encaissables via Stripe.",
+            detail="Seuls les packs de Sylvins ou de Lueurs sont encaissables via Stripe.",
         )
-    if not product.sylvins or product.sylvins <= 0:
+    credited_amount = (
+        int(product.sylvins or 0) if is_sylvins_pack else int(product.lueurs or 0)
+    )
+    credited_label = "Sylvins" if is_sylvins_pack else "Lueurs"
+    if credited_amount <= 0:
         raise HTTPException(
             status_code=400,
-            detail="Ce produit ne déclare aucun montant de Sylvins à créditer.",
+            detail=f"Ce produit ne déclare aucun montant de {credited_label} à créditer.",
         )
     if product.price <= 0:
         raise HTTPException(
@@ -383,7 +389,7 @@ def create_sylvins_checkout(
                         "product_data": {
                             "name": product.name,
                             "description": (
-                                f"{product.sylvins} Sylvins crédités sur ton "
+                                f"{credited_amount} {credited_label} crédités sur ton "
                                 f"compte Vaelyndra."
                             ),
                             "images": product_images,
@@ -400,7 +406,8 @@ def create_sylvins_checkout(
             metadata={
                 "user_id": user.id,
                 "product_id": product.id,
-                "sylvins_amount": str(product.sylvins),
+                "sylvins_amount": str(product.sylvins or 0),
+                "lueurs_amount": str(product.lueurs or 0),
             },
             customer_email=None,  # laissé vide : Stripe demande au moment du paiement
         )
@@ -416,7 +423,8 @@ def create_sylvins_checkout(
             id=checkout.id,
             user_id=user.id,
             product_id=product.id,
-            sylvins_amount=product.sylvins,
+            sylvins_amount=int(product.sylvins or 0),
+            lueurs_amount=int(product.lueurs or 0),
             amount_cents=amount_cents,
             currency="eur",
             status="pending",
@@ -630,10 +638,21 @@ def _apply_paid_checkout(
     # Incrément atomique côté SQL pour éviter la lost-update race :
     # si deux webhooks pour le même utilisateur (packs différents)
     # arrivent en parallèle, un read-modify-write Python ferait perdre
-    # un des crédits. En passant par l'expression de colonne SQLAlchemy
-    # (`UserProfile.sylvins_paid + N`), le SQL généré est
-    # `SET sylvins_paid = sylvins_paid + N`, qui est atomique côté DB.
-    profile.sylvins_paid = UserProfile.sylvins_paid + record.sylvins_amount
+    # un des crédits.
+    if record.sylvins_amount > 0:
+        profile.sylvins_paid = UserProfile.sylvins_paid + record.sylvins_amount
+        ledger_pot = "sylvins_paid"
+        ledger_delta = record.sylvins_amount
+    elif record.lueurs_amount > 0:
+        profile.lueurs = UserProfile.lueurs + record.lueurs_amount
+        ledger_pot = "lueurs"
+        ledger_delta = record.lueurs_amount
+    else:
+        log.error("stripe_webhook_empty_currency session_id=%s", checkout_id)
+        raise HTTPException(
+            status_code=500,
+            detail="Paiement sans monnaie à créditer — retry attendu.",
+        )
     profile.updated_at = _now_iso()
     session.add(profile)
     # Trace WalletLedger pour audit. On enregistre le delta brut + le
@@ -645,9 +664,11 @@ def _apply_paid_checkout(
     session.add(
         WalletLedger(
             user_id=profile.id,
-            pot="sylvins_paid",
-            delta=record.sylvins_amount,
-            balance_after=profile.sylvins_paid,
+            pot=ledger_pot,
+            delta=ledger_delta,
+            balance_after=(
+                profile.sylvins_paid if ledger_pot == "sylvins_paid" else profile.lueurs
+            ),
             reason="stripe:checkout",
             reference_id=checkout_id,
         )
@@ -655,8 +676,9 @@ def _apply_paid_checkout(
     session.commit()
 
     log.info(
-        "stripe_credited user=%s session=%s sylvins=%s",
+        "stripe_credited user=%s session=%s pot=%s amount=%s",
         profile.id,
         checkout_id,
-        record.sylvins_amount,
+        ledger_pot,
+        ledger_delta,
     )
