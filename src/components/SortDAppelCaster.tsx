@@ -16,7 +16,7 @@
  * bouton par niveau). À la fin du cooldown le bouton réapparaît avec
  * le niveau suivant.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Flame, Sparkles, Wand2, Crown } from "lucide-react";
 
 /** Niveau de sort disponible. */
@@ -59,6 +59,62 @@ export const SORT_LEVELS: {
   },
 ];
 
+const SORT_STATE_PREFIX = "vaelyndra:live:sort-dappel:";
+
+interface PersistedSortState {
+  nextIndex: number;
+  cooldownUntil: number;
+}
+
+function normalizeSortState(value: unknown): PersistedSortState {
+  if (typeof value !== "object" || value === null) {
+    return { nextIndex: 0, cooldownUntil: 0 };
+  }
+  const raw = value as Partial<PersistedSortState>;
+  const nextIndex =
+    typeof raw.nextIndex === "number" &&
+    Number.isInteger(raw.nextIndex) &&
+    raw.nextIndex >= 0 &&
+    raw.nextIndex < SORT_LEVELS.length
+      ? raw.nextIndex
+      : 0;
+  const cooldownUntil =
+    typeof raw.cooldownUntil === "number" &&
+    Number.isFinite(raw.cooldownUntil) &&
+    raw.cooldownUntil > 0
+      ? raw.cooldownUntil
+      : 0;
+  return { nextIndex, cooldownUntil };
+}
+
+function readPersistedSortState(storageKey?: string): PersistedSortState {
+  if (!storageKey || typeof window === "undefined") {
+    return { nextIndex: 0, cooldownUntil: 0 };
+  }
+  try {
+    const raw = window.localStorage.getItem(`${SORT_STATE_PREFIX}${storageKey}`);
+    if (!raw) return { nextIndex: 0, cooldownUntil: 0 };
+    return normalizeSortState(JSON.parse(raw));
+  } catch {
+    return { nextIndex: 0, cooldownUntil: 0 };
+  }
+}
+
+function writePersistedSortState(
+  storageKey: string | undefined,
+  state: PersistedSortState,
+) {
+  if (!storageKey || typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(
+      `${SORT_STATE_PREFIX}${storageKey}`,
+      JSON.stringify(state),
+    );
+  } catch {
+    // Le sort reste utilisable meme si le stockage navigateur est indisponible.
+  }
+}
+
 interface Props {
   /**
    * Callback déclenché quand un sort part. Le parent décide quoi faire
@@ -69,20 +125,49 @@ interface Props {
   onCast: (level: SortLevel) => boolean | void;
   /** Désactive toute interaction (ex. pas connecté). */
   disabled?: boolean;
+  /** Cle stable par user + live pour conserver niveau et cooldown au refresh. */
+  persistenceKey?: string;
+  className?: string;
 }
 
-export function SortDAppelCaster({ onCast, disabled }: Props) {
+export function SortDAppelCaster({
+  onCast,
+  disabled,
+  persistenceKey,
+  className = "",
+}: Props) {
   // Index (0..SORT_LEVELS.length-1) du prochain sort à lancer. On boucle
   // au bout. La progression n'a lieu **qu'après** que le parent a accepté
   // le sort (retour ≠ false) ET que le cooldown est armé — pour que, si
   // l'utilisateur n'est pas connecté, on ne sauterait pas silencieusement
   // au niveau suivant sans rien avoir lancé.
-  const [nextIndex, setNextIndex] = useState(0);
+  const [nextIndex, setNextIndex] = useState(
+    () => readPersistedSortState(persistenceKey).nextIndex,
+  );
   /** Timestamp (ms) jusqu'auquel le bouton reste grisé (cooldown global). */
-  const [cooldownUntil, setCooldownUntil] = useState(0);
+  const [cooldownUntil, setCooldownUntil] = useState(
+    () => readPersistedSortState(persistenceKey).cooldownUntil,
+  );
   const [now, setNow] = useState(() => Date.now());
+  const skipNextPersistRef = useRef(false);
 
   const nextTier = SORT_LEVELS[nextIndex];
+
+  useEffect(() => {
+    const persisted = readPersistedSortState(persistenceKey);
+    skipNextPersistRef.current = true;
+    setNextIndex(persisted.nextIndex);
+    setCooldownUntil(persisted.cooldownUntil);
+    setNow(Date.now());
+  }, [persistenceKey]);
+
+  useEffect(() => {
+    if (skipNextPersistRef.current) {
+      skipNextPersistRef.current = false;
+      return;
+    }
+    writePersistedSortState(persistenceKey, { nextIndex, cooldownUntil });
+  }, [cooldownUntil, nextIndex, persistenceKey]);
 
   // Tick 250 ms pour rafraîchir l'affichage du minuteur. Stoppé dès que
   // plus aucun cooldown n'est actif pour ne pas re-render inutilement.
@@ -138,7 +223,7 @@ export function SortDAppelCaster({ onCast, disabled }: Props) {
           ? `Prochain sort : ${nextTier.label} (cooldown ${Math.round(nextTier.cooldownMs / 1000)} s)`
           : undefined
       }
-      className={`inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-night-900/40 px-3 py-1.5 text-xs ring-1 backdrop-blur transition ${visibleTier.tone} disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-night-900/40`}
+      className={`inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-night-900/40 px-3 py-1.5 text-xs ring-1 backdrop-blur transition ${visibleTier.tone} disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-night-900/40 ${className}`}
     >
       {visibleTier.icon}
       <span>{visibleTier.label}</span>

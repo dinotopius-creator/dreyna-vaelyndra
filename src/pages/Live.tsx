@@ -1311,6 +1311,16 @@ export function Live() {
     (amBroadcaster ? config.mode : "screen");
   const isActiveLive =
     !!registryEntry || (amBroadcaster && config.status === "live");
+  const liveSpellPersistenceKey =
+    user && broadcasterId
+      ? [
+          user.id,
+          broadcasterId,
+          registryEntry?.startedAt ??
+            (amBroadcaster ? config.startedAt : null) ??
+            "pending",
+        ].join(":")
+      : undefined;
   const isNativeAndroidHost =
     amBroadcaster && activeMode === "android-screen" && config.status === "live";
   const isHost = amBroadcaster && (!!localStream || isNativeAndroidHost);
@@ -2924,20 +2934,25 @@ export function Live() {
                   : "flex flex-wrap items-center justify-between gap-3 p-4"
               }
             >
-              <div className="pointer-events-auto flex flex-wrap items-center gap-2">
+              <div className="pointer-events-auto grid w-full grid-cols-3 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
                 <button
                   onClick={shootHeart}
-                  className="btn-ghost"
+                  className="btn-ghost min-h-10 w-full justify-center sm:min-h-0 sm:w-auto"
                   aria-label="Envoyer un cœur"
                 >
                   <Heart className="h-3.5 w-3.5" /> Cœur
                 </button>
-                <SortDAppelCaster onCast={castSortDAppel} disabled={!user} />
+                <SortDAppelCaster
+                  onCast={castSortDAppel}
+                  disabled={!user}
+                  persistenceKey={liveSpellPersistenceKey}
+                  className="min-h-10 w-full justify-center sm:min-h-0 sm:w-auto"
+                />
                 <button
                   type="button"
                   onClick={toggleOfferingPanel}
                   disabled={!broadcasterProfile || !isActiveLive}
-                  className="btn-ghost"
+                  className="btn-ghost min-h-10 w-full justify-center sm:min-h-0 sm:w-auto"
                   aria-label={
                     isOfferingOpen ? "Fermer les offrandes" : "Ouvrir les offrandes"
                   }
