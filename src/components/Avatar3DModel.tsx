@@ -10,7 +10,13 @@ export type OutfitTheme =
   | "shadow"
   | "celestial"
   | "verdant"
-  | "ember";
+  | "ember"
+  | "frost"
+  | "rose"
+  | "oracle"
+  | "street"
+  | "ceremony"
+  | "neon";
 export type AccessoryTheme =
   | "crown"
   | "halo"
@@ -24,6 +30,12 @@ export type AccessoryTheme =
   | "moon-crown"
   | "butterfly"
   | "visor"
+  | "rose-circlet"
+  | "crystal-mask"
+  | "sun-halo"
+  | "ribbon"
+  | "star-tiara"
+  | "onyx-horns"
   | null;
 
 interface Props {
@@ -193,6 +205,18 @@ function outfitPalette(theme: OutfitTheme) {
       return { top: "#166534", bottom: "#14532d", accent: "#bbf7d0" };
     case "ember":
       return { top: "#c2410c", bottom: "#7c2d12", accent: "#fdba74" };
+    case "frost":
+      return { top: "#bae6fd", bottom: "#0369a1", accent: "#f8fafc" };
+    case "rose":
+      return { top: "#fb7185", bottom: "#9f1239", accent: "#fce7f3" };
+    case "oracle":
+      return { top: "#581c87", bottom: "#312e81", accent: "#f0abfc" };
+    case "street":
+      return { top: "#1f2937", bottom: "#111827", accent: "#facc15" };
+    case "ceremony":
+      return { top: "#fef3c7", bottom: "#92400e", accent: "#f4cf74" };
+    case "neon":
+      return { top: "#0891b2", bottom: "#0f172a", accent: "#f472b6" };
     default:
       return { top: "#9d174d", bottom: "#5b1648", accent: "#fbeecb" };
   }
@@ -612,6 +636,44 @@ export function Avatar3DModel({
             />
           </>
         )}
+        {outfit === "frost" && (
+          <>
+            <Cuboid width={92} height={92} depth={12} color="#e0f2fe" transform="translate3d(0,26px,-14px)" />
+            <Cuboid width={62} height={10} depth={8} color="#7dd3fc" transform="translate3d(0,0px,18px)" />
+          </>
+        )}
+        {outfit === "rose" && (
+          <>
+            <Cuboid width={90} height={98} depth={14} color="#fda4af" transform="translate3d(0,30px,-16px)" />
+            <Cuboid width={18} height={18} depth={8} color="#ffe4e6" transform="translate3d(-22px,4px,18px)" />
+            <Cuboid width={18} height={18} depth={8} color="#ffe4e6" transform="translate3d(22px,4px,18px)" />
+          </>
+        )}
+        {outfit === "oracle" && (
+          <>
+            <Cuboid width={96} height={114} depth={14} color="#7e22ce" transform="translate3d(0,34px,-18px)" />
+            <Cuboid width={14} height={42} depth={8} color="#fde68a" transform="translate3d(0,30px,18px)" />
+          </>
+        )}
+        {outfit === "street" && (
+          <>
+            <Cuboid width={92} height={58} depth={12} color="#374151" transform="translate3d(0,14px,-14px)" />
+            <Cuboid width={58} height={12} depth={8} color="#facc15" transform="translate3d(0,46px,18px)" />
+          </>
+        )}
+        {outfit === "ceremony" && (
+          <>
+            <Cuboid width={98} height={112} depth={14} color="#fef3c7" transform="translate3d(0,36px,-18px)" />
+            <Cuboid width={72} height={12} depth={8} color="#d4a94a" transform="translate3d(0,0px,18px)" />
+          </>
+        )}
+        {outfit === "neon" && (
+          <>
+            <Cuboid width={76} height={86} depth={10} color="#164e63" transform="translate3d(0,24px,-14px)" />
+            <Cuboid width={10} height={76} depth={8} color="#22d3ee" transform="translate3d(-18px,24px,18px)" />
+            <Cuboid width={10} height={76} depth={8} color="#f472b6" transform="translate3d(18px,24px,18px)" />
+          </>
+        )}
         {accessory === "crown" && (
           <>
             <Cuboid width={54} height={8} depth={44} color="#f4cf74" transform="translate3d(0,-112px,0)" />
@@ -777,6 +839,58 @@ export function Avatar3DModel({
             color="#67e8f9"
             transform="translate3d(0,-56px,24px)"
           />
+        )}
+        {accessory === "rose-circlet" && (
+          <>
+            <Cuboid width={58} height={8} depth={38} color="#fda4af" transform="translate3d(0,-112px,2px)" />
+            <Cuboid width={12} height={12} depth={8} color="#fecdd3" transform="translate3d(-18px,-118px,18px)" />
+            <Cuboid width={12} height={12} depth={8} color="#fecdd3" transform="translate3d(18px,-118px,18px)" />
+          </>
+        )}
+        {accessory === "crystal-mask" && (
+          <>
+            <Cuboid width={64} height={18} depth={8} color="#67e8f9" transform="translate3d(0,-56px,24px)" />
+            <Cuboid width={14} height={22} depth={8} color="#bae6fd" transform="translate3d(-20px,-54px,28px) rotateZ(-8deg)" />
+            <Cuboid width={14} height={22} depth={8} color="#bae6fd" transform="translate3d(20px,-54px,28px) rotateZ(8deg)" />
+          </>
+        )}
+        {accessory === "sun-halo" && (
+          <div
+            style={{
+              position: "absolute",
+              width: 92,
+              height: 22,
+              left: -46,
+              top: -142,
+              borderRadius: "999px",
+              border: "5px solid rgba(250,204,21,0.95)",
+              boxShadow: "0 0 24px rgba(250,204,21,0.75)",
+              transform: "rotateX(72deg) translateZ(10px)",
+            }}
+          />
+        )}
+        {accessory === "ribbon" && (
+          <>
+            <Cuboid width={30} height={18} depth={8} color="#f9a8d4" transform="translate3d(-20px,-104px,16px) rotateZ(-18deg)" />
+            <Cuboid width={30} height={18} depth={8} color="#f9a8d4" transform="translate3d(20px,-104px,16px) rotateZ(18deg)" />
+            <Cuboid width={12} height={16} depth={8} color="#f472b6" transform="translate3d(0,-104px,18px)" />
+          </>
+        )}
+        {accessory === "star-tiara" && (
+          <>
+            <Cuboid width={54} height={8} depth={34} color="#f4cf74" transform="translate3d(0,-114px,0)" />
+            <Cuboid width={10} height={20} depth={8} color="#fde68a" transform="translate3d(-18px,-126px,0)" />
+            <Cuboid width={12} height={26} depth={8} color="#fef3c7" transform="translate3d(0,-130px,0)" />
+            <Cuboid width={10} height={20} depth={8} color="#fde68a" transform="translate3d(18px,-126px,0)" />
+          </>
+        )}
+        {accessory === "onyx-horns" && (
+          <>
+            <Cuboid width={12} height={32} depth={10} color="#111827" transform="translate3d(-24px,-130px,-4px) rotateZ(-28deg)" />
+            <Cuboid width={12} height={32} depth={10} color="#111827" transform="translate3d(24px,-130px,-4px) rotateZ(28deg)" />
+            <Cuboid width={8} height={10} depth={8} color="#c084fc" transform="translate3d(-26px,-148px,0)" />
+            <Cuboid width={8} height={10} depth={8} color="#c084fc" transform="translate3d(26px,-148px,0)" />
+          </>
         )}
         <div
           style={{

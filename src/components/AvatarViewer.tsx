@@ -167,6 +167,16 @@ const SCENE_STYLES: Record<SceneId, string> = {
     "avatar-scene bg-[radial-gradient(ellipse_at_50%_30%,#a7f3d0_0%,transparent_36%),linear-gradient(160deg,#064e3b_0%,#166534_45%,#0f172a_100%)]",
   "midnight-court":
     "avatar-scene bg-[radial-gradient(ellipse_at_50%_24%,#fef3c7_0%,transparent_30%),linear-gradient(140deg,#111827_0%,#312e81_45%,#4c1d95_100%)]",
+  "moon-garden":
+    "avatar-scene bg-[radial-gradient(ellipse_at_50%_18%,#e0e7ff_0%,transparent_24%),radial-gradient(ellipse_at_35%_78%,#86efac_0%,transparent_34%),linear-gradient(180deg,#172554_0%,#312e81_48%,#052e16_100%)]",
+  "crystal-studio":
+    "avatar-scene bg-[radial-gradient(ellipse_at_30%_20%,#bae6fd_0%,transparent_34%),radial-gradient(ellipse_at_76%_72%,#f0abfc_0%,transparent_32%),linear-gradient(135deg,#0f172a_0%,#164e63_52%,#581c87_100%)]",
+  "throne-light":
+    "avatar-scene bg-[radial-gradient(ellipse_at_50%_16%,#fef3c7_0%,transparent_34%),linear-gradient(160deg,#451a03_0%,#92400e_48%,#111827_100%)]",
+  "starlit-balcony":
+    "avatar-scene bg-[radial-gradient(ellipse_at_20%_22%,#f8fafc_0%,transparent_10%),radial-gradient(ellipse_at_72%_34%,#c4b5fd_0%,transparent_18%),linear-gradient(180deg,#020617_0%,#1e1b4b_58%,#111827_100%)]",
+  "neon-arcade":
+    "avatar-scene bg-[radial-gradient(ellipse_at_25%_30%,#22d3ee_0%,transparent_35%),radial-gradient(ellipse_at_78%_64%,#fb7185_0%,transparent_32%),linear-gradient(135deg,#020617_0%,#1e1b4b_45%,#0f172a_100%)]",
 };
 
 function SceneBackground({ sceneId }: { sceneId: string }) {
