@@ -146,6 +146,27 @@ function extractTwitchChannel(raw: string) {
   return v.replace(/^@/, "").replace(/[^A-Za-z0-9_]/g, "");
 }
 
+const LIVE_LAST_SESSION_PREFIX = "vaelyndra:live:last-session:";
+const LIVE_HEART_ANNOUNCED_PREFIX = "vaelyndra:live:heart-announced:";
+
+function readLiveLocalValue(prefix: string, key?: string | null) {
+  if (!key || typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem(`${prefix}${key}`);
+  } catch {
+    return null;
+  }
+}
+
+function writeLiveLocalValue(prefix: string, key: string | undefined, value: string) {
+  if (!key || typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(`${prefix}${key}`, value);
+  } catch {
+    // Les interactions live restent fonctionnelles sans stockage navigateur.
+  }
+}
+
 function isDesktopViewport() {
   if (typeof window === "undefined") return false;
   return window.matchMedia("(min-width: 1024px)").matches;
@@ -1311,15 +1332,25 @@ export function Live() {
     (amBroadcaster ? config.mode : "screen");
   const isActiveLive =
     !!registryEntry || (amBroadcaster && config.status === "live");
+  const liveInteractionScopeKey =
+    user && broadcasterId ? `${user.id}:${broadcasterId}` : undefined;
+  const currentLiveStartedAt =
+    registryEntry?.startedAt ?? (amBroadcaster ? config.startedAt : null) ?? null;
+  const liveInteractionSessionKey =
+    currentLiveStartedAt ??
+    readLiveLocalValue(LIVE_LAST_SESSION_PREFIX, liveInteractionScopeKey) ??
+    "pending";
+  useEffect(() => {
+    if (!liveInteractionScopeKey || !currentLiveStartedAt) return;
+    writeLiveLocalValue(
+      LIVE_LAST_SESSION_PREFIX,
+      liveInteractionScopeKey,
+      currentLiveStartedAt,
+    );
+  }, [currentLiveStartedAt, liveInteractionScopeKey]);
   const liveSpellPersistenceKey =
     user && broadcasterId
-      ? [
-          user.id,
-          broadcasterId,
-          registryEntry?.startedAt ??
-            (amBroadcaster ? config.startedAt : null) ??
-            "pending",
-        ].join(":")
+      ? [user.id, broadcasterId, liveInteractionSessionKey].join(":")
       : undefined;
   const isNativeAndroidHost =
     amBroadcaster && activeMode === "android-screen" && config.status === "live";
@@ -2174,10 +2205,13 @@ export function Live() {
     setHeartEvents((h) => [...h.slice(-64), { emitterId, x }]);
     setHeartTick((t) => t + 1);
     if (!user) return;
-    const liveKey = registryEntry?.startedAt ?? config.startedAt ?? "pending";
-    const announceKey = `${broadcasterId}:${liveKey}:${user.id}`;
-    if (!announcedHeartKeysRef.current.has(announceKey)) {
+    const announceKey = `${user.id}:${broadcasterId}:${liveInteractionSessionKey}`;
+    const alreadyAnnounced =
+      announcedHeartKeysRef.current.has(announceKey) ||
+      readLiveLocalValue(LIVE_HEART_ANNOUNCED_PREFIX, announceKey) === "1";
+    if (!alreadyAnnounced) {
       announcedHeartKeysRef.current.add(announceKey);
+      writeLiveLocalValue(LIVE_HEART_ANNOUNCED_PREFIX, announceKey, "1");
       pushSystemAnnouncement(
         `❤️ ${user.username} envoie un cœur à ${broadcasterProfile?.username ?? "la cour"}`,
       );
