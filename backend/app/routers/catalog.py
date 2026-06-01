@@ -70,6 +70,7 @@ class ProductOut(BaseModel):
     image: str
     category: str
     sylvins: Optional[int]
+    lueurs: Optional[int]
     rating: float
     stock: int
     featured: bool
@@ -87,6 +88,7 @@ def _product_out(p: CatalogProduct) -> ProductOut:
         image=p.image,
         category=p.category,
         sylvins=p.sylvins,
+        lueurs=p.lueurs,
         rating=p.rating,
         stock=p.stock,
         featured=p.featured,
@@ -104,6 +106,7 @@ class ProductIn(BaseModel):
     image: str = Field(default="", max_length=1000)
     category: str = Field(default="Merch", max_length=40)
     sylvins: Optional[int] = Field(default=None, ge=0)
+    lueurs: Optional[int] = Field(default=None, ge=0)
     rating: float = Field(default=5.0, ge=0, le=5)
     stock: int = Field(default=0, ge=0)
     featured: bool = False
@@ -119,6 +122,7 @@ class ProductPatch(BaseModel):
     image: Optional[str] = Field(default=None, max_length=1000)
     category: Optional[str] = Field(default=None, max_length=40)
     sylvins: Optional[int] = Field(default=None, ge=0)
+    lueurs: Optional[int] = Field(default=None, ge=0)
     rating: Optional[float] = Field(default=None, ge=0, le=5)
     stock: Optional[int] = Field(default=None, ge=0)
     featured: Optional[bool] = None
@@ -152,6 +156,7 @@ def create_product(
         image=body.image,
         category=body.category,
         sylvins=body.sylvins,
+        lueurs=body.lueurs,
         rating=body.rating,
         stock=body.stock,
         featured=body.featured,

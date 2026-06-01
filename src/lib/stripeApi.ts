@@ -2,18 +2,17 @@
  * Client HTTP pour les endpoints `/stripe/*` du backend Vaelyndra.
  *
  * Flux attendu :
- * 1. Le client appelle `apiCreateSylvinsCheckout(productId)` avec l'id d'un
- *    `CatalogProduct` de catégorie "Sylvins".
+ * 1. Le client appelle `apiCreateCurrencyCheckout(productId)` avec l'id d'un
+ *    `CatalogProduct` de catégorie "Sylvins" ou "Lueurs".
  * 2. Le backend crée une Stripe Checkout Session et renvoie son `url`.
  * 3. Le frontend redirige `window.location.href = url` vers Stripe.
  * 4. Après paiement, Stripe redirige vers `/compte?payment=success`. Le
- *    webhook `POST /stripe/webhook` (déclenché en parallèle par Stripe vers
- *    notre backend) crédite `sylvins_paid` sur le profil.
+ *    webhook `POST /stripe/webhook` crédite la monnaie déclarée sur le profil.
  */
 import { API_BASE, ApiError } from "./api";
 import type { UserProfileDto } from "./api";
 
-interface CheckoutSylvinsOut {
+interface CheckoutCurrencyOut {
   url: string;
   session_id: string;
 }
@@ -39,7 +38,13 @@ export interface StripePayoutDto {
 
 export async function apiCreateSylvinsCheckout(
   productId: string,
-): Promise<CheckoutSylvinsOut> {
+): Promise<CheckoutCurrencyOut> {
+  return apiCreateCurrencyCheckout(productId);
+}
+
+export async function apiCreateCurrencyCheckout(
+  productId: string,
+): Promise<CheckoutCurrencyOut> {
   const res = await fetch(`${API_BASE}/stripe/checkout/sylvins`, {
     method: "POST",
     credentials: "include",
@@ -59,7 +64,7 @@ export async function apiCreateSylvinsCheckout(
     }
     throw new ApiError(res.status, detail || `HTTP ${res.status}`);
   }
-  return (await res.json()) as CheckoutSylvinsOut;
+  return (await res.json()) as CheckoutCurrencyOut;
 }
 
 async function stripeJson<T>(path: string, init?: RequestInit): Promise<T> {

@@ -1,15 +1,12 @@
 import { useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ShoppingBag, Sparkles, Star } from "lucide-react";
-import { useAuth } from "../contexts/AuthContext";
-import { useProfile } from "../contexts/ProfileContext";
+import clsx from "clsx";
 import { useStore } from "../contexts/StoreContext";
 import { useToast } from "../contexts/ToastContext";
 import { SectionHeading } from "../components/SectionHeading";
-import { formatPrice, generateId } from "../lib/helpers";
-import { apiShopPurchaseLueurs } from "../lib/api";
-import clsx from "clsx";
+import { formatPrice } from "../lib/helpers";
 import type { Product } from "../types";
 
 type CategoryFilter = "Tous" | Product["category"];
@@ -25,12 +22,8 @@ const CATEGORIES: CategoryFilter[] = [
 
 export function Shop() {
   const { products, dispatch, cartCount, cartTotal } = useStore();
-  const { user } = useAuth();
-  const { profile, refresh: refreshProfile } = useProfile();
   const { notify } = useToast();
-  const navigate = useNavigate();
   const [category, setCategory] = useState<CategoryFilter>("Tous");
-  const [buyingLueursId, setBuyingLueursId] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     return products.filter(
@@ -45,74 +38,12 @@ export function Shop() {
     notify(`${p.name} ajouté à votre panier royal`);
   }
 
-  async function buyWithLueurs(product: Product) {
-    if (!user) {
-      notify("Connecte-toi pour acheter avec tes Lueurs.", "info");
-      navigate("/connexion", { state: { from: "/boutique" } });
-      return;
-    }
-    if (!profile) {
-      notify("Ta bourse n'est pas disponible pour le moment.", "error");
-      return;
-    }
-    if (profile.lueurs < product.price) {
-      notify("Pas assez de Lueurs pour cet achat.", "error");
-      return;
-    }
-    setBuyingLueursId(product.id);
-    try {
-      // Achat atomique côté serveur (débit Lueurs + livraison item +
-      // ShopOrder + WalletLedger en une seule transaction). Avant cet
-      // appel, on faisait deux étapes (débit côté serveur, ajout d'order
-      // côté state local) qui pouvaient se désynchroniser au vidage du
-      // cache navigateur, donnant l'impression d'avoir "perdu" ses Lueurs.
-      await apiShopPurchaseLueurs(user.id, {
-        item_id: product.id,
-        price: Math.round(product.price),
-      });
-      // L'order reste aussi en state local pour que l'historique
-      // s'affiche immédiatement sans recharger ; côté DB il y a une
-      // ligne `ShopOrder` qui sert d'archive durable.
-      dispatch({
-        type: "addOrder",
-        order: {
-          id: generateId("order"),
-          userId: user.id,
-          items: [
-            {
-              productId: product.id,
-              quantity: 1,
-              priceAtPurchase: product.price,
-            },
-          ],
-          total: product.price,
-          createdAt: new Date().toISOString(),
-          status: "paid",
-        },
-      });
-      await refreshProfile();
-      notify(
-        `${product.name} acheté avec ${Math.round(product.price)} Lueurs ✨`,
-        "success",
-      );
-    } catch (err) {
-      console.warn(err);
-      const msg =
-        err instanceof Error && err.message
-          ? err.message
-          : "Achat en Lueurs impossible pour le moment.";
-      notify(msg, "error");
-    } finally {
-      setBuyingLueursId(null);
-    }
-  }
-
   return (
     <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16">
       <SectionHeading
         eyebrow="Boutique Royale"
         title={<>Les trésors de <span className="text-mystic">Vaelyndra</span></>}
-        subtitle="Merch fantasy, tenues numériques, accès VIP et objets sacrés. Stock limité."
+        subtitle="Packs de Lueurs, Sylvins, merch fantasy, tenues numériques et accès VIP. Les monnaies achetées en euros passent par Stripe."
       />
 
       {featured && (
@@ -141,29 +72,24 @@ export function Shop() {
               {featured.tagline}
             </p>
             <p className="mt-5 text-ivory/80">{featured.description}</p>
+            {(featured.lueurs || featured.sylvins) && (
+              <p className="mt-4 rounded-2xl border border-gold-400/25 bg-night-950/50 px-4 py-3 text-sm text-gold-100">
+                Crédit immédiat après paiement :{" "}
+                {featured.lueurs
+                  ? `${featured.lueurs.toLocaleString("fr-FR")} Lueurs`
+                  : `${featured.sylvins?.toLocaleString("fr-FR")} Sylvins`}
+              </p>
+            )}
             <div className="mt-6 flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
               <span className="font-display text-3xl text-ivory">
                 {formatPrice(featured.price, featured.currency)}
               </span>
-              {featured.category === "Lueurs" ? (
-                <button
-                  onClick={() => buyWithLueurs(featured)}
-                  disabled={buyingLueursId === featured.id}
-                  className="btn-gold w-full justify-center sm:w-auto"
-                >
-                  <Sparkles className="h-4 w-4" />{" "}
-                  {buyingLueursId === featured.id
-                    ? "Achat..."
-                    : "Acheter en Lueurs"}
-                </button>
-              ) : (
-                <button
-                  onClick={() => addToCart(featured)}
-                  className="btn-gold w-full justify-center sm:w-auto"
-                >
-                  <ShoppingBag className="h-4 w-4" /> Ajouter
-                </button>
-              )}
+              <button
+                onClick={() => addToCart(featured)}
+                className="btn-gold w-full justify-center sm:w-auto"
+              >
+                <ShoppingBag className="h-4 w-4" /> Ajouter
+              </button>
             </div>
           </div>
         </motion.div>
@@ -227,27 +153,26 @@ export function Shop() {
               <p className="mt-2 line-clamp-2 text-sm text-ivory/65">
                 {p.description}
               </p>
+              {(p.lueurs || p.sylvins) && (
+                <p className="mt-3 rounded-xl border border-white/10 bg-night-950/50 px-3 py-2 text-xs text-ivory/70">
+                  Crédit :{" "}
+                  <span className="text-gold-200">
+                    {p.lueurs
+                      ? `${p.lueurs.toLocaleString("fr-FR")} Lueurs`
+                      : `${p.sylvins?.toLocaleString("fr-FR")} Sylvins`}
+                  </span>
+                </p>
+              )}
               <div className="mt-auto flex flex-col items-start gap-3 pt-5 sm:flex-row sm:items-center sm:justify-between">
                 <span className="font-display text-xl text-ivory">
                   {formatPrice(p.price, p.currency)}
                 </span>
-                {p.category === "Lueurs" ? (
-                  <button
-                    onClick={() => buyWithLueurs(p)}
-                    disabled={buyingLueursId === p.id}
-                    className="btn-ghost w-full justify-center sm:w-auto"
-                  >
-                    <Sparkles className="h-3.5 w-3.5" />{" "}
-                    {buyingLueursId === p.id ? "Achat..." : "Acheter"}
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => addToCart(p)}
-                    className="btn-ghost w-full justify-center sm:w-auto"
-                  >
-                    <ShoppingBag className="h-3.5 w-3.5" /> Ajouter
-                  </button>
-                )}
+                <button
+                  onClick={() => addToCart(p)}
+                  className="btn-ghost w-full justify-center sm:w-auto"
+                >
+                  <ShoppingBag className="h-3.5 w-3.5" /> Ajouter
+                </button>
               </div>
               {p.stock < 20 && (
                 <p className="mt-3 text-xs text-rose-300/80">

@@ -472,6 +472,7 @@ function ProductsAdmin() {
     tagline: string;
     description: string;
     price: number;
+    currencyAmount: number;
     category: Product["category"];
     image: string;
     stock: number;
@@ -480,6 +481,7 @@ function ProductsAdmin() {
     tagline: "",
     description: "",
     price: 0,
+    currencyAmount: 0,
     category: "Merch",
     image: "",
     stock: 100,
@@ -493,11 +495,15 @@ function ProductsAdmin() {
         tagline: form.tagline.trim() || "Nouvelle relique",
         description: form.description.trim(),
         price: Number(form.price),
-        currency: form.category === "Lueurs" ? "Lueurs" : "€",
+        currency: "€",
         image:
           form.image.trim() ||
           "https://images.unsplash.com/photo-1470813740244-df37b8c1edcb?w=900&auto=format&fit=crop&q=80",
         category: form.category,
+        sylvins:
+          form.category === "Sylvins" ? Number(form.currencyAmount) : null,
+        lueurs:
+          form.category === "Lueurs" ? Number(form.currencyAmount) : null,
         rating: 5,
         stock: Number(form.stock),
         tags: [],
@@ -509,6 +515,7 @@ function ProductsAdmin() {
         tagline: "",
         description: "",
         price: 0,
+        currencyAmount: 0,
         category: "Merch",
         image: "",
         stock: 100,
@@ -585,6 +592,22 @@ function ProductsAdmin() {
           <option>VIP</option>
           <option>Exclusif</option>
         </select>
+        {(form.category === "Lueurs" || form.category === "Sylvins") && (
+          <input
+            type="number"
+            className="glass-input"
+            placeholder={
+              form.category === "Lueurs"
+                ? "Lueurs créditées"
+                : "Sylvins crédités"
+            }
+            value={form.currencyAmount}
+            onChange={(e) =>
+              setForm({ ...form, currencyAmount: Number(e.target.value) })
+            }
+            min={0}
+          />
+        )}
         <input
           className="glass-input"
           placeholder="URL image"
@@ -610,9 +633,12 @@ function ProductsAdmin() {
               </p>
               <h4 className="font-display text-base text-gold-200">{p.name}</h4>
               <p className="text-sm text-ivory/70">
-                {p.currency === "Lueurs"
-                  ? `${Math.round(p.price)} Lueurs`
-                  : `${p.price}€`}
+                {p.price}€{" "}
+                {p.lueurs
+                  ? `· ${p.lueurs.toLocaleString("fr-FR")} Lueurs`
+                  : p.sylvins
+                    ? `· ${p.sylvins.toLocaleString("fr-FR")} Sylvins`
+                    : ""}
               </p>
             </div>
             <button

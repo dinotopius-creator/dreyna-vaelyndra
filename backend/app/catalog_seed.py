@@ -172,55 +172,60 @@ SEED_PRODUCTS: list[dict] = [
     },
     {
         "id": "prod-lueurs-fiole",
-        "name": "Fiole de lucioles",
-        "tagline": "Collection lumineuse · 120 Lueurs",
-        "description": "Objet numérique collector inspiré des lucioles sacrées de Vaelyndra. Achat immédiat avec tes Lueurs.",
-        "price": 120,
-        "currency": "Lueurs",
+        "name": "Étincelle de Lueurs",
+        "tagline": "500 Lueurs · recharge découverte",
+        "description": "500 Lueurs créditées sur ton compte pour débloquer les premiers items gratuits plus vite.",
+        "price": 1.49,
+        "currency": "€",
         "image": "/lueurs-fiole.svg",
         "category": "Lueurs",
         "rating": 4.8,
         "stock": 9999,
-        "tags": ["lueurs", "collector", "digital"],
+        "tags": ["lueurs", "monnaie virtuelle", "découverte"],
+        "lueurs": 500,
     },
     {
         "id": "prod-lueurs-grimoire",
-        "name": "Grimoire d'éclats",
-        "tagline": "Edition runique · 260 Lueurs",
-        "description": "Une relique numérique de bibliothèque mystique, réservée aux membres qui dépensent leurs Lueurs.",
-        "price": 260,
-        "currency": "Lueurs",
+        "name": "Bourse de Lueurs",
+        "tagline": "1 200 Lueurs · meilleur départ",
+        "description": "1 200 Lueurs pour acheter plusieurs cosmétiques non premium sans attendre les récompenses quotidiennes.",
+        "price": 2.99,
+        "currency": "€",
         "image": "/lueurs-grimoire.svg",
         "category": "Lueurs",
         "rating": 4.9,
         "stock": 9999,
-        "tags": ["lueurs", "grimoire", "digital"],
+        "tags": ["lueurs", "monnaie virtuelle", "populaire"],
+        "featured": True,
+        "lueurs": 1200,
     },
     {
         "id": "prod-lueurs-banniere",
-        "name": "Bannière astrale",
-        "tagline": "Étendard du royaume · 480 Lueurs",
-        "description": "Grande bannière cosmique de collection, pensée comme un trésor premium à débloquer avec les Lueurs du jeu.",
-        "price": 480,
-        "currency": "Lueurs",
+        "name": "Coffret de Lueurs",
+        "tagline": "3 000 Lueurs · collection avatar",
+        "description": "Un gros pack de Lueurs pensé pour composer une tenue avatar complète en monnaie non premium.",
+        "price": 6.99,
+        "currency": "€",
         "image": "/lueurs-banniere.svg",
         "category": "Lueurs",
         "rating": 5,
         "stock": 9999,
-        "tags": ["lueurs", "astral", "collector"],
+        "tags": ["lueurs", "monnaie virtuelle", "avatar"],
+        "lueurs": 3000,
     },
     {
         "id": "prod-lueurs-relique",
-        "name": "Relique du veilleur",
-        "tagline": "Artefact majeur · 900 Lueurs",
-        "description": "Une grande pièce de prestige pour les membres les plus actifs de la plateforme. Achetable uniquement en Lueurs.",
-        "price": 900,
-        "currency": "Lueurs",
+        "name": "Trésor de Lueurs",
+        "tagline": "7 500 Lueurs · réserve royale",
+        "description": "La réserve la plus rentable en Lueurs, moins chère que les Sylvins et adaptée aux achats cosmétiques non premium.",
+        "price": 14.99,
+        "currency": "€",
         "image": "/lueurs-relique.svg",
         "category": "Lueurs",
         "rating": 5,
         "stock": 9999,
-        "tags": ["lueurs", "prestige", "relique"],
+        "tags": ["lueurs", "monnaie virtuelle", "réserve"],
+        "lueurs": 7500,
     },
 ]
 
@@ -346,6 +351,7 @@ def seed_catalog() -> None:
                         image=p.get("image", ""),
                         category=p.get("category", "Merch"),
                         sylvins=p.get("sylvins"),
+                        lueurs=p.get("lueurs"),
                         rating=float(p.get("rating", 5.0)),
                         stock=int(p.get("stock", 0)),
                         featured=bool(p.get("featured", False)),
@@ -362,7 +368,31 @@ def seed_catalog() -> None:
             )
             now = _now_iso()
             for p in SEED_PRODUCTS:
-                if p["id"] not in BACKFILL_PRODUCT_IDS or p["id"] in existing_ids:
+                if p["id"] not in BACKFILL_PRODUCT_IDS:
+                    continue
+                existing = session.get(CatalogProduct, p["id"])
+                if existing is not None:
+                    # Convertit les anciens objets collectors achetés en
+                    # Lueurs en vrais packs de Lueurs payables en euros.
+                    existing.name = p["name"]
+                    existing.tagline = p.get("tagline", "")
+                    existing.description = p.get("description", "")
+                    existing.price = float(p.get("price", 0))
+                    existing.currency = p.get("currency", "€")
+                    existing.image = p.get("image", "")
+                    existing.category = p.get("category", "Merch")
+                    existing.sylvins = p.get("sylvins")
+                    existing.lueurs = p.get("lueurs")
+                    existing.rating = float(p.get("rating", 5.0))
+                    existing.stock = int(p.get("stock", 0))
+                    existing.featured = bool(p.get("featured", False))
+                    existing.tags_json = json.dumps(
+                        p.get("tags", []), ensure_ascii=False
+                    )
+                    existing.updated_at = now
+                    session.add(existing)
+                    continue
+                if p["id"] in existing_ids:
                     continue
                 session.add(
                     CatalogProduct(
@@ -375,6 +405,7 @@ def seed_catalog() -> None:
                         image=p.get("image", ""),
                         category=p.get("category", "Merch"),
                         sylvins=p.get("sylvins"),
+                        lueurs=p.get("lueurs"),
                         rating=float(p.get("rating", 5.0)),
                         stock=int(p.get("stock", 0)),
                         featured=bool(p.get("featured", False)),

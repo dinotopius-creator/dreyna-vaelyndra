@@ -92,6 +92,8 @@ export interface Product {
    * Only set on products of category "Sylvins".
    */
   sylvins?: number;
+  /** Amount of Lueurs granted when this euro product is purchased. */
+  lueurs?: number;
   rating: number;
   stock: number;
   featured?: boolean;
