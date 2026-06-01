@@ -214,10 +214,11 @@ function buildCameraConstraints(
 ): MediaTrackConstraints {
   const deviceId = options?.deviceId?.trim() || "";
   const allowExactFacing = options?.allowExactFacing === true;
+  const mobile = isMobileMediaBrowser();
   const base: MediaTrackConstraints = {
-    width: { ideal: 1280, max: 1920 },
-    height: { ideal: 720, max: 1080 },
-    frameRate: { ideal: 30, max: 30 },
+    width: mobile ? { ideal: 960, max: 1280 } : { ideal: 1280, max: 1920 },
+    height: mobile ? { ideal: 540, max: 720 } : { ideal: 720, max: 1080 },
+    frameRate: mobile ? { ideal: 24, max: 30 } : { ideal: 30, max: 30 },
   };
   if (deviceId && options?.preferExactDevice) {
     return {
@@ -1480,6 +1481,13 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         hostPeerRef.current = peer;
         isHostingChatRef.current = true;
         let peerOpened = false;
+        let hostReconnectTimer: number | null = null;
+        const clearHostReconnectTimer = () => {
+          if (hostReconnectTimer !== null) {
+            window.clearTimeout(hostReconnectTimer);
+            hostReconnectTimer = null;
+          }
+        };
 
         peer.on("open", () => {
           if (!isLiveStartTokenCurrent(startToken)) {
@@ -1490,6 +1498,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             }
             return;
           }
+          clearHostReconnectTimer();
           peerOpened = true;
           const startedAt = new Date().toISOString();
           setConfig((c) => ({
@@ -1534,6 +1543,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         peer.on("error", (err: Error & { type?: string }) => {
           if (!isLiveStartTokenCurrent(startToken)) return;
           if (!peerOpened) {
+            clearHostReconnectTimer();
             const friendly =
               err.type === "unavailable-id"
                 ? "Un live Vaelyndra est déjà actif à ton nom ailleurs. Ferme l'autre onglet."
@@ -1548,11 +1558,22 @@ export function LiveProvider({ children }: { children: ReactNode }) {
           if (!isLiveStartTokenCurrent(startToken)) return;
           if (peerOpened) {
             setLastError(
-              "La connexion au serveur de relais a été perdue. Relance un live quand tu es prêt.",
+              "Connexion live instable : Vaelyndra tente de reconnecter le relais automatiquement.",
             );
             try {
               peer.reconnect();
+              clearHostReconnectTimer();
+              hostReconnectTimer = window.setTimeout(() => {
+                if (!isLiveStartTokenCurrent(startToken)) return;
+                if (!hostPeerRef.current || hostPeerRef.current.destroyed) return;
+                if (!hostPeerRef.current.disconnected) return;
+                pauseLiveForRecovery(
+                  mode,
+                  "Le relais live a décroché trop longtemps. Ton live reste annoncé : relance le partage pour reprendre.",
+                );
+              }, 12_000);
             } catch {
+              clearHostReconnectTimer();
               pauseLiveForRecovery(
                 mode,
                 "Le relais live a décroché. Ton live reste annoncé : relance le partage pour reprendre.",
@@ -2599,6 +2620,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
               }
               if (cancelled) return;
               setRemoteStream(null);
+              setIsConnecting(false);
             });
             call.on("error", () => {
               if (viewerMediaCallRef.current === call) {
@@ -2723,6 +2745,15 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             }
             console.warn("PeerJS viewer error", err);
             setIsConnecting(false);
+          });
+          viewerPeer.on("disconnected", () => {
+            if (cancelled) return;
+            setIsConnecting(true);
+            try {
+              viewerPeer.reconnect();
+            } catch {
+              setIsConnecting(false);
+            }
           });
         } catch (err) {
           if (!cancelled) {
