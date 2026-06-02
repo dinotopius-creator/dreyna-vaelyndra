@@ -511,8 +511,15 @@ export function World3DStage({
     const onKeyUp = (event: KeyboardEvent) => {
       keyState.delete(event.code);
     };
+    const clearPressedKeys = () => {
+      keyState.clear();
+      joystickInputRef.current = { active: false, x: 0, y: 0 };
+      setJoystickUi({ active: false, x: 0, y: 0 });
+    };
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
+    window.addEventListener("blur", clearPressedKeys);
+    document.addEventListener("visibilitychange", clearPressedKeys);
 
     const raycastAt = (event: PointerEvent) => {
       const rect = renderer.domElement.getBoundingClientRect();
@@ -672,7 +679,6 @@ export function World3DStage({
           : 0;
         const speed = (run || joystickPower > 0.86 ? 7.2 : 4.2) * delta;
         const turnSpeed = 2.8 * delta;
-        const selfPlayer = playersById.get(currentSelf.id);
         if (keyState.has("KeyA") || keyState.has("ArrowLeft")) yaw += turnSpeed;
         if (keyState.has("KeyD") || keyState.has("ArrowRight")) yaw -= turnSpeed;
         const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
@@ -701,10 +707,8 @@ export function World3DStage({
           }
         } else {
           selfEntity.moving = false;
-          if (selfPlayer) {
-            localPosition.lerp(pctToWorld(selfPlayer.x, selfPlayer.y), 0.12);
-          }
         }
+        selfEntity.target.copy(localPosition);
         if (keyState.has("Space") && selfEntity.jumpHeight <= 0.01) {
           selfEntity.jumpVelocity = 5.5;
         }
@@ -773,6 +777,8 @@ export function World3DStage({
       resizeObserver.disconnect();
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("blur", clearPressedKeys);
+      document.removeEventListener("visibilitychange", clearPressedKeys);
       renderer.domElement.removeEventListener("pointerdown", onPointerDown);
       renderer.domElement.removeEventListener("pointermove", onPointerMove);
       renderer.domElement.removeEventListener("pointerup", finishCameraPointer);
