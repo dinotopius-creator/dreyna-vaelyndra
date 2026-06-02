@@ -1642,39 +1642,6 @@ export function Worlds() {
                 </button>
               </div>
 
-              <div className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 md:hidden">
-                <button
-                  type="button"
-                  onClick={() => moveBy(0, -5)}
-                  className="rounded-full border border-royal-500/30 bg-night-950/85 px-4 py-3 text-sm text-ivory/90 shadow-lg backdrop-blur"
-                >
-                  ▲
-                </button>
-                <div className="flex flex-col gap-2">
-                  <button
-                    type="button"
-                    onClick={() => moveBy(-5, 0)}
-                    className="rounded-full border border-royal-500/30 bg-night-950/85 px-4 py-3 text-sm text-ivory/90 shadow-lg backdrop-blur"
-                  >
-                    ◀
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => moveBy(5, 0)}
-                    className="rounded-full border border-royal-500/30 bg-night-950/85 px-4 py-3 text-sm text-ivory/90 shadow-lg backdrop-blur"
-                  >
-                    ▶
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => moveBy(0, 5)}
-                  className="rounded-full border border-royal-500/30 bg-night-950/85 px-4 py-3 text-sm text-ivory/90 shadow-lg backdrop-blur"
-                >
-                  ▼
-                </button>
-              </div>
-
               <div className="absolute bottom-5 right-5 rounded-2xl border border-white/10 bg-night-950/70 px-4 py-3 backdrop-blur">
                 <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-ivory/60">
                   <Volume2 className="h-3.5 w-3.5 text-gold-300" />

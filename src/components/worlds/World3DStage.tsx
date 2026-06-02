@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import * as THREE from "three";
 
 export type World3DDistrictId = "place" | "arcades" | "observatory";
@@ -60,6 +60,7 @@ interface AvatarEntity {
   jumpHeight: number;
   phase: number;
   moving: boolean;
+  lastSeenAt: number;
   userId: string;
 }
 
@@ -76,6 +77,18 @@ interface HotspotEntity {
 const WORLD_WIDTH = 24;
 const WORLD_DEPTH = 18;
 const SELF_ID = "__self__";
+const REMOTE_AVATAR_GRACE_MS = 8000;
+
+interface AnalogInput {
+  active: boolean;
+  x: number;
+  y: number;
+}
+
+interface CameraInput {
+  yawDelta: number;
+  pitchDelta: number;
+}
 
 function pctToWorld(x: number, y: number) {
   return new THREE.Vector3(
@@ -90,6 +103,10 @@ function worldToPct(position: THREE.Vector3) {
     x: THREE.MathUtils.clamp((position.x / WORLD_WIDTH) * 100 + 50, 10, 88),
     y: THREE.MathUtils.clamp((position.z / WORLD_DEPTH) * 100 + 50, 18, 84),
   };
+}
+
+function hasValidWorldPosition(player: World3DPlayer) {
+  return Number.isFinite(player.x) && Number.isFinite(player.y);
 }
 
 function colorForPlayer(id: string, isSelf?: boolean) {
@@ -216,6 +233,7 @@ function createAvatar(player: World3DPlayer) {
     jumpHeight: 0,
     phase: 0,
     moving: false,
+    lastSeenAt: performance.now(),
     userId: player.id,
   } satisfies AvatarEntity;
 }
@@ -367,6 +385,10 @@ export function World3DStage({
   onTriggerHotspot,
 }: Props) {
   const hostRef = useRef<HTMLDivElement | null>(null);
+  const joystickPadRef = useRef<HTMLDivElement | null>(null);
+  const joystickPointerIdRef = useRef<number | null>(null);
+  const joystickInputRef = useRef<AnalogInput>({ active: false, x: 0, y: 0 });
+  const cameraInputRef = useRef<CameraInput>({ yawDelta: 0, pitchDelta: 0 });
   const playersRef = useRef(players);
   const lueursRef = useRef(lueurs);
   const hotspotsRef = useRef(hotspots);
@@ -384,6 +406,46 @@ export function World3DStage({
   onTriggerHotspotRef.current = onTriggerHotspot;
 
   const self = useMemo(() => players.find((player) => player.isSelf), [players]);
+  const [joystickUi, setJoystickUi] = useState({ active: false, x: 0, y: 0 });
+  const [cameraTouchActive, setCameraTouchActive] = useState(false);
+
+  const updateJoystickFromPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const pad = joystickPadRef.current;
+    if (!pad) return;
+    const rect = pad.getBoundingClientRect();
+    const radius = Math.max(1, rect.width / 2);
+    const rawX = event.clientX - (rect.left + radius);
+    const rawY = event.clientY - (rect.top + radius);
+    const distance = Math.min(radius, Math.hypot(rawX, rawY));
+    const angle = Math.atan2(rawY, rawX);
+    const x = (Math.cos(angle) * distance) / radius;
+    const y = (Math.sin(angle) * distance) / radius;
+    joystickInputRef.current = { active: true, x, y };
+    setJoystickUi({ active: true, x, y });
+  };
+
+  const resetJoystick = () => {
+    joystickPointerIdRef.current = null;
+    joystickInputRef.current = { active: false, x: 0, y: 0 };
+    setJoystickUi({ active: false, x: 0, y: 0 });
+  };
+
+  const handleJoystickPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    joystickPointerIdRef.current = event.pointerId;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    updateJoystickFromPointer(event);
+  };
+
+  const handleJoystickPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (joystickPointerIdRef.current !== event.pointerId) return;
+    updateJoystickFromPointer(event);
+  };
+
+  const handleJoystickPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (joystickPointerIdRef.current !== event.pointerId) return;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+    resetJoystick();
+  };
 
   useEffect(() => {
     const host = hostRef.current;
@@ -422,6 +484,11 @@ export function World3DStage({
     const keyState = new Set<string>();
     let localPosition = pctToWorld(self?.x ?? 49, self?.y ?? 62);
     let yaw = 0;
+    let cameraPitch = 0.12;
+    let cameraPointerId: number | null = null;
+    let cameraLastX = 0;
+    let cameraLastY = 0;
+    let cameraDragDistance = 0;
     let lastMoveSent = 0;
     let animationId = 0;
 
@@ -447,7 +514,7 @@ export function World3DStage({
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
 
-    const onPointerDown = (event: PointerEvent) => {
+    const raycastAt = (event: PointerEvent) => {
       const rect = renderer.domElement.getBoundingClientRect();
       pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
       pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
@@ -465,7 +532,56 @@ export function World3DStage({
         onTriggerHotspotRef.current(id);
       }
     };
+
+    const onPointerDown = (event: PointerEvent) => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      const isTouchLike =
+        event.pointerType === "touch" ||
+        event.pointerType === "pen" ||
+        navigator.maxTouchPoints > 0 ||
+        window.matchMedia("(pointer: coarse)").matches;
+      const isLeftCameraZone = event.clientX <= rect.left + rect.width * 0.56;
+      if (isTouchLike && isLeftCameraZone) {
+        cameraPointerId = event.pointerId;
+        cameraLastX = event.clientX;
+        cameraLastY = event.clientY;
+        cameraDragDistance = 0;
+        setCameraTouchActive(true);
+        renderer.domElement.setPointerCapture?.(event.pointerId);
+        event.preventDefault();
+        return;
+      }
+      raycastAt(event);
+    };
+
+    const onPointerMove = (event: PointerEvent) => {
+      if (cameraPointerId !== event.pointerId) return;
+      const dx = event.clientX - cameraLastX;
+      const dy = event.clientY - cameraLastY;
+      cameraLastX = event.clientX;
+      cameraLastY = event.clientY;
+      cameraDragDistance += Math.abs(dx) + Math.abs(dy);
+      cameraInputRef.current.yawDelta -= dx * 0.006;
+      cameraInputRef.current.pitchDelta += dy * 0.0035;
+      event.preventDefault();
+    };
+
+    const finishCameraPointer = (event: PointerEvent) => {
+      if (cameraPointerId !== event.pointerId) return;
+      if (cameraDragDistance < 8) {
+        raycastAt(event);
+      }
+      cameraPointerId = null;
+      cameraDragDistance = 0;
+      setCameraTouchActive(false);
+      renderer.domElement.releasePointerCapture?.(event.pointerId);
+      event.preventDefault();
+    };
+
     renderer.domElement.addEventListener("pointerdown", onPointerDown);
+    renderer.domElement.addEventListener("pointermove", onPointerMove);
+    renderer.domElement.addEventListener("pointerup", finishCameraPointer);
+    renderer.domElement.addEventListener("pointercancel", finishCameraPointer);
 
     const syncCollections = () => {
       const currentLueurs = new Set(lueursRef.current.map((entry) => entry.id));
@@ -510,8 +626,9 @@ export function World3DStage({
       syncCollections();
 
       const playersById = new Map(playersRef.current.map((player) => [player.id, player]));
+      const now = performance.now();
       entities.forEach((entity, id) => {
-        if (!playersById.has(id)) {
+        if (!playersById.has(id) && now - entity.lastSeenAt > REMOTE_AVATAR_GRACE_MS) {
           scene.remove(entity.group);
           entities.delete(id);
         }
@@ -524,7 +641,14 @@ export function World3DStage({
           entities.set(player.id, entity);
           scene.add(entity.group);
         }
-        entity.target.copy(player.isSelf ? localPosition : pctToWorld(player.x, player.y));
+        entity.lastSeenAt = now;
+        if (player.isSelf) {
+          entity.target.copy(localPosition);
+        } else if (hasValidWorldPosition(player)) {
+          entity.target.copy(pctToWorld(player.x, player.y));
+        } else {
+          entity.target.copy(entity.current);
+        }
         const micMaterial = entity.mic.material as THREE.MeshStandardMaterial;
         micMaterial.color.set(player.voiceEnabled ? (player.isSpeaking ? 0x22c55e : 0xfacc15) : 0x475569);
         micMaterial.emissive.set(player.voiceEnabled ? (player.isSpeaking ? 0x16a34a : 0x854d0e) : 0x020617);
@@ -534,8 +658,19 @@ export function World3DStage({
       const currentSelf = self;
       const selfEntity = currentSelf ? entities.get(currentSelf.id) : null;
       if (selfEntity && currentSelf) {
+        const cameraInput = cameraInputRef.current;
+        if (cameraInput.yawDelta !== 0 || cameraInput.pitchDelta !== 0) {
+          yaw += cameraInput.yawDelta;
+          cameraPitch = THREE.MathUtils.clamp(cameraPitch + cameraInput.pitchDelta, -0.32, 0.58);
+          cameraInput.yawDelta = 0;
+          cameraInput.pitchDelta = 0;
+        }
         const run = keyState.has("ShiftLeft") || keyState.has("ShiftRight");
-        const speed = (run ? 7.2 : 4.2) * delta;
+        const joystick = joystickInputRef.current;
+        const joystickPower = joystick.active
+          ? THREE.MathUtils.clamp(Math.hypot(joystick.x, joystick.y), 0, 1)
+          : 0;
+        const speed = (run || joystickPower > 0.86 ? 7.2 : 4.2) * delta;
         const turnSpeed = 2.8 * delta;
         const selfPlayer = playersById.get(currentSelf.id);
         if (keyState.has("KeyA") || keyState.has("ArrowLeft")) yaw += turnSpeed;
@@ -547,13 +682,19 @@ export function World3DStage({
         if (keyState.has("KeyS") || keyState.has("ArrowDown")) movement.sub(forward);
         if (keyState.has("KeyQ")) movement.sub(right);
         if (keyState.has("KeyE")) movement.add(right);
+        if (joystick.active) {
+          movement.addScaledVector(forward, -joystick.y);
+          movement.addScaledVector(right, joystick.x);
+        }
         if (movement.lengthSq() > 0) {
-          movement.normalize().multiplyScalar(speed);
+          if (movement.lengthSq() > 1) {
+            movement.normalize();
+          }
+          movement.multiplyScalar(speed);
           localPosition.add(movement);
           localPosition.x = THREE.MathUtils.clamp(localPosition.x, -10.8, 10.8);
           localPosition.z = THREE.MathUtils.clamp(localPosition.z, -7.4, 7.4);
           selfEntity.moving = true;
-          const now = performance.now();
           if (now - lastMoveSent > 90) {
             lastMoveSent = now;
             onMoveRef.current(worldToPct(localPosition));
@@ -601,7 +742,13 @@ export function World3DStage({
       if (selfEntity) {
         const cameraTarget = selfEntity.group.position.clone();
         cameraTarget.y = 1.2;
-        const offset = new THREE.Vector3(-Math.sin(yaw) * 7.5, 5.6, -Math.cos(yaw) * 7.5);
+        const flatDistance = 7.5 * Math.cos(cameraPitch);
+        const cameraHeight = 5.2 + Math.sin(cameraPitch) * 4.2;
+        const offset = new THREE.Vector3(
+          -Math.sin(yaw) * flatDistance,
+          cameraHeight,
+          -Math.cos(yaw) * flatDistance,
+        );
         camera.position.lerp(cameraTarget.clone().add(offset), 0.08);
         camera.lookAt(cameraTarget);
       } else {
@@ -627,6 +774,9 @@ export function World3DStage({
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       renderer.domElement.removeEventListener("pointerdown", onPointerDown);
+      renderer.domElement.removeEventListener("pointermove", onPointerMove);
+      renderer.domElement.removeEventListener("pointerup", finishCameraPointer);
+      renderer.domElement.removeEventListener("pointercancel", finishCameraPointer);
       renderer.dispose();
       if (renderer.domElement.parentNode === host) {
         host.removeChild(renderer.domElement);
@@ -644,8 +794,46 @@ export function World3DStage({
   return (
     <div className="absolute inset-0">
       <div ref={hostRef} className="h-full w-full touch-none" />
-      <div className="pointer-events-none absolute left-4 top-4 rounded-2xl border border-white/10 bg-night-950/70 px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-ivory/60 backdrop-blur">
+      <div className="pointer-events-none absolute left-4 top-4 hidden rounded-2xl border border-white/10 bg-night-950/70 px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-ivory/60 backdrop-blur md:block">
         ZQSD/WASD pour marcher, A/D pour tourner, Q/E strafe, Shift courir, Espace sauter
+      </div>
+      <div
+        className={`pointer-events-none absolute bottom-5 left-4 top-20 w-[48%] rounded-[28px] border border-white/10 bg-night-950/10 backdrop-blur-[1px] transition md:hidden ${
+          cameraTouchActive ? "border-cyan-200/30 bg-cyan-200/8" : "opacity-55"
+        }`}
+        aria-hidden
+      >
+        <div className="absolute left-3 top-3 rounded-full border border-white/10 bg-night-950/60 px-3 py-1 text-[9px] uppercase tracking-[0.18em] text-ivory/55">
+          Camera
+        </div>
+      </div>
+      <div
+        ref={joystickPadRef}
+        className="absolute bottom-6 right-5 h-32 w-32 touch-none select-none rounded-full border border-white/15 bg-night-950/35 shadow-[0_18px_60px_rgba(0,0,0,0.35)] backdrop-blur-xl md:hidden"
+        onPointerDown={handleJoystickPointerDown}
+        onPointerMove={handleJoystickPointerMove}
+        onPointerUp={handleJoystickPointerUp}
+        onPointerCancel={handleJoystickPointerUp}
+        aria-label="Joystick de deplacement"
+        role="application"
+      >
+        <div className="absolute inset-3 rounded-full border border-gold-200/12 bg-[radial-gradient(circle,rgba(250,204,21,0.10),rgba(15,23,42,0.26)_58%,rgba(15,23,42,0.58))]" />
+        <div className="absolute left-1/2 top-1/2 h-px w-20 -translate-x-1/2 bg-white/10" />
+        <div className="absolute left-1/2 top-1/2 h-20 w-px -translate-y-1/2 bg-white/10" />
+        <div
+          className={`absolute left-1/2 top-1/2 flex h-14 w-14 items-center justify-center rounded-full border transition ${
+            joystickUi.active
+              ? "border-gold-200/70 bg-gold-300/25 shadow-[0_0_28px_rgba(250,204,21,0.28)]"
+              : "border-white/18 bg-white/10"
+          }`}
+          style={{
+            transform: `translate(calc(-50% + ${joystickUi.x * 48}px), calc(-50% + ${
+              joystickUi.y * 48
+            }px))`,
+          }}
+        >
+          <span className="h-3 w-3 rounded-full bg-gold-100/90" />
+        </div>
       </div>
     </div>
   );
