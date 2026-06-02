@@ -58,10 +58,21 @@ function RemoteAudioSink({
   useEffect(() => {
     const element = ref.current;
     if (!element) return;
+    element.muted = false;
+    element.volume = 1;
     if (element.srcObject !== stream) {
       element.srcObject = stream;
     }
-    element.play().catch(() => undefined);
+    const play = () => {
+      element.play().catch(() => undefined);
+    };
+    play();
+    element.addEventListener("loadedmetadata", play);
+    element.addEventListener("canplay", play);
+    return () => {
+      element.removeEventListener("loadedmetadata", play);
+      element.removeEventListener("canplay", play);
+    };
   }, [stream]);
 
   useEffect(() => {
@@ -69,10 +80,14 @@ function RemoteAudioSink({
       ref.current?.play().catch(() => undefined);
     };
     window.addEventListener("pointerdown", resumePlayback, { passive: true });
-    return () => window.removeEventListener("pointerdown", resumePlayback);
+    window.addEventListener("touchstart", resumePlayback, { passive: true });
+    return () => {
+      window.removeEventListener("pointerdown", resumePlayback);
+      window.removeEventListener("touchstart", resumePlayback);
+    };
   }, []);
 
-  return <audio ref={ref} autoPlay playsInline />;
+  return <audio ref={ref} autoPlay playsInline preload="auto" />;
 }
 
 export function useWorldVoice(input: {
@@ -93,8 +108,10 @@ export function useWorldVoice(input: {
 
   const localStreamRef = useRef<MediaStream | null>(null);
   const peerRef = useRef<Peer | null>(null);
+  const peerOpenRef = useRef(false);
   const connsRef = useRef<Map<string, MediaConnection>>(new Map());
   const retryTimersRef = useRef<Map<string, number>>(new Map());
+  const remoteStreamsRef = useRef<Array<{ userId: string; stream: MediaStream }>>([]);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -119,6 +136,10 @@ export function useWorldVoice(input: {
         .map((member) => member.userId),
     [currentChannelId, members, userId],
   );
+
+  useEffect(() => {
+    remoteStreamsRef.current = remoteStreams;
+  }, [remoteStreams]);
 
   const shutdownVoice = useCallback(() => {
     generationRef.current += 1;
@@ -146,6 +167,7 @@ export function useWorldVoice(input: {
       }
       peerRef.current = null;
     }
+    peerOpenRef.current = false;
     analyserRef.current?.disconnect();
     analyserRef.current = null;
     audioContextRef.current?.close().catch(() => undefined);
@@ -175,9 +197,25 @@ export function useWorldVoice(input: {
       connsRef.current.set(remoteUserId, conn);
       conn.on("stream", (remote) => {
         if (generation !== generationRef.current) return;
+        const hasAudio = remote.getAudioTracks().some((track) => track.readyState === "live");
+        if (!hasAudio) {
+          worldVoiceLog("stream", `ignored stream without live audio from ${remoteUserId}`);
+          return;
+        }
         setRemoteStreams((current) => {
           const next = current.filter((entry) => entry.userId !== remoteUserId);
           return [...next, { userId: remoteUserId, stream: remote }];
+        });
+        remote.getTracks().forEach((track) => {
+          track.addEventListener(
+            "ended",
+            () => {
+              setRemoteStreams((current) =>
+                current.filter((entry) => entry.userId !== remoteUserId),
+              );
+            },
+            { once: true },
+          );
         });
       });
       const release = () => {
@@ -212,6 +250,29 @@ export function useWorldVoice(input: {
       worldVoiceLog("conn", `linked ${remoteUserId}`);
     },
     [activePeers, userId, worldId],
+  );
+
+  const dialRemotePeer = useCallback(
+    (remoteUserId: string, generation: number, reason: string) => {
+      const peer = peerRef.current;
+      const activeStream = localStreamRef.current;
+      if (!peer || !activeStream || peer.destroyed || !peerOpenRef.current) return;
+      if (remoteUserId === userId) return;
+      const existing = connsRef.current.get(remoteUserId);
+      if (existing) {
+        try {
+          existing.close();
+        } catch {
+          // ignore
+        }
+        connsRef.current.delete(remoteUserId);
+      }
+      const next = peer.call(peerIdForWorld(worldId, remoteUserId), activeStream);
+      if (!next) return;
+      worldVoiceLog("dial", `${reason}: calling ${remoteUserId}`);
+      registerConnection(remoteUserId, next, generation);
+    },
+    [registerConnection, userId, worldId],
   );
 
   const startVoice = useCallback(async () => {
@@ -271,6 +332,7 @@ export function useWorldVoice(input: {
       peerRef.current = peer;
       peer.on("open", () => {
         if (generation !== generationRef.current) return;
+        peerOpenRef.current = true;
         setVoiceEnabled(true);
         worldVoiceLog("peer", `opened for ${userId}`);
       });
@@ -283,6 +345,22 @@ export function useWorldVoice(input: {
         }
         setError(err.message || "peer-error");
         worldVoiceLog("peer", "peer error", err);
+      });
+      peer.on("disconnected", () => {
+        peerOpenRef.current = false;
+        worldVoiceLog("peer", "broker disconnected, reconnecting");
+        window.setTimeout(() => {
+          const current = peerRef.current;
+          if (!current || current.destroyed || !current.disconnected) return;
+          try {
+            current.reconnect();
+          } catch (err) {
+            worldVoiceLog("peer", "reconnect failed", err);
+          }
+        }, 900);
+      });
+      peer.on("close", () => {
+        peerOpenRef.current = false;
       });
       peer.on("call", (incoming) => {
         const remoteUserId = resolveUserIdFromPeerId(worldId, incoming.peer);
@@ -335,7 +413,7 @@ export function useWorldVoice(input: {
     if (!voiceEnabled || !userId) return;
     const stream = localStreamRef.current;
     const peer = peerRef.current;
-    if (!stream || !peer || peer.destroyed) return;
+    if (!stream || !peer || peer.destroyed || !peerOpenRef.current) return;
     const generation = generationRef.current;
     const wanted = new Set(activePeers);
 
@@ -356,11 +434,27 @@ export function useWorldVoice(input: {
     for (const remoteUserId of activePeers) {
       if (connsRef.current.has(remoteUserId)) continue;
       if (!shouldInitiateCall(userId, remoteUserId)) continue;
-      const conn = peer.call(peerIdForWorld(worldId, remoteUserId), stream);
-      if (!conn) continue;
-      registerConnection(remoteUserId, conn, generation);
+      dialRemotePeer(remoteUserId, generation, "active peer joined");
     }
-  }, [activePeers, registerConnection, userId, voiceEnabled, worldId]);
+  }, [activePeers, dialRemotePeer, userId, voiceEnabled]);
+
+  useEffect(() => {
+    if (!voiceEnabled || !userId) return;
+    const timer = window.setInterval(() => {
+      const generation = generationRef.current;
+      for (const remoteUserId of activePeers) {
+        if (!shouldInitiateCall(userId, remoteUserId)) continue;
+        const hasLiveStream = remoteStreamsRef.current.some(
+          (entry) =>
+            entry.userId === remoteUserId &&
+            entry.stream.getAudioTracks().some((track) => track.readyState === "live"),
+        );
+        if (hasLiveStream) continue;
+        dialRemotePeer(remoteUserId, generation, "retry missing audio");
+      }
+    }, 2600);
+    return () => window.clearInterval(timer);
+  }, [activePeers, dialRemotePeer, userId, voiceEnabled]);
 
   const VoiceAudioLayer = useMemo(
     () =>
