@@ -690,7 +690,7 @@ export function World3DStage({
         if (keyState.has("KeyE")) movement.add(right);
         if (joystick.active) {
           movement.addScaledVector(forward, -joystick.y);
-          movement.addScaledVector(right, joystick.x);
+          movement.addScaledVector(right, -joystick.x);
         }
         if (movement.lengthSq() > 0) {
           if (movement.lengthSq() > 1) {

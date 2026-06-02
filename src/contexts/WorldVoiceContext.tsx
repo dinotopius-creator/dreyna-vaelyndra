@@ -16,6 +16,7 @@ type DistrictVoiceMember = Pick<
 
 interface WorldVoiceState {
   voiceEnabled: boolean;
+  micEnabled: boolean;
   voiceLoading: boolean;
   voiceLevel: number;
   hasMicPermission: boolean;
@@ -98,6 +99,7 @@ export function useWorldVoice(input: {
 }) {
   const { worldId, userId, district, members } = input;
   const [voiceEnabled, setVoiceEnabled] = useState(false);
+  const [micEnabled, setMicEnabled] = useState(false);
   const [voiceLoading, setVoiceLoading] = useState(false);
   const [voiceLevel, setVoiceLevel] = useState(0);
   const [hasMicPermission, setHasMicPermission] = useState(false);
@@ -107,6 +109,7 @@ export function useWorldVoice(input: {
   >([]);
 
   const localStreamRef = useRef<MediaStream | null>(null);
+  const micEnabledRef = useRef(false);
   const peerRef = useRef<Peer | null>(null);
   const peerOpenRef = useRef(false);
   const connsRef = useRef<Map<string, MediaConnection>>(new Map());
@@ -140,6 +143,10 @@ export function useWorldVoice(input: {
   useEffect(() => {
     remoteStreamsRef.current = remoteStreams;
   }, [remoteStreams]);
+
+  useEffect(() => {
+    micEnabledRef.current = micEnabled;
+  }, [micEnabled]);
 
   const shutdownVoice = useCallback(() => {
     generationRef.current += 1;
@@ -178,6 +185,7 @@ export function useWorldVoice(input: {
     }
     setRemoteStreams([]);
     setVoiceLevel(0);
+    setMicEnabled(false);
   }, []);
 
   const registerConnection = useCallback(
@@ -304,6 +312,10 @@ export function useWorldVoice(input: {
       }
 
       localStreamRef.current = stream;
+      stream.getAudioTracks().forEach((track) => {
+        track.enabled = true;
+      });
+      setMicEnabled(true);
       setHasMicPermission(true);
       const context = new AudioContext();
       const source = context.createMediaStreamSource(stream);
@@ -315,6 +327,11 @@ export function useWorldVoice(input: {
       const buffer = new Uint8Array(analyser.frequencyBinCount);
       const sampleLevel = () => {
         if (!analyserRef.current) return;
+        if (!micEnabledRef.current) {
+          setVoiceLevel(0);
+          rafRef.current = window.requestAnimationFrame(sampleLevel);
+          return;
+        }
         analyserRef.current.getByteFrequencyData(buffer);
         const average =
           buffer.reduce((sum, value) => sum + value, 0) / Math.max(1, buffer.length);
@@ -394,12 +411,16 @@ export function useWorldVoice(input: {
 
   const toggleVoice = useCallback(async () => {
     if (voiceEnabled) {
-      shutdownVoice();
-      setVoiceEnabled(false);
+      const nextMicEnabled = !micEnabledRef.current;
+      localStreamRef.current?.getAudioTracks().forEach((track) => {
+        track.enabled = nextMicEnabled;
+      });
+      setMicEnabled(nextMicEnabled);
+      if (!nextMicEnabled) setVoiceLevel(0);
       return;
     }
     await startVoice();
-  }, [shutdownVoice, startVoice, voiceEnabled]);
+  }, [startVoice, voiceEnabled]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -475,6 +496,7 @@ export function useWorldVoice(input: {
 
   return {
     voiceEnabled,
+    micEnabled,
     voiceLoading,
     voiceLevel,
     hasMicPermission,
