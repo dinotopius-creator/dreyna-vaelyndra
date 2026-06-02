@@ -1034,9 +1034,15 @@ export function Worlds() {
       window.clearInterval(timer);
       if (sendTimeout !== null) window.clearTimeout(sendTimeout);
       window.removeEventListener("vaelyndra:position-change", onPosChange as EventListener);
-      void apiLeaveWorldPresence(WORLD_ID).catch(() => undefined);
     };
   }, [district, position.x, position.y, user, voiceEnabled]);
+
+  useEffect(() => {
+    if (!user) return;
+    return () => {
+      void apiLeaveWorldPresence(WORLD_ID).catch(() => undefined);
+    };
+  }, [user?.id]);
 
   useEffect(() => {
     if (!worldVoiceError) return;
