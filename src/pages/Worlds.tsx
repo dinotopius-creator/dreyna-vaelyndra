@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { SectionHeading } from "../components/SectionHeading";
 import { AvatarImage } from "../components/AvatarImage";
+import { AvatarViewer } from "../components/AvatarViewer";
 import { FollowButton } from "../components/FollowButton";
 import { Handle } from "../components/Handle";
 import { useAuth } from "../contexts/AuthContext";
@@ -1459,10 +1460,11 @@ export function Worlds() {
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
               onPointerCancel={handlePointerUp}
-              className={`relative min-h-[320px] sm:min-h-[500px] md:min-h-[620px] xl:min-h-[760px] overflow-hidden rounded-[30px] border border-white/10 bg-gradient-to-br ${selectedDistrict.accent}`}
+              className={`relative min-h-[420px] overflow-hidden rounded-[30px] border border-white/10 bg-gradient-to-br sm:min-h-[560px] md:min-h-[680px] xl:min-h-[780px] [perspective:1200px] ${selectedDistrict.accent}`}
             >
               <DistrictBackdrop district={district} />
               <DistrictAmbientVeil district={district} activeEvent={ambientEvent} />
+              <World3DEnvironment district={district} />
 
               {ambientEvent?.district === district && (
                 <div className="absolute left-4 top-4 z-20 max-w-sm rounded-[24px] border border-gold-300/30 bg-night-950/72 px-4 py-3 backdrop-blur-xl">
@@ -1568,12 +1570,17 @@ export function Worlds() {
                   key={member.id}
                   className={`absolute flex flex-col items-center ${member.aura}`}
                   style={{
-                    left: `calc(${member.x}% - 28px)`,
-                    top: `calc(${member.y}% - 40px)`,
+                    left: `${member.x}%`,
+                    top: `${member.y}%`,
+                    zIndex: worldDepthZ(member.y),
                   }}
                   animate={{ y: [0, -5, 0] }}
                   transition={{ duration: 4.6, repeat: Infinity, ease: "easeInOut" }}
                 >
+                  <div
+                    className="flex -translate-x-1/2 -translate-y-1/2 flex-col items-center"
+                    style={{ transform: `translate(-50%, -50%) scale(${worldDepthScale(member.y)})` }}
+                  >
                   <button
                     type="button"
                     onClick={(event) => {
@@ -1585,13 +1592,18 @@ export function Worlds() {
                     }}
                     className="group flex flex-col items-center"
                   >
-                    <div className="relative rounded-[24px] border border-white/15 bg-night-950/75 p-1.5 backdrop-blur transition group-hover:border-gold-300/45">
-                      <AvatarImage
-                        candidates={[member.avatarImageUrl]}
-                        fallbackSeed={member.id}
-                        alt={member.username}
-                        className="h-10 w-10 md:h-12 md:w-12 rounded-[18px] object-cover"
-                      />
+                    <div className="relative rounded-[28px] border border-white/15 bg-night-950/78 p-1.5 shadow-[0_20px_45px_rgba(2,6,23,0.38)] backdrop-blur transition group-hover:border-gold-300/45 group-hover:shadow-[0_24px_60px_rgba(250,204,21,0.16)]">
+                      <div className="w-12 md:w-16">
+                        <AvatarViewer
+                          src={member.avatarUrl ?? null}
+                          fallbackImage={member.avatarImageUrl}
+                          alt={member.username}
+                          size="square"
+                          framing="body"
+                          autoRotate={false}
+                          interactive={false}
+                        />
+                      </div>
 
                       <WorldInteractionBurst
                         kind={member.interactionKind}
@@ -1620,6 +1632,7 @@ export function Worlds() {
                       </div>
                     </div>
                   </button>
+                  </div>
                 </motion.div>
               ))}
 
@@ -1639,20 +1652,33 @@ export function Worlds() {
               <motion.div
                 className="absolute z-10"
                 style={{
-                  left: `calc(${position.x}% - 44px)`,
-                  top: `calc(${position.y}% - 68px)`,
+                  left: `${position.x}%`,
+                  top: `${position.y}%`,
+                  zIndex: worldDepthZ(position.y) + 2,
                 }}
                 animate={{ y: [0, -8, 0] }}
                 transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}
               >
-                <div className="relative flex flex-col items-center">
-                  <div className="rounded-[30px] border border-gold-300/40 bg-night-950/80 p-2 shadow-[0_0_45px_rgba(250,204,21,0.25)] backdrop-blur">
-                    <AvatarImage
-                      candidates={[profile?.avatarImageUrl, user?.avatar]}
-                      fallbackSeed={user?.id ?? "guest-world"}
-                      alt={user?.username ?? "Explorateur"}
-                      className="h-14 w-14 md:h-20 md:w-20 rounded-[24px] object-cover"
-                    />
+                <div
+                  className="relative flex flex-col items-center"
+                  style={{ transform: `translate(-50%, -50%) scale(${worldDepthScale(position.y)})` }}
+                >
+                  <div className="rounded-[34px] border border-gold-300/45 bg-night-950/82 p-2 shadow-[0_0_55px_rgba(250,204,21,0.3)] backdrop-blur">
+                    <div className="w-20 md:w-28">
+                      <AvatarViewer
+                        src={profile?.avatarUrl ?? null}
+                        fallbackImage={profile?.avatarImageUrl || user?.avatar}
+                        alt={user?.username ?? "Explorateur"}
+                        size="square"
+                        framing="body"
+                        autoRotate={false}
+                        interactive={false}
+                        equippedFrameId={profile?.equipped?.frame ?? null}
+                        equippedSceneId={profile?.equipped?.scene ?? null}
+                        equippedOutfit3DId={profile?.equipped?.outfit3d ?? null}
+                        equippedAccessory3DId={profile?.equipped?.accessory3d ?? null}
+                      />
+                    </div>
                   </div>
                   <WorldInteractionBurst
                     kind={myWorldPresence?.interactionKind ?? null}
@@ -2447,6 +2473,99 @@ function DistrictAmbientVeil({
           />
         </>
       )}
+    </div>
+  );
+}
+
+function worldDepthScale(y: number) {
+  return 0.62 + clamp(y, 12, 92) / 100;
+}
+
+function worldDepthZ(y: number) {
+  return 40 + Math.round(clamp(y, 0, 100) * 10);
+}
+
+function World3DEnvironment({ district }: { district: DistrictId }) {
+  const isPlace = district === "place";
+  const isArcades = district === "arcades";
+  const isObservatory = district === "observatory";
+  const pillars = isArcades
+    ? [
+        { x: 13, y: 36, h: 190, tone: "from-cyan-200/28 to-sky-800/28" },
+        { x: 29, y: 30, h: 230, tone: "from-sky-200/24 to-indigo-900/28" },
+        { x: 70, y: 32, h: 220, tone: "from-indigo-200/24 to-cyan-900/24" },
+        { x: 86, y: 39, h: 180, tone: "from-cyan-100/20 to-slate-900/30" },
+      ]
+    : isObservatory
+      ? [
+          { x: 16, y: 42, h: 170, tone: "from-fuchsia-200/22 to-purple-950/26" },
+          { x: 35, y: 30, h: 210, tone: "from-violet-200/20 to-night-950/28" },
+          { x: 68, y: 31, h: 220, tone: "from-rose-200/18 to-purple-950/26" },
+          { x: 84, y: 44, h: 160, tone: "from-white/18 to-fuchsia-950/24" },
+        ]
+      : [
+          { x: 15, y: 43, h: 150, tone: "from-gold-100/24 to-amber-900/26" },
+          { x: 30, y: 34, h: 190, tone: "from-amber-100/24 to-emerald-950/24" },
+          { x: 68, y: 34, h: 190, tone: "from-gold-100/22 to-amber-900/24" },
+          { x: 84, y: 43, h: 150, tone: "from-rose-100/18 to-emerald-950/26" },
+        ];
+
+  return (
+    <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+      <div className="absolute inset-x-[6%] bottom-[4%] h-[62%] origin-bottom rounded-[48%] border border-white/10 bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.10),rgba(34,197,94,0.18)_35%,rgba(6,78,59,0.48)_68%,rgba(2,6,23,0.72))] shadow-[0_60px_120px_rgba(0,0,0,0.45)] [transform:rotateX(62deg)]" />
+      <div className="absolute inset-x-[12%] bottom-[13%] h-[34%] origin-bottom rounded-[50%] border border-gold-200/12 bg-[repeating-radial-gradient(ellipse_at_center,rgba(250,204,21,0.14)_0_1px,transparent_1px_24px)] opacity-70 [transform:rotateX(66deg)]" />
+      <div className="absolute inset-x-[20%] bottom-[18%] h-[18%] origin-bottom rounded-[50%] border border-white/10 bg-night-950/24 blur-[1px] [transform:rotateX(64deg)]" />
+
+      {pillars.map((pillar, index) => (
+        <div
+          key={`${district}-3d-pillar-${index}`}
+          className={`absolute w-16 -translate-x-1/2 rounded-t-[32px] border border-white/10 bg-gradient-to-b ${pillar.tone} shadow-[0_26px_80px_rgba(2,6,23,0.34)] backdrop-blur-md [transform:translateZ(-80px)_rotateX(3deg)]`}
+          style={{
+            left: `${pillar.x}%`,
+            top: `${pillar.y}%`,
+            height: `${pillar.h}px`,
+            zIndex: worldDepthZ(pillar.y) - 20,
+          }}
+        />
+      ))}
+
+      {isPlace && (
+        <>
+          <div className="absolute left-1/2 top-[44%] h-32 w-32 -translate-x-1/2 -translate-y-1/2 rounded-full border border-gold-100/35 bg-[radial-gradient(circle,rgba(255,255,255,0.16),rgba(250,204,21,0.18)_45%,rgba(15,23,42,0.55))] shadow-[0_28px_80px_rgba(250,204,21,0.16)]" />
+          <div className="absolute left-1/2 top-[38%] h-20 w-20 -translate-x-1/2 -translate-y-1/2 rounded-full bg-gold-100/16 blur-xl" />
+        </>
+      )}
+
+      {isArcades && (
+        <div className="absolute left-1/2 top-[38%] grid w-[58%] -translate-x-1/2 grid-cols-3 gap-4">
+          {["Avatar", "Fan art", "Events"].map((label) => (
+            <div
+              key={label}
+              className="rounded-[24px] border border-cyan-200/18 bg-night-950/40 px-4 py-5 text-center font-display text-sm uppercase tracking-[0.2em] text-cyan-100/70 shadow-[0_18px_60px_rgba(34,211,238,0.12)] backdrop-blur"
+            >
+              {label}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {isObservatory && (
+        <>
+          <div className="absolute left-1/2 top-[35%] h-36 w-[58%] -translate-x-1/2 rounded-t-[160px] border border-fuchsia-100/16 bg-fuchsia-100/6 shadow-[0_0_70px_rgba(217,70,239,0.14)] backdrop-blur" />
+          <div className="absolute right-[14%] top-[12%] h-20 w-20 rounded-full bg-white/80 shadow-[0_0_90px_rgba(226,232,240,0.55)]" />
+        </>
+      )}
+
+      {Array.from({ length: 18 }).map((_, index) => (
+        <span
+          key={`${district}-3d-grass-${index}`}
+          className="absolute bottom-[6%] h-16 w-2 origin-bottom rounded-full bg-emerald-300/22 blur-[0.5px]"
+          style={{
+            left: `${4 + ((index * 7) % 92)}%`,
+            transform: `rotate(${index % 2 ? 7 : -7}deg) scaleY(${0.7 + (index % 5) * 0.12})`,
+          }}
+        />
+      ))}
     </div>
   );
 }
