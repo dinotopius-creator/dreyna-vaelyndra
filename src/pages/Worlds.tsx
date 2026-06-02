@@ -1642,7 +1642,7 @@ export function Worlds() {
                 </button>
               </div>
 
-              <div className="absolute bottom-5 right-5 rounded-2xl border border-white/10 bg-night-950/70 px-4 py-3 backdrop-blur">
+              <div className="absolute left-5 top-5 rounded-2xl border border-white/10 bg-night-950/70 px-4 py-3 backdrop-blur md:bottom-5 md:left-auto md:right-5 md:top-auto">
                 <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-ivory/60">
                   <Volume2 className="h-3.5 w-3.5 text-gold-300" />
                   Salon vocal
