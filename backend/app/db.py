@@ -5,7 +5,9 @@ de survivre aux redéploiements. En local, il vit à la racine du backend.
 """
 from __future__ import annotations
 
+import logging
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 
 from sqlmodel import SQLModel, create_engine, Session
@@ -186,6 +188,64 @@ def _apply_migrations() -> None:
                 "WHERE id = 'user-dreyna'"
             )
             conn.exec_driver_sql("PRAGMA user_version = 1")
+
+        # user_version = 2 — Backfill des abonnements aux comptes officiels
+        # (Dreyna, Kamestars, Roi des zems). Pendant longtemps, `/auth/
+        # register` créait directement le `UserProfile` sans appeler
+        # `_auto_follow_officials` (qui n'existait que dans `POST /users`,
+        # plus appelé par le front). Conséquence : la grande majorité des
+        # comptes récents n'avaient aucun abonnement aux officiels, ce qui
+        # se manifestait par une "perte d'abonnés" pour Dreyna/Kamestars/
+        # Roi des zems.
+        #
+        # On rejoue rétroactivement l'auto-follow pour tous les
+        # `UserProfile` non-officiels existants. `INSERT OR IGNORE` +
+        # l'index unique `follow_unique_pair` garantissent l'idempotence
+        # (les utilisateurs qui avaient déjà follow manuellement ne sont
+        # pas dupliqués).
+        if user_version < 2:
+            official_ids = (
+                "user-dreyna",
+                "user-kamestars",
+                "user-roi-des-zems",
+            )
+            now_iso = datetime.now(timezone.utc).isoformat()
+            inserted = 0
+            for target_id in official_ids:
+                exists = conn.exec_driver_sql(
+                    "SELECT 1 FROM userprofile WHERE id = ?",
+                    (target_id,),
+                ).fetchone()
+                if not exists:
+                    continue
+                cur = conn.exec_driver_sql(
+                    "INSERT OR IGNORE INTO follow "
+                    "(follower_id, following_id, created_at) "
+                    "SELECT u.id, ?, ? FROM userprofile u "
+                    "WHERE u.id NOT IN (?, ?, ?) "
+                    "AND u.id != ? "
+                    "AND NOT EXISTS ("
+                    "  SELECT 1 FROM follow f "
+                    "  WHERE f.follower_id = u.id "
+                    "    AND f.following_id = ?"
+                    ")",
+                    (
+                        target_id,
+                        now_iso,
+                        official_ids[0],
+                        official_ids[1],
+                        official_ids[2],
+                        target_id,
+                        target_id,
+                    ),
+                )
+                inserted += cur.rowcount or 0
+            conn.exec_driver_sql("PRAGMA user_version = 2")
+            if inserted:
+                logging.getLogger("vaelyndra.db").info(
+                    "auto_follow_officials backfill: %d Follow rows inserted",
+                    inserted,
+                )
 
 
 def get_session() -> Session:

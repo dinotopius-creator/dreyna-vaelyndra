@@ -43,7 +43,7 @@ from sqlmodel import Session, select
 from ..creatures import CREATURES
 from ..db import get_session
 from ..handles import slugify_handle, suggest_unique_handle
-from ..models import UserProfile
+from ..models import Follow, UserProfile
 from . import emailer
 from .crypto import (
     generate_opaque_token,
@@ -74,6 +74,42 @@ from .rate_limit import limiter, user_agent_of
 
 logger = logging.getLogger("vaelyndra.auth")
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+# Comptes officiels suivis automatiquement à la création d'un compte (cf.
+# `app.routers.users.OFFICIAL_FOLLOW_TARGETS`). Dupliqué ici parce que
+# `/auth/register` crée le `UserProfile` directement (sans passer par
+# `POST /users`), donc la logique d'auto-follow n'était jamais déclenchée
+# pour les comptes créés via l'inscription standard — c'est la cause de
+# la perte de "nombre d'abonnés" reportée par les utilisateurs.
+_AUTO_FOLLOW_OFFICIAL_IDS: tuple[str, ...] = (
+    "user-dreyna",
+    "user-kamestars",
+    "user-roi-des-zems",
+)
+
+
+def _auto_follow_officials_on_register(db: Session, follower_id: str) -> None:
+    """Insère les Follow (follower_id, official_id) manquants.
+
+    Idempotent : l'index unique `follow_unique_pair` ignore silencieusement
+    les doublons. Sauté pour les comptes officiels eux-mêmes pour ne pas
+    créer de self-follow ni de boucle. Une vérification d'existence
+    (`db.get(UserProfile, target)`) évite les follows fantômes si le seed
+    officiel n'est pas encore passé (cas du tout premier boot local).
+    """
+    for target_id in _AUTO_FOLLOW_OFFICIAL_IDS:
+        if target_id == follower_id:
+            continue
+        if db.get(UserProfile, target_id) is None:
+            continue
+        existing = db.exec(
+            select(Follow)
+            .where(Follow.follower_id == follower_id)
+            .where(Follow.following_id == target_id)
+        ).first()
+        if existing is not None:
+            continue
+        db.add(Follow(follower_id=follower_id, following_id=target_id))
 
 
 # --- Helpers --------------------------------------------------------------
@@ -388,7 +424,16 @@ def register(payload: RegisterIn, request: Request) -> dict:
                 )
             db.refresh(user)
 
-        # 3. Crée le Credential (non vérifié) + le token d'email verification.
+        # 3. Auto-abonne aux comptes officiels (Dreyna, Kamestars, Roi des
+        #    zems). Avant ce fix, l'abonnement automatique n'existait que
+        #    dans `POST /users` (upsert_user) qui n'est plus appelé par le
+        #    front depuis le passage à `/auth/register` → la grande
+        #    majorité des comptes récents n'avaient aucun abonnement aux
+        #    officiels, ce qui explique la "perte d'abonnés" reportée par
+        #    les utilisateurs.
+        _auto_follow_officials_on_register(db, user.id)
+
+        # 4. Crée le Credential (non vérifié) + le token d'email verification.
         credential = Credential(
             user_id=user.id,
             email=email,
