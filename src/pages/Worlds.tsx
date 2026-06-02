@@ -524,6 +524,7 @@ export function Worlds() {
 
   const {
     voiceEnabled,
+    micEnabled,
     voiceLoading,
     voiceLevel,
     connectionCount: worldVoiceConnections,
@@ -660,8 +661,8 @@ export function Worlds() {
           x: position.x,
           y: position.y,
           isSelf: true,
-          voiceEnabled,
-          isSpeaking: voiceEnabled && voiceLevel > 12,
+          voiceEnabled: micEnabled,
+          isSpeaking: micEnabled && voiceLevel > 12,
           interactionKind: myWorldPresence?.interactionKind ?? null,
           familiarIcon: activeFamiliar?.icon ?? null,
           familiarColor: activeFamiliar?.color ?? null,
@@ -690,7 +691,7 @@ export function Worlds() {
     position.y,
     stageMembers,
     user,
-    voiceEnabled,
+    micEnabled,
     voiceLevel,
   ]);
 
@@ -1492,17 +1493,21 @@ export function Worlds() {
                 onClick={toggleVoice}
                 disabled={voiceLoading}
                 className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm transition ${
-                  voiceEnabled
+                  micEnabled
                     ? "border-emerald-400/60 bg-emerald-400/10 text-emerald-200"
+                    : voiceEnabled
+                      ? "border-gold-400/60 bg-gold-500/10 text-gold-100"
                     : "border-royal-500/30 text-ivory/75 hover:border-gold-400/60 hover:text-gold-200"
                 }`}
               >
-                {voiceEnabled ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
+                {micEnabled ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
                 {voiceLoading
                   ? "Activation..."
-                  : voiceEnabled
-                    ? "Chat vocal actif"
-                    : "Activer le chat vocal"}
+                  : micEnabled
+                    ? "Couper le micro"
+                    : voiceEnabled
+                      ? "Activer le micro"
+                      : "Rejoindre le vocal"}
               </button>
             </div>
 
@@ -1657,8 +1662,10 @@ export function Worlds() {
                   {voiceEnabled
                     ? currentChannelId.startsWith("private:")
                       ? "discussion privée active"
-                      : `${worldVoiceConnections} presence${worldVoiceConnections > 1 ? "s" : ""} audio reliee${worldVoiceConnections > 1 ? "s" : ""}`
-                    : "micro local en veille"}
+                      : micEnabled
+                        ? `${worldVoiceConnections} presence${worldVoiceConnections > 1 ? "s" : ""} audio reliee${worldVoiceConnections > 1 ? "s" : ""}`
+                        : `écoute active · micro coupé · ${worldVoiceConnections} lien${worldVoiceConnections > 1 ? "s" : ""}`
+                    : "vocal non rejoint"}
                 </div>
                 <div className="mt-3 flex gap-1">
                   {Array.from({ length: 10 }).map((_, index) => (
