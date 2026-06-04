@@ -1616,23 +1616,23 @@ export function Worlds() {
               } ${selectedDistrict.accent}`}
             >
               {isWorldFullscreen && (
-                <div className="absolute inset-x-0 top-0 z-40 flex items-center justify-between gap-3 bg-gradient-to-b from-night-950/82 to-transparent px-[calc(0.85rem+env(safe-area-inset-left))] pb-8 pt-[calc(0.75rem+env(safe-area-inset-top))] landscape:pb-5">
-                  <div>
-                    <p className="text-[10px] uppercase tracking-[0.22em] text-gold-200/70">
-                      Monde 3D APK
-                    </p>
-                    <p className="font-display text-lg text-gold-100 landscape:text-base">
-                      {selectedDistrict.name}
-                    </p>
-                  </div>
+                <div className="absolute left-[calc(0.75rem+env(safe-area-inset-left))] top-[calc(0.75rem+env(safe-area-inset-top))] z-40 flex items-center gap-3">
                   <button
                     type="button"
                     onClick={() => setIsWorldFullscreen(false)}
-                    className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-night-950/75 text-ivory/80 shadow-xl backdrop-blur"
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-night-950/75 text-ivory/80 shadow-xl backdrop-blur transition hover:border-gold-300/45 hover:text-gold-100"
                     aria-label="Quitter le monde plein écran"
                   >
                     <X className="h-5 w-5" />
                   </button>
+                  <div className="hidden rounded-2xl border border-white/10 bg-night-950/58 px-3 py-2 backdrop-blur landscape:block">
+                    <p className="text-[9px] uppercase tracking-[0.22em] text-gold-200/70">
+                      Monde 3D APK
+                    </p>
+                    <p className="font-display text-sm text-gold-100">
+                      {selectedDistrict.name}
+                    </p>
+                  </div>
                 </div>
               )}
               <DistrictBackdrop district={district} />
@@ -1729,7 +1729,13 @@ export function Worlds() {
                 </button>
               </div>
 
-              <div className="absolute left-5 top-5 rounded-2xl border border-white/10 bg-night-950/70 px-4 py-3 backdrop-blur md:bottom-5 md:left-auto md:right-5 md:top-auto">
+              <div
+                className={`absolute z-30 rounded-2xl border border-white/10 bg-night-950/70 px-4 py-3 backdrop-blur ${
+                  isWorldFullscreen
+                    ? "right-[calc(0.75rem+env(safe-area-inset-right))] top-[calc(0.75rem+env(safe-area-inset-top))] max-w-[min(15rem,42vw)]"
+                    : "right-5 top-5 md:bottom-5 md:top-auto"
+                }`}
+              >
                 <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-ivory/60">
                   <Volume2 className="h-3.5 w-3.5 text-gold-300" />
                   Salon vocal
@@ -1747,7 +1753,7 @@ export function Worlds() {
                   {Array.from({ length: 10 }).map((_, index) => (
                     <span
                       key={index}
-                      className="h-10 w-2 rounded-full bg-emerald-300/15 transition"
+                      className={`${isWorldFullscreen ? "h-7 w-1.5" : "h-10 w-2"} rounded-full bg-emerald-300/15 transition`}
                       style={{
                         background:
                           index < Math.max(1, Math.round(voiceLevel / 10))

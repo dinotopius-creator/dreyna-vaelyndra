@@ -70,6 +70,7 @@ interface AvatarEntity {
   hair: THREE.Mesh;
   shadow: THREE.Mesh;
   suitMaterial: THREE.MeshStandardMaterial;
+  trimMaterial: THREE.MeshStandardMaterial;
   accessoryRoot: THREE.Group;
   parureRoot: THREE.Group;
   familiarRoot: THREE.Group | null;
@@ -97,6 +98,7 @@ const WORLD_WIDTH = 24;
 const WORLD_DEPTH = 18;
 const SELF_ID = "__self__";
 const REMOTE_AVATAR_GRACE_MS = 8000;
+const MAX_PIXEL_RATIO = 1.65;
 
 interface AnalogInput {
   active: boolean;
@@ -179,6 +181,16 @@ function setObjectUserData(object: THREE.Object3D, data: Record<string, string>)
   object.children.forEach((child) => setObjectUserData(child, data));
 }
 
+function terrainHeightAt(x: number, z: number, district: World3DDistrictId) {
+  const ridge = Math.max(0, Math.abs(x) - 6.2) * 0.16 + Math.max(0, Math.abs(z) - 5.1) * 0.14;
+  const waves =
+    Math.sin(x * 0.62 + z * 0.28) * 0.13 +
+    Math.cos(z * 0.54 - x * 0.18) * 0.11;
+  const centerFlatten = THREE.MathUtils.clamp(Math.hypot(x / 6.8, z / 4.8), 0, 1);
+  const districtLift = district === "observatory" ? 0.18 : district === "arcades" ? 0.08 : 0.12;
+  return Math.max(0, (ridge + waves + districtLift) * centerFlatten);
+}
+
 function makeLimb(material: THREE.Material, height = 0.72) {
   const group = new THREE.Group();
   const mesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.12, height, 4, 8), material);
@@ -236,6 +248,43 @@ function createAccessory(theme: AccessoryTheme) {
   return root;
 }
 
+function createOutfitDetails(theme: OutfitTheme, trimColor: number) {
+  const root = new THREE.Group();
+  const trim = new THREE.MeshStandardMaterial({
+    color: trimColor,
+    emissive: trimColor,
+    emissiveIntensity: theme === "base" ? 0.08 : 0.22,
+    roughness: 0.38,
+    metalness: 0.18,
+  });
+  const chest = new THREE.Mesh(new THREE.TorusGeometry(0.35, 0.018, 6, 32), trim);
+  chest.position.set(0, 1.78, 0.325);
+  chest.rotation.x = Math.PI / 2;
+  root.add(chest);
+  const belt = new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.018, 6, 32), trim);
+  belt.position.set(0, 1.2, 0);
+  belt.scale.z = 0.72;
+  belt.rotation.x = Math.PI / 2;
+  root.add(belt);
+  if (theme === "royal" || theme === "ceremony" || theme === "oracle") {
+    const cape = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.95, 1.12, 1, 1),
+      new THREE.MeshStandardMaterial({ color: trimColor, transparent: true, opacity: 0.38, side: THREE.DoubleSide }),
+    );
+    cape.position.set(0, 1.34, -0.36);
+    cape.rotation.x = -0.12;
+    root.add(cape);
+  }
+  if (theme === "neon" || theme === "street" || theme === "frost") {
+    [-0.43, 0.43].forEach((x) => {
+      const strip = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.74, 0.035), trim);
+      strip.position.set(x, 1.62, 0.33);
+      root.add(strip);
+    });
+  }
+  return root;
+}
+
 function createParure(frameId: string | null | undefined) {
   const root = new THREE.Group();
   if (!frameId) return root;
@@ -264,24 +313,74 @@ function createFamiliar(player: World3DPlayer) {
   const color = new THREE.Color(player.familiarColor || "#facc15").getHex();
   const root = new THREE.Group();
   root.position.set(0.72, 0, 0.72);
+  const familiarName = `${player.familiarName ?? ""} ${player.familiarIcon ?? ""}`.toLowerCase();
+  const isFox = familiarName.includes("renard") || familiarName.includes("fox") || player.familiarIcon.includes("🦊");
+  const isCat = familiarName.includes("chat") || familiarName.includes("cat") || player.familiarIcon.includes("🐱") || player.familiarIcon.includes("🐈");
+  const isDragon = familiarName.includes("dragon") || player.familiarIcon.includes("🐉") || player.familiarIcon.includes("🐲");
   const bodyMaterial = new THREE.MeshStandardMaterial({
     color,
     emissive: color,
-    emissiveIntensity: 0.14,
+    emissiveIntensity: isDragon ? 0.2 : 0.14,
     roughness: 0.68,
   });
-  const body = new THREE.Mesh(new THREE.SphereGeometry(0.22, 18, 14), bodyMaterial);
-  body.position.y = 0.32;
+  const bellyMaterial = new THREE.MeshStandardMaterial({ color: 0xfff7d6, roughness: 0.74 });
+  const darkMaterial = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.72 });
+  const body = new THREE.Mesh(new THREE.SphereGeometry(isDragon ? 0.25 : 0.23, 18, 14), bodyMaterial);
+  body.scale.set(isFox ? 1.28 : 1.08, isDragon ? 0.82 : 0.72, isFox ? 0.82 : 0.92);
+  body.position.y = 0.3;
   body.castShadow = true;
   root.add(body);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.16, 16, 12), bodyMaterial);
-  head.position.set(0, 0.55, 0.14);
+  const belly = new THREE.Mesh(new THREE.SphereGeometry(0.13, 14, 10), bellyMaterial);
+  belly.scale.set(0.85, 0.6, 0.34);
+  belly.position.set(0, 0.31, 0.2);
+  root.add(belly);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(isDragon ? 0.18 : 0.16, 16, 12), bodyMaterial);
+  head.position.set(0, 0.53, 0.24);
   head.castShadow = true;
   root.add(head);
   [-0.12, 0.12].forEach((x) => {
-    const ear = new THREE.Mesh(new THREE.ConeGeometry(0.055, 0.16, 10), bodyMaterial);
-    ear.position.set(x, 0.72, 0.12);
+    const ear = new THREE.Mesh(new THREE.ConeGeometry(isFox ? 0.07 : 0.055, isDragon ? 0.18 : 0.17, 10), bodyMaterial);
+    ear.position.set(x, 0.7, 0.18);
+    ear.rotation.z = x < 0 ? 0.18 : -0.18;
     root.add(ear);
+  });
+  const snout = new THREE.Mesh(new THREE.ConeGeometry(isFox ? 0.075 : 0.055, isDragon ? 0.14 : 0.12, 12), bellyMaterial);
+  snout.position.set(0, 0.52, 0.41);
+  snout.rotation.x = Math.PI / 2;
+  root.add(snout);
+  const tail = new THREE.Mesh(
+    isFox
+      ? new THREE.ConeGeometry(0.12, 0.58, 14)
+      : new THREE.CapsuleGeometry(0.055, isDragon ? 0.5 : 0.34, 5, 10),
+    isFox ? bodyMaterial : darkMaterial,
+  );
+  tail.position.set(0, 0.33, -0.43);
+  tail.rotation.x = isFox ? -1.15 : -0.75;
+  tail.castShadow = true;
+  root.add(tail);
+  if (isFox) {
+    const tailTip = new THREE.Mesh(new THREE.SphereGeometry(0.085, 12, 10), bellyMaterial);
+    tailTip.position.set(0, 0.58, -0.68);
+    root.add(tailTip);
+  }
+  if (isDragon) {
+    [-0.18, 0.18].forEach((x) => {
+      const wing = new THREE.Mesh(
+        new THREE.ConeGeometry(0.16, 0.38, 3),
+        new THREE.MeshStandardMaterial({ color, transparent: true, opacity: 0.62, side: THREE.DoubleSide }),
+      );
+      wing.position.set(x, 0.48, -0.08);
+      wing.rotation.set(0.6, 0, x < 0 ? -0.85 : 0.85);
+      root.add(wing);
+    });
+  }
+  [-0.16, 0.16].forEach((x) => {
+    [-0.12, 0.18].forEach((z) => {
+      const paw = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 8), isCat ? darkMaterial : bodyMaterial);
+      paw.scale.y = 0.55;
+      paw.position.set(x, 0.08, z);
+      root.add(paw);
+    });
   });
   const shadow = new THREE.Mesh(
     new THREE.CircleGeometry(0.34, 24),
@@ -304,8 +403,12 @@ function applyAppearance(entity: AvatarEntity, player: World3DPlayer) {
   entity.suitMaterial.color.setHex(player.isSelf && outfit === "base" ? colorForPlayer(player.id, true) : colors.main);
   entity.suitMaterial.emissive.setHex(colors.glow);
   entity.suitMaterial.emissiveIntensity = outfit === "base" ? 0.08 : 0.18;
+  entity.trimMaterial.color.setHex(colors.trim);
+  entity.trimMaterial.emissive.setHex(colors.glow);
+  entity.trimMaterial.emissiveIntensity = outfit === "base" ? 0.06 : 0.22;
   clearGroup(entity.accessoryRoot);
   clearGroup(entity.parureRoot);
+  entity.accessoryRoot.add(createOutfitDetails(outfit, colors.trim));
   entity.accessoryRoot.add(createAccessory(accessory));
   entity.parureRoot.add(createParure(player.appearance?.frame));
 }
@@ -340,6 +443,13 @@ function createAvatar(player: World3DPlayer) {
     emissiveIntensity: 0.25,
     roughness: 0.45,
   });
+  const trim = new THREE.MeshStandardMaterial({
+    color: 0xfacc15,
+    emissive: 0xf59e0b,
+    emissiveIntensity: 0.12,
+    roughness: 0.42,
+    metalness: 0.14,
+  });
 
   const group = new THREE.Group();
   group.position.copy(pctToWorld(player.x, player.y));
@@ -361,11 +471,23 @@ function createAvatar(player: World3DPlayer) {
   torso.position.y = 1.58;
   torso.castShadow = true;
   group.add(torso);
+  const chestPlate = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.42, 0.045), trim);
+  chestPlate.position.set(0, 1.72, 0.335);
+  chestPlate.castShadow = true;
+  group.add(chestPlate);
 
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.34, 20, 20), skin);
   head.position.y = 2.26;
   head.castShadow = true;
   group.add(head);
+  [-0.11, 0.11].forEach((x) => {
+    const eye = new THREE.Mesh(
+      new THREE.SphereGeometry(0.032, 8, 8),
+      new THREE.MeshBasicMaterial({ color: player.isSelf ? 0xfef3c7 : 0xe0f2fe }),
+    );
+    eye.position.set(x, 2.3, 0.31);
+    group.add(eye);
+  });
 
   const hair = new THREE.Mesh(new THREE.SphereGeometry(0.36, 18, 12, 0, Math.PI * 2, 0, Math.PI / 2), dark);
   hair.position.y = 2.42;
@@ -429,6 +551,7 @@ function createAvatar(player: World3DPlayer) {
     hair,
     shadow,
     suitMaterial: suit,
+    trimMaterial: trim,
     accessoryRoot,
     parureRoot,
     familiarRoot: null,
@@ -449,20 +572,44 @@ function createAvatar(player: World3DPlayer) {
 function createGround(district: World3DDistrictId) {
   const group = new THREE.Group();
   const color = district === "observatory" ? 0x1e1b4b : district === "arcades" ? 0x064e5f : 0x14532d;
+  const groundGeometry = new THREE.PlaneGeometry(WORLD_WIDTH + 8, WORLD_DEPTH + 8, 48, 40);
+  const positions = groundGeometry.attributes.position;
+  for (let index = 0; index < positions.count; index += 1) {
+    const x = positions.getX(index);
+    const y = positions.getY(index);
+    positions.setZ(index, terrainHeightAt(x, y, district));
+  }
+  groundGeometry.computeVertexNormals();
   const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(WORLD_WIDTH + 8, WORLD_DEPTH + 8, 32, 32),
+    groundGeometry,
     new THREE.MeshStandardMaterial({
       color,
       roughness: 0.9,
       metalness: 0.02,
+      vertexColors: false,
     }),
   );
   ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;
   group.add(ground);
 
+  const socialPlate = new THREE.Mesh(
+    new THREE.CircleGeometry(5.15, 72),
+    new THREE.MeshStandardMaterial({
+      color: district === "observatory" ? 0x312e81 : district === "arcades" ? 0x0e7490 : 0x3f2b16,
+      roughness: 0.64,
+      metalness: 0.04,
+      transparent: true,
+      opacity: 0.84,
+    }),
+  );
+  socialPlate.rotation.x = -Math.PI / 2;
+  socialPlate.position.y = 0.035;
+  socialPlate.receiveShadow = true;
+  group.add(socialPlate);
+
   const path = new THREE.Mesh(
-    new THREE.RingGeometry(2.4, 4.4, 64),
+    new THREE.RingGeometry(2.5, 4.7, 88),
     new THREE.MeshStandardMaterial({
       color: district === "observatory" ? 0x7c3aed : district === "arcades" ? 0x0891b2 : 0xb45309,
       roughness: 0.72,
@@ -473,6 +620,25 @@ function createGround(district: World3DDistrictId) {
   path.rotation.x = -Math.PI / 2;
   path.position.y = 0.018;
   group.add(path);
+
+  const ridgeMaterial = new THREE.MeshStandardMaterial({
+    color: district === "observatory" ? 0x312e81 : district === "arcades" ? 0x155e75 : 0x365314,
+    roughness: 0.86,
+  });
+  [
+    [-10.8, -7.2, 2.6, 1.1],
+    [-9.6, 6.4, 2.1, 0.9],
+    [9.8, -6.6, 2.4, 1.0],
+    [10.7, 6.2, 2.8, 1.2],
+    [0, -8.2, 3.2, 0.8],
+  ].forEach(([x, z, radius, height], index) => {
+    const hill = new THREE.Mesh(new THREE.ConeGeometry(radius, height, 28), ridgeMaterial);
+    hill.position.set(x, height / 2 - 0.02, z);
+    hill.rotation.y = index * 0.7;
+    hill.castShadow = true;
+    hill.receiveShadow = true;
+    group.add(hill);
+  });
 
   return group;
 }
@@ -501,6 +667,96 @@ function createWorldProps(district: World3DDistrictId) {
     pillar.receiveShadow = true;
     group.add(pillar);
   });
+
+  const rockMaterial = new THREE.MeshStandardMaterial({
+    color: district === "observatory" ? 0x64748b : district === "arcades" ? 0x0f766e : 0x57534e,
+    roughness: 0.82,
+    metalness: 0.04,
+  });
+  const flowerMaterial = new THREE.MeshStandardMaterial({
+    color: district === "observatory" ? 0xf0abfc : district === "arcades" ? 0x67e8f9 : 0xf9a8d4,
+    emissive: district === "observatory" ? 0x86198f : 0x0e7490,
+    emissiveIntensity: 0.16,
+    roughness: 0.48,
+  });
+  const leafMaterial = new THREE.MeshStandardMaterial({
+    color: district === "observatory" ? 0xa7f3d0 : district === "arcades" ? 0x22d3ee : 0x86efac,
+    roughness: 0.72,
+  });
+
+  [
+    [-7.2, -2.8],
+    [-5.5, 6.5],
+    [5.6, -5.8],
+    [6.9, 2.4],
+    [1.8, 7.1],
+  ].forEach(([x, z], index) => {
+    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.32 + (index % 3) * 0.1, 0), rockMaterial);
+    rock.position.set(x, 0.22, z);
+    rock.scale.set(1.3, 0.62, 0.88);
+    rock.rotation.set(0.2, index * 0.8, -0.08);
+    rock.castShadow = true;
+    rock.receiveShadow = true;
+    group.add(rock);
+  });
+
+  Array.from({ length: 22 }).forEach((_, index) => {
+    const angle = index * 1.71;
+    const radius = 5.7 + (index % 5) * 0.72;
+    const x = Math.cos(angle) * radius;
+    const z = Math.sin(angle) * (radius * 0.68);
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.018, 0.24, 5), leafMaterial);
+    stem.position.set(x, 0.13, z);
+    group.add(stem);
+    const bloom = new THREE.Mesh(new THREE.SphereGeometry(0.055 + (index % 3) * 0.012, 8, 6), flowerMaterial);
+    bloom.position.set(x, 0.28, z);
+    bloom.castShadow = true;
+    group.add(bloom);
+  });
+
+  const treeTrunk = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.78 });
+  const treeLeaf = new THREE.MeshStandardMaterial({
+    color: district === "observatory" ? 0x7c3aed : district === "arcades" ? 0x06b6d4 : 0x22c55e,
+    emissive: district === "arcades" ? 0x0e7490 : 0x064e3b,
+    emissiveIntensity: district === "arcades" ? 0.18 : 0.06,
+    roughness: 0.65,
+  });
+  [
+    [-10.2, 0.5],
+    [-8.4, 7.0],
+    [9.2, 5.4],
+    [10.4, -1.5],
+  ].forEach(([x, z], index) => {
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.17, 1.05, 8), treeTrunk);
+    trunk.position.set(x, 0.52, z);
+    trunk.castShadow = true;
+    group.add(trunk);
+    const crown = new THREE.Mesh(new THREE.ConeGeometry(0.55 + (index % 2) * 0.16, 1.05, 10), treeLeaf);
+    crown.position.set(x, 1.38, z);
+    crown.castShadow = true;
+    group.add(crown);
+  });
+
+  const swingMaterial = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.52, metalness: 0.1 });
+  const swing = new THREE.Group();
+  const top = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.08, 0.08), swingMaterial);
+  top.position.y = 1.7;
+  swing.add(top);
+  [-0.76, 0.76].forEach((x) => {
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 1.65, 8), swingMaterial);
+    post.position.set(x, 0.85, 0);
+    post.rotation.z = x < 0 ? -0.15 : 0.15;
+    swing.add(post);
+    const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.8, 6), swingMaterial);
+    rope.position.set(x * 0.4, 1.22, 0);
+    swing.add(rope);
+  });
+  const seat = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.06, 0.26), swingMaterial);
+  seat.position.y = 0.82;
+  swing.add(seat);
+  swing.position.set(district === "observatory" ? -5.8 : 5.8, 0, district === "arcades" ? 5.8 : -3.8);
+  swing.rotation.y = district === "arcades" ? -0.35 : 0.25;
+  group.add(swing);
 
   if (district === "place") {
     const fountain = new THREE.Mesh(
@@ -666,7 +922,7 @@ export function World3DStage({
     camera.position.set(0, 8.4, 13.5);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.8));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
