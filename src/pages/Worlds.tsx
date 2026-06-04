@@ -541,6 +541,7 @@ export function Worlds() {
   });
 
   const mapRef = useRef<HTMLDivElement | null>(null);
+  const [isWorldFullscreen, setIsWorldFullscreen] = useState(false);
   function handlePointerDown() {
     // Clicking or tapping the map should not teleport the player.
   }
@@ -1046,6 +1047,18 @@ export function Worlds() {
   }, [user?.id]);
 
   useEffect(() => {
+    if (!isWorldFullscreen) return;
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousHtmlOverflow;
+    };
+  }, [isWorldFullscreen]);
+
+  useEffect(() => {
     if (!worldVoiceError) return;
     if (worldVoiceError === "duplicate-peer") {
       notify("Le vocal du monde est déjà ouvert dans un autre onglet.", "info");
@@ -1529,9 +1542,9 @@ export function Worlds() {
             </div>
           </div>
 
-          <div className="relative overflow-hidden p-4 md:p-5">
-            <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-[1.2fr,0.8fr]">
-              <div className="rounded-[24px] border border-white/10 bg-night-950/55 p-4 backdrop-blur-xl">
+            <div className="relative overflow-hidden p-4 md:p-5">
+              <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-[1.2fr,0.8fr]">
+                <div className="rounded-[24px] border border-white/10 bg-night-950/55 p-4 backdrop-blur-xl">
                 <div className="text-[11px] uppercase tracking-[0.24em] text-gold-200/75">
                   Signature visuelle
                 </div>
@@ -1551,14 +1564,49 @@ export function Worlds() {
               </div>
             </div>
 
+            <div className="mb-3 flex justify-end md:hidden">
+              <button
+                type="button"
+                onClick={() => setIsWorldFullscreen(true)}
+                className="inline-flex items-center gap-2 rounded-full border border-gold-300/35 bg-gold-500/12 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-gold-100 shadow-[0_12px_36px_rgba(250,204,21,0.12)]"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                Entrer dans le monde
+              </button>
+            </div>
+
             <div
               ref={mapRef}
               onPointerDown={handlePointerDown}
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
               onPointerCancel={handlePointerUp}
-              className={`relative min-h-[420px] overflow-hidden rounded-[30px] border border-white/10 bg-gradient-to-br sm:min-h-[560px] md:min-h-[680px] xl:min-h-[780px] [perspective:1200px] ${selectedDistrict.accent}`}
+              className={`relative overflow-hidden border border-white/10 bg-gradient-to-br [perspective:1200px] ${
+                isWorldFullscreen
+                  ? "fixed inset-0 z-[80] min-h-[100dvh] rounded-none"
+                  : "min-h-[420px] rounded-[30px] sm:min-h-[560px] md:min-h-[680px] xl:min-h-[780px]"
+              } ${selectedDistrict.accent}`}
             >
+              {isWorldFullscreen && (
+                <div className="absolute inset-x-0 top-0 z-40 flex items-center justify-between gap-3 bg-gradient-to-b from-night-950/82 to-transparent px-4 pb-8 pt-[calc(0.75rem+env(safe-area-inset-top))]">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-[0.22em] text-gold-200/70">
+                      Monde 3D
+                    </p>
+                    <p className="font-display text-lg text-gold-100">
+                      {selectedDistrict.name}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsWorldFullscreen(false)}
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-night-950/75 text-ivory/80 shadow-xl backdrop-blur"
+                    aria-label="Quitter le monde plein écran"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              )}
               <DistrictBackdrop district={district} />
               <DistrictAmbientVeil district={district} activeEvent={ambientEvent} />
               <Suspense

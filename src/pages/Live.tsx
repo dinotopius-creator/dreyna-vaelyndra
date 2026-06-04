@@ -2647,6 +2647,20 @@ export function Live() {
                     : undefined
                 }
               >
+                {fullscreenActive && isActiveLive && broadcasterProfile && !amBroadcaster && (
+                  <button
+                    type="button"
+                    onClick={toggleOfferingPanel}
+                    className="pointer-events-auto inline-flex h-8 items-center gap-1.5 rounded-full bg-gold-500/18 px-3 text-xs font-semibold text-gold-100 backdrop-blur transition hover:bg-gold-500/28"
+                    aria-label={
+                      isOfferingOpen ? "Fermer les offrandes" : "Envoyer une offrande"
+                    }
+                    aria-pressed={isOfferingOpen}
+                  >
+                    <GiftIcon className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Offrande</span>
+                  </button>
+                )}
                 {amBroadcaster && isActiveLive && (
                   <button
                     type="button"
@@ -2953,6 +2967,35 @@ export function Live() {
                     </div>
                   )}
                 </div>
+              )}
+              {fullscreenActive && isOfferingOpen && broadcasterProfile && !amBroadcaster && (
+                <>
+                  <button
+                    type="button"
+                    aria-label="Fermer les offrandes"
+                    onClick={() => setIsOfferingOpen(false)}
+                    className="absolute inset-0 z-[35] bg-night-950/30 backdrop-blur-[1px]"
+                  />
+                  <div
+                    className="absolute inset-x-3 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-[45] max-h-[min(68dvh,34rem)] overflow-y-auto rounded-[2rem] border border-gold-300/25 bg-night-950/94 shadow-[0_30px_90px_rgba(0,0,0,0.55)] backdrop-blur-xl sm:left-auto sm:right-4 sm:w-[min(26rem,calc(100%-2rem))]"
+                    style={
+                      isViewportFullscreen
+                        ? {
+                            left: "calc(0.75rem + env(safe-area-inset-left))",
+                            right: "calc(0.75rem + env(safe-area-inset-right))",
+                          }
+                        : undefined
+                    }
+                  >
+                    <GiftPanel
+                      hostId={broadcasterProfile.id}
+                      hostName={broadcasterProfile.username}
+                      onGiftSent={onGiftSent}
+                      variant="overlay"
+                      onClose={() => setIsOfferingOpen(false)}
+                    />
+                  </div>
+                </>
               )}
             </div>
             {/* Bloc d'infos du live (badge En direct, catégorie, titre,
