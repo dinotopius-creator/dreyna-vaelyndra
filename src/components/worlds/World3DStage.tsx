@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import * as THREE from "three";
+import type { AccessoryTheme, OutfitTheme } from "../Avatar3DModel";
+import { CATALOG_BY_ID } from "../../lib/avatarShop";
 
 export type World3DDistrictId = "place" | "arcades" | "observatory";
 
@@ -12,8 +14,17 @@ export interface World3DPlayer {
   voiceEnabled: boolean;
   isSpeaking?: boolean;
   interactionKind?: string | null;
+  appearance?: World3DAppearance | null;
   familiarIcon?: string | null;
   familiarColor?: string | null;
+  familiarName?: string | null;
+}
+
+export interface World3DAppearance {
+  avatarUrl?: string | null;
+  outfit3d?: string | null;
+  accessory3d?: string | null;
+  frame?: string | null;
 }
 
 export interface World3DLueur {
@@ -50,12 +61,20 @@ interface AvatarEntity {
   last: THREE.Vector3;
   mic: THREE.Mesh;
   torso: THREE.Mesh;
+  hips: THREE.Mesh;
   leftLeg: THREE.Group;
   rightLeg: THREE.Group;
   leftArm: THREE.Group;
   rightArm: THREE.Group;
   head: THREE.Mesh;
+  hair: THREE.Mesh;
   shadow: THREE.Mesh;
+  suitMaterial: THREE.MeshStandardMaterial;
+  accessoryRoot: THREE.Group;
+  parureRoot: THREE.Group;
+  familiarRoot: THREE.Group | null;
+  appearanceKey: string;
+  familiarKey: string;
   jumpVelocity: number;
   jumpHeight: number;
   phase: number;
@@ -119,6 +138,42 @@ function colorForPlayer(id: string, isSelf?: boolean) {
   return palette[hash % palette.length];
 }
 
+const OUTFIT_COLORS: Record<OutfitTheme, { main: number; trim: number; glow: number }> = {
+  base: { main: 0x475569, trim: 0xfacc15, glow: 0x38bdf8 },
+  royal: { main: 0x7c2d12, trim: 0xfacc15, glow: 0xf59e0b },
+  battle: { main: 0x1f2937, trim: 0xef4444, glow: 0xf97316 },
+  mystic: { main: 0x4c1d95, trim: 0xc4b5fd, glow: 0xa855f7 },
+  shadow: { main: 0x020617, trim: 0x64748b, glow: 0x475569 },
+  celestial: { main: 0x1e3a8a, trim: 0x93c5fd, glow: 0x38bdf8 },
+  verdant: { main: 0x14532d, trim: 0x86efac, glow: 0x22c55e },
+  ember: { main: 0x7f1d1d, trim: 0xfbbf24, glow: 0xf97316 },
+  frost: { main: 0x164e63, trim: 0xbae6fd, glow: 0x67e8f9 },
+  rose: { main: 0x831843, trim: 0xf9a8d4, glow: 0xec4899 },
+  oracle: { main: 0x312e81, trim: 0xfef3c7, glow: 0x8b5cf6 },
+  street: { main: 0x111827, trim: 0x22d3ee, glow: 0x06b6d4 },
+  ceremony: { main: 0x78350f, trim: 0xfde68a, glow: 0xf59e0b },
+  neon: { main: 0x0f172a, trim: 0x22d3ee, glow: 0xec4899 },
+};
+
+function themeFromItem<T extends string>(itemId: string | null | undefined): T | null {
+  if (!itemId) return null;
+  const theme = CATALOG_BY_ID[itemId]?.wearableThemeId;
+  return typeof theme === "string" ? (theme as T) : null;
+}
+
+function appearanceKey(appearance?: World3DAppearance | null) {
+  return [
+    appearance?.avatarUrl ?? "",
+    appearance?.outfit3d ?? "",
+    appearance?.accessory3d ?? "",
+    appearance?.frame ?? "",
+  ].join("|");
+}
+
+function familiarKey(player: World3DPlayer) {
+  return [player.familiarIcon ?? "", player.familiarColor ?? "", player.familiarName ?? ""].join("|");
+}
+
 function setObjectUserData(object: THREE.Object3D, data: Record<string, string>) {
   object.userData = { ...object.userData, ...data };
   object.children.forEach((child) => setObjectUserData(child, data));
@@ -131,6 +186,143 @@ function makeLimb(material: THREE.Material, height = 0.72) {
   mesh.position.y = -height / 2;
   group.add(mesh);
   return group;
+}
+
+function clearGroup(group: THREE.Group) {
+  while (group.children.length) {
+    group.remove(group.children[0]);
+  }
+}
+
+function createAccessory(theme: AccessoryTheme) {
+  const root = new THREE.Group();
+  if (!theme) return root;
+  const gold = new THREE.MeshStandardMaterial({
+    color: theme === "crystal-mask" || theme === "visor" ? 0x67e8f9 : 0xfacc15,
+    emissive: theme === "halo" || theme === "sun-halo" ? 0xf59e0b : 0x000000,
+    emissiveIntensity: theme === "halo" || theme === "sun-halo" ? 0.32 : 0.04,
+    roughness: 0.35,
+    metalness: 0.22,
+  });
+  if (theme.includes("ears")) {
+    [-0.34, 0.34].forEach((x) => {
+      const ear = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.34, 12), gold);
+      ear.position.set(x, 2.36, 0);
+      ear.rotation.z = x < 0 ? 0.85 : -0.85;
+      root.add(ear);
+    });
+    return root;
+  }
+  if (theme.includes("horns") || theme === "antlers" || theme === "onyx-horns") {
+    [-0.2, 0.2].forEach((x) => {
+      const horn = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.42, 14), gold);
+      horn.position.set(x, 2.68, 0.02);
+      horn.rotation.z = x < 0 ? 0.32 : -0.32;
+      root.add(horn);
+    });
+    return root;
+  }
+  if (theme === "halo" || theme === "sun-halo") {
+    const halo = new THREE.Mesh(new THREE.TorusGeometry(0.43, 0.025, 10, 42), gold);
+    halo.position.y = 2.83;
+    halo.rotation.x = Math.PI / 2;
+    root.add(halo);
+    return root;
+  }
+  const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.34, 0.16, 5), gold);
+  crown.position.y = 2.65;
+  crown.castShadow = true;
+  root.add(crown);
+  return root;
+}
+
+function createParure(frameId: string | null | undefined) {
+  const root = new THREE.Group();
+  if (!frameId) return root;
+  const color = frameId.includes("heart")
+    ? 0xf9a8d4
+    : frameId.includes("moon")
+      ? 0xc4b5fd
+      : frameId.includes("leaf") || frameId.includes("lily")
+        ? 0x86efac
+        : frameId.includes("flame")
+          ? 0xfb923c
+          : 0xfacc15;
+  const material = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.58 });
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.78, 0.018, 8, 56), material);
+  ring.position.y = 1.62;
+  ring.rotation.x = Math.PI / 2;
+  root.add(ring);
+  const aura = new THREE.Mesh(new THREE.TorusGeometry(0.48, 0.014, 8, 44), material);
+  aura.position.y = 2.38;
+  root.add(aura);
+  return root;
+}
+
+function createFamiliar(player: World3DPlayer) {
+  if (!player.familiarIcon) return null;
+  const color = new THREE.Color(player.familiarColor || "#facc15").getHex();
+  const root = new THREE.Group();
+  root.position.set(0.72, 0, 0.72);
+  const bodyMaterial = new THREE.MeshStandardMaterial({
+    color,
+    emissive: color,
+    emissiveIntensity: 0.14,
+    roughness: 0.68,
+  });
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.22, 18, 14), bodyMaterial);
+  body.position.y = 0.32;
+  body.castShadow = true;
+  root.add(body);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.16, 16, 12), bodyMaterial);
+  head.position.set(0, 0.55, 0.14);
+  head.castShadow = true;
+  root.add(head);
+  [-0.12, 0.12].forEach((x) => {
+    const ear = new THREE.Mesh(new THREE.ConeGeometry(0.055, 0.16, 10), bodyMaterial);
+    ear.position.set(x, 0.72, 0.12);
+    root.add(ear);
+  });
+  const shadow = new THREE.Mesh(
+    new THREE.CircleGeometry(0.34, 24),
+    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.22 }),
+  );
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.y = 0.012;
+  root.add(shadow);
+  setObjectUserData(root, { kind: "familiar", id: player.id });
+  return root;
+}
+
+function applyAppearance(entity: AvatarEntity, player: World3DPlayer) {
+  const nextKey = appearanceKey(player.appearance);
+  if (entity.appearanceKey === nextKey) return;
+  entity.appearanceKey = nextKey;
+  const outfit = themeFromItem<OutfitTheme>(player.appearance?.outfit3d) ?? "base";
+  const accessory = themeFromItem<NonNullable<AccessoryTheme>>(player.appearance?.accessory3d);
+  const colors = OUTFIT_COLORS[outfit] ?? OUTFIT_COLORS.base;
+  entity.suitMaterial.color.setHex(player.isSelf && outfit === "base" ? colorForPlayer(player.id, true) : colors.main);
+  entity.suitMaterial.emissive.setHex(colors.glow);
+  entity.suitMaterial.emissiveIntensity = outfit === "base" ? 0.08 : 0.18;
+  clearGroup(entity.accessoryRoot);
+  clearGroup(entity.parureRoot);
+  entity.accessoryRoot.add(createAccessory(accessory));
+  entity.parureRoot.add(createParure(player.appearance?.frame));
+}
+
+function syncFamiliar(entity: AvatarEntity, player: World3DPlayer) {
+  const nextKey = familiarKey(player);
+  if (entity.familiarKey === nextKey) return;
+  entity.familiarKey = nextKey;
+  if (entity.familiarRoot) {
+    entity.group.remove(entity.familiarRoot);
+    entity.familiarRoot = null;
+  }
+  const familiar = createFamiliar(player);
+  if (familiar) {
+    entity.familiarRoot = familiar;
+    entity.group.add(familiar);
+  }
 }
 
 function createAvatar(player: World3DPlayer) {
@@ -214,21 +406,34 @@ function createAvatar(player: World3DPlayer) {
   micRing.rotation.x = Math.PI / 2;
   group.add(micRing);
 
+  const accessoryRoot = new THREE.Group();
+  group.add(accessoryRoot);
+  const parureRoot = new THREE.Group();
+  group.add(parureRoot);
+
   setObjectUserData(group, { kind: "player", id: player.id });
 
-  return {
+  const entity = {
     group,
     target: group.position.clone(),
     current: group.position.clone(),
     last: group.position.clone(),
     mic,
     torso,
+    hips,
     leftLeg,
     rightLeg,
     leftArm,
     rightArm,
     head,
+    hair,
     shadow,
+    suitMaterial: suit,
+    accessoryRoot,
+    parureRoot,
+    familiarRoot: null,
+    appearanceKey: "",
+    familiarKey: "",
     jumpVelocity: 0,
     jumpHeight: 0,
     phase: 0,
@@ -236,6 +441,9 @@ function createAvatar(player: World3DPlayer) {
     lastSeenAt: performance.now(),
     userId: player.id,
   } satisfies AvatarEntity;
+  applyAppearance(entity, player);
+  syncFamiliar(entity, player);
+  return entity;
 }
 
 function createGround(district: World3DDistrictId) {
@@ -660,6 +868,8 @@ export function World3DStage({
         micMaterial.color.set(player.voiceEnabled ? (player.isSpeaking ? 0x22c55e : 0xfacc15) : 0x475569);
         micMaterial.emissive.set(player.voiceEnabled ? (player.isSpeaking ? 0x16a34a : 0x854d0e) : 0x020617);
         micMaterial.emissiveIntensity = player.voiceEnabled ? (player.isSpeaking ? 0.9 : 0.28) : 0.08;
+        applyAppearance(entity, player);
+        syncFamiliar(entity, player);
       });
 
       const currentSelf = self;
@@ -690,7 +900,7 @@ export function World3DStage({
         if (keyState.has("KeyE")) movement.add(right);
         if (joystick.active) {
           movement.addScaledVector(forward, -joystick.y);
-          movement.addScaledVector(right, -joystick.x);
+          movement.addScaledVector(right, joystick.x);
         }
         if (movement.lengthSq() > 0) {
           if (movement.lengthSq() > 1) {
@@ -735,6 +945,12 @@ export function World3DStage({
         entity.rightArm.rotation.x = walk * 0.35;
         entity.torso.rotation.z = entity.moving ? Math.sin(entity.phase * 0.5) * 0.035 : 0;
         entity.head.position.y = 2.26 + Math.sin(entity.phase * 0.7) * 0.02;
+        if (entity.familiarRoot) {
+          const side = entity.userId === currentSelf?.id ? 1 : -1;
+          entity.familiarRoot.position.x = THREE.MathUtils.lerp(entity.familiarRoot.position.x, side * 0.72, 0.08);
+          entity.familiarRoot.position.z = THREE.MathUtils.lerp(entity.familiarRoot.position.z, entity.moving ? 0.92 : 0.62, 0.08);
+          entity.familiarRoot.position.y = Math.sin(entity.phase * 1.4) * (entity.moving ? 0.035 : 0.012);
+        }
         entity.group.position.set(entity.current.x, entity.jumpHeight, entity.current.z);
         entity.shadow.scale.setScalar(Math.max(0.55, 1 - entity.jumpHeight * 0.18));
         (entity.shadow.material as THREE.MeshBasicMaterial).opacity = Math.max(
@@ -803,8 +1019,22 @@ export function World3DStage({
       <div className="pointer-events-none absolute left-4 top-4 hidden rounded-2xl border border-white/10 bg-night-950/70 px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-ivory/60 backdrop-blur md:block">
         ZQSD/WASD pour marcher, A/D pour tourner, Q/E strafe, Shift courir, Espace sauter
       </div>
+      <div className="pointer-events-none absolute left-[calc(1rem+env(safe-area-inset-left))] top-[calc(0.75rem+env(safe-area-inset-top))] z-20 hidden rounded-full border border-cyan-200/20 bg-night-950/55 px-3 py-1.5 text-[9px] uppercase tracking-[0.18em] text-cyan-100/70 backdrop-blur landscape:block md:hidden">
+        Tourne la camera a gauche
+      </div>
+      <div className="pointer-events-none absolute inset-x-4 top-1/2 z-30 -translate-y-1/2 rounded-[28px] border border-gold-200/20 bg-night-950/78 px-5 py-4 text-center shadow-[0_24px_70px_rgba(0,0,0,0.45)] backdrop-blur-xl landscape:hidden md:hidden">
+        <p className="text-[10px] uppercase tracking-[0.24em] text-gold-200/75">
+          Mode monde 3D
+        </p>
+        <p className="mt-2 font-display text-xl text-gold-100">
+          Tourne ton telephone
+        </p>
+        <p className="mt-2 text-sm leading-6 text-ivory/65">
+          L'experience APK est optimisee en horizontal : camera a gauche, joystick a droite.
+        </p>
+      </div>
       <div
-        className={`pointer-events-none absolute bottom-5 left-4 top-20 w-[48%] rounded-[28px] border border-white/10 bg-night-950/10 backdrop-blur-[1px] transition md:hidden ${
+        className={`pointer-events-none absolute bottom-[calc(1rem+env(safe-area-inset-bottom))] left-[calc(1rem+env(safe-area-inset-left))] top-[calc(3.6rem+env(safe-area-inset-top))] w-[48%] rounded-[28px] border border-white/10 bg-night-950/10 backdrop-blur-[1px] transition md:hidden ${
           cameraTouchActive ? "border-cyan-200/30 bg-cyan-200/8" : "opacity-55"
         }`}
         aria-hidden
@@ -815,7 +1045,7 @@ export function World3DStage({
       </div>
       <div
         ref={joystickPadRef}
-        className="absolute bottom-6 right-5 h-32 w-32 touch-none select-none rounded-full border border-white/15 bg-night-950/35 shadow-[0_18px_60px_rgba(0,0,0,0.35)] backdrop-blur-xl md:hidden"
+        className="absolute bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-[calc(1.25rem+env(safe-area-inset-right))] z-20 h-32 w-32 touch-none select-none rounded-full border border-white/15 bg-night-950/35 shadow-[0_18px_60px_rgba(0,0,0,0.35)] backdrop-blur-xl md:hidden landscape:h-36 landscape:w-36"
         onPointerDown={handleJoystickPointerDown}
         onPointerMove={handleJoystickPointerMove}
         onPointerUp={handleJoystickPointerUp}

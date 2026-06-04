@@ -1,6 +1,7 @@
 """Présence temps réel des mondes sociaux Vaelyndra."""
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -10,6 +11,7 @@ from ..auth.dependencies import require_auth
 from ..db import get_session
 from ..models import UserProfile, WorldPresence
 from ..schemas import (
+    WorldAvatarAppearanceOut,
     WorldInteractionSendIn,
     WorldPresenceHeartbeatIn,
     WorldPresenceOut,
@@ -81,6 +83,21 @@ def _clear_interaction(row: WorldPresence) -> None:
     row.interaction_expires_at = None
 
 
+def _profile_world_appearance(profile: UserProfile) -> WorldAvatarAppearanceOut:
+    try:
+        equipped = json.loads(profile.equipped_json or "{}")
+    except json.JSONDecodeError:
+        equipped = {}
+    if not isinstance(equipped, dict):
+        equipped = {}
+    return WorldAvatarAppearanceOut(
+        avatarUrl=profile.avatar_url,
+        outfit3d=equipped.get("outfit3d") if isinstance(equipped.get("outfit3d"), str) else None,
+        accessory3d=equipped.get("accessory3d") if isinstance(equipped.get("accessory3d"), str) else None,
+        frame=equipped.get("frame") if isinstance(equipped.get("frame"), str) else None,
+    )
+
+
 def _serialize_presence(row: WorldPresence, profile: UserProfile) -> WorldPresenceOut:
     return WorldPresenceOut(
         userId=profile.id,
@@ -88,6 +105,7 @@ def _serialize_presence(row: WorldPresence, profile: UserProfile) -> WorldPresen
         handle=profile.handle,
         avatarImageUrl=profile.avatar_image_url or "",
         avatarUrl=profile.avatar_url,
+        appearance=_profile_world_appearance(profile),
         role=profile.role or "user",
         district=row.district,
         posX=int(row.pos_x),

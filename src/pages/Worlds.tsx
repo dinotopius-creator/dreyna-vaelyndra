@@ -100,6 +100,7 @@ interface StageMember {
   interactionFromUsername?: string | null;
   interactionPartnerUserId?: string | null;
   interactionExpiresAt?: string | null;
+  appearance?: World3DPlayer["appearance"];
 }
 
 interface SelectedWorldMember {
@@ -645,6 +646,12 @@ export function Worlds() {
           interactionFromUsername: entry.interactionFromUsername,
           interactionPartnerUserId: entry.interactionPartnerUserId,
           interactionExpiresAt: entry.interactionExpiresAt,
+          appearance: entry.appearance ?? {
+            avatarUrl: entry.avatarUrl,
+            outfit3d: null,
+            accessory3d: null,
+            frame: null,
+          },
         };
       });
   }, [district, liveEntries, user?.id, worldMembers]);
@@ -665,8 +672,15 @@ export function Worlds() {
           voiceEnabled: micEnabled,
           isSpeaking: micEnabled && voiceLevel > 12,
           interactionKind: myWorldPresence?.interactionKind ?? null,
+          appearance: {
+            avatarUrl: profile?.avatarUrl ?? null,
+            outfit3d: profile?.equipped?.outfit3d ?? null,
+            accessory3d: profile?.equipped?.accessory3d ?? null,
+            frame: profile?.equipped?.frame ?? null,
+          },
           familiarIcon: activeFamiliar?.icon ?? null,
           familiarColor: activeFamiliar?.color ?? null,
+          familiarName: activeFamiliar?.nickname ?? activeFamiliar?.name ?? null,
         }
       : null;
 
@@ -678,18 +692,26 @@ export function Worlds() {
       voiceEnabled: member.voiceEnabled,
       isSpeaking: member.voiceEnabled,
       interactionKind: member.interactionKind ?? null,
+      appearance: member.appearance ?? null,
       familiarIcon: otherFamiliars[member.id]?.icon ?? null,
       familiarColor: otherFamiliars[member.id]?.color ?? null,
+      familiarName: otherFamiliars[member.id]?.nickname ?? otherFamiliars[member.id]?.name ?? null,
     }));
 
     return selfPlayer ? [selfPlayer, ...others] : others;
   }, [
     activeFamiliar?.color,
     activeFamiliar?.icon,
+    activeFamiliar?.name,
+    activeFamiliar?.nickname,
     myWorldPresence?.interactionKind,
     otherFamiliars,
     position.x,
     position.y,
+    profile?.avatarUrl,
+    profile?.equipped?.accessory3d,
+    profile?.equipped?.frame,
+    profile?.equipped?.outfit3d,
     stageMembers,
     user,
     micEnabled,
@@ -1052,7 +1074,13 @@ export function Worlds() {
     const previousHtmlOverflow = document.documentElement.style.overflow;
     document.body.style.overflow = "hidden";
     document.documentElement.style.overflow = "hidden";
+    const orientation = screen.orientation as ScreenOrientation & {
+      lock?: (orientation: OrientationLockType) => Promise<void>;
+      unlock?: () => void;
+    };
+    void orientation.lock?.("landscape").catch(() => undefined);
     return () => {
+      orientation.unlock?.();
       document.body.style.overflow = previousBodyOverflow;
       document.documentElement.style.overflow = previousHtmlOverflow;
     };
@@ -1583,17 +1611,17 @@ export function Worlds() {
               onPointerCancel={handlePointerUp}
               className={`relative overflow-hidden border border-white/10 bg-gradient-to-br [perspective:1200px] ${
                 isWorldFullscreen
-                  ? "fixed inset-0 z-[80] min-h-[100dvh] rounded-none"
+                  ? "fixed inset-0 z-[80] h-[100dvh] w-screen min-h-[100dvh] rounded-none border-0"
                   : "min-h-[420px] rounded-[30px] sm:min-h-[560px] md:min-h-[680px] xl:min-h-[780px]"
               } ${selectedDistrict.accent}`}
             >
               {isWorldFullscreen && (
-                <div className="absolute inset-x-0 top-0 z-40 flex items-center justify-between gap-3 bg-gradient-to-b from-night-950/82 to-transparent px-4 pb-8 pt-[calc(0.75rem+env(safe-area-inset-top))]">
+                <div className="absolute inset-x-0 top-0 z-40 flex items-center justify-between gap-3 bg-gradient-to-b from-night-950/82 to-transparent px-[calc(0.85rem+env(safe-area-inset-left))] pb-8 pt-[calc(0.75rem+env(safe-area-inset-top))] landscape:pb-5">
                   <div>
                     <p className="text-[10px] uppercase tracking-[0.22em] text-gold-200/70">
-                      Monde 3D
+                      Monde 3D APK
                     </p>
-                    <p className="font-display text-lg text-gold-100">
+                    <p className="font-display text-lg text-gold-100 landscape:text-base">
                       {selectedDistrict.name}
                     </p>
                   </div>
