@@ -48,6 +48,11 @@ export function Footer() {
                 Mondes
               </Link>
             </li>
+            <li>
+              <Link to="/wiki" className="hover:text-gold-200">
+                Wiki
+              </Link>
+            </li>
           </ul>
         </div>
 

@@ -52,6 +52,10 @@ const Worlds = lazy(async () => {
   const mod = await import("./pages/Worlds");
   return { default: mod.Worlds };
 });
+const Wiki = lazy(async () => {
+  const mod = await import("./pages/Wiki");
+  return { default: mod.Wiki };
+});
 const Oracle = lazy(async () => {
   const mod = await import("./pages/Oracle");
   return { default: mod.Oracle };
@@ -187,6 +191,8 @@ function AnimatedRoutes() {
             <Route path="/live/:broadcasterId" element={<Live />} />
             <Route path="/communaute" element={<Community />} />
             <Route path="/mondes" element={<Worlds />} />
+            <Route path="/wiki" element={<Wiki />} />
+            <Route path="/wiki/:slug" element={<Wiki />} />
             <Route path="/oracle" element={<Oracle />} />
             <Route path="/u/:userId" element={<UserProfile />} />
             <Route path="/connexion" element={<Login />} />
