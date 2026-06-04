@@ -29,6 +29,7 @@ const NAV = [
   { to: "/boutique", label: "Boutique" },
   { to: "/live", label: "Live" },
   { to: "/mondes", label: "Mondes" },
+  { to: "/wiki", label: "Wiki" },
   { to: "/communaute", label: "Communauté" },
 ];
 
@@ -77,9 +78,12 @@ export function Navbar() {
   }, [open]);
 
   useEffect(() => {
-    setNotificationsOpen(false);
-    setNotificationSettingsOpen(false);
-    setOpen(false);
+    const closeMenus = window.setTimeout(() => {
+      setNotificationsOpen(false);
+      setNotificationSettingsOpen(false);
+      setOpen(false);
+    }, 0);
+    return () => window.clearTimeout(closeMenus);
   }, [location.pathname]);
 
   return (
