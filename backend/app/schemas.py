@@ -481,12 +481,26 @@ class WorldPresenceHeartbeatIn(BaseModel):
     voiceEnabled: bool = False
 
 
+class WorldAvatarAppearanceOut(BaseModel):
+    """Apparence 3D partageable dans le monde.
+
+    Les scènes de profil sont volontairement exclues : le monde reste un
+    espace commun, pas le décor personnel du profil.
+    """
+
+    avatarUrl: Optional[str] = None
+    outfit3d: Optional[str] = None
+    accessory3d: Optional[str] = None
+    frame: Optional[str] = None
+
+
 class WorldPresenceOut(BaseModel):
     userId: str
     username: str
     handle: Optional[str] = None
     avatarImageUrl: str = ""
     avatarUrl: Optional[str] = None
+    appearance: WorldAvatarAppearanceOut = Field(default_factory=WorldAvatarAppearanceOut)
     role: str = "user"
     district: str = "place"
     posX: int = 50

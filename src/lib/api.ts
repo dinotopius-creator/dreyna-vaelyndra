@@ -396,6 +396,12 @@ export interface WorldPresenceDto {
   handle: string | null;
   avatarImageUrl: string;
   avatarUrl: string | null;
+  appearance?: {
+    avatarUrl?: string | null;
+    outfit3d?: string | null;
+    accessory3d?: string | null;
+    frame?: string | null;
+  };
   role: string;
   district: string;
   posX: number;
