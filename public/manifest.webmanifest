@@ -1,6 +1,6 @@
 {
-  "name": "Vaelyndra",
-  "short_name": "Vaelyndra",
+  "name": "Vaelyndra Créature",
+  "short_name": "Créature",
   "description": "Experience sociale fantasy mobile-first avec lives, avatars, familiers et mondes immersifs.",
   "start_url": "/",
   "display": "standalone",
@@ -20,6 +20,18 @@
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"
+    },
+    {
+      "src": "/app-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/app-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }

@@ -389,7 +389,9 @@ export function Me() {
                 onClick={() => fileRef.current?.click()}
                 className="btn-royal"
               >
-                <Upload className="h-4 w-4" /> Importer depuis mon PC
+                <Upload className="h-4 w-4" />
+                <span className="hidden sm:inline">Importer depuis mon ordinateur</span>
+                <span className="sm:hidden">Importer depuis mon mobile</span>
               </button>
               <div className="relative flex-1 min-w-[240px]">
                 <LinkIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ivory/40" />
@@ -402,7 +404,12 @@ export function Me() {
               </div>
             </div>
             <p className="mt-2 text-[11px] text-ivory/50">
-              Astuce : tu peux sauvegarder ton avatar sur ton PC, puis cliquer "Importer". Max 5 Mo.
+              <span className="hidden sm:inline">
+                Astuce : tu peux sauvegarder ton avatar sur ton ordinateur, puis cliquer "Importer". Max 5 Mo.
+              </span>
+              <span className="sm:hidden">
+                Astuce : choisis une photo depuis ton téléphone ou ta galerie. Max 5 Mo.
+              </span>
             </p>
           </motion.div>
         )}
