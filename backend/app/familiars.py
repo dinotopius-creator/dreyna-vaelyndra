@@ -335,7 +335,7 @@ FAMILIAR_COSMETICS: List[FamiliarCosmeticDef] = [
         "rarity": "commun",
         "currency": "free",
         "price": 0,
-        "icon": "◡",
+        "icon": "• •",
         "accent": "Base",
     },
     {
@@ -346,7 +346,7 @@ FAMILIAR_COSMETICS: List[FamiliarCosmeticDef] = [
         "rarity": "commun",
         "currency": "lueurs",
         "price": 120,
-        "icon": "ᵔ",
+        "icon": "⌒ ⌒",
         "accent": "Lueurs",
     },
     {
@@ -357,7 +357,7 @@ FAMILIAR_COSMETICS: List[FamiliarCosmeticDef] = [
         "rarity": "rare",
         "currency": "lueurs",
         "price": 260,
-        "icon": "✦",
+        "icon": "✦ ✦",
         "accent": "Lueurs",
     },
     {
@@ -368,7 +368,7 @@ FAMILIAR_COSMETICS: List[FamiliarCosmeticDef] = [
         "rarity": "epique",
         "currency": "sylvins",
         "price": 80,
-        "icon": "◆",
+        "icon": "◆ ◆",
         "accent": "Sylvins",
     },
     {
