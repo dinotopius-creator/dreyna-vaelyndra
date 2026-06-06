@@ -4,6 +4,12 @@
 @tailwind components;
 @tailwind utilities;
 
+body.vaelyndra-world-game-open {
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
+}
+
 @layer base {
   :root {
     color-scheme: dark;

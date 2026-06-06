@@ -132,6 +132,10 @@ const MyFamiliar = lazy(async () => {
   const mod = await import("./pages/MyFamiliar");
   return { default: mod.MyFamiliar };
 });
+const FamiliarEnclosure = lazy(async () => {
+  const mod = await import("./pages/FamiliarEnclosure");
+  return { default: mod.FamiliarEnclosure };
+});
 const BoutiqueFamiliars = lazy(async () => {
   const mod = await import("./pages/BoutiqueFamiliars");
   return { default: mod.BoutiqueFamiliars };
@@ -234,6 +238,14 @@ function AnimatedRoutes() {
               element={
                 <Guarded>
                   <MyFamiliar />
+                </Guarded>
+              }
+            />
+            <Route
+              path="/familier/enclos"
+              element={
+                <Guarded>
+                  <FamiliarEnclosure />
                 </Guarded>
               }
             />
