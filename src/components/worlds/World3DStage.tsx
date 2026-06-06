@@ -111,6 +111,14 @@ interface CameraInput {
   pitchDelta: number;
 }
 
+function readViewportLandscape() {
+  if (typeof window === "undefined") return true;
+  const viewport = window.visualViewport;
+  const width = viewport?.width ?? window.innerWidth;
+  const height = viewport?.height ?? window.innerHeight;
+  return width >= height;
+}
+
 function pctToWorld(x: number, y: number) {
   return new THREE.Vector3(
     ((x - 50) / 100) * WORLD_WIDTH,
@@ -872,6 +880,24 @@ export function World3DStage({
   const self = useMemo(() => players.find((player) => player.isSelf), [players]);
   const [joystickUi, setJoystickUi] = useState({ active: false, x: 0, y: 0 });
   const [cameraTouchActive, setCameraTouchActive] = useState(false);
+  const [isViewportLandscape, setIsViewportLandscape] = useState(readViewportLandscape);
+
+  useEffect(() => {
+    const updateViewportMode = () => {
+      setIsViewportLandscape(readViewportLandscape());
+    };
+
+    updateViewportMode();
+    window.addEventListener("resize", updateViewportMode);
+    window.addEventListener("orientationchange", updateViewportMode);
+    window.visualViewport?.addEventListener("resize", updateViewportMode);
+
+    return () => {
+      window.removeEventListener("resize", updateViewportMode);
+      window.removeEventListener("orientationchange", updateViewportMode);
+      window.visualViewport?.removeEventListener("resize", updateViewportMode);
+    };
+  }, []);
 
   const updateJoystickFromPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
     const pad = joystickPadRef.current;
@@ -946,7 +972,7 @@ export function World3DStage({
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
     const keyState = new Set<string>();
-    let localPosition = pctToWorld(self?.x ?? 49, self?.y ?? 62);
+    const localPosition = pctToWorld(self?.x ?? 49, self?.y ?? 62);
     let yaw = 0;
     let cameraPitch = 0.12;
     let cameraPointerId: number | null = null;
@@ -965,6 +991,8 @@ export function World3DStage({
     resize();
     const resizeObserver = new ResizeObserver(resize);
     resizeObserver.observe(host);
+    window.visualViewport?.addEventListener("resize", resize);
+    window.addEventListener("orientationchange", resize);
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (["KeyW", "KeyA", "KeyS", "KeyD", "KeyQ", "KeyE", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", "ShiftLeft", "ShiftRight"].includes(event.code)) {
@@ -1247,6 +1275,8 @@ export function World3DStage({
     return () => {
       cancelAnimationFrame(animationId);
       resizeObserver.disconnect();
+      window.visualViewport?.removeEventListener("resize", resize);
+      window.removeEventListener("orientationchange", resize);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("blur", clearPressedKeys);
@@ -1278,7 +1308,8 @@ export function World3DStage({
       <div className="pointer-events-none absolute left-[calc(1rem+env(safe-area-inset-left))] top-[calc(0.75rem+env(safe-area-inset-top))] z-20 hidden rounded-full border border-cyan-200/20 bg-night-950/55 px-3 py-1.5 text-[9px] uppercase tracking-[0.18em] text-cyan-100/70 backdrop-blur landscape:block md:hidden">
         Tourne la caméra à gauche
       </div>
-      <div className="pointer-events-none absolute inset-x-4 top-1/2 z-30 -translate-y-1/2 rounded-[28px] border border-gold-200/20 bg-night-950/78 px-5 py-4 text-center shadow-[0_24px_70px_rgba(0,0,0,0.45)] backdrop-blur-xl landscape:hidden md:hidden">
+      {!isViewportLandscape && (
+      <div className="pointer-events-none absolute inset-x-4 top-1/2 z-30 -translate-y-1/2 rounded-[28px] border border-gold-200/20 bg-night-950/78 px-5 py-4 text-center shadow-[0_24px_70px_rgba(0,0,0,0.45)] backdrop-blur-xl md:hidden">
         <p className="text-[10px] uppercase tracking-[0.24em] text-gold-200/75">
           Mode monde 3D
         </p>
@@ -1289,6 +1320,7 @@ export function World3DStage({
           L'expérience APK est optimisée en horizontal : caméra à gauche, joystick à droite.
         </p>
       </div>
+      )}
       <div
         className={`pointer-events-none absolute bottom-[calc(1rem+env(safe-area-inset-bottom))] left-[calc(1rem+env(safe-area-inset-left))] top-[calc(3.6rem+env(safe-area-inset-top))] w-[48%] rounded-[28px] border border-white/10 bg-night-950/10 backdrop-blur-[1px] transition md:hidden ${
           cameraTouchActive ? "border-cyan-200/30 bg-cyan-200/8" : "opacity-55"
@@ -1301,7 +1333,7 @@ export function World3DStage({
       </div>
       <div
         ref={joystickPadRef}
-        className="absolute bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-[calc(1.25rem+env(safe-area-inset-right))] z-20 h-32 w-32 touch-none select-none rounded-full border border-white/15 bg-night-950/35 shadow-[0_18px_60px_rgba(0,0,0,0.35)] backdrop-blur-xl md:hidden landscape:h-36 landscape:w-36"
+        className="absolute bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-[calc(1.25rem+env(safe-area-inset-right))] z-[70] h-32 w-32 touch-none select-none rounded-full border border-white/15 bg-night-950/35 shadow-[0_18px_60px_rgba(0,0,0,0.35)] backdrop-blur-xl md:hidden landscape:h-36 landscape:w-36"
         onPointerDown={handleJoystickPointerDown}
         onPointerMove={handleJoystickPointerMove}
         onPointerUp={handleJoystickPointerUp}
