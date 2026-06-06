@@ -26,8 +26,10 @@ import {
   type StreamerLeaderboardEntryDto,
 } from "../lib/api";
 import { formatNumber } from "../lib/helpers";
+import { formatWeekShort } from "../lib/weeklyRanking";
 import { CreatureBadge, RoleBadge } from "./UserBadges";
 import StreamerGradeBadge from "./StreamerGradeBadge";
+import { WeeklyRankingCountdown } from "./WeeklyRankingCountdown";
 
 type Period = "this" | "last";
 
@@ -96,17 +98,25 @@ export function StreamerLeaderboard({ refreshTick }: Props) {
   }, []);
 
   useEffect(() => {
-    setLoading(true);
-    void fetchNow(period);
+    const initialFetch = window.setTimeout(() => {
+      setLoading(true);
+      void fetchNow(period);
+    }, 0);
     const interval = period === "this" ? POLL_MS_THIS : POLL_MS_LAST;
-    if (!interval) return;
+    if (!interval) {
+      return () => window.clearTimeout(initialFetch);
+    }
     const id = window.setInterval(() => void fetchNow(period), interval);
-    return () => window.clearInterval(id);
+    return () => {
+      window.clearTimeout(initialFetch);
+      window.clearInterval(id);
+    };
   }, [period, fetchNow]);
 
   useEffect(() => {
     if (refreshTick === undefined) return;
-    void fetchNow(period);
+    const id = window.setTimeout(() => void fetchNow(period), 0);
+    return () => window.clearTimeout(id);
   }, [refreshTick, period, fetchNow]);
 
   const [podium, rest] = useMemo(() => {
@@ -148,6 +158,21 @@ export function StreamerLeaderboard({ refreshTick }: Props) {
             {PERIOD_LABELS[p]}
           </button>
         ))}
+      </div>
+
+      <div className="mt-4">
+        <WeeklyRankingCountdown
+          weekStartIso={weekStart}
+          active={period === "this"}
+          label="Fin du classement dans"
+          completeLabel={period === "last" ? "Classement terminé" : "Classement en attente"}
+          helper={
+            period === "this"
+              ? "Le classement évolue avec les Sylvins reçus pendant les lives de la semaine en cours."
+              : "Cette semaine est clôturée : le classement reste figé pour consultation."
+          }
+          compact
+        />
       </div>
 
       {loading && entries.length === 0 && (
@@ -290,16 +315,3 @@ export function StreamerLeaderboard({ refreshTick }: Props) {
 
 const FALLBACK_AVATAR =
   "https://api.dicebear.com/7.x/shapes/svg?seed=vaelyndra";
-
-function formatWeekShort(iso: string): string {
-  try {
-    const d = new Date(`${iso}T00:00:00Z`);
-    return d.toLocaleDateString("fr-FR", {
-      day: "2-digit",
-      month: "short",
-      timeZone: "UTC",
-    });
-  } catch {
-    return iso;
-  }
-}
