@@ -441,7 +441,7 @@ export function Community() {
       setEditImageRemoved(false);
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Image impossible a utiliser.";
+        error instanceof Error ? error.message : "Image impossible à utiliser.";
       notify(message, "error");
       event.target.value = "";
     }
@@ -497,7 +497,7 @@ export function Community() {
       setImagePreviewUrl(URL.createObjectURL(file));
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Image impossible a utiliser.";
+        error instanceof Error ? error.message : "Image impossible à utiliser.";
       notify(message, "error");
       event.target.value = "";
     }
@@ -573,7 +573,7 @@ export function Community() {
                       </button>
                     </div>
                     <p className="text-xs text-ivory/45">
-                      Import direct depuis ton telephone ou ton PC. Le champ URL d'image a ete retire.
+                      Import direct depuis ton téléphone ou ton ordinateur. Le champ URL d'image a été retiré.
                     </p>
                     {imagePreviewUrl && (
                       <div className="rounded-2xl border border-royal-500/30 bg-night-900/55 p-3">
@@ -617,7 +617,7 @@ export function Community() {
                         <p className="text-xs text-ivory/45">Recherche...</p>
                       )}
                       {!tagLoading && tagQuery.trim().length > 0 && tagResults.length === 0 && (
-                        <p className="text-xs text-ivory/45">Aucun membre trouve.</p>
+                        <p className="text-xs text-ivory/45">Aucun membre trouvé.</p>
                       )}
                       {tagResults.slice(0, 4).map((hit) => (
                         <button
@@ -935,7 +935,7 @@ export function Community() {
             })}
             {sorted.length === 0 && (
               <li className="text-center text-sm text-ivory/50">
-                Silence... Le fil attend la premiere voix.
+                Silence... Le fil attend la première voix.
               </li>
             )}
           </ul>
@@ -955,14 +955,14 @@ export function Community() {
                 </h3>
                 <p className="mt-2 text-sm text-ivory/72">
                   Un mini-jeu mystique avec 3 tentatives par jour, des Lueurs
-                  frequentes et 1 Sylvin presque introuvable.
+                  fréquentes et 1 Sylvin presque introuvable.
                 </p>
                 <div className="mt-4 flex items-center gap-2 text-xs text-gold-300/90">
                   <span className="rounded-full border border-sky-400/25 bg-sky-500/10 px-2.5 py-1">
-                    Lueurs frequentes
+                    Lueurs fréquentes
                   </span>
                   <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2.5 py-1">
-                    1 Sylvin tres rare
+                    1 Sylvin très rare
                   </span>
                 </div>
                 <Link
@@ -1062,7 +1062,7 @@ export function Community() {
               ))}
               {displayLeaderboard.length === 0 && (
                 <li className="rounded-2xl border border-dashed border-royal-500/25 px-4 py-5 text-center text-sm text-ivory/55">
-                  Aucun membre n'a encore poste cette semaine.
+                  Aucun membre n'a encore posté cette semaine.
                 </li>
               )}
             </ul>

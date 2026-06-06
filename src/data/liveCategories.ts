@@ -44,7 +44,7 @@ export const LIVE_CATEGORIES: LiveCategoryMeta[] = [
     id: "live-guests",
     label: "Live invite",
     description:
-      "Scene ouverte avec invites, viewers sur scene et formats conversationnels a plusieurs.",
+      "Scène ouverte avec invités, viewers sur scène et formats conversationnels à plusieurs.",
     icon: "🎤",
     chipClass: "border-rose-400/50 bg-rose-500/15 text-rose-100",
   },

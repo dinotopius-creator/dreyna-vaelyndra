@@ -15,7 +15,7 @@ export function Footer() {
             </span>
           </div>
           <p className="text-sm text-ivory/70">
-            Mini-reseau social magique. Streamers, createurs, ames connectees
+            Mini-réseau social magique. Streamers, créateurs, âmes connectées
             : chacun peut percer, chacun peut briller.
           </p>
         </div>
@@ -61,7 +61,7 @@ export function Footer() {
           <ul className="mt-3 space-y-2 text-sm text-ivory/75">
             <li>
               <Link to="/communaute" className="hover:text-gold-200">
-                Communaute
+                Communauté
               </Link>
             </li>
             <li>
@@ -77,24 +77,24 @@ export function Footer() {
           </ul>
           <p className="mt-4 inline-flex items-center gap-1.5 text-xs text-ivory/50">
             <Sparkles className="h-3 w-3 text-gold-300" />
-            "Par la Lumiere d'Elennor"
+            "Par la Lumière d'Elennor"
           </p>
         </div>
       </div>
 
       <div className="border-t border-royal-600/20">
         <nav
-          aria-label="Parchemins legaux"
+          aria-label="Parchemins légaux"
           className="mx-auto grid max-w-7xl grid-cols-2 gap-2 px-4 pt-5 text-center text-xs text-ivory/70 sm:flex sm:flex-wrap sm:items-center sm:justify-center sm:gap-x-5 sm:gap-y-2 sm:px-6"
         >
           <Link to="/mentions-legales" className="hover:text-gold-200">
-            Mentions legales
+            Mentions légales
           </Link>
           <span aria-hidden="true" className="hidden text-royal-500/40 sm:inline">
             ·
           </span>
           <Link to="/confidentialite" className="hover:text-gold-200">
-            Confidentialite
+            Confidentialité
           </Link>
           <span aria-hidden="true" className="hidden text-royal-500/40 sm:inline">
             ·
@@ -116,9 +116,9 @@ export function Footer() {
           </Link>
         </nav>
         <div className="mx-auto max-w-7xl space-y-2 px-4 py-5 text-center text-xs text-ivory/40 sm:px-6">
-          <p>© {new Date().getFullYear()} Royaume de Vaelyndra. Tous droits reserves.</p>
+          <p>© {new Date().getFullYear()} Royaume de Vaelyndra. Tous droits réservés.</p>
           <p className="text-[11px]">
-            Site independant. Les marques tierces mentionnees restent la
+            Site indépendant. Les marques tierces mentionnées restent la
             propriété de leurs détenteurs respectifs.
           </p>
         </div>

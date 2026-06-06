@@ -660,7 +660,7 @@ function BroadcasterControls() {
   async function copyOverlayUrl() {
     try {
       await navigator.clipboard.writeText(overlayUrl());
-      notify("URL overlay OBS copiÃ©e.", "success");
+      notify("URL de l'overlay OBS copiée.", "success");
     } catch {
       notify("Impossible de copier l'URL overlay.", "info");
     }
@@ -935,7 +935,7 @@ function BroadcasterControls() {
         </div>
         {isMobile && (
           <div className="mt-3 rounded-2xl border border-gold-300/20 bg-gold-500/10 px-4 py-3 text-xs leading-5 text-gold-100/90">
-            Sur telephone, le mode <strong>Camera</strong> reste le plus stable.
+            Sur téléphone, le mode <strong>Caméra</strong> reste le plus stable.
             Le partage d'écran mobile est volontairement désactivé pour cette
             version Play Store afin d'eviter les coupures et les faux demarrages.
             Le partage d'écran ordinateur reste conservé.
@@ -1107,7 +1107,7 @@ function BroadcasterControls() {
               type="button"
               onClick={openOverlayPopout}
               className="btn-ghost"
-              title="Ouvrir le chat Vaelyndra dans une fenÃªtre sÃ©parÃ©e"
+              title="Ouvrir le chat Vaelyndra dans une fenêtre séparée"
             >
               <ExternalLink className="h-4 w-4" />
               Overlay chat
@@ -1116,7 +1116,7 @@ function BroadcasterControls() {
               type="button"
               onClick={copyOverlayUrl}
               className="btn-ghost"
-              title="Copier l'URL Ã  ajouter dans OBS comme source navigateur"
+              title="Copier l'URL à ajouter dans OBS comme source navigateur"
             >
               <Copy className="h-4 w-4" />
               URL OBS
@@ -2490,7 +2490,7 @@ export function Live() {
                     <p className="max-w-md text-sm text-ivory/65">
                       {isConnecting
                         ? "Stabilisation du flux vidéo mobile."
-                        : `${broadcasterProfile?.username ?? "Le broadcaster"} prepare son flux. Reste ici, la reprise est automatique.`}
+                        : `${broadcasterProfile?.username ?? "Le streamer"} prépare son flux. Reste ici, la reprise est automatique.`}
                     </p>
                   </div>
                 </div>

@@ -388,7 +388,7 @@ export function Navbar() {
                               </label>
                               <div className="flex min-h-10 items-center justify-between gap-3 pt-1">
                                 <span className="text-xs text-ivory/75">
-                                  Notifications PC/tel
+                                  Notifications navigateur
                                 </span>
                                 {permission === "granted" ? (
                                   <input

@@ -210,7 +210,7 @@ const DISTRICTS: District[] = [
     flora: "Jardin lunaire et herbes d'argent",
     signature: "Terrasse des constellations",
     orb: "Lune",
-    ambience: "Une scene de nuit claire avec lune, etoiles, halos et herbes argentees pour donner au live une allure ceremonielle.",
+    ambience: "Une scène de nuit claire avec lune, étoiles, halos et herbes argentées pour donner au live une allure cérémonielle.",
     badge: "Balcon celeste",
   },
 ];
@@ -443,7 +443,7 @@ const WORLD_INTERACTION_META: Record<
     label: "Faire coucou",
     emoji: "👋",
     toast: "Coucou envoye.",
-    copy: (actor, target) => `${actor} fait coucou a ${target}.`,
+    copy: (actor, target) => `${actor} fait coucou à ${target}.`,
   },
   heart: {
     label: "Envoyer un coeur",
@@ -1645,7 +1645,7 @@ export function Worlds() {
                         Monde 3D
                       </p>
                       <p className="mt-2 text-sm text-ivory/65">
-                        Chargement de la scene temps reel...
+                        Chargement de la scène temps réel...
                       </p>
                     </div>
                   </div>
