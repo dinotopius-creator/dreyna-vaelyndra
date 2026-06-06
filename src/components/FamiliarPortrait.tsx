@@ -24,11 +24,55 @@ const SIZE_CLASSES = {
   lg: "h-32 w-32 text-7xl",
 };
 
+const DECOR_CLASSES = {
+  sm: {
+    hair: "-top-1 text-sm",
+    accessory: "text-sm",
+    face: "top-[41%] text-[8px] tracking-[0.24em]",
+    frameIcon: "-right-0.5 -top-0.5 text-[9px]",
+    effect: "-right-0.5 -top-0.5 text-[10px]",
+  },
+  md: {
+    hair: "top-0 text-base",
+    accessory: "text-base",
+    face: "top-[42%] text-[10px] tracking-[0.28em]",
+    frameIcon: "-right-1 -top-1 text-xs",
+    effect: "-right-1 -top-1 text-xs",
+  },
+  lg: {
+    hair: "top-1 text-xl",
+    accessory: "text-xl",
+    face: "top-[43%] text-xs tracking-[0.32em]",
+    frameIcon: "-right-1.5 -top-1.5 text-sm",
+    effect: "-right-1.5 -top-1.5 text-sm",
+  },
+};
+
 function getCosmetic(
   familiar: FamiliarLike,
   slot: FamiliarCosmeticSlot,
 ): FamiliarCosmeticCatalogItem | undefined {
   return familiar.cosmetics?.[slot];
+}
+
+function accessoryPosition(accessory?: FamiliarCosmeticCatalogItem) {
+  if (!accessory) return "right-[12%] top-[19%]";
+  if (accessory.id.includes("couronne")) {
+    return "left-1/2 top-[7%] -translate-x-1/2";
+  }
+  if (accessory.id.includes("collier")) {
+    return "left-1/2 bottom-[18%] -translate-x-1/2";
+  }
+  return "right-[13%] top-[28%]";
+}
+
+function accessoryShape(accessory?: FamiliarCosmeticCatalogItem) {
+  if (!accessory) return "";
+  if (accessory.id.includes("collier")) {
+    return "rounded-full border border-current px-2 py-0.5";
+  }
+  if (accessory.id.includes("couronne")) return "rounded-full px-1";
+  return "rounded-full px-1";
 }
 
 export function FamiliarPortrait({
@@ -52,6 +96,7 @@ export function FamiliarPortrait({
   const haloAlpha = Math.min(0.85, 0.25 + aura / 200);
   const ringOpacity = Math.min(0.8, charisma / 140);
   const frameColor = showFrame ? frame?.color || color : color;
+  const decor = DECOR_CLASSES[size];
 
   return (
     <motion.div
@@ -74,7 +119,7 @@ export function FamiliarPortrait({
           }}
           aria-hidden
         >
-          <span className="absolute -right-1 -top-1 text-xs">{frame.icon}</span>
+          <span className={`absolute ${decor.frameIcon}`}>{frame.icon}</span>
         </span>
       )}
 
@@ -93,10 +138,10 @@ export function FamiliarPortrait({
 
       {hair && (
         <span
-          className="pointer-events-none absolute -top-3 left-1/2 -translate-x-1/2 text-lg"
+          className={`pointer-events-none absolute left-1/2 z-20 -translate-x-1/2 ${decor.hair}`}
           style={{
             color: hair.color || color,
-            filter: `drop-shadow(0 0 7px ${hair.color || color})`,
+            filter: `drop-shadow(0 2px 5px rgba(0,0,0,0.55)) drop-shadow(0 0 7px ${hair.color || color})`,
           }}
           aria-hidden
         >
@@ -106,10 +151,14 @@ export function FamiliarPortrait({
 
       {accessory && (
         <span
-          className="pointer-events-none absolute -right-2 top-2 text-lg"
+          className={`pointer-events-none absolute z-30 ${accessoryPosition(accessory)} ${accessoryShape(accessory)} ${decor.accessory}`}
           style={{
             color: accessory.color || color,
-            filter: `drop-shadow(0 0 7px ${accessory.color || color})`,
+            background:
+              accessory.id.includes("collier") || accessory.id.includes("couronne")
+                ? "rgba(2,6,23,0.45)"
+                : "transparent",
+            filter: `drop-shadow(0 2px 5px rgba(0,0,0,0.55)) drop-shadow(0 0 7px ${accessory.color || color})`,
           }}
           aria-hidden
         >
@@ -117,13 +166,21 @@ export function FamiliarPortrait({
         </span>
       )}
 
-      <span style={{ filter: `drop-shadow(0 0 10px ${color})` }} aria-hidden>
+      <span
+        className="relative z-10 select-none"
+        style={{ filter: `drop-shadow(0 0 10px ${color})` }}
+        aria-hidden
+      >
         {familiar.icon}
       </span>
 
-      {face && face.id !== "face-doux" && (
+      {face && (
         <span
-          className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full border border-white/20 bg-night-950/70 px-1.5 text-[10px] text-gold-100"
+          className={`pointer-events-none absolute left-1/2 z-20 -translate-x-1/2 rounded-full bg-night-950/55 px-1.5 font-black leading-none text-gold-50 shadow-[0_1px_8px_rgba(0,0,0,0.45)] ${decor.face}`}
+          style={{
+            color: face.color || "#fff7d6",
+            textShadow: "0 1px 4px rgba(0,0,0,0.75)",
+          }}
           aria-hidden
         >
           {face.icon}
@@ -132,7 +189,7 @@ export function FamiliarPortrait({
 
       {(effect || affinity >= 22) && (
         <motion.span
-          className="pointer-events-none absolute -right-1 -top-1 text-xs"
+          className={`pointer-events-none absolute z-40 ${decor.effect}`}
           style={{
             color: effect?.color || color,
             filter: `drop-shadow(0 0 4px ${effect?.color || color})`,
