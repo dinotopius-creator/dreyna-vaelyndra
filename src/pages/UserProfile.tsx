@@ -9,6 +9,7 @@ import { AvatarViewer } from "../components/AvatarViewer";
 import { UserBadges } from "../components/UserBadges";
 import { Handle } from "../components/Handle";
 import { FollowButton } from "../components/FollowButton";
+import { FamiliarPortrait } from "../components/FamiliarPortrait";
 import SoulBondsModal from "../components/SoulBondsModal";
 import StreamerGradeBadge from "../components/StreamerGradeBadge";
 import { WishlistSection } from "../components/WishlistSection";
@@ -378,21 +379,7 @@ export function UserProfile() {
               aria-hidden
             />
             <div className="relative flex flex-col items-center gap-4 sm:flex-row sm:items-start sm:gap-6">
-              <motion.div
-                className="relative flex h-24 w-24 shrink-0 items-center justify-center rounded-3xl border text-5xl"
-                style={{
-                  background: `radial-gradient(circle at 50% 40%, ${activeFamiliar.color}40, ${activeFamiliar.color}11 60%, transparent)`,
-                  borderColor: `${activeFamiliar.color}55`,
-                  boxShadow: `0 0 24px -8px ${activeFamiliar.color}`,
-                }}
-                animate={{ y: [0, -4, 0] }}
-                transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-                aria-hidden
-              >
-                <span style={{ filter: `drop-shadow(0 0 10px ${activeFamiliar.color})` }}>
-                  {activeFamiliar.icon}
-                </span>
-              </motion.div>
+              <FamiliarPortrait familiar={activeFamiliar} size="md" />
 
               <div className="flex-1 text-center sm:text-left">
                 <h3 className="font-display text-xl text-gold-200">

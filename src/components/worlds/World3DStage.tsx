@@ -18,6 +18,8 @@ export interface World3DPlayer {
   familiarIcon?: string | null;
   familiarColor?: string | null;
   familiarName?: string | null;
+  familiarAccessoryIcon?: string | null;
+  familiarHairIcon?: string | null;
 }
 
 export interface World3DAppearance {
@@ -173,7 +175,13 @@ function appearanceKey(appearance?: World3DAppearance | null) {
 }
 
 function familiarKey(player: World3DPlayer) {
-  return [player.familiarIcon ?? "", player.familiarColor ?? "", player.familiarName ?? ""].join("|");
+  return [
+    player.familiarIcon ?? "",
+    player.familiarColor ?? "",
+    player.familiarName ?? "",
+    player.familiarAccessoryIcon ?? "",
+    player.familiarHairIcon ?? "",
+  ].join("|");
 }
 
 function setObjectUserData(object: THREE.Object3D, data: Record<string, string>) {
@@ -382,6 +390,43 @@ function createFamiliar(player: World3DPlayer) {
       root.add(paw);
     });
   });
+  if (player.familiarHairIcon) {
+    const tuft = new THREE.Mesh(
+      new THREE.ConeGeometry(0.06, 0.16, 8),
+      new THREE.MeshStandardMaterial({ color: 0xfde68a, emissive: 0xfbbf24, emissiveIntensity: 0.12 }),
+    );
+    tuft.position.set(0, 0.76, 0.2);
+    tuft.rotation.x = -0.25;
+    root.add(tuft);
+  }
+  if (player.familiarAccessoryIcon) {
+    const accessoryIcon = player.familiarAccessoryIcon;
+    const accessoryMaterial = new THREE.MeshStandardMaterial({
+      color: accessoryIcon.includes("♛") ? 0xf8d477 : accessoryIcon.includes("◇") ? 0x67e8f9 : 0xfacc15,
+      emissive: accessoryIcon.includes("♛") ? 0xf59e0b : 0x000000,
+      emissiveIntensity: accessoryIcon.includes("♛") ? 0.2 : 0.06,
+      roughness: 0.36,
+      metalness: 0.16,
+    });
+    if (accessoryIcon.includes("♛")) {
+      const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.13, 0.07, 5), accessoryMaterial);
+      crown.position.set(0, 0.77, 0.22);
+      crown.castShadow = true;
+      root.add(crown);
+    } else if (accessoryIcon.includes("◇")) {
+      const collar = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.014, 6, 24), accessoryMaterial);
+      collar.position.set(0, 0.43, 0.21);
+      collar.rotation.x = Math.PI / 2;
+      root.add(collar);
+    } else {
+      [-0.08, 0.08].forEach((x) => {
+        const bow = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), accessoryMaterial);
+        bow.scale.set(1.35, 0.65, 0.55);
+        bow.position.set(x, 0.62, 0.34);
+        root.add(bow);
+      });
+    }
+  }
   const shadow = new THREE.Mesh(
     new THREE.CircleGeometry(0.34, 24),
     new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.22 }),

@@ -34,9 +34,11 @@ from ..handles import (
     suggest_unique_handle,
 )
 from ..familiars import (
+    DEFAULT_FAMILIAR_COSMETIC_IDS,
     compute_familiar_stats,
     evolution_for_level,
     get_familiar,
+    get_familiar_cosmetic,
     progress_in_level,
 )
 from ..models import (
@@ -122,6 +124,57 @@ def _creature_out(creature_id: str | None) -> CreatureOut | None:
     return CreatureOut(**c)
 
 
+def _familiar_cosmetic_payload(row: UserFamiliar) -> tuple[list[str], dict[str, str], dict[str, dict], str | None]:
+    try:
+        raw_inventory = json.loads(row.cosmetic_inventory_json or "[]")
+    except (TypeError, ValueError):
+        raw_inventory = []
+    inventory: list[str] = []
+    for cosmetic_id in [
+        *DEFAULT_FAMILIAR_COSMETIC_IDS,
+        *[str(item) for item in raw_inventory if isinstance(item, str)],
+    ]:
+        if cosmetic_id in inventory:
+            continue
+        if get_familiar_cosmetic(cosmetic_id) is not None:
+            inventory.append(cosmetic_id)
+
+    try:
+        raw_equipped = json.loads(row.cosmetic_equipped_json or "{}")
+    except (TypeError, ValueError):
+        raw_equipped = {}
+    equipped: dict[str, str] = {}
+    cosmetics: dict[str, dict] = {}
+    color_override: str | None = None
+    if isinstance(raw_equipped, dict):
+        for slot, cosmetic_id in raw_equipped.items():
+            if not isinstance(slot, str) or not isinstance(cosmetic_id, str):
+                continue
+            if cosmetic_id not in inventory:
+                continue
+            cosmetic = get_familiar_cosmetic(cosmetic_id)
+            if cosmetic is None or cosmetic["slot"] != slot:
+                continue
+            equipped[slot] = cosmetic_id
+            payload = {
+                "id": cosmetic["id"],
+                "slot": cosmetic["slot"],
+                "name": cosmetic["name"],
+                "description": cosmetic["description"],
+                "rarity": cosmetic["rarity"],
+                "currency": cosmetic["currency"],
+                "price": cosmetic["price"],
+                "icon": cosmetic.get("icon", ""),
+                "color": cosmetic.get("color", ""),
+                "accent": cosmetic.get("accent", ""),
+                "compatibleFamiliars": cosmetic.get("compatible_familiars"),
+            }
+            cosmetics[slot] = payload
+            if slot == "color" and payload["color"]:
+                color_override = payload["color"]
+    return inventory, equipped, cosmetics, color_override
+
+
 def _active_familiar_summary(
     session: Session, user_id: str
 ) -> Optional[ActiveFamiliarSummary]:
@@ -143,11 +196,12 @@ def _active_familiar_summary(
         return None
     level, xp_into, xp_to_next = progress_in_level(row.xp or 0)
     evo = evolution_for_level(level)
+    cosmetic_inventory, cosmetic_equipped, cosmetics, color_override = _familiar_cosmetic_payload(row)
     return ActiveFamiliarSummary(
         familiarId=row.familiar_id,
         name=fam["name"],
         icon=fam["icon"],
-        color=fam["color"],
+        color=color_override or fam["color"],
         tier=fam["tier"],
         rarity=fam["rarity"],
         level=level,
@@ -157,6 +211,9 @@ def _active_familiar_summary(
         evolutionId=evo["id"],
         evolutionName=evo["name"],
         nickname=row.nickname,
+        cosmeticInventory=cosmetic_inventory,
+        cosmeticEquipped=cosmetic_equipped,
+        cosmetics=cosmetics,
         stats=dict(compute_familiar_stats(row.familiar_id, row.xp or 0)),
     )
 
