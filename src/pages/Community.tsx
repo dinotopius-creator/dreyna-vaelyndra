@@ -32,6 +32,7 @@ import { MemberSearch } from "../components/MemberSearch";
 import { AvatarImage } from "../components/AvatarImage";
 import { RichMentionText, buildMentionLookup } from "../components/RichMentionText";
 import StreamerGradeBadge from "../components/StreamerGradeBadge";
+import { WeeklyRankingCountdown } from "../components/WeeklyRankingCountdown";
 import { getOfficial } from "../data/officials";
 import {
   formatRelative,
@@ -105,6 +106,7 @@ export function Community() {
       score: number;
     }>
   >([]);
+  const [activityWeekStartIso, setActivityWeekStartIso] = useState<string>("");
 
   const displayLeaderboard = useMemo(
     () =>
@@ -233,17 +235,23 @@ export function Community() {
 
   useEffect(() => {
     let cancelled = false;
-    void apiGetCommunityActivityLeaderboard(5)
+    const loadLeaderboard = () => {
+      void apiGetCommunityActivityLeaderboard(5)
       .then((result) => {
         if (cancelled) return;
+        setActivityWeekStartIso(result.weekStartIso);
         setActivityLeaderboard(result.entries);
       })
       .catch(() => {
         if (cancelled) return;
         setActivityLeaderboard([]);
       });
+    };
+    loadLeaderboard();
+    const interval = window.setInterval(loadLeaderboard, 15_000);
     return () => {
       cancelled = true;
+      window.clearInterval(interval);
     };
   }, [posts]);
 
@@ -258,7 +266,7 @@ export function Community() {
         if (!myReward) return;
         await refreshProfile();
         notify(
-          `Classement communautaire : +${myReward.rewardLueurs} lueurs creditees.`,
+          `Classement communautaire : +${myReward.rewardLueurs} Lueurs créditées.`,
         );
       })
       .catch(() => {
@@ -983,13 +991,22 @@ export function Community() {
               </h3>
             </div>
             <p className="mt-1 text-xs text-ivory/55">
-              Classement live du fil de la semaine. Il bouge en temps reel
-              selon les posts, commentaires et reactions.
+              Classement live du fil de la semaine. Il évolue en temps réel
+              selon les posts, commentaires et réactions.
             </p>
-            <div className="mt-4 rounded-2xl border border-gold-400/20 bg-gold-500/10 p-3">
+            <div className="mt-4">
+              <WeeklyRankingCountdown
+                weekStartIso={activityWeekStartIso}
+                active
+                label="Récompenses dans"
+                helper="Les récompenses sont attribuées à la fin de la semaine selon le classement final."
+                compact
+              />
+            </div>
+            <div className="mt-3 rounded-2xl border border-gold-400/20 bg-gold-500/10 p-3">
               <p className="flex items-center gap-2 text-sm font-medium text-gold-100">
                 <Gift className="h-4 w-4 text-gold-300" />
-                Recompenses de fin de semaine
+                Récompenses de fin de semaine
               </p>
               <div className="mt-2 grid grid-cols-1 gap-2 text-center text-xs min-[360px]:grid-cols-3">
                 {[1, 2, 3].map((rank) => (
@@ -998,10 +1015,13 @@ export function Community() {
                     className="rounded-xl border border-gold-400/20 bg-night-900/45 px-2 py-2 text-ivory/80"
                   >
                     <p className="font-display text-gold-200">Top {rank}</p>
-                    <p>{COMMUNITY_REWARD_BY_RANK[rank]} lueurs</p>
+                    <p>{COMMUNITY_REWARD_BY_RANK[rank]} Lueurs</p>
                   </div>
                 ))}
               </div>
+              <p className="mt-2 text-[11px] leading-5 text-ivory/55">
+                Le backend distribue ces Lueurs après clôture de la semaine précédente.
+              </p>
             </div>
             <ul className="mt-4 space-y-3">
               {displayLeaderboard.map((member, index) => (
