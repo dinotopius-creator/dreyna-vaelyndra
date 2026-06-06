@@ -104,6 +104,10 @@ def _apply_migrations() -> None:
         "stripepayment": [
             ("lueurs_amount", "INTEGER NOT NULL DEFAULT 0"),
         ],
+        "userfamiliar": [
+            ("cosmetic_inventory_json", "TEXT NOT NULL DEFAULT '[]'"),
+            ("cosmetic_equipped_json", "TEXT NOT NULL DEFAULT '{}'"),
+        ],
     }
     with engine.begin() as conn:
         for table, columns in required.items():

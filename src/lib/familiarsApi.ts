@@ -48,6 +48,30 @@ export interface FamiliarCatalogItem {
   baseStats: Record<string, number>;
 }
 
+export type FamiliarCosmeticSlot =
+  | "color"
+  | "face"
+  | "hair"
+  | "accessory"
+  | "frame"
+  | "effect";
+
+export type FamiliarCosmeticCurrency = "free" | "lueurs" | "sylvins";
+
+export interface FamiliarCosmeticCatalogItem {
+  id: string;
+  slot: FamiliarCosmeticSlot;
+  name: string;
+  description: string;
+  rarity: string;
+  currency: FamiliarCosmeticCurrency;
+  price: number;
+  icon: string;
+  color: string;
+  accent: string;
+  compatibleFamiliars: string[] | null;
+}
+
 export interface OwnedFamiliar {
   id: number;
   familiarId: string;
@@ -66,6 +90,9 @@ export interface OwnedFamiliar {
   stats: Record<string, number>;
   acquiredAt: string;
   lastActiveAt: string | null;
+  cosmeticInventory: string[];
+  cosmeticEquipped: Partial<Record<FamiliarCosmeticSlot, string>>;
+  cosmetics: Partial<Record<FamiliarCosmeticSlot, FamiliarCosmeticCatalogItem>>;
 }
 
 export interface FamiliarCollection {
@@ -81,6 +108,14 @@ export interface FamiliarCollection {
 
 export async function fetchFamiliarsCatalog(): Promise<FamiliarCatalogItem[]> {
   return familiarRequest<FamiliarCatalogItem[]>("/familiers/catalog");
+}
+
+export async function fetchFamiliarCosmeticsCatalog(): Promise<
+  FamiliarCosmeticCatalogItem[]
+> {
+  return familiarRequest<FamiliarCosmeticCatalogItem[]>(
+    "/familiers/cosmetics/catalog",
+  );
 }
 
 export async function fetchUserFamiliars(
@@ -132,6 +167,27 @@ export async function setFamiliarNickname(
   return familiarRequest<FamiliarCollection>(
     `/users/${encodeURIComponent(userId)}/familiers/nickname`,
     { method: "POST", body: JSON.stringify({ nickname }) },
+  );
+}
+
+export async function buyFamiliarCosmetic(
+  userId: string,
+  cosmeticId: string,
+): Promise<FamiliarCollection> {
+  return familiarRequest<FamiliarCollection>(
+    `/users/${encodeURIComponent(userId)}/familiers/cosmetics/buy`,
+    { method: "POST", body: JSON.stringify({ cosmeticId }) },
+  );
+}
+
+export async function equipFamiliarCosmetic(
+  userId: string,
+  slot: FamiliarCosmeticSlot,
+  cosmeticId: string | null,
+): Promise<FamiliarCollection> {
+  return familiarRequest<FamiliarCollection>(
+    `/users/${encodeURIComponent(userId)}/familiers/cosmetics/equip`,
+    { method: "POST", body: JSON.stringify({ slot, cosmeticId }) },
   );
 }
 

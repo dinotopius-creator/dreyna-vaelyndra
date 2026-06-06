@@ -248,6 +248,9 @@ class ActiveFamiliarSummary(BaseModel):
     evolutionId: str
     evolutionName: str
     nickname: Optional[str] = None
+    cosmeticInventory: List[str] = []
+    cosmeticEquipped: Dict[str, str] = {}
+    cosmetics: Dict[str, dict] = {}
     # Caractéristiques effectives (cf. backend/app/familiars.py).
     # Câblées sur le site : `harvest` bonifie le daily-claim,
     # `energy` densifie les réactions live, `aura` / `charisma` /

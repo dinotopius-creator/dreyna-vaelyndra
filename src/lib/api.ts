@@ -345,6 +345,36 @@ export interface UserProfileDto {
    * donc rester résilient et ne rien afficher plutôt que de crasher.
    */
   grade: StreamerGradeDto | null;
+  familiar?: {
+    familiarId: string;
+    name: string;
+    icon: string;
+    color: string;
+    tier: string;
+    rarity: string;
+    level: number;
+    xp: number;
+    xpIntoLevel: number;
+    xpToNextLevel: number;
+    evolutionId: string;
+    evolutionName: string;
+    nickname: string | null;
+    cosmeticInventory?: string[];
+    cosmeticEquipped?: Record<string, string>;
+    cosmetics?: Record<string, {
+      id: string;
+      slot: string;
+      name: string;
+      description: string;
+      rarity: string;
+      currency: string;
+      price: number;
+      icon?: string;
+      color?: string;
+      accent?: string;
+    }>;
+    stats: Record<string, number>;
+  } | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -742,6 +742,8 @@ export function Worlds() {
           familiarIcon: activeFamiliar?.icon ?? null,
           familiarColor: activeFamiliar?.color ?? null,
           familiarName: activeFamiliar?.nickname ?? activeFamiliar?.name ?? null,
+          familiarAccessoryIcon: activeFamiliar?.cosmetics?.accessory?.icon ?? null,
+          familiarHairIcon: activeFamiliar?.cosmetics?.hair?.icon ?? null,
         }
       : null;
 
@@ -757,6 +759,8 @@ export function Worlds() {
       familiarIcon: otherFamiliars[member.id]?.icon ?? null,
       familiarColor: otherFamiliars[member.id]?.color ?? null,
       familiarName: otherFamiliars[member.id]?.nickname ?? otherFamiliars[member.id]?.name ?? null,
+      familiarAccessoryIcon: otherFamiliars[member.id]?.cosmetics?.accessory?.icon ?? null,
+      familiarHairIcon: otherFamiliars[member.id]?.cosmetics?.hair?.icon ?? null,
     }));
 
     return selfPlayer ? [selfPlayer, ...others] : others;
@@ -765,6 +769,8 @@ export function Worlds() {
     activeFamiliar?.icon,
     activeFamiliar?.name,
     activeFamiliar?.nickname,
+    activeFamiliar?.cosmetics?.accessory?.icon,
+    activeFamiliar?.cosmetics?.hair?.icon,
     myWorldPresence?.interactionKind,
     otherFamiliars,
     position.x,

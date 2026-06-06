@@ -670,6 +670,11 @@ class UserFamiliar(SQLModel, table=True):
     familiar_id: str = Field(index=True)
     xp: int = Field(default=0)
     nickname: Optional[str] = Field(default=None, max_length=40)
+    # Personnalisation propre au familier possede. JSON serialise:
+    # - cosmetic_inventory_json: list[str] des cosmetiques debloques
+    # - cosmetic_equipped_json: dict[slot, cosmeticId] des items equipes
+    cosmetic_inventory_json: str = Field(default="[]")
+    cosmetic_equipped_json: str = Field(default="{}")
     is_active: bool = Field(default=False, index=True)
     acquired_at: str = Field(default_factory=_now_iso, index=True)
     last_active_at: Optional[str] = Field(default=None)

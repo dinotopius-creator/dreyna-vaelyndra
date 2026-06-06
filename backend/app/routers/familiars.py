@@ -14,6 +14,7 @@ viennent dans des PRs suivantes.
 """
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from typing import List, Optional
 
@@ -24,11 +25,14 @@ from sqlmodel import Session, select
 from ..db import get_session
 from ..familiars import (
     FAMILIARS,
+    FAMILIAR_COSMETICS,
+    DEFAULT_FAMILIAR_COSMETIC_IDS,
     SWITCH_PRICE_SYLVINS,
     RENAME_PRICE_SYLVINS,
     compute_familiar_stats,
     evolution_for_level,
     get_familiar,
+    get_familiar_cosmetic,
     progress_in_level,
 )
 from ..familiars_xp import grant_gift_received_xp, grant_gift_sent_xp
@@ -85,6 +89,20 @@ class FamiliarCatalogItemOut(BaseModel):
     baseStats: dict
 
 
+class FamiliarCosmeticOut(BaseModel):
+    id: str
+    slot: str
+    name: str
+    description: str
+    rarity: str
+    currency: str
+    price: int
+    icon: str = ""
+    color: str = ""
+    accent: str = ""
+    compatibleFamiliars: Optional[List[str]] = None
+
+
 class OwnedFamiliarOut(BaseModel):
     """Un familier possédé par un user, avec sa progression vivante."""
 
@@ -105,6 +123,9 @@ class OwnedFamiliarOut(BaseModel):
     stats: dict
     acquiredAt: str
     lastActiveAt: Optional[str] = None
+    cosmeticInventory: List[str] = []
+    cosmeticEquipped: dict = {}
+    cosmetics: dict = {}
 
 
 class FamiliarCollectionOut(BaseModel):
@@ -139,6 +160,15 @@ class GiftFamiliarPayload(BaseModel):
     amount: int = Field(..., gt=0, le=10000)
 
 
+class BuyFamiliarCosmeticPayload(BaseModel):
+    cosmeticId: str = Field(..., min_length=1, max_length=80)
+
+
+class EquipFamiliarCosmeticPayload(BaseModel):
+    slot: str = Field(..., min_length=1, max_length=32)
+    cosmeticId: Optional[str] = Field(default=None, max_length=80)
+
+
 # --- Helpers --------------------------------------------------------------
 
 
@@ -157,6 +187,90 @@ def _catalog_item_out(definition) -> FamiliarCatalogItemOut:
     )
 
 
+def _cosmetic_out(definition) -> FamiliarCosmeticOut:
+    return FamiliarCosmeticOut(
+        id=definition["id"],
+        slot=definition["slot"],
+        name=definition["name"],
+        description=definition["description"],
+        rarity=definition["rarity"],
+        currency=definition["currency"],
+        price=definition["price"],
+        icon=definition.get("icon", ""),
+        color=definition.get("color", ""),
+        accent=definition.get("accent", ""),
+        compatibleFamiliars=definition.get("compatible_familiars"),
+    )
+
+
+def _load_cosmetic_inventory(row: UserFamiliar) -> List[str]:
+    try:
+        raw = json.loads(row.cosmetic_inventory_json or "[]")
+    except (TypeError, ValueError):
+        raw = []
+    ids = [str(item) for item in raw if isinstance(item, str)]
+    merged: list[str] = []
+    for cosmetic_id in [*DEFAULT_FAMILIAR_COSMETIC_IDS, *ids]:
+        if cosmetic_id in merged:
+            continue
+        if get_familiar_cosmetic(cosmetic_id) is not None:
+            merged.append(cosmetic_id)
+    return merged
+
+
+def _store_cosmetic_inventory(row: UserFamiliar, inventory: List[str]) -> None:
+    clean = []
+    for cosmetic_id in inventory:
+        if cosmetic_id in clean:
+            continue
+        if get_familiar_cosmetic(cosmetic_id) is not None:
+            clean.append(cosmetic_id)
+    row.cosmetic_inventory_json = json.dumps(clean)
+
+
+def _load_cosmetic_equipped(row: UserFamiliar) -> dict[str, str]:
+    try:
+        raw = json.loads(row.cosmetic_equipped_json or "{}")
+    except (TypeError, ValueError):
+        raw = {}
+    if not isinstance(raw, dict):
+        return {}
+    inventory = set(_load_cosmetic_inventory(row))
+    out: dict[str, str] = {}
+    for slot, cosmetic_id in raw.items():
+        if not isinstance(slot, str) or not isinstance(cosmetic_id, str):
+            continue
+        cosmetic = get_familiar_cosmetic(cosmetic_id)
+        if cosmetic is None or cosmetic_id not in inventory:
+            continue
+        if cosmetic["slot"] != slot:
+            continue
+        out[slot] = cosmetic_id
+    return out
+
+
+def _store_cosmetic_equipped(row: UserFamiliar, equipped: dict[str, str]) -> None:
+    clean: dict[str, str] = {}
+    inventory = set(_load_cosmetic_inventory(row))
+    for slot, cosmetic_id in equipped.items():
+        cosmetic = get_familiar_cosmetic(cosmetic_id)
+        if cosmetic is None or cosmetic_id not in inventory:
+            continue
+        if cosmetic["slot"] != slot:
+            continue
+        clean[slot] = cosmetic_id
+    row.cosmetic_equipped_json = json.dumps(clean)
+
+
+def _equipped_cosmetics(row: UserFamiliar) -> dict:
+    out = {}
+    for slot, cosmetic_id in _load_cosmetic_equipped(row).items():
+        cosmetic = get_familiar_cosmetic(cosmetic_id)
+        if cosmetic is not None:
+            out[slot] = dict(_cosmetic_out(cosmetic))
+    return out
+
+
 def _owned_out(row: UserFamiliar) -> OwnedFamiliarOut:
     fam = get_familiar(row.familiar_id) or {
         "id": row.familiar_id,
@@ -167,6 +281,13 @@ def _owned_out(row: UserFamiliar) -> OwnedFamiliarOut:
         "color": "#888",
     }
     level, xp_into, xp_to_next = progress_in_level(row.xp)
+    inventory = _load_cosmetic_inventory(row)
+    equipped = _load_cosmetic_equipped(row)
+    cosmetics = _equipped_cosmetics(row)
+    display_color = fam.get("color", "#888")
+    color_cosmetic = cosmetics.get("color")
+    if color_cosmetic and color_cosmetic.get("color"):
+        display_color = color_cosmetic["color"]
     return OwnedFamiliarOut(
         id=row.id or 0,
         familiarId=row.familiar_id,
@@ -174,7 +295,7 @@ def _owned_out(row: UserFamiliar) -> OwnedFamiliarOut:
         rarity=fam.get("rarity", "commun"),
         tier=fam.get("tier", "free"),
         icon=fam.get("icon", "❓"),
-        color=fam.get("color", "#888"),
+        color=display_color,
         nickname=row.nickname,
         isActive=row.is_active,
         xp=row.xp,
@@ -185,6 +306,9 @@ def _owned_out(row: UserFamiliar) -> OwnedFamiliarOut:
         stats=dict(compute_familiar_stats(row.familiar_id, row.xp)),
         acquiredAt=row.acquired_at,
         lastActiveAt=row.last_active_at,
+        cosmeticInventory=inventory,
+        cosmeticEquipped=equipped,
+        cosmetics=cosmetics,
     )
 
 
@@ -299,6 +423,12 @@ def get_catalog() -> List[FamiliarCatalogItemOut]:
     return [_catalog_item_out(f) for f in FAMILIARS]
 
 
+@router.get("/cosmetics/catalog", response_model=List[FamiliarCosmeticOut])
+def get_cosmetics_catalog() -> List[FamiliarCosmeticOut]:
+    """Catalogue serveur des cosmétiques de familiers."""
+    return [_cosmetic_out(c) for c in FAMILIAR_COSMETICS]
+
+
 @user_router.get(
     "/{user_id}/familiers", response_model=FamiliarCollectionOut
 )
@@ -309,6 +439,143 @@ def list_user_familiars(
     p = session.get(UserProfile, user_id)
     if not p:
         raise HTTPException(status_code=404, detail="Profil introuvable.")
+    return _collection_out(session, user_id)
+
+
+@user_router.post(
+    "/{user_id}/familiers/cosmetics/buy",
+    response_model=FamiliarCollectionOut,
+)
+def buy_familiar_cosmetic(
+    user_id: str,
+    payload: BuyFamiliarCosmeticPayload,
+    session: Session = Depends(_session_dep),
+) -> FamiliarCollectionOut:
+    """Achete un cosmetique pour le familier actif avec prix serveur."""
+    p = session.get(UserProfile, user_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Profil introuvable.")
+    active = _active_row(session, user_id)
+    if active is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tu n'as pas encore de familier actif.",
+        )
+    cosmetic = get_familiar_cosmetic(payload.cosmeticId)
+    if cosmetic is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cosmétique de familier inconnu.",
+        )
+    compatible = cosmetic.get("compatible_familiars")
+    if compatible and active.familiar_id not in compatible:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ce cosmétique n'est pas compatible avec ce familier.",
+        )
+
+    inventory = _load_cosmetic_inventory(active)
+    if cosmetic["id"] in inventory:
+        return _collection_out(session, user_id)
+
+    reference_id = f"famcos-{int(datetime.now(timezone.utc).timestamp() * 1000)}-{user_id[-6:]}"
+    price = int(cosmetic.get("price", 0) or 0)
+    currency = cosmetic["currency"]
+    if currency == "lueurs" and price > 0:
+        if p.lueurs < price:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Solde Lueurs insuffisant.",
+            )
+        p.lueurs -= price
+        session.add(
+            WalletLedger(
+                user_id=user_id,
+                pot="lueurs",
+                delta=-price,
+                balance_after=p.lueurs,
+                reason=f"familier:cosmetic:{cosmetic['id']}",
+                reference_id=reference_id,
+            )
+        )
+    elif currency == "sylvins" and price > 0:
+        take_promo, take_paid = _consume_sylvins(p, price)
+        _record_purchase_ledger(
+            session,
+            user_id,
+            take_promo,
+            take_paid,
+            p.sylvins,
+            p.sylvins_paid,
+            reason=f"familier:cosmetic:{cosmetic['id']}",
+            reference_id=reference_id,
+        )
+
+    inventory.append(cosmetic["id"])
+    _store_cosmetic_inventory(active, inventory)
+    session.add(active)
+    p.updated_at = _now_iso()
+    session.commit()
+    return _collection_out(session, user_id)
+
+
+@user_router.post(
+    "/{user_id}/familiers/cosmetics/equip",
+    response_model=FamiliarCollectionOut,
+)
+def equip_familiar_cosmetic(
+    user_id: str,
+    payload: EquipFamiliarCosmeticPayload,
+    session: Session = Depends(_session_dep),
+) -> FamiliarCollectionOut:
+    """Equipe ou retire un cosmetique du familier actif."""
+    p = session.get(UserProfile, user_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Profil introuvable.")
+    active = _active_row(session, user_id)
+    if active is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tu n'as pas encore de familier actif.",
+        )
+    slot = payload.slot.strip()
+    equipped = _load_cosmetic_equipped(active)
+    if payload.cosmeticId is None:
+        equipped.pop(slot, None)
+        _store_cosmetic_equipped(active, equipped)
+        session.add(active)
+        p.updated_at = _now_iso()
+        session.commit()
+        return _collection_out(session, user_id)
+
+    cosmetic = get_familiar_cosmetic(payload.cosmeticId)
+    if cosmetic is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cosmétique de familier inconnu.",
+        )
+    if cosmetic["slot"] != slot:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ce cosmétique ne correspond pas à cette catégorie.",
+        )
+    inventory = _load_cosmetic_inventory(active)
+    if cosmetic["id"] not in inventory:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Achète ou débloque ce cosmétique avant de l'équiper.",
+        )
+    compatible = cosmetic.get("compatible_familiars")
+    if compatible and active.familiar_id not in compatible:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ce cosmétique n'est pas compatible avec ce familier.",
+        )
+    equipped[slot] = cosmetic["id"]
+    _store_cosmetic_equipped(active, equipped)
+    session.add(active)
+    p.updated_at = _now_iso()
+    session.commit()
     return _collection_out(session, user_id)
 
 
