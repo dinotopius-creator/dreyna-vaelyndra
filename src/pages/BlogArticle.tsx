@@ -453,7 +453,7 @@ export function BlogArticle() {
           <ul className="mt-8 space-y-4">
             {article.comments.length === 0 && (
               <li className="text-sm text-ivory/50">
-                Silence dans la cour... soyez la premiere voix.
+                Silence dans la cour... soyez la première voix.
               </li>
             )}
             {topLevelComments.map((c) => renderComment(c))}

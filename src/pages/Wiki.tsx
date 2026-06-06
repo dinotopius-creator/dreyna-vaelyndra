@@ -115,7 +115,7 @@ function WikiHome() {
                 Wiki officiel <span className="text-mystic">Vaelyndra</span>
               </>
             }
-            subtitle="Guides utilisateurs, streamers, avatar, familiers, lives, monde 3D, communaute, grades et offrandes. Tout est base sur les vraies routes et fonctionnalites du site."
+            subtitle="Guides utilisateurs, streamers, avatar, familiers, lives, monde 3D, communauté, grades et offrandes. Tout est basé sur les vraies routes et fonctionnalités du site."
           />
 
           <div className="rounded-[1.5rem] border border-white/10 bg-night-950/60 p-4 backdrop-blur-xl sm:p-5">
@@ -214,15 +214,15 @@ function WikiHome() {
           <div className="mt-4 grid gap-2 text-sm text-ivory/65">
             <p>
               <strong className="text-emerald-100">Disponible</strong> :
-              fonctionnalite presente et utilisable.
+              fonctionnalité présente et utilisable.
             </p>
             <p>
               <strong className="text-gold-100">En evolution</strong> :
-              fonctionnalite presente mais encore amelioree par PR.
+              fonctionnalité présente mais encore améliorée par PR.
             </p>
             <p>
               <strong className="text-sky-100">A venir</strong> : structure
-              prevue, mais pas de fonctionnalite finale detectee.
+              prévue, mais pas de fonctionnalité finale détectée.
             </p>
           </div>
         </div>
@@ -396,7 +396,7 @@ function WikiArticleView({ article }: { article: WikiArticle }) {
             </GuideSection>
 
             {article.commonIssues && article.commonIssues.length > 0 && (
-              <GuideSection title="Problemes frequents">
+              <GuideSection title="Problèmes fréquents">
                 <ul className="space-y-3">
                   {article.commonIssues.map((issue, index) => (
                     <li
@@ -427,7 +427,7 @@ function WikiArticleView({ article }: { article: WikiArticle }) {
                 Note de maintenance
               </p>
               <p className="mt-2">
-                Ce guide documente les fonctionnalites detectees dans le code.
+                Ce guide documente les fonctionnalités détectées dans le code.
                 Les sections marquees En evolution peuvent changer avec les
                 prochaines PR.
               </p>
@@ -460,7 +460,7 @@ function WikiNotFound() {
       <HelpCircle className="mx-auto h-10 w-10 text-gold-300" />
       <h1 className="heading-gold mt-5 text-4xl">Article introuvable</h1>
       <p className="mt-3 text-ivory/65">
-        Cette entree du Wiki n'existe pas encore ou a ete deplacee.
+        Cette entrée du Wiki n'existe pas encore ou a été déplacée.
       </p>
       <Link to="/wiki" className="btn-gold mt-6">
         Retour au Wiki

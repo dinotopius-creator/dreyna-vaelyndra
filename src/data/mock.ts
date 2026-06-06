@@ -66,7 +66,7 @@ export const BADGES: Badge[] = [
     id: "magic-academy-top2",
     name: "Top 2 · Magic Academy",
     description:
-      "Finaliste d'élite de l'événement Magic Academy, classée 2ᵉ du royaume.",
+      "Finaliste d'élite de l'événement Magic Academy, classée 2e du royaume.",
     icon: "🏆",
     rarity: "royale",
   },
@@ -476,7 +476,7 @@ export const SEED_CHAT: ChatMessage[] = [
     authorId: "user-lyria",
     authorName: "Lyria",
     authorAvatar: "https://i.pravatar.cc/150?u=lyria",
-    content: "Coucou tout le monde 👋",
+    content: "Bonsoir tout le monde 👋",
     createdAt: new Date(Date.now() - 1000 * 60 * 7).toISOString(),
   },
   {
@@ -484,7 +484,7 @@ export const SEED_CHAT: ChatMessage[] = [
     authorId: "user-caelum",
     authorName: "Caelum",
     authorAvatar: "https://i.pravatar.cc/150?u=caelum",
-    content: "F4F ? je rends les abos 💜",
+    content: "Très belle ambiance dans le live 💜",
     createdAt: new Date(Date.now() - 1000 * 60 * 6).toISOString(),
   },
   {
@@ -492,7 +492,7 @@ export const SEED_CHAT: ChatMessage[] = [
     authorId: "user-mira",
     authorName: "Mira",
     authorAvatar: "https://i.pravatar.cc/150?u=mira",
-    content: "salut la compagnie ✨",
+    content: "Salut la compagnie ✨",
     createdAt: new Date(Date.now() - 1000 * 60 * 4).toISOString(),
   },
   {
@@ -500,43 +500,40 @@ export const SEED_CHAT: ChatMessage[] = [
     authorId: "user-aeris",
     authorName: "Aëris",
     authorAvatar: "https://i.pravatar.cc/150?u=aeris",
-    content: "première fois sur ton live 🔥",
+    content: "Première fois sur ton live 🔥",
     createdAt: new Date(Date.now() - 1000 * 60 * 3).toISOString(),
   },
 ];
 
 /**
  * Pool de messages factices utilisés pour simuler une activité de chat
- * pendant qu'un broadcaster teste son live ou attend ses viewers.
+ * pendant qu'un streamer teste son live ou attend ses viewers.
  *
- * Gardé volontairement **neutre** : pas de référence à Vaelyndra, Dreyna
- * ni à l'univers elfique. Ces messages s'affichent sur TOUS les lives
- * du réseau (chaque membre peut être broadcaster), donc on reste sur du
- * vocabulaire générique de streameur (F4F, coucou, je rends les abos…)
- * pour ne pas laisser penser que le live appartient à la reine ou au
- * lore Vaelyndra.
+ * Gardé volontairement neutre : pas de référence à Vaelyndra, Dreyna
+ * ni à l'univers elfique. Ces messages s'affichent sur tous les lives
+ * du réseau ; ils restent donc génériques, bienveillants et professionnels.
  */
 export const AUTO_CHAT_LINES = [
-  "coucou 👋",
-  "salut tout le monde",
-  "hello 💜",
-  "F4F ?",
-  "je rends les abos",
-  "je follow, follow back ? 🙏",
-  "re",
-  "première fois ici 🔥",
-  "bien ou bien",
-  "ça passe bien chez moi",
-  "soirée tranquille 🌙",
-  "yo la team",
-  "belle ambiance",
-  "t'es trop stylé·e 💫",
-  "on reste jusqu'à la fin",
-  "abonné·e avec la cloche 🔔",
-  "merci pour le live ✨",
-  "trop cool cette commu",
-  "ça déchire",
-  "j'adore ton contenu",
+  "Bonsoir tout le monde 👋",
+  "Salut la cour",
+  "Belle ambiance 💜",
+  "Première fois ici 🔥",
+  "Le son passe bien chez moi",
+  "Soirée tranquille 🌙",
+  "Très belle énergie",
+  "On reste jusqu'à la fin",
+  "Abonné avec la cloche 🔔",
+  "Merci pour le live ✨",
+  "Cette communauté est vraiment cool",
+  "Ça déchire",
+  "J'adore ton contenu",
+  "Le chat est super vivant",
+  "La scène est propre",
+  "Les effets rendent trop bien",
+  "On sent la bonne ambiance",
+  "Trop stylé 💫",
+  "Le live est fluide chez moi",
+  "Je repasserai au prochain live",
 ];
 
 export const TOP_FANS = [
