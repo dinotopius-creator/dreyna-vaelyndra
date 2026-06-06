@@ -56,6 +56,14 @@ type DistrictId = "place" | "arcades" | "observatory";
 
 const World3DStage = lazy(() => import("../components/worlds/World3DStage"));
 
+const WORLD_BOOT_STEPS = [
+  "Connexion au monde...",
+  "Chargement de votre avatar...",
+  "Préparation de l'univers...",
+  "Synchronisation du vocal...",
+  "Entrée dans Vaelyndra...",
+];
+
 interface District {
   id: DistrictId;
   name: string;
@@ -543,6 +551,8 @@ export function Worlds() {
 
   const mapRef = useRef<HTMLDivElement | null>(null);
   const [isWorldFullscreen, setIsWorldFullscreen] = useState(false);
+  const [worldBooting, setWorldBooting] = useState(false);
+  const [worldBootStep, setWorldBootStep] = useState(0);
   function handlePointerDown() {
     // Clicking or tapping the map should not teleport the player.
   }
@@ -554,6 +564,57 @@ export function Worlds() {
   function handlePointerUp() {
     // Movement stays on dedicated controls to preserve player interactions.
   }
+
+  const enterWorldGame = useCallback(() => {
+    if (worldBooting || isWorldFullscreen) return;
+    setWorldBooting(true);
+    setWorldBootStep(0);
+  }, [isWorldFullscreen, worldBooting]);
+
+  const exitWorldGame = useCallback(() => {
+    setWorldBooting(false);
+    setIsWorldFullscreen(false);
+    setWorldBootStep(0);
+    void document.exitFullscreen?.().catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    if (!worldBooting) return undefined;
+    let step = 0;
+    const stepTimer = window.setInterval(() => {
+      step += 1;
+      setWorldBootStep(Math.min(step, WORLD_BOOT_STEPS.length - 1));
+    }, 360);
+    const readyTimer = window.setTimeout(() => {
+      window.clearInterval(stepTimer);
+      setWorldBooting(false);
+      setIsWorldFullscreen(true);
+    }, 1850);
+    return () => {
+      window.clearInterval(stepTimer);
+      window.clearTimeout(readyTimer);
+    };
+  }, [worldBooting]);
+
+  useEffect(() => {
+    if (!isWorldFullscreen) {
+      document.body.classList.remove("vaelyndra-world-game-open");
+      return undefined;
+    }
+    document.body.classList.add("vaelyndra-world-game-open");
+    const node = mapRef.current;
+    void node?.requestFullscreen?.().catch(() => undefined);
+    const onFullscreenChange = () => {
+      if (!document.fullscreenElement) {
+        setIsWorldFullscreen(false);
+      }
+    };
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => {
+      document.body.classList.remove("vaelyndra-world-game-open");
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
+    };
+  }, [isWorldFullscreen]);
 
   const refreshWorldPresence = useCallback(async () => {
     try {
@@ -1595,11 +1656,12 @@ export function Worlds() {
             <div className="mb-3 flex justify-end md:hidden">
               <button
                 type="button"
-                onClick={() => setIsWorldFullscreen(true)}
-                className="inline-flex items-center gap-2 rounded-full border border-gold-300/35 bg-gold-500/12 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-gold-100 shadow-[0_12px_36px_rgba(250,204,21,0.12)]"
+                onClick={enterWorldGame}
+                disabled={worldBooting}
+                className="inline-flex items-center gap-2 rounded-full border border-gold-300/35 bg-gold-500/12 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-gold-100 shadow-[0_12px_36px_rgba(250,204,21,0.12)] disabled:cursor-wait disabled:opacity-70"
               >
                 <Sparkles className="h-3.5 w-3.5" />
-                Entrer dans le monde
+                {worldBooting ? "Ouverture..." : "Entrer dans le monde"}
               </button>
             </div>
 
@@ -1615,17 +1677,46 @@ export function Worlds() {
                   : "min-h-[420px] rounded-[30px] sm:min-h-[560px] md:min-h-[680px] xl:min-h-[780px]"
               } ${selectedDistrict.accent}`}
             >
-              {isWorldFullscreen && (
-                <div className="absolute left-[calc(0.75rem+env(safe-area-inset-left))] top-[calc(0.75rem+env(safe-area-inset-top))] z-40 flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setIsWorldFullscreen(false)}
-                    className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-night-950/75 text-ivory/80 shadow-xl backdrop-blur transition hover:border-gold-300/45 hover:text-gold-100"
-                    aria-label="Quitter le monde plein écran"
+              {worldBooting && (
+                <div className="fixed inset-0 z-[90] flex min-h-[100dvh] items-center justify-center overflow-hidden bg-[#05010c] px-5 text-center">
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,rgba(250,204,21,0.18),transparent_34%),radial-gradient(circle_at_20%_80%,rgba(34,211,238,0.16),transparent_35%),linear-gradient(135deg,rgba(15,23,42,0.96),rgba(6,3,16,0.98))]" />
+                  <motion.div
+                    className="relative w-full max-w-md rounded-[34px] border border-gold-200/20 bg-night-950/72 p-6 shadow-[0_30px_100px_rgba(0,0,0,0.55)] backdrop-blur-xl"
+                    initial={{ opacity: 0, scale: 0.96, y: 14 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    transition={{ duration: 0.35 }}
                   >
-                    <X className="h-5 w-5" />
-                  </button>
-                  <div className="hidden rounded-2xl border border-white/10 bg-night-950/58 px-3 py-2 backdrop-blur landscape:block">
+                    <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-[28px] border border-gold-200/25 bg-gold-300/10 shadow-[0_0_55px_rgba(250,204,21,0.22)]">
+                      <Sparkles className="h-9 w-9 animate-pulse text-gold-200" />
+                    </div>
+                    <p className="mt-5 text-[11px] uppercase tracking-[0.28em] text-gold-200/75">
+                      Mode jeu Vaelyndra
+                    </p>
+                    <h3 className="mt-2 font-display text-3xl text-gold-100">
+                      Entrée dans le monde
+                    </h3>
+                    <p className="mt-3 min-h-6 text-sm text-ivory/70">
+                      {WORLD_BOOT_STEPS[worldBootStep]}
+                    </p>
+                    <div className="mt-5 h-2 overflow-hidden rounded-full bg-white/10">
+                      <motion.div
+                        className="h-full rounded-full bg-gradient-to-r from-gold-300 via-cyan-200 to-emerald-200"
+                        initial={{ width: "8%" }}
+                        animate={{
+                          width: `${Math.min(100, ((worldBootStep + 1) / WORLD_BOOT_STEPS.length) * 100)}%`,
+                        }}
+                        transition={{ duration: 0.25 }}
+                      />
+                    </div>
+                    <p className="mt-4 text-xs leading-5 text-ivory/50">
+                      Préchargement du rendu 3D, des contrôles tactiles, du vocal et des lueurs visibles.
+                    </p>
+                  </motion.div>
+                </div>
+              )}
+              {isWorldFullscreen && (
+                <div className="absolute right-[calc(0.75rem+env(safe-area-inset-right))] top-[calc(0.75rem+env(safe-area-inset-top))] z-40 flex items-center gap-3">
+                  <div className="hidden rounded-2xl border border-white/10 bg-night-950/58 px-3 py-2 text-right backdrop-blur landscape:block">
                     <p className="text-[9px] uppercase tracking-[0.22em] text-gold-200/70">
                       Monde 3D APK
                     </p>
@@ -1633,6 +1724,14 @@ export function Worlds() {
                       {selectedDistrict.name}
                     </p>
                   </div>
+                  <button
+                    type="button"
+                    onClick={exitWorldGame}
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-night-950/75 text-ivory/80 shadow-xl backdrop-blur transition hover:border-gold-300/45 hover:text-gold-100"
+                    aria-label="Quitter le monde plein écran"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
                 </div>
               )}
               <DistrictBackdrop district={district} />
@@ -1732,7 +1831,7 @@ export function Worlds() {
               <div
                 className={`absolute z-30 rounded-2xl border border-white/10 bg-night-950/70 px-4 py-3 backdrop-blur ${
                   isWorldFullscreen
-                    ? "right-[calc(0.75rem+env(safe-area-inset-right))] top-[calc(0.75rem+env(safe-area-inset-top))] max-w-[min(15rem,42vw)]"
+                    ? "left-[calc(0.75rem+env(safe-area-inset-left))] top-[calc(0.75rem+env(safe-area-inset-top))] max-w-[min(15rem,42vw)]"
                     : "right-5 top-5 md:bottom-5 md:top-auto"
                 }`}
               >
@@ -1745,7 +1844,7 @@ export function Worlds() {
                     ? currentChannelId.startsWith("private:")
                       ? "discussion privée active"
                       : micEnabled
-                        ? `${worldVoiceConnections} presence${worldVoiceConnections > 1 ? "s" : ""} audio reliee${worldVoiceConnections > 1 ? "s" : ""}`
+                        ? `${worldVoiceConnections} présence${worldVoiceConnections > 1 ? "s" : ""} audio reliée${worldVoiceConnections > 1 ? "s" : ""}`
                         : `écoute active · micro coupé · ${worldVoiceConnections} lien${worldVoiceConnections > 1 ? "s" : ""}`
                     : "vocal non rejoint"}
                 </div>

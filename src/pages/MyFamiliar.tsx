@@ -267,6 +267,29 @@ export function MyFamiliar() {
         </div>
 
         <div className="relative mt-8">
+          <div className="mb-6 overflow-hidden rounded-[26px] border border-gold-300/25 bg-[radial-gradient(circle_at_top_left,rgba(250,204,21,0.18),transparent_34%),rgba(15,23,42,0.58)] p-4">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.24em] text-gold-200/70">
+                  Mini-jeu familier
+                </p>
+                <h3 className="mt-1 font-display text-2xl text-gold-100">
+                  Enclos du familier
+                </h3>
+                <p className="mt-2 max-w-xl text-sm leading-6 text-ivory/62">
+                  Laisse ton compagnon se promener, nettoie son refuge au toucher et gagne des Lueurs avec une chance très rare de Sylvin promo.
+                </p>
+              </div>
+              <Link
+                to="/familier/enclos"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-gold-300/35 bg-gold-500/12 px-5 py-2 text-sm font-semibold text-gold-100 transition hover:border-gold-200 hover:bg-gold-500/18"
+              >
+                <Sparkles className="h-4 w-4" />
+                Ouvrir l'enclos
+              </Link>
+            </div>
+          </div>
+
           <div className="mb-3 flex items-baseline justify-between gap-3">
             <h3 className="text-xs uppercase tracking-[0.3em] text-ivory/50">
               Caractéristiques
