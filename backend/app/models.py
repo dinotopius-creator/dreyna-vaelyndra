@@ -675,6 +675,10 @@ class UserFamiliar(SQLModel, table=True):
     # - cosmetic_equipped_json: dict[slot, cosmeticId] des items equipes
     cosmetic_inventory_json: str = Field(default="[]")
     cosmetic_equipped_json: str = Field(default="{}")
+    food_stock: int = Field(default=0)
+    affection_feedings: int = Field(default=0)
+    affection_rewarded_hearts_json: str = Field(default="[]")
+    enclosure_last_cleaned_at: Optional[str] = Field(default=None)
     is_active: bool = Field(default=False, index=True)
     acquired_at: str = Field(default_factory=_now_iso, index=True)
     last_active_at: Optional[str] = Field(default=None)

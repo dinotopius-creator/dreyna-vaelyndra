@@ -15,7 +15,8 @@ viennent dans des PRs suivantes.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+import random
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -48,6 +49,10 @@ from ..models import (
 router = APIRouter(prefix="/familiers", tags=["familiers"])
 user_router = APIRouter(prefix="/users", tags=["familiers"])
 
+AFFECTION_HEART_REQUIREMENTS = [10, 15, 20, 30, 45, 60, 80, 105, 135, 170]
+AFFECTION_HEART_REWARDS = [50, 75, 100, 150, 200, 275, 350, 450, 600, 800]
+ENCLOSURE_CLEANING_COOLDOWN_SECONDS = 20 * 60
+
 
 def _session_dep() -> Session:
     return next(_session_gen())
@@ -63,6 +68,100 @@ def _session_gen():
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _parse_iso(value: Optional[str]) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _affection_cumulative_thresholds() -> list[int]:
+    total = 0
+    thresholds: list[int] = []
+    for required in AFFECTION_HEART_REQUIREMENTS:
+        total += required
+        thresholds.append(total)
+    return thresholds
+
+
+def _affection_hearts(feedings: int) -> int:
+    total = max(0, int(feedings or 0))
+    hearts = 0
+    for threshold in _affection_cumulative_thresholds():
+        if total >= threshold:
+            hearts += 1
+    return min(10, hearts)
+
+
+def _load_rewarded_hearts(row: UserFamiliar) -> list[int]:
+    try:
+        raw = json.loads(row.affection_rewarded_hearts_json or "[]")
+    except (TypeError, ValueError):
+        raw = []
+    out: list[int] = []
+    for item in raw:
+        try:
+            heart = int(item)
+        except (TypeError, ValueError):
+            continue
+        if 1 <= heart <= 10 and heart not in out:
+            out.append(heart)
+    return sorted(out)
+
+
+def _store_rewarded_hearts(row: UserFamiliar, hearts: list[int]) -> None:
+    clean = sorted({heart for heart in hearts if 1 <= int(heart) <= 10})
+    row.affection_rewarded_hearts_json = json.dumps(clean)
+
+
+def _affection_out(row: UserFamiliar) -> FamiliarAffectionOut:
+    feedings = max(0, int(row.affection_feedings or 0))
+    hearts = _affection_hearts(feedings)
+    thresholds = _affection_cumulative_thresholds()
+    previous_threshold = thresholds[hearts - 1] if hearts > 0 else 0
+    next_threshold = thresholds[hearts] if hearts < 10 else thresholds[-1]
+    meals_for_next = (
+        AFFECTION_HEART_REQUIREMENTS[hearts] if hearts < 10 else 0
+    )
+    meals_into = min(max(0, feedings - previous_threshold), meals_for_next)
+    meals_until = max(0, next_threshold - feedings) if hearts < 10 else 0
+    return FamiliarAffectionOut(
+        foodStock=max(0, int(row.food_stock or 0)),
+        affectionFeedings=feedings,
+        affectionHearts=hearts,
+        affectionMealsIntoHeart=meals_into,
+        affectionMealsForNextHeart=meals_for_next,
+        affectionMealsUntilNextHeart=meals_until,
+        affectionRewardedHearts=_load_rewarded_hearts(row),
+        heartRequirements=list(AFFECTION_HEART_REQUIREMENTS),
+        heartRewards=list(AFFECTION_HEART_REWARDS),
+    )
+
+
+def _roll_cleaning_food() -> int:
+    roll = random.random()
+    if roll < 0.60:
+        return 1
+    if roll < 0.85:
+        return 2
+    if roll < 0.95:
+        return 3
+    return 0
+
+
+def _cleaning_cooldown_remaining(row: UserFamiliar) -> int:
+    last = _parse_iso(row.enclosure_last_cleaned_at)
+    if last is None:
+        return 0
+    if last.tzinfo is None:
+        last = last.replace(tzinfo=timezone.utc)
+    ready_at = last + timedelta(seconds=ENCLOSURE_CLEANING_COOLDOWN_SECONDS)
+    remaining = ready_at - datetime.now(timezone.utc)
+    return max(0, int(remaining.total_seconds()))
 
 
 # --- DTOs ------------------------------------------------------------------
@@ -126,6 +225,37 @@ class OwnedFamiliarOut(BaseModel):
     cosmeticInventory: List[str] = []
     cosmeticEquipped: dict = {}
     cosmetics: dict = {}
+    foodStock: int = 0
+    affectionFeedings: int = 0
+    affectionHearts: int = 0
+    affectionMealsIntoHeart: int = 0
+    affectionMealsForNextHeart: int = 0
+    affectionMealsUntilNextHeart: int = 0
+    affectionRewardedHearts: List[int] = []
+    enclosureLastCleanedAt: Optional[str] = None
+
+
+class FamiliarAffectionOut(BaseModel):
+    foodStock: int
+    affectionFeedings: int
+    affectionHearts: int
+    affectionMealsIntoHeart: int
+    affectionMealsForNextHeart: int
+    affectionMealsUntilNextHeart: int
+    affectionRewardedHearts: List[int]
+    heartRequirements: List[int]
+    heartRewards: List[int]
+
+
+class FamiliarEnclosureActionOut(BaseModel):
+    familiar: OwnedFamiliarOut
+    affection: FamiliarAffectionOut
+    foodFound: int = 0
+    heartGained: Optional[int] = None
+    lueursRewarded: int = 0
+    profileLueurs: int = 0
+    cooldownRemainingSeconds: int = 0
+    message: str
 
 
 class FamiliarCollectionOut(BaseModel):
@@ -284,6 +414,7 @@ def _owned_out(row: UserFamiliar) -> OwnedFamiliarOut:
     inventory = _load_cosmetic_inventory(row)
     equipped = _load_cosmetic_equipped(row)
     cosmetics = _equipped_cosmetics(row)
+    affection = _affection_out(row)
     display_color = fam.get("color", "#888")
     color_cosmetic = cosmetics.get("color")
     if color_cosmetic and color_cosmetic.get("color"):
@@ -309,6 +440,14 @@ def _owned_out(row: UserFamiliar) -> OwnedFamiliarOut:
         cosmeticInventory=inventory,
         cosmeticEquipped=equipped,
         cosmetics=cosmetics,
+        foodStock=affection.foodStock,
+        affectionFeedings=affection.affectionFeedings,
+        affectionHearts=affection.affectionHearts,
+        affectionMealsIntoHeart=affection.affectionMealsIntoHeart,
+        affectionMealsForNextHeart=affection.affectionMealsForNextHeart,
+        affectionMealsUntilNextHeart=affection.affectionMealsUntilNextHeart,
+        affectionRewardedHearts=affection.affectionRewardedHearts,
+        enclosureLastCleanedAt=row.enclosure_last_cleaned_at,
     )
 
 
@@ -440,6 +579,143 @@ def list_user_familiars(
     if not p:
         raise HTTPException(status_code=404, detail="Profil introuvable.")
     return _collection_out(session, user_id)
+
+
+@user_router.post(
+    "/{user_id}/familiers/enclosure/clean",
+    response_model=FamiliarEnclosureActionOut,
+)
+def clean_familiar_enclosure(
+    user_id: str,
+    session: Session = Depends(_session_dep),
+) -> FamiliarEnclosureActionOut:
+    """Nettoie l'enclos du familier actif et donne de la nourriture.
+
+    Le gain est scelle cote serveur pour eviter les recompenses purement
+    client. Le cooldown limite le farm sans bloquer l'usage de l'enclos.
+    """
+    p = session.get(UserProfile, user_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Profil introuvable.")
+    active = _active_row(session, user_id)
+    if active is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tu n'as pas encore de familier actif.",
+        )
+
+    remaining = _cleaning_cooldown_remaining(active)
+    if remaining > 0:
+        return FamiliarEnclosureActionOut(
+            familiar=_owned_out(active),
+            affection=_affection_out(active),
+            cooldownRemainingSeconds=remaining,
+            profileLueurs=p.lueurs,
+            message="L'enclos est déjà propre. Revenez un peu plus tard.",
+        )
+
+    food_found = _roll_cleaning_food()
+    active.food_stock = max(0, int(active.food_stock or 0)) + food_found
+    active.enclosure_last_cleaned_at = _now_iso()
+    session.add(active)
+    p.updated_at = _now_iso()
+    session.add(p)
+    session.commit()
+    session.refresh(active)
+    session.refresh(p)
+    message = (
+        f"Vous avez gagné {food_found} nourriture{'s' if food_found > 1 else ''}."
+        if food_found > 0
+        else "Aucune nourriture trouvée cette fois."
+    )
+    return FamiliarEnclosureActionOut(
+        familiar=_owned_out(active),
+        affection=_affection_out(active),
+        foodFound=food_found,
+        cooldownRemainingSeconds=_cleaning_cooldown_remaining(active),
+        profileLueurs=p.lueurs,
+        message=message,
+    )
+
+
+@user_router.post(
+    "/{user_id}/familiers/enclosure/feed",
+    response_model=FamiliarEnclosureActionOut,
+)
+def feed_active_familiar(
+    user_id: str,
+    session: Session = Depends(_session_dep),
+) -> FamiliarEnclosureActionOut:
+    """Nourrit le familier actif et crédite les Lueurs au changement de coeur."""
+    p = session.get(UserProfile, user_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Profil introuvable.")
+    active = _active_row(session, user_id)
+    if active is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tu n'as pas encore de familier actif.",
+        )
+    if int(active.food_stock or 0) <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Vous n'avez plus de nourriture. Nettoyez l'enclos pour en trouver.",
+        )
+
+    before_hearts = _affection_hearts(active.affection_feedings)
+    active.food_stock = max(0, int(active.food_stock or 0) - 1)
+    active.affection_feedings = max(0, int(active.affection_feedings or 0)) + 1
+    after_hearts = _affection_hearts(active.affection_feedings)
+    rewarded = _load_rewarded_hearts(active)
+    heart_gained: Optional[int] = None
+    lueurs_rewarded = 0
+    reference_id = (
+        f"famaff-{active.id}-{int(datetime.now(timezone.utc).timestamp() * 1000)}"
+        f"-{user_id[-6:]}"
+    )
+
+    if after_hearts > before_hearts and after_hearts not in rewarded:
+        heart_gained = after_hearts
+        lueurs_rewarded = AFFECTION_HEART_REWARDS[after_hearts - 1]
+        p.lueurs += lueurs_rewarded
+        rewarded.append(after_hearts)
+        _store_rewarded_hearts(active, rewarded)
+        session.add(
+            WalletLedger(
+                user_id=user_id,
+                pot="lueurs",
+                delta=lueurs_rewarded,
+                balance_after=p.lueurs,
+                reason=f"familier:affection-heart:{after_hearts}",
+                reference_id=reference_id,
+            )
+        )
+
+    session.add(active)
+    p.updated_at = _now_iso()
+    session.add(p)
+    session.commit()
+    session.refresh(active)
+    session.refresh(p)
+
+    affection = _affection_out(active)
+    if heart_gained:
+        message = f"Votre familier gagne un cœur ! +{lueurs_rewarded} lueurs."
+    elif affection.affectionHearts >= 10:
+        message = "Votre familier est déjà au maximum d'affection."
+    else:
+        message = (
+            "Votre familier a été nourri. "
+            f"Encore {affection.affectionMealsUntilNextHeart} repas avant le prochain cœur."
+        )
+    return FamiliarEnclosureActionOut(
+        familiar=_owned_out(active),
+        affection=affection,
+        heartGained=heart_gained,
+        lueursRewarded=lueurs_rewarded,
+        profileLueurs=p.lueurs,
+        message=message,
+    )
 
 
 @user_router.post(
