@@ -101,6 +101,7 @@ const WORLD_DEPTH = 18;
 const SELF_ID = "__self__";
 const REMOTE_AVATAR_GRACE_MS = 8000;
 const MAX_PIXEL_RATIO = 1.65;
+const MOBILE_JOYSTICK_DEADZONE = 0.13;
 
 interface AnalogInput {
   active: boolean;
@@ -111,6 +112,33 @@ interface AnalogInput {
 interface CameraInput {
   yawDelta: number;
   pitchDelta: number;
+}
+
+function normalizeJoystickInput(rawX: number, rawY: number): AnalogInput {
+  const magnitude = THREE.MathUtils.clamp(Math.hypot(rawX, rawY), 0, 1);
+  if (magnitude < MOBILE_JOYSTICK_DEADZONE) {
+    return { active: false, x: 0, y: 0 };
+  }
+  const scaledMagnitude = (magnitude - MOBILE_JOYSTICK_DEADZONE) / (1 - MOBILE_JOYSTICK_DEADZONE);
+  return {
+    active: true,
+    x: (rawX / magnitude) * scaledMagnitude,
+    y: (rawY / magnitude) * scaledMagnitude,
+  };
+}
+
+function addCameraRelativeJoystickMovement(
+  movement: THREE.Vector3,
+  joystick: AnalogInput,
+  cameraYaw: number,
+) {
+  if (!joystick.active) return;
+
+  // Mobile convention: up = into the camera view, down = back, left/right = screen left/right.
+  const cameraForward = new THREE.Vector3(Math.sin(cameraYaw), 0, -Math.cos(cameraYaw));
+  const cameraRight = new THREE.Vector3(Math.cos(cameraYaw), 0, Math.sin(cameraYaw));
+  movement.addScaledVector(cameraForward, -joystick.y);
+  movement.addScaledVector(cameraRight, joystick.x);
 }
 
 function pctToWorld(x: number, y: number) {
@@ -927,10 +955,12 @@ export function World3DStage({
     const rawY = event.clientY - (rect.top + radius);
     const distance = Math.min(radius, Math.hypot(rawX, rawY));
     const angle = Math.atan2(rawY, rawX);
-    const x = (Math.cos(angle) * distance) / radius;
-    const y = (Math.sin(angle) * distance) / radius;
-    joystickInputRef.current = { active: true, x, y };
-    setJoystickUi({ active: true, x, y });
+    const normalized = normalizeJoystickInput(
+      (Math.cos(angle) * distance) / radius,
+      (Math.sin(angle) * distance) / radius,
+    );
+    joystickInputRef.current = normalized;
+    setJoystickUi(normalized);
   };
 
   const resetJoystick = () => {
@@ -941,18 +971,26 @@ export function World3DStage({
 
   const handleJoystickPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     joystickPointerIdRef.current = event.pointerId;
+    event.preventDefault();
+    event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
     updateJoystickFromPointer(event);
   };
 
   const handleJoystickPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (joystickPointerIdRef.current !== event.pointerId) return;
+    event.preventDefault();
+    event.stopPropagation();
     updateJoystickFromPointer(event);
   };
 
   const handleJoystickPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (joystickPointerIdRef.current !== event.pointerId) return;
-    event.currentTarget.releasePointerCapture(event.pointerId);
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
     resetJoystick();
   };
 
@@ -1188,7 +1226,8 @@ export function World3DStage({
         const joystickPower = joystick.active
           ? THREE.MathUtils.clamp(Math.hypot(joystick.x, joystick.y), 0, 1)
           : 0;
-        const speed = (run || joystickPower > 0.86 ? 7.2 : 4.2) * delta;
+        const analogSpeedScale = joystick.active ? Math.max(0.45, joystickPower) : 1;
+        const speed = (run || joystickPower > 0.86 ? 7.2 : 4.2) * analogSpeedScale * delta;
         const turnSpeed = 2.8 * delta;
         if (keyState.has("KeyA") || keyState.has("ArrowLeft")) yaw += turnSpeed;
         if (keyState.has("KeyD") || keyState.has("ArrowRight")) yaw -= turnSpeed;
@@ -1199,10 +1238,7 @@ export function World3DStage({
         if (keyState.has("KeyS") || keyState.has("ArrowDown")) movement.sub(forward);
         if (keyState.has("KeyQ")) movement.sub(right);
         if (keyState.has("KeyE")) movement.add(right);
-        if (joystick.active) {
-          movement.addScaledVector(forward, -joystick.y);
-          movement.addScaledVector(right, joystick.x);
-        }
+        addCameraRelativeJoystickMovement(movement, joystick, yaw);
         if (movement.lengthSq() > 0) {
           if (movement.lengthSq() > 1) {
             movement.normalize();
@@ -1340,7 +1376,8 @@ export function World3DStage({
         onPointerMove={handleJoystickPointerMove}
         onPointerUp={handleJoystickPointerUp}
         onPointerCancel={handleJoystickPointerUp}
-        aria-label="Joystick de deplacement"
+        onLostPointerCapture={resetJoystick}
+        aria-label="Joystick de déplacement"
         role="application"
       >
         <div className="absolute inset-3 rounded-full border border-gold-200/12 bg-[radial-gradient(circle,rgba(250,204,21,0.10),rgba(15,23,42,0.26)_58%,rgba(15,23,42,0.58))]" />
