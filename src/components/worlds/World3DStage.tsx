@@ -1323,17 +1323,6 @@ export function World3DStage({
       <div className="pointer-events-none absolute left-[calc(1rem+env(safe-area-inset-left))] top-[calc(0.75rem+env(safe-area-inset-top))] z-20 hidden rounded-full border border-cyan-200/20 bg-night-950/55 px-3 py-1.5 text-[9px] uppercase tracking-[0.18em] text-cyan-100/70 backdrop-blur landscape:block md:hidden">
         Tourne la caméra à gauche
       </div>
-      <div className="pointer-events-none absolute inset-x-4 top-1/2 z-30 -translate-y-1/2 rounded-[28px] border border-gold-200/20 bg-night-950/78 px-5 py-4 text-center shadow-[0_24px_70px_rgba(0,0,0,0.45)] backdrop-blur-xl landscape:hidden md:hidden">
-        <p className="text-[10px] uppercase tracking-[0.24em] text-gold-200/75">
-          Mode monde 3D
-        </p>
-        <p className="mt-2 font-display text-xl text-gold-100">
-          Tourne ton téléphone
-        </p>
-        <p className="mt-2 text-sm leading-6 text-ivory/65">
-          L'expérience APK est optimisée en horizontal : caméra à gauche, joystick à droite.
-        </p>
-      </div>
       <div
         className={`pointer-events-none absolute bottom-[calc(1rem+env(safe-area-inset-bottom))] left-[calc(1rem+env(safe-area-inset-left))] top-[calc(3.6rem+env(safe-area-inset-top))] w-[48%] rounded-[28px] border border-white/10 bg-night-950/10 backdrop-blur-[1px] transition md:hidden ${
           cameraTouchActive ? "border-cyan-200/30 bg-cyan-200/8" : "opacity-55"
