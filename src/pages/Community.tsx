@@ -242,9 +242,9 @@ export function Community() {
         setActivityWeekStartIso(result.weekStartIso);
         setActivityLeaderboard(result.entries);
       })
-      .catch(() => {
+      .catch((error) => {
         if (cancelled) return;
-        setActivityLeaderboard([]);
+        console.warn("Classement communautaire indisponible", error);
       });
     };
     loadLeaderboard();
