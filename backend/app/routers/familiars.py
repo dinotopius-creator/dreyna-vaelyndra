@@ -232,6 +232,8 @@ class OwnedFamiliarOut(BaseModel):
     affectionMealsForNextHeart: int = 0
     affectionMealsUntilNextHeart: int = 0
     affectionRewardedHearts: List[int] = []
+    heartRequirements: List[int] = []
+    heartRewards: List[int] = []
     enclosureLastCleanedAt: Optional[str] = None
 
 
@@ -447,6 +449,8 @@ def _owned_out(row: UserFamiliar) -> OwnedFamiliarOut:
         affectionMealsForNextHeart=affection.affectionMealsForNextHeart,
         affectionMealsUntilNextHeart=affection.affectionMealsUntilNextHeart,
         affectionRewardedHearts=affection.affectionRewardedHearts,
+        heartRequirements=affection.heartRequirements,
+        heartRewards=affection.heartRewards,
         enclosureLastCleanedAt=row.enclosure_last_cleaned_at,
     )
 

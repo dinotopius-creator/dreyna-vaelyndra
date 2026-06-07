@@ -100,6 +100,8 @@ export interface OwnedFamiliar {
   affectionMealsForNextHeart: number;
   affectionMealsUntilNextHeart: number;
   affectionRewardedHearts: number[];
+  heartRequirements: number[];
+  heartRewards: number[];
   enclosureLastCleanedAt: string | null;
 }
 
