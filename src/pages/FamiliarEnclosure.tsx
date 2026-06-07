@@ -77,6 +77,8 @@ function affectionFromFamiliar(familiar: OwnedFamiliar | null): FamiliarAffectio
     affectionMealsUntilNextHeart:
       familiar.affectionMealsUntilNextHeart ?? DEFAULT_AFFECTION.affectionMealsUntilNextHeart,
     affectionRewardedHearts: familiar.affectionRewardedHearts ?? [],
+    heartRequirements: familiar.heartRequirements ?? DEFAULT_AFFECTION.heartRequirements,
+    heartRewards: familiar.heartRewards ?? DEFAULT_AFFECTION.heartRewards,
   };
 }
 
@@ -93,6 +95,7 @@ export function FamiliarEnclosure() {
   const [cooldownRemaining, setCooldownRemaining] = useState(0);
   const [displayedLueurs, setDisplayedLueurs] = useState(() => profile?.lueurs ?? 0);
   const [heartPulse, setHeartPulse] = useState<number | null>(null);
+  const [guideOpen, setGuideOpen] = useState(false);
 
   useEffect(() => {
     setDisplayedLueurs(profile?.lueurs ?? 0);
@@ -371,6 +374,10 @@ export function FamiliarEnclosure() {
                 <Heart className="h-4 w-4" />
                 <h2 className="font-display text-xl">Cœurs d'affection</h2>
               </div>
+              <p className="mt-3 text-sm leading-6 text-ivory/68">
+                Les cœurs représentent l'affection de votre familier. Nourrissez-le
+                pour gagner des cœurs et débloquer des lueurs.
+              </p>
               <div className="mt-4 flex flex-wrap gap-1.5">
                 {Array.from({ length: 10 }, (_, index) => (
                   <Heart
@@ -394,6 +401,15 @@ export function FamiliarEnclosure() {
                   style={{ width: `${nextHeartProgress}%` }}
                 />
               </div>
+              <button
+                type="button"
+                onClick={() => setGuideOpen((current) => !current)}
+                className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full border border-rose-200/25 bg-night-950/45 px-4 py-2 text-sm font-semibold text-rose-100 transition hover:border-rose-200/55"
+              >
+                <Sparkles className="h-4 w-4" />
+                {guideOpen ? "Masquer le guide" : "À quoi servent les cœurs ?"}
+              </button>
+              {guideOpen && <FamiliarHeartRewardGuide affection={affection} />}
             </div>
 
             <div className="rounded-[26px] border border-gold-300/25 bg-gold-500/10 p-5">
@@ -437,8 +453,8 @@ export function FamiliarEnclosure() {
             />
             <InfoCard
               icon={<ShieldCheck className="h-4 w-4" />}
-              title="Récompenses protégées"
-              text="Chaque nouveau cœur crédite des lueurs une seule fois, avec une trace serveur dans le ledger du wallet."
+              title="Progression sauvegardée"
+              text="Les cœurs, les repas, le stock de nourriture et les récompenses sont sauvegardés côté serveur pour chaque familier."
             />
 
             <div className="rounded-[26px] border border-white/10 bg-night-950/55 p-5">
@@ -509,6 +525,122 @@ function AffectionHearts({
           </motion.span>
         );
       })}
+    </div>
+  );
+}
+
+function FamiliarHeartRewardGuide({
+  affection,
+}: {
+  affection: FamiliarAffectionState;
+}) {
+  const nextHeart = Math.min(10, affection.affectionHearts + 1);
+
+  return (
+    <div className="mt-4 space-y-4 rounded-[24px] border border-white/10 bg-night-950/50 p-4">
+      <div>
+        <h3 className="font-display text-lg text-gold-100">
+          Guide des 10 cœurs
+        </h3>
+        <p className="mt-2 text-sm leading-6 text-ivory/65">
+          Chaque nourriture donnée compte comme un repas. Quand un nouveau cœur
+          est débloqué, la récompense en lueurs est accordée une seule fois et
+          reste enregistrée sur ce familier.
+        </p>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        {Array.from({ length: 10 }, (_, index) => {
+          const heart = index + 1;
+          const requirement = affection.heartRequirements[index] ?? 0;
+          const reward = affection.heartRewards[index] ?? 0;
+          const unlocked = heart <= affection.affectionHearts;
+          const current = heart === nextHeart && affection.affectionHearts < 10;
+          const rewarded = affection.affectionRewardedHearts.includes(heart);
+          const badge = unlocked ? "Débloqué" : current ? "En cours" : "Verrouillé";
+          const badgeClass = unlocked
+            ? "border-emerald-300/35 bg-emerald-400/10 text-emerald-100"
+            : current
+              ? "border-gold-300/45 bg-gold-400/10 text-gold-100"
+              : "border-white/10 bg-white/5 text-ivory/45";
+
+          return (
+            <div
+              key={heart}
+              className={`rounded-2xl border p-3 ${
+                current
+                  ? "border-gold-300/35 bg-gold-500/10"
+                  : "border-white/10 bg-night-950/45"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-sm font-semibold text-ivory/85">
+                  <Heart
+                    className={`h-4 w-4 ${
+                      unlocked ? "fill-rose-300 text-rose-200" : "text-white/30"
+                    }`}
+                  />
+                  Cœur {heart}
+                </div>
+                <span
+                  className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] ${badgeClass}`}
+                >
+                  {badge}
+                </span>
+              </div>
+              <p className="mt-2 text-xs leading-5 text-ivory/58">
+                Objectif : nourrir le familier {requirement} fois
+                {heart > 1 ? " supplémentaires" : ""}.
+              </p>
+              <p className="mt-1 text-xs leading-5 text-gold-100">
+                Récompense : {reward.toLocaleString("fr-FR")} lueurs
+              </p>
+              <p className="mt-1 text-[11px] leading-5 text-ivory/45">
+                {rewarded
+                  ? "Récompense déjà obtenue."
+                  : current
+                    ? `Encore ${affection.affectionMealsUntilNextHeart} repas avant ce cœur.`
+                    : unlocked
+                      ? "Cœur débloqué."
+                      : "Récompense à venir."}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="rounded-2xl border border-cyan-200/15 bg-cyan-300/10 p-3">
+        <div className="flex items-center gap-2 text-sm font-semibold text-cyan-100">
+          <Utensils className="h-4 w-4" />
+          Comment obtenir de la nourriture ?
+        </div>
+        <p className="mt-2 text-xs leading-5 text-ivory/62">
+          Nettoyez l'enclos de votre familier pour avoir une chance de trouver
+          de la nourriture. La nourriture trouvée est ajoutée à votre stock,
+          puis vous pouvez l'utiliser avec le bouton Nourrir.
+        </p>
+        <p className="mt-2 text-xs text-gold-100">
+          Stock actuel : {affection.foodStock.toLocaleString("fr-FR")} nourriture
+          {affection.foodStock > 1 ? "s" : ""}
+        </p>
+      </div>
+
+      <div className="rounded-2xl border border-gold-300/20 bg-gold-500/10 p-3">
+        <div className="flex items-center gap-2 text-sm font-semibold text-gold-100">
+          <Sparkles className="h-4 w-4" />
+          Récompenses d'affection
+        </div>
+        <p className="mt-2 text-xs leading-5 text-ivory/62">
+          À chaque nouveau cœur débloqué, vous recevez des lueurs. Plus le cœur
+          est difficile à atteindre, plus la récompense est importante. Chaque
+          récompense de cœur est obtenue une seule fois.
+        </p>
+        <p className="mt-2 text-xs font-semibold text-gold-100">
+          Objectif final : 10 cœurs et{" "}
+          {(affection.heartRewards[9] ?? 0).toLocaleString("fr-FR")} lueurs
+          pour le dernier palier.
+        </p>
+      </div>
     </div>
   );
 }
