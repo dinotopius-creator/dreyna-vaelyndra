@@ -93,6 +93,14 @@ export interface OwnedFamiliar {
   cosmeticInventory: string[];
   cosmeticEquipped: Partial<Record<FamiliarCosmeticSlot, string>>;
   cosmetics: Partial<Record<FamiliarCosmeticSlot, FamiliarCosmeticCatalogItem>>;
+  foodStock: number;
+  affectionFeedings: number;
+  affectionHearts: number;
+  affectionMealsIntoHeart: number;
+  affectionMealsForNextHeart: number;
+  affectionMealsUntilNextHeart: number;
+  affectionRewardedHearts: number[];
+  enclosureLastCleanedAt: string | null;
 }
 
 export interface FamiliarCollection {
@@ -123,6 +131,47 @@ export async function fetchUserFamiliars(
 ): Promise<FamiliarCollection> {
   return familiarRequest<FamiliarCollection>(
     `/users/${encodeURIComponent(userId)}/familiers`,
+  );
+}
+
+export interface FamiliarAffectionState {
+  foodStock: number;
+  affectionFeedings: number;
+  affectionHearts: number;
+  affectionMealsIntoHeart: number;
+  affectionMealsForNextHeart: number;
+  affectionMealsUntilNextHeart: number;
+  affectionRewardedHearts: number[];
+  heartRequirements: number[];
+  heartRewards: number[];
+}
+
+export interface FamiliarEnclosureActionResult {
+  familiar: OwnedFamiliar;
+  affection: FamiliarAffectionState;
+  foodFound: number;
+  heartGained: number | null;
+  lueursRewarded: number;
+  profileLueurs: number;
+  cooldownRemainingSeconds: number;
+  message: string;
+}
+
+export async function cleanFamiliarEnclosure(
+  userId: string,
+): Promise<FamiliarEnclosureActionResult> {
+  return familiarRequest<FamiliarEnclosureActionResult>(
+    `/users/${encodeURIComponent(userId)}/familiers/enclosure/clean`,
+    { method: "POST" },
+  );
+}
+
+export async function feedActiveFamiliar(
+  userId: string,
+): Promise<FamiliarEnclosureActionResult> {
+  return familiarRequest<FamiliarEnclosureActionResult>(
+    `/users/${encodeURIComponent(userId)}/familiers/enclosure/feed`,
+    { method: "POST" },
   );
 }
 

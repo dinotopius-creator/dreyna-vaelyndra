@@ -107,6 +107,10 @@ def _apply_migrations() -> None:
         "userfamiliar": [
             ("cosmetic_inventory_json", "TEXT NOT NULL DEFAULT '[]'"),
             ("cosmetic_equipped_json", "TEXT NOT NULL DEFAULT '{}'"),
+            ("food_stock", "INTEGER NOT NULL DEFAULT 0"),
+            ("affection_feedings", "INTEGER NOT NULL DEFAULT 0"),
+            ("affection_rewarded_hearts_json", "TEXT NOT NULL DEFAULT '[]'"),
+            ("enclosure_last_cleaned_at", "TEXT"),
         ],
     }
     with engine.begin() as conn:

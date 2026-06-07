@@ -4,22 +4,27 @@ import { motion } from "framer-motion";
 import {
   ArrowLeft,
   Brush,
-  Gem,
+  Heart,
   Leaf,
   Loader2,
   ShieldCheck,
   Sparkles,
   Timer,
+  Utensils,
 } from "lucide-react";
+import { FamiliarPortrait } from "../components/FamiliarPortrait";
 import { useAuth } from "../contexts/AuthContext";
 import { useProfile } from "../contexts/ProfileContext";
 import { useToast } from "../contexts/ToastContext";
-import { apiApplyWalletDelta } from "../lib/api";
-import { fetchUserFamiliars, type OwnedFamiliar } from "../lib/familiarsApi";
+import {
+  cleanFamiliarEnclosure,
+  feedActiveFamiliar,
+  fetchUserFamiliars,
+  type FamiliarAffectionState,
+  type OwnedFamiliar,
+} from "../lib/familiarsApi";
 
-const CLEANING_REWARD_LUEURS = 18;
-const RARE_SYLVIN_CHANCE = 1 / 1000;
-const CLEANING_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+const CLEANING_COOLDOWN_SECONDS = 20 * 60;
 const CLEANING_ITEMS = [
   { id: "leaf-1", label: "Feuilles dorées", icon: "🍃", x: 16, y: 68 },
   { id: "dust-1", label: "Poussière de lune", icon: "✨", x: 31, y: 78 },
@@ -31,42 +36,72 @@ const CLEANING_ITEMS = [
   { id: "flower-1", label: "Fleurs froissées", icon: "🌸", x: 42, y: 83 },
 ];
 
-function cooldownKey(userId: string) {
-  return `vaelyndra_familiar_enclosure_cleaned_at:${userId}`;
-}
+const DEFAULT_AFFECTION: FamiliarAffectionState = {
+  foodStock: 0,
+  affectionFeedings: 0,
+  affectionHearts: 0,
+  affectionMealsIntoHeart: 0,
+  affectionMealsForNextHeart: 10,
+  affectionMealsUntilNextHeart: 10,
+  affectionRewardedHearts: [],
+  heartRequirements: [10, 15, 20, 30, 45, 60, 80, 105, 135, 170],
+  heartRewards: [50, 75, 100, 150, 200, 275, 350, 450, 600, 800],
+};
 
-function formatRemaining(ms: number) {
-  const totalMinutes = Math.ceil(ms / 60_000);
+function formatRemaining(seconds: number) {
+  const totalMinutes = Math.ceil(seconds / 60);
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
   if (hours <= 0) return `${minutes} min`;
   return `${hours} h ${minutes.toString().padStart(2, "0")}`;
 }
 
-function rollRareSylvin() {
-  const random = globalThis.crypto?.getRandomValues
-    ? globalThis.crypto.getRandomValues(new Uint32Array(1))[0] / 2 ** 32
-    : Math.random();
-  return random < RARE_SYLVIN_CHANCE;
+function cooldownFromLastCleaned(lastCleanedAt: string | null) {
+  if (!lastCleanedAt) return 0;
+  const last = new Date(lastCleanedAt).getTime();
+  if (!Number.isFinite(last)) return 0;
+  const readyAt = last + CLEANING_COOLDOWN_SECONDS * 1000;
+  return Math.max(0, Math.ceil((readyAt - Date.now()) / 1000));
+}
+
+function affectionFromFamiliar(familiar: OwnedFamiliar | null): FamiliarAffectionState {
+  if (!familiar) return DEFAULT_AFFECTION;
+  return {
+    ...DEFAULT_AFFECTION,
+    foodStock: familiar.foodStock ?? 0,
+    affectionFeedings: familiar.affectionFeedings ?? 0,
+    affectionHearts: familiar.affectionHearts ?? 0,
+    affectionMealsIntoHeart: familiar.affectionMealsIntoHeart ?? 0,
+    affectionMealsForNextHeart:
+      familiar.affectionMealsForNextHeart ?? DEFAULT_AFFECTION.affectionMealsForNextHeart,
+    affectionMealsUntilNextHeart:
+      familiar.affectionMealsUntilNextHeart ?? DEFAULT_AFFECTION.affectionMealsUntilNextHeart,
+    affectionRewardedHearts: familiar.affectionRewardedHearts ?? [],
+  };
 }
 
 export function FamiliarEnclosure() {
   const { user } = useAuth();
-  const { profile, setProfile, refresh } = useProfile();
+  const { profile, refresh } = useProfile();
   const { notify } = useToast();
   const [active, setActive] = useState<OwnedFamiliar | null>(null);
+  const [affection, setAffection] = useState<FamiliarAffectionState>(DEFAULT_AFFECTION);
   const [loading, setLoading] = useState(true);
   const [cleaned, setCleaned] = useState<Record<string, boolean>>({});
-  const [savingReward, setSavingReward] = useState(false);
-  const [rewardMessage, setRewardMessage] = useState<string | null>(null);
-  const [lastCleanedAt, setLastCleanedAt] = useState<number>(() => {
-    if (!user?.id) return 0;
-    return Number(localStorage.getItem(cooldownKey(user.id)) ?? "0");
-  });
-  const [now, setNow] = useState(() => Date.now());
+  const [actionLoading, setActionLoading] = useState<"clean" | "feed" | null>(null);
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const [cooldownRemaining, setCooldownRemaining] = useState(0);
+  const [displayedLueurs, setDisplayedLueurs] = useState(() => profile?.lueurs ?? 0);
+  const [heartPulse, setHeartPulse] = useState<number | null>(null);
 
   useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 30_000);
+    setDisplayedLueurs(profile?.lueurs ?? 0);
+  }, [profile?.lueurs]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setCooldownRemaining((current) => Math.max(0, current - 1));
+    }, 1000);
     return () => window.clearInterval(timer);
   }, []);
 
@@ -77,8 +112,15 @@ export function FamiliarEnclosure() {
       setLoading(true);
       try {
         const collection = await fetchUserFamiliars(user.id);
+        const current = collection.owned.find((entry) => entry.isActive) ?? null;
         if (!cancelled) {
-          setActive(collection.owned.find((entry) => entry.isActive) ?? null);
+          setActive(current);
+          setAffection(affectionFromFamiliar(current));
+          const remaining = cooldownFromLastCleaned(current?.enclosureLastCleanedAt ?? null);
+          setCooldownRemaining(remaining);
+          if (remaining > 0) {
+            setCleaned(Object.fromEntries(CLEANING_ITEMS.map((item) => [item.id, true])));
+          }
         }
       } catch {
         if (!cancelled) notify("Impossible de charger l'enclos du familier.", "error");
@@ -96,54 +138,39 @@ export function FamiliarEnclosure() {
     () => CLEANING_ITEMS.filter((item) => cleaned[item.id]).length,
     [cleaned],
   );
-  const progress = Math.round((cleanedCount / CLEANING_ITEMS.length) * 100);
-  const cooldownRemaining = Math.max(
-    0,
-    lastCleanedAt + CLEANING_COOLDOWN_MS - now,
-  );
+  const cleaningProgress = Math.round((cleanedCount / CLEANING_ITEMS.length) * 100);
   const onCooldown = cooldownRemaining > 0;
-  const canClean = !onCooldown && !savingReward;
+  const canClean = !onCooldown && !actionLoading;
+  const canFeed = affection.foodStock > 0 && !actionLoading && Boolean(active);
+  const nextHeartProgress =
+    affection.affectionMealsForNextHeart > 0
+      ? Math.round(
+          (affection.affectionMealsIntoHeart / affection.affectionMealsForNextHeart) * 100,
+        )
+      : 100;
 
   async function finishCleaning(nextCleaned: Record<string, boolean>) {
-    if (!user?.id || savingReward || onCooldown) return;
+    if (!user?.id || actionLoading || onCooldown) return;
     const completed = CLEANING_ITEMS.every((item) => nextCleaned[item.id]);
     if (!completed) return;
-    setSavingReward(true);
-    const premiumWon = rollRareSylvin();
+    setActionLoading("clean");
     try {
-      const updated = await apiApplyWalletDelta(user.id, {
-        lueurs: CLEANING_REWARD_LUEURS,
-        ...(premiumWon ? { sylvins_promo: 1 } : {}),
-        reason: premiumWon
-          ? "familiar-enclosure-clean:rare-sylvin"
-          : "familiar-enclosure-clean:lueurs",
-      });
-      setProfile(updated);
+      const result = await cleanFamiliarEnclosure(user.id);
+      setActive(result.familiar);
+      setAffection(result.affection);
+      setCooldownRemaining(result.cooldownRemainingSeconds);
+      setFeedback(`${result.message} Stock de nourriture : ${result.affection.foodStock}.`);
+      notify(result.message, result.foodFound > 0 ? "success" : "info");
       void refresh();
-      const now = Date.now();
-      localStorage.setItem(cooldownKey(user.id), String(now));
-      setNow(now);
-      setLastCleanedAt(now);
-      setRewardMessage(
-        premiumWon
-          ? `Enclos impeccable : +${CLEANING_REWARD_LUEURS} Lueurs et +1 Sylvin rare.`
-          : `Enclos impeccable : +${CLEANING_REWARD_LUEURS} Lueurs.`,
-      );
-      notify(
-        premiumWon
-          ? `Récompense rare : +${CLEANING_REWARD_LUEURS} Lueurs et +1 Sylvin.`
-          : `+${CLEANING_REWARD_LUEURS} Lueurs ajoutées à ta bourse.`,
-        "success",
-      );
     } catch (error) {
       setCleaned({});
       const message =
         error instanceof Error
           ? error.message
-          : "La récompense n'a pas pu être scellée.";
+          : "Le nettoyage n'a pas pu être enregistré.";
       notify(message, "error");
     } finally {
-      setSavingReward(false);
+      setActionLoading(null);
     }
   }
 
@@ -156,16 +183,45 @@ export function FamiliarEnclosure() {
     });
   }
 
-  function resetAfterCooldown() {
-    if (onCooldown) return;
+  async function feedFamiliar() {
+    if (!user?.id || !canFeed) {
+      if (affection.foodStock <= 0) {
+        notify("Vous n'avez plus de nourriture. Nettoyez l'enclos pour en trouver.", "info");
+      }
+      return;
+    }
+    setActionLoading("feed");
+    try {
+      const result = await feedActiveFamiliar(user.id);
+      setActive(result.familiar);
+      setAffection(result.affection);
+      setDisplayedLueurs(result.profileLueurs);
+      setFeedback(result.message);
+      notify(result.message, result.heartGained ? "success" : "info");
+      if (result.heartGained) {
+        setHeartPulse(result.heartGained);
+        window.setTimeout(() => setHeartPulse(null), 1300);
+      }
+      void refresh();
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Impossible de nourrir le familier.";
+      notify(message, "error");
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  function resetEnclosure() {
+    if (onCooldown || actionLoading) return;
     setCleaned({});
-    setRewardMessage(null);
+    setFeedback(null);
   }
 
   if (!user?.id) {
     return (
       <section className="mx-auto max-w-3xl px-4 py-16 text-center text-ivory/70">
-        <p>Connecte-toi pour ouvrir l'enclos de ton familier.</p>
+        <p>Connectez-vous pour ouvrir l'enclos de votre familier.</p>
         <Link to="/connexion" className="btn-gold mt-4 inline-flex">
           Se connecter
         </Link>
@@ -192,7 +248,7 @@ export function FamiliarEnclosure() {
           Retour
         </Link>
         <div className="rounded-full border border-gold-300/25 bg-gold-500/10 px-3 py-2 text-xs uppercase tracking-[0.18em] text-gold-100">
-          {profile?.lueurs?.toLocaleString("fr-FR") ?? 0} Lueurs
+          {displayedLueurs.toLocaleString("fr-FR")} Lueurs
         </div>
       </div>
 
@@ -204,16 +260,17 @@ export function FamiliarEnclosure() {
           <div className="mt-2 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div>
               <h1 className="font-display text-3xl text-gold-100 sm:text-5xl">
-                Un refuge vivant à nettoyer
+                Affection, repas et petits cœurs
               </h1>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-ivory/66">
-                Touchez les éléments à ranger, laissez votre compagnon se promener, puis scellez une petite récompense quand l'enclos est propre.
+                Nettoyez l'enclos pour trouver de la nourriture, nourrissez votre
+                compagnon et faites grandir son affection sur 10 cœurs.
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-2 text-xs sm:min-w-64">
-              <StatPill label="Nettoyage" value={`${progress}%`} />
+            <div className="grid grid-cols-2 gap-2 text-xs sm:min-w-72">
+              <StatPill label="Nourriture" value={String(affection.foodStock)} />
               <StatPill
-                label="Cooldown"
+                label="Prochain nettoyage"
                 value={onCooldown ? formatRemaining(cooldownRemaining) : "Prêt"}
               />
             </div>
@@ -221,7 +278,7 @@ export function FamiliarEnclosure() {
         </header>
 
         <div className="grid gap-5 p-4 lg:grid-cols-[1.35fr,0.65fr] lg:p-6">
-          <div className="relative min-h-[520px] overflow-hidden rounded-[30px] border border-white/10 bg-[radial-gradient(circle_at_50%_28%,rgba(74,222,128,0.16),transparent_28%),linear-gradient(180deg,rgba(16,185,129,0.12),rgba(15,23,42,0.92))] sm:min-h-[620px]">
+          <div className="relative min-h-[560px] overflow-hidden rounded-[30px] border border-white/10 bg-[radial-gradient(circle_at_50%_28%,rgba(74,222,128,0.16),transparent_28%),linear-gradient(180deg,rgba(16,185,129,0.12),rgba(15,23,42,0.92))] sm:min-h-[640px]">
             <div className="absolute inset-x-0 bottom-0 h-[48%] rounded-t-[50%] bg-[radial-gradient(ellipse_at_center,rgba(34,197,94,0.35),rgba(20,83,45,0.2)_48%,transparent_72%)]" />
             <div className="absolute left-[8%] top-[16%] h-32 w-32 rounded-full bg-gold-200/10 blur-3xl" />
             <div className="absolute right-[10%] top-[10%] h-40 w-40 rounded-full bg-cyan-200/10 blur-3xl" />
@@ -243,21 +300,15 @@ export function FamiliarEnclosure() {
                 style={{ color: active.color }}
                 animate={{
                   left: ["18%", "58%", "46%", "25%", "18%"],
-                  top: ["55%", "48%", "68%", "72%", "55%"],
+                  top: ["52%", "45%", "66%", "70%", "52%"],
                 }}
                 transition={{ duration: 14, repeat: Infinity, ease: "easeInOut" }}
               >
-                <motion.div
-                  className="flex h-28 w-28 items-center justify-center rounded-[34px] border border-white/15 bg-night-950/62 text-6xl shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur"
-                  style={{
-                    boxShadow: `0 0 48px -10px ${active.color}`,
-                    borderColor: `${active.color}66`,
-                  }}
-                  animate={{ y: [0, -10, 0] }}
-                  transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
-                >
-                  {active.icon}
-                </motion.div>
+                <AffectionHearts
+                  hearts={affection.affectionHearts}
+                  pulseHeart={heartPulse}
+                />
+                <FamiliarPortrait familiar={active} size="lg" />
                 <div className="mt-2 rounded-full border border-white/10 bg-night-950/72 px-3 py-1 text-center text-xs text-ivory/80 backdrop-blur">
                   {active.nickname || active.name}
                 </div>
@@ -265,7 +316,7 @@ export function FamiliarEnclosure() {
             ) : (
               <div className="absolute inset-0 z-20 flex items-center justify-center px-5 text-center">
                 <div className="rounded-3xl border border-white/10 bg-night-950/70 p-5 text-ivory/70 backdrop-blur">
-                  Aucun familier actif. Retourne choisir ton compagnon.
+                  Aucun familier actif. Retournez choisir votre compagnon.
                 </div>
               </div>
             )}
@@ -300,7 +351,7 @@ export function FamiliarEnclosure() {
 
             <div className="absolute inset-x-4 bottom-4 z-40 rounded-3xl border border-white/10 bg-night-950/72 p-4 backdrop-blur-xl">
               <div className="flex items-center justify-between gap-3 text-xs uppercase tracking-[0.18em] text-ivory/55">
-                <span>Progression</span>
+                <span>Nettoyage</span>
                 <span>
                   {cleanedCount}/{CLEANING_ITEMS.length}
                 </span>
@@ -308,64 +359,157 @@ export function FamiliarEnclosure() {
               <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
                 <div
                   className="h-full rounded-full bg-gradient-to-r from-emerald-300 via-gold-200 to-cyan-200 transition-all"
-                  style={{ width: `${progress}%` }}
+                  style={{ width: `${cleaningProgress}%` }}
                 />
               </div>
             </div>
           </div>
 
           <aside className="space-y-4">
+            <div className="rounded-[26px] border border-rose-300/20 bg-rose-500/10 p-5">
+              <div className="flex items-center gap-2 text-rose-100">
+                <Heart className="h-4 w-4" />
+                <h2 className="font-display text-xl">Cœurs d'affection</h2>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-1.5">
+                {Array.from({ length: 10 }, (_, index) => (
+                  <Heart
+                    key={index}
+                    className={`h-5 w-5 ${
+                      index < affection.affectionHearts
+                        ? "fill-rose-300 text-rose-200"
+                        : "text-white/25"
+                    }`}
+                  />
+                ))}
+              </div>
+              <div className="mt-4 text-sm text-ivory/68">
+                {affection.affectionHearts >= 10
+                  ? "Affection maximale atteinte."
+                  : `${affection.affectionMealsIntoHeart} / ${affection.affectionMealsForNextHeart} repas pour le prochain cœur.`}
+              </div>
+              <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-rose-300 to-gold-200 transition-all"
+                  style={{ width: `${nextHeartProgress}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="rounded-[26px] border border-gold-300/25 bg-gold-500/10 p-5">
+              <div className="flex items-center gap-2 text-gold-100">
+                <Utensils className="h-4 w-4" />
+                <h2 className="font-display text-xl">Nourriture</h2>
+              </div>
+              <p className="mt-3 text-sm leading-6 text-ivory/68">
+                Stock de nourriture :{" "}
+                <span className="font-semibold text-gold-100">{affection.foodStock}</span>
+              </p>
+              <button
+                type="button"
+                onClick={() => void feedFamiliar()}
+                disabled={!canFeed}
+                className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full border border-gold-300/35 bg-night-950/50 px-4 py-2 text-sm font-semibold text-gold-100 transition hover:border-gold-200 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {actionLoading === "feed" ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Utensils className="h-4 w-4" />
+                )}
+                {actionLoading === "feed" ? "Repas en cours..." : "Nourrir"}
+              </button>
+              {affection.foodStock <= 0 && (
+                <p className="mt-3 text-xs leading-5 text-ivory/50">
+                  Vous n'avez plus de nourriture. Nettoyez l'enclos pour en trouver.
+                </p>
+              )}
+            </div>
+
             <InfoCard
               icon={<Brush className="h-4 w-4" />}
-              title="Nettoyage tactile"
-              text="Appuie sur chaque élément dans l'enclos. Sur mobile, les cibles sont assez grandes pour le pouce."
+              title="Nettoyer l'enclos"
+              text="Touchez chaque élément à ranger. Une fois l'enclos propre, le serveur ajoute 0 à 3 nourritures à votre stock."
             />
             <InfoCard
               icon={<Leaf className="h-4 w-4" />}
-              title="Récompense contrôlée"
-              text={`Une session complète donne ${CLEANING_REWARD_LUEURS} Lueurs, puis verrouille l'enclos pendant ${formatRemaining(CLEANING_COOLDOWN_MS)}.`}
-            />
-            <InfoCard
-              icon={<Gem className="h-4 w-4" />}
-              title="Chance rare"
-              text="Environ 1 fois sur 1000, le nettoyage peut aussi donner 1 Sylvin promo. Le gain est scellé via le wallet serveur."
+              title="Progression durable"
+              text="Les cœurs demandent de plus en plus de repas. Le premier est accessible, le dixième devient prestigieux."
             />
             <InfoCard
               icon={<ShieldCheck className="h-4 w-4" />}
-              title="Anti-abus"
-              text="Cooldown local, attribution serveur et reason de ledger limitent les clics répétés. Une validation serveur dédiée pourra renforcer la règle ensuite."
+              title="Récompenses protégées"
+              text="Chaque nouveau cœur crédite des lueurs une seule fois, avec une trace serveur dans le ledger du wallet."
             />
 
-            <div className="rounded-[26px] border border-gold-300/25 bg-gold-500/10 p-5">
+            <div className="rounded-[26px] border border-white/10 bg-night-950/55 p-5">
               <div className="flex items-center gap-2 text-gold-100">
                 <Sparkles className="h-4 w-4" />
                 <h2 className="font-display text-xl">État de l'enclos</h2>
               </div>
               <p className="mt-3 text-sm leading-6 text-ivory/68">
                 {onCooldown
-                  ? `L'enclos est propre. Prochaine récompense dans ${formatRemaining(cooldownRemaining)}.`
-                  : rewardMessage ?? "L'enclos attend ton passage. Nettoie tout pour sceller la récompense."}
+                  ? `L'enclos est propre. Prochain nettoyage dans ${formatRemaining(cooldownRemaining)}.`
+                  : feedback ?? "Nettoyez l'enclos, trouvez de la nourriture, puis nourrissez votre familier."}
               </p>
               <button
                 type="button"
-                onClick={resetAfterCooldown}
-                disabled={onCooldown || savingReward}
-                className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full border border-gold-300/35 bg-night-950/50 px-4 py-2 text-sm font-semibold text-gold-100 transition hover:border-gold-200 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={resetEnclosure}
+                disabled={onCooldown || Boolean(actionLoading)}
+                className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full border border-white/10 bg-night-950/50 px-4 py-2 text-sm font-semibold text-ivory/80 transition hover:border-gold-200 hover:text-gold-100 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {savingReward ? (
+                {actionLoading === "clean" ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : onCooldown ? (
                   <Timer className="h-4 w-4" />
                 ) : (
                   <Brush className="h-4 w-4" />
                 )}
-                {savingReward ? "Scellement..." : onCooldown ? "Enclos en repos" : "Recommencer l'enclos"}
+                {actionLoading === "clean"
+                  ? "Enregistrement..."
+                  : onCooldown
+                    ? "Enclos en repos"
+                    : "Réinitialiser les objets"}
               </button>
             </div>
           </aside>
         </div>
       </div>
     </section>
+  );
+}
+
+function AffectionHearts({
+  hearts,
+  pulseHeart,
+}: {
+  hearts: number;
+  pulseHeart: number | null;
+}) {
+  return (
+    <div className="mb-2 flex rounded-full border border-white/10 bg-night-950/70 px-2.5 py-1.5 shadow-[0_10px_30px_rgba(0,0,0,0.28)] backdrop-blur">
+      {Array.from({ length: 10 }, (_, index) => {
+        const heartNumber = index + 1;
+        const filled = heartNumber <= hearts;
+        return (
+          <motion.span
+            key={heartNumber}
+            animate={
+              pulseHeart === heartNumber
+                ? { scale: [1, 1.45, 1], rotate: [0, -8, 0] }
+                : undefined
+            }
+            transition={{ duration: 0.8, ease: "easeOut" }}
+            className="mx-0.5"
+          >
+            <Heart
+              className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${
+                filled ? "fill-rose-300 text-rose-200" : "text-white/30"
+              }`}
+            />
+          </motion.span>
+        );
+      })}
+    </div>
   );
 }
 
