@@ -30,7 +30,7 @@ const DECOR_CLASSES = {
     accessory: "text-sm",
     face: "top-[43%] h-3.5 w-7 gap-1",
     eye: "h-1.5 w-1.5",
-    frameIcon: "right-1 top-1 text-[9px]",
+    frameIcon: "right-5 top-1 text-[9px]",
     effect: "-right-0.5 -top-0.5 text-[10px]",
   },
   md: {
@@ -38,7 +38,7 @@ const DECOR_CLASSES = {
     accessory: "text-base",
     face: "top-[44%] h-[18px] w-9 gap-1.5",
     eye: "h-2 w-2",
-    frameIcon: "right-1.5 top-1.5 text-xs",
+    frameIcon: "right-7 top-1.5 text-xs",
     effect: "-right-1 -top-1 text-xs",
   },
   lg: {
@@ -46,7 +46,7 @@ const DECOR_CLASSES = {
     accessory: "text-xl",
     face: "top-[45%] h-5 w-11 gap-2",
     eye: "h-2.5 w-2.5",
-    frameIcon: "right-2 top-2 text-sm",
+    frameIcon: "right-9 top-2 text-sm",
     effect: "-right-1.5 -top-1.5 text-sm",
   },
 };
