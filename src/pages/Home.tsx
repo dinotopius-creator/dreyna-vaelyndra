@@ -54,6 +54,7 @@ export function Home() {
   const { user } = useAuth();
   const isRegistered = Boolean(user);
   const featuredArticle = articles[0];
+  const sideArticles = articles.slice(1, 4);
   const topProducts = products.filter((p) => p.featured).slice(0, 3);
 
   const [stats, setStats] = useState<CommunityStatsOverviewDto | null>(null);
@@ -143,7 +144,7 @@ export function Home() {
       <StatsBar stats={stats} />
       <RuneDivider label="Les portes de Vaelyndra" />
       <Pillars />
-      <FeaturedArticle article={featuredArticle} />
+      <FeaturedArticle article={featuredArticle} sideArticles={sideArticles} />
       <ShopShowcase products={topProducts} />
       <CommunityTeaser
         isRegistered={isRegistered}
@@ -696,25 +697,12 @@ function Pillars() {
 
 function FeaturedArticle({
   article,
+  sideArticles,
 }: {
   article?: (typeof import("../data/mock").INITIAL_ARTICLES)[number];
+  sideArticles: (typeof import("../data/mock").INITIAL_ARTICLES)[number][];
 }) {
   if (!article) return null;
-
-  const sideStories = [
-    {
-      title: "Les chevaliers d'argent de la Cour",
-      desc: "Portrait de celles et ceux qui veillent à vos côtés.",
-    },
-    {
-      title: "Rituel de la Nuit d'Elennor",
-      desc: "Pourquoi la lumière d’Elennor change tout.",
-    },
-    {
-      title: "La Prophétie de l’Aube",
-      desc: "Un chapitre secret, révélé lors du prochain live.",
-    },
-  ];
 
   return (
     <section className="mx-auto max-w-7xl px-4 pt-20 sm:px-6 sm:pt-24">
@@ -755,7 +743,7 @@ function FeaturedArticle({
           </Link>
         </motion.article>
         <div className="space-y-5 lg:col-span-2">
-          {sideStories.map((story, i) => (
+          {sideArticles.map((story, i) => (
             <motion.div
               key={story.title}
               initial={{ opacity: 0, x: 20 }}
@@ -764,14 +752,14 @@ function FeaturedArticle({
               transition={{ delay: (i + 1) * 0.1 }}
               className="panel-app transition hover:-translate-y-1"
             >
-              <Link to="/blog" className="block p-5">
+              <Link to={`/blog/${story.slug}`} className="block p-5">
                 <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
-                  Saga du royaume
+                  {story.category}
                 </p>
                 <h4 className="mt-2 font-display text-lg text-gold-200">
                   {story.title}
                 </h4>
-                <p className="mt-1 text-sm text-ivory/65">{story.desc}</p>
+                <p className="mt-1 text-sm text-ivory/65">{story.excerpt}</p>
                 <span className="mt-4 inline-flex items-center gap-1 font-regal text-[10px] tracking-[0.22em] text-gold-300">
                   Ouvrir <ArrowRight className="h-3 w-3" />
                 </span>
