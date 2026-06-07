@@ -39,7 +39,6 @@ import {
 
 const COSMETIC_TABS: Array<{ slot: FamiliarCosmeticSlot; label: string }> = [
   { slot: "color", label: "Couleurs" },
-  { slot: "face", label: "Visage" },
   { slot: "hair", label: "Cheveux" },
   { slot: "accessory", label: "Accessoires" },
   { slot: "frame", label: "Cadres" },

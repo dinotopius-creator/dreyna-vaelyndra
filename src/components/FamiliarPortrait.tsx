@@ -28,25 +28,19 @@ const DECOR_CLASSES = {
   sm: {
     hair: "top-2 text-sm",
     accessory: "text-sm",
-    face: "top-[43%] h-3.5 w-7 gap-1",
-    eye: "h-1.5 w-1.5",
-    frameIcon: "right-1 top-1 text-[9px]",
+    frameIcon: "right-3 top-1 text-[9px]",
     effect: "-right-0.5 -top-0.5 text-[10px]",
   },
   md: {
     hair: "top-3 text-base",
     accessory: "text-base",
-    face: "top-[44%] h-[18px] w-9 gap-1.5",
-    eye: "h-2 w-2",
-    frameIcon: "right-1.5 top-1.5 text-xs",
+    frameIcon: "right-4 top-1.5 text-xs",
     effect: "-right-1 -top-1 text-xs",
   },
   lg: {
     hair: "top-4 text-xl",
     accessory: "text-xl",
-    face: "top-[45%] h-5 w-11 gap-2",
-    eye: "h-2.5 w-2.5",
-    frameIcon: "right-2 top-2 text-sm",
+    frameIcon: "right-5 top-2 text-sm",
     effect: "-right-1.5 -top-1.5 text-sm",
   },
 };
@@ -64,7 +58,7 @@ function accessoryPosition(accessory?: FamiliarCosmeticCatalogItem) {
     return "left-1/2 top-[7%] -translate-x-1/2";
   }
   if (accessory.id.includes("collier")) {
-    return "left-1/2 bottom-[12%] -translate-x-1/2";
+    return "left-1/2 bottom-[4%] -translate-x-1/2";
   }
   return "right-[13%] top-[28%]";
 }
@@ -76,51 +70,6 @@ function accessoryShape(accessory?: FamiliarCosmeticCatalogItem) {
   }
   if (accessory.id.includes("couronne")) return "rounded-full px-1";
   return "rounded-full px-1";
-}
-
-function eyeStyle(face?: FamiliarCosmeticCatalogItem) {
-  if (!face) {
-    return {
-      className: "rounded-full",
-      color: "#fff7d6",
-      transform: "",
-      shine: true,
-    };
-  }
-
-  if (face.id.includes("malicieux")) {
-    return {
-      className: "rounded-full border-t-2 border-current bg-transparent",
-      color: face.color || "#fde68a",
-      transform: "translateY(1px)",
-      shine: false,
-    };
-  }
-
-  if (face.id.includes("etoile")) {
-    return {
-      className: "rotate-45 rounded-[2px]",
-      color: face.color || "#fef3c7",
-      transform: "",
-      shine: true,
-    };
-  }
-
-  if (face.id.includes("royal")) {
-    return {
-      className: "rotate-45 rounded-[3px]",
-      color: face.color || "#f8d477",
-      transform: "scaleY(1.08)",
-      shine: true,
-    };
-  }
-
-  return {
-    className: "rounded-full",
-    color: face.color || "#fff7d6",
-    transform: "",
-    shine: true,
-  };
 }
 
 export function FamiliarPortrait({
@@ -135,7 +84,6 @@ export function FamiliarPortrait({
   const affinity = familiar.stats?.affinity ?? 0;
   const color = familiar.color || "#f8d477";
   const frame = getCosmetic(familiar, "frame");
-  const face = getCosmetic(familiar, "face");
   const hair = getCosmetic(familiar, "hair");
   const accessory = getCosmetic(familiar, "accessory");
   const effect = getCosmetic(familiar, "effect");
@@ -145,7 +93,6 @@ export function FamiliarPortrait({
   const ringOpacity = Math.min(0.8, charisma / 140);
   const frameColor = showFrame ? frame?.color || color : color;
   const decor = DECOR_CLASSES[size];
-  const eyes = eyeStyle(face);
 
   return (
     <motion.div
@@ -222,38 +169,6 @@ export function FamiliarPortrait({
       >
         {familiar.icon}
       </span>
-
-      {face && (
-        <span
-          className={`pointer-events-none absolute left-1/2 z-20 flex -translate-x-1/2 items-center justify-center rounded-full border border-white/10 bg-night-950/50 shadow-[0_2px_10px_rgba(0,0,0,0.48)] backdrop-blur-[1px] ${decor.face}`}
-          style={{
-            color: eyes.color,
-            boxShadow: `0 0 10px -6px ${face.color || color}, inset 0 0 8px rgba(255,255,255,0.08)`,
-          }}
-          aria-hidden
-        >
-          {[0, 1].map((index) => (
-            <span
-              key={index}
-              className={`relative block ${decor.eye} ${eyes.className}`}
-              style={{
-                backgroundColor: eyes.className.includes("bg-transparent")
-                  ? "transparent"
-                  : eyes.color,
-                color: eyes.color,
-                transform: eyes.transform,
-                boxShadow: eyes.className.includes("bg-transparent")
-                  ? "none"
-                  : `0 0 8px -2px ${eyes.color}`,
-              }}
-            >
-              {eyes.shine && (
-                <span className="absolute left-[18%] top-[18%] h-1/3 w-1/3 rounded-full bg-white/80" />
-              )}
-            </span>
-          ))}
-        </span>
-      )}
 
       {(effect || affinity >= 22) && (
         <motion.span
