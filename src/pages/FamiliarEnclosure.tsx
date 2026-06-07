@@ -24,7 +24,6 @@ import {
   type OwnedFamiliar,
 } from "../lib/familiarsApi";
 
-const CLEANING_COOLDOWN_SECONDS = 20 * 60;
 const CLEANING_ITEMS = [
   { id: "leaf-1", label: "Feuilles dorées", icon: "🍃", x: 16, y: 68 },
   { id: "dust-1", label: "Poussière de lune", icon: "✨", x: 31, y: 78 },
@@ -54,14 +53,6 @@ function formatRemaining(seconds: number) {
   const minutes = totalMinutes % 60;
   if (hours <= 0) return `${minutes} min`;
   return `${hours} h ${minutes.toString().padStart(2, "0")}`;
-}
-
-function cooldownFromLastCleaned(lastCleanedAt: string | null) {
-  if (!lastCleanedAt) return 0;
-  const last = new Date(lastCleanedAt).getTime();
-  if (!Number.isFinite(last)) return 0;
-  const readyAt = last + CLEANING_COOLDOWN_SECONDS * 1000;
-  return Math.max(0, Math.ceil((readyAt - Date.now()) / 1000));
 }
 
 function playFeedSound() {
@@ -118,6 +109,10 @@ function affectionFromFamiliar(familiar: OwnedFamiliar | null): FamiliarAffectio
   };
 }
 
+function cleanStateForAllItems(isClean: boolean) {
+  return isClean ? Object.fromEntries(CLEANING_ITEMS.map((item) => [item.id, true])) : {};
+}
+
 export function FamiliarEnclosure() {
   const { user } = useAuth();
   const { profile, refresh } = useProfile();
@@ -156,11 +151,9 @@ export function FamiliarEnclosure() {
         if (!cancelled) {
           setActive(current);
           setAffection(affectionFromFamiliar(current));
-          const remaining = cooldownFromLastCleaned(current?.enclosureLastCleanedAt ?? null);
+          const remaining = current?.enclosureCooldownRemainingSeconds ?? 0;
           setCooldownRemaining(remaining);
-          if (remaining > 0) {
-            setCleaned(Object.fromEntries(CLEANING_ITEMS.map((item) => [item.id, true])));
-          }
+          setCleaned(cleanStateForAllItems(remaining > 0));
         }
       } catch {
         if (!cancelled) notify("Impossible de charger l'enclos du familier.", "error");
@@ -174,12 +167,15 @@ export function FamiliarEnclosure() {
     };
   }, [notify, user?.id]);
 
+  const onCooldown = cooldownRemaining > 0;
   const cleanedCount = useMemo(
-    () => CLEANING_ITEMS.filter((item) => cleaned[item.id]).length,
-    [cleaned],
+    () =>
+      onCooldown
+        ? CLEANING_ITEMS.length
+        : CLEANING_ITEMS.filter((item) => cleaned[item.id]).length,
+    [cleaned, onCooldown],
   );
   const cleaningProgress = Math.round((cleanedCount / CLEANING_ITEMS.length) * 100);
-  const onCooldown = cooldownRemaining > 0;
   const canClean = !onCooldown && !actionLoading;
   const canFeed = affection.foodStock > 0 && !actionLoading && Boolean(active);
   const nextHeartProgress =
@@ -199,6 +195,7 @@ export function FamiliarEnclosure() {
       setActive(result.familiar);
       setAffection(result.affection);
       setCooldownRemaining(result.cooldownRemainingSeconds);
+      setCleaned(cleanStateForAllItems(result.cooldownRemainingSeconds > 0));
       setFeedback(`${result.message} Stock de nourriture : ${result.affection.foodStock}.`);
       notify(result.message, result.foodFound > 0 ? "success" : "info");
       void refresh();

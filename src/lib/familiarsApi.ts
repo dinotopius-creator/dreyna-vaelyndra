@@ -103,6 +103,7 @@ export interface OwnedFamiliar {
   heartRequirements: number[];
   heartRewards: number[];
   enclosureLastCleanedAt: string | null;
+  enclosureCooldownRemainingSeconds: number;
 }
 
 export interface FamiliarCollection {
