@@ -43,6 +43,7 @@ export interface AuthMe {
   handle: string | null;
   /** PR S — ISO du dernier changement de handle (cooldown 30 j). */
   handle_updated_at: string | null;
+  bio?: string;
   avatar_image_url: string;
   avatar_url: string | null;
   creature_id: string | null;

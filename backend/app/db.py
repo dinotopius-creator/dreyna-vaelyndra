@@ -73,6 +73,7 @@ def _apply_migrations() -> None:
             # l'index partiel créé plus bas.
             ("handle", "TEXT"),
             ("handle_updated_at", "TEXT"),
+            ("bio", "TEXT NOT NULL DEFAULT ''"),
         ],
         "directmessage": [
             # Persistance des pièces jointes (images, PDF) en base64 JSON.

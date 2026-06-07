@@ -553,6 +553,7 @@ function BroadcasterControls() {
     lastError,
   } = useLive();
   const [showKey, setShowKey] = useState(false);
+  const [stoppingLive, setStoppingLive] = useState(false);
   const screenShareSupported = isScreenShareSupported();
   const cameraSupported = isCameraSupported();
   const isMobile = useMemo(() => isLikelyMobile(), []);
@@ -567,6 +568,20 @@ function BroadcasterControls() {
       cancelled = true;
     };
   }, []);
+
+  function handleStopLive() {
+    if (stoppingLive) return;
+    setStoppingLive(true);
+    try {
+      stopLive();
+      notify("Live terminé. Les flux caméra et micro sont en cours de fermeture.", "info");
+    } catch (error) {
+      console.error("stopLive button failed", error);
+      notify("Le live est en cours d'arrêt. Réessaie dans quelques secondes.", "error");
+    } finally {
+      window.setTimeout(() => setStoppingLive(false), 1200);
+    }
+  }
   // Le partage d'écran via `getDisplayMedia` n'est pas supporté sur
   // mobile : même si Chrome Android expose parfois l'API, l'appel
   // renvoie une `NotAllowedError` / une track morte. On désactive donc
@@ -1056,8 +1071,9 @@ function BroadcasterControls() {
                 : "Publier le live Twitch"}
           </button>
         ) : (
-          <button onClick={stopLive} className="btn-ghost">
-            <StopCircle className="h-4 w-4" /> Terminer mon live
+          <button onClick={handleStopLive} className="btn-ghost" disabled={stoppingLive}>
+            <StopCircle className="h-4 w-4" />
+            {stoppingLive ? "Arrêt du live..." : "Terminer mon live"}
           </button>
         )}
         {isLive && config.mode === "camera" && (

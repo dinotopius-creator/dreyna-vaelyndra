@@ -212,6 +212,7 @@ def _user_public_dict(user: UserProfile, credential: Optional[Credential]) -> di
         # startup n'est pas passé sur tous les profils pré-PR S.
         "handle": user.handle,
         "handle_updated_at": user.handle_updated_at,
+        "bio": user.bio or "",
         "avatar_image_url": user.avatar_image_url,
         "avatar_url": user.avatar_url,
         "creature_id": user.creature_id,

@@ -163,6 +163,7 @@ class UserProfile(SQLModel, table=True):
     # pré-PR S soit migré au prochain démarrage du backend.
     handle: Optional[str] = Field(default=None, index=True, max_length=20)
     handle_updated_at: Optional[str] = None
+    bio: str = Field(default="", max_length=500)
     avatar_image_url: str = ""
     avatar_url: Optional[str] = None
     # JSON sérialisé (list[str] et dict[str, str]) — SQLite ne gère pas les
