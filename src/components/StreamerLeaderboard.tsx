@@ -17,7 +17,7 @@
  * - Animations Framer Motion `layout` pour interpoler les changements de
  *   rang au fil des dons (effet "rise").
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Crown, Sparkles, Trophy } from "lucide-react";
@@ -82,16 +82,34 @@ export function StreamerLeaderboard({ refreshTick }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [weekStart, setWeekStart] = useState<string>("");
+  const lastGoodByPeriodRef = useRef<
+    Partial<Record<Period, { entries: StreamerLeaderboardEntryDto[]; weekStart: string }>>
+  >({});
 
   const fetchNow = useCallback(async (target: Period) => {
     try {
       const data = await apiGetStreamerLeaderboard(target, 50);
-      setEntries(data.entries);
+      const nextEntries = data.entries ?? [];
+      if (nextEntries.length > 0) {
+        lastGoodByPeriodRef.current[target] = {
+          entries: nextEntries,
+          weekStart: data.weekStart,
+        };
+      }
+      const fallback = lastGoodByPeriodRef.current[target];
+      setEntries(nextEntries.length > 0 ? nextEntries : fallback?.entries ?? []);
       setWeekStart(data.weekStart);
       setError(null);
     } catch (err) {
       console.warn("Classement streamers indisponible", err);
-      setError("Classement indisponible pour l'instant.");
+      const fallback = lastGoodByPeriodRef.current[target];
+      if (fallback) {
+        setEntries(fallback.entries);
+        setWeekStart(fallback.weekStart);
+        setError(null);
+      } else {
+        setError("Classement indisponible pour l'instant.");
+      }
     } finally {
       setLoading(false);
     }

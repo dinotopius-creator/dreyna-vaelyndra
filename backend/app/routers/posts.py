@@ -204,11 +204,14 @@ def _serialize_reward(row: CommunityActivityReward) -> CommunityActivityRewardOu
 
 def _community_activity_rows(
     session: Session,
-    week_start: datetime,
+    week_start: datetime | None,
 ) -> list[dict]:
-    week_end = week_start + timedelta(days=7)
-    week_start_iso = week_start.isoformat()
-    week_end_iso = week_end.isoformat()
+    week_start_iso = ""
+    week_end_iso = ""
+    if week_start is not None:
+        week_end = week_start + timedelta(days=7)
+        week_start_iso = week_start.isoformat()
+        week_end_iso = week_end.isoformat()
     profiles = {
         p.id: p
         for p in session.exec(select(UserProfile)).all()
@@ -250,12 +253,12 @@ def _community_activity_rows(
                 current["avatarImageUrl"] = avatar
         return current
 
-    posts = session.exec(
-        select(Post)
-        .where(Post.created_at >= week_start_iso)
-        .where(Post.created_at < week_end_iso)
-        .order_by(Post.created_at.desc())
-    ).all()
+    post_stmt = select(Post).order_by(Post.created_at.desc())
+    if week_start is not None:
+        post_stmt = post_stmt.where(Post.created_at >= week_start_iso).where(
+            Post.created_at < week_end_iso
+        )
+    posts = session.exec(post_stmt).all()
     for post in posts:
         member = ensure_member(post.author_id, post.author_name, post.author_avatar)
         if member is None:
@@ -267,11 +270,12 @@ def _community_activity_rows(
                 member["latestActivity"], created_at.isoformat()
             )
 
-    comments = session.exec(
-        select(Comment)
-        .where(Comment.created_at >= week_start_iso)
-        .where(Comment.created_at < week_end_iso)
-    ).all()
+    comment_stmt = select(Comment)
+    if week_start is not None:
+        comment_stmt = comment_stmt.where(Comment.created_at >= week_start_iso).where(
+            Comment.created_at < week_end_iso
+        )
+    comments = session.exec(comment_stmt).all()
     for comment in comments:
         member = ensure_member(
             comment.author_id, comment.author_name, comment.author_avatar
@@ -285,11 +289,12 @@ def _community_activity_rows(
                 member["latestActivity"], created_at.isoformat()
             )
 
-    reactions = session.exec(
-        select(Reaction)
-        .where(Reaction.created_at >= week_start_iso)
-        .where(Reaction.created_at < week_end_iso)
-    ).all()
+    reaction_stmt = select(Reaction)
+    if week_start is not None:
+        reaction_stmt = reaction_stmt.where(Reaction.created_at >= week_start_iso).where(
+            Reaction.created_at < week_end_iso
+        )
+    reactions = session.exec(reaction_stmt).all()
     for reaction in reactions:
         member = ensure_member(reaction.user_id)
         if member is None:
@@ -316,13 +321,16 @@ def _community_activity_rows(
         )
         rows.append(member)
 
+    fallback_activity_date = week_start or datetime(1970, 1, 1, tzinfo=UTC)
     rows.sort(
         key=lambda row: (
             -row["score"],
             -row["postCount"],
             -row["commentCount"],
             -row["reactionCount"],
-            -int((_parse_iso(row["latestActivity"]) or week_start).timestamp()),
+            -int(
+                (_parse_iso(row["latestActivity"]) or fallback_activity_date).timestamp()
+            ),
             row["username"].lower(),
         )
     )
@@ -526,7 +534,13 @@ def community_activity_leaderboard(
 ) -> CommunityActivityLeaderboardOut:
     safe_limit = max(1, min(int(limit or 5), 10))
     week_start = _week_start()
-    rows = _community_activity_rows(session, week_start)[:safe_limit]
+    rows = _community_activity_rows(session, week_start)
+    if not rows:
+        # Si la semaine courante n'a pas encore d'activite enregistree, on
+        # garde le classement vivant avec les vraies statistiques historiques
+        # au lieu d'afficher un faux etat vide apres le changement de semaine.
+        rows = _community_activity_rows(session, None)
+    rows = rows[:safe_limit]
     return CommunityActivityLeaderboardOut(
         weekStartIso=week_start.isoformat(),
         entries=[_serialize_activity_entry(row) for row in rows],

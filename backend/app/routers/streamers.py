@@ -117,6 +117,55 @@ def _pick_week_start(week: str) -> tuple[date, date]:
     return this_week, this_week
 
 
+def _streamer_profile_fallback_entries(
+    session: Session,
+    limit: int,
+) -> list[StreamerLeaderboardEntryOut]:
+    """Classement de secours base sur les vrais profils actifs."""
+    profiles = [
+        p
+        for p in session.exec(select(UserProfile)).all()
+        if p.banned_at is None
+    ]
+    ranked: list[tuple[UserProfile, int, int]] = []
+    for profile in profiles:
+        total_sylvins = int(profile.sylvins_earnings or 0) + int(
+            profile.earnings_paid or 0
+        )
+        streamer_xp = int(profile.streamer_xp or 0)
+        if total_sylvins <= 0 and streamer_xp <= 0:
+            continue
+        ranked.append((profile, total_sylvins, streamer_xp))
+
+    ranked.sort(
+        key=lambda item: (
+            -item[1],
+            -item[2],
+            item[0].username.lower(),
+        )
+    )
+
+    entries: list[StreamerLeaderboardEntryOut] = []
+    for rank, (profile, total_sylvins, _streamer_xp) in enumerate(
+        ranked[:limit],
+        start=1,
+    ):
+        entries.append(
+            StreamerLeaderboardEntryOut(
+                rank=rank,
+                userId=profile.id,
+                username=profile.username,
+                handle=profile.handle,
+                avatarImageUrl=profile.avatar_image_url,
+                totalSylvins=total_sylvins,
+                creature=_creature_dto(profile.creature_id),
+                role=profile.role or "user",
+                grade=_grade_out_for(profile),
+            )
+        )
+    return entries
+
+
 @router.get("/leaderboard", response_model=StreamerLeaderboardOut)
 def streamer_leaderboard(
     week: Literal["this", "last"] = Query("this"),
@@ -196,6 +245,9 @@ def streamer_leaderboard(
     # l'intervalle affiché [weekStart, weekEnd] soit intuitivement
     # "lundi → dimanche". NB : `date - timedelta(seconds=1)` est un no-op
     # (timedelta.days == 0), il faut bien passer par `days=1`.
+    if not entries and week == "this":
+        entries = _streamer_profile_fallback_entries(session, limit)
+
     return StreamerLeaderboardOut(
         week=week,
         weekStart=start.isoformat(),
