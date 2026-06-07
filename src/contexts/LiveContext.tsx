@@ -664,6 +664,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   // MediaStream concurrents et la première fuite (tracks jamais
   // `stop()`-ées → caméra/micro restent actifs en tâche de fond).
   const switchingCameraRef = useRef(false);
+  const stoppingLiveRef = useRef(false);
   // Verrou pour la recuperation silencieuse declenchee par un "ended"
   // (notamment iOS Safari quand l'user retourne son ecran : le track
   // camera est brievement coupe par le navigateur). On evite plusieurs
@@ -1319,11 +1320,18 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   }, [stopHosting, stopViewing]);
 
   const stopLive = useCallback(() => {
+    if (stoppingLiveRef.current) return;
+    stoppingLiveRef.current = true;
     const me = userRef.current;
     allowPageUnloadRef.current = true;
     // IMPORTANT : ne ferme QUE le côté host, pour ne pas casser le stream
     // qu'on est en train de regarder sur un autre user (viewerPeerRef).
-    stopHosting({ stopNative: true });
+    try {
+      stopHosting({ stopNative: true });
+    } catch (error) {
+      console.error("stopLive cleanup failed", error);
+      setLastError("Le live est en cours d'arrêt. Réessaie dans quelques secondes.");
+    }
     setConfig((c) => ({ ...c, status: "idle", startedAt: null }));
     // Clic volontaire sur "stopper le live" → plus de reprise possible.
     clearResumeMarker();
@@ -1337,11 +1345,15 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       });
       // Notifie le backend pour que les autres users voient disparaître
       // ce live immédiatement (sans attendre le TTL heartbeat 90 s).
-      apiStopLive().catch(() => {
+      apiStopLive().catch((error) => {
+        console.warn("apiStopLive failed after local live cleanup", error);
         // Si l'appel échoue, le serveur finira par supprimer l'entrée
         // une fois que le heartbeat expirera côté backend (90 s).
       });
     }
+    window.setTimeout(() => {
+      stoppingLiveRef.current = false;
+    }, 900);
   }, [stopHosting, updateRegistry]);
 
   const pauseLiveForRecovery = useCallback(

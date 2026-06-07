@@ -35,6 +35,7 @@ export function PostComments({
   const { notify } = useToast();
   const [draft, setDraft] = useState("");
   const [replyTo, setReplyTo] = useState<Comment | null>(null);
+  const [posting, setPosting] = useState(false);
 
   const usersById = useMemo(
     () => new Map(users.map((entry) => [entry.id, entry])),
@@ -121,8 +122,9 @@ export function PostComments({
       notify("Connecte-toi pour commenter.", "info");
       return;
     }
-    if (!draft.trim()) return;
+    if (!draft.trim() || posting) return;
 
+    setPosting(true);
     try {
       const comment = await apiAddComment(postId, {
         author: {
@@ -141,7 +143,9 @@ export function PostComments({
       void refreshProfile();
     } catch (err) {
       console.warn(err);
-      notify("Commentaire perdu en route.", "error");
+      notify("Le commentaire n'a pas pu être envoyé. Réessaie.", "error");
+    } finally {
+      setPosting(false);
     }
   }
 
@@ -189,10 +193,11 @@ export function PostComments({
     }
   }
 
-  function renderComment(comment: Comment, nested = false) {
+  function renderComment(comment: Comment, depth = 0) {
     const canDelete =
       isQueen || user?.id === comment.authorId || user?.id === postAuthorId;
     const replies = repliesByParent[comment.id] ?? [];
+    const isReply = depth > 0;
     const profile = profileOverrides[comment.authorId];
     const displayName = profile?.username || comment.authorName;
     const displayHandle = profile?.handle ?? comment.authorHandle ?? null;
@@ -209,23 +214,27 @@ export function PostComments({
       <li
         key={comment.id}
         id={`comment-${comment.id}`}
-        className={`flex items-start gap-3 ${nested ? "ml-5 sm:ml-8" : ""}`}
+        className={`flex min-w-0 items-start gap-2.5 sm:gap-3 ${
+          isReply ? "rounded-2xl bg-night-950/18 py-2 pl-2 pr-1 sm:pl-3" : ""
+        }`}
       >
         <Link to={profileHref(comment.authorId)} className="shrink-0">
           <AvatarImage
             candidates={[displayAvatar, comment.authorAvatar]}
             fallbackSeed={comment.authorId || comment.authorName}
             alt={displayName}
-            className="h-8 w-8 rounded-full object-cover ring-2 ring-royal-500/30 transition hover:ring-gold-400/60"
+            className={`rounded-full object-cover ring-2 ring-royal-500/30 transition hover:ring-gold-400/60 ${
+              isReply ? "h-7 w-7 sm:h-8 sm:w-8" : "h-8 w-8 sm:h-9 sm:w-9"
+            }`}
           />
         </Link>
 
         <div className="min-w-0 flex-1">
-          <div className="rounded-2xl bg-night-900/40 px-3 py-2">
+          <div className="max-w-full rounded-2xl bg-night-900/45 px-3 py-2 ring-1 ring-white/5">
             <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
               <Link
                 to={profileHref(comment.authorId)}
-                className="font-display text-gold-200 transition hover:text-gold-300"
+                className="min-w-0 max-w-full break-words font-display text-gold-200 transition hover:text-gold-300"
               >
                 {displayName}
               </Link>
@@ -271,7 +280,7 @@ export function PostComments({
               content={comment.content}
               mentionsByHandle={mentionTargets}
               profileHref={profileHref}
-              className="mt-1 whitespace-pre-wrap break-words text-sm text-ivory/85"
+              className="mt-1 max-w-full whitespace-pre-wrap break-words text-sm leading-6 text-ivory/85 [overflow-wrap:anywhere]"
             />
           </div>
 
@@ -332,8 +341,14 @@ export function PostComments({
           </div>
 
           {replies.length > 0 && (
-            <ul className="mt-3 space-y-3">
-              {replies.map((reply) => renderComment(reply, true))}
+            <ul
+              className={`mt-3 space-y-2.5 ${
+                depth === 0
+                  ? "border-l border-royal-500/25 pl-3 sm:pl-4"
+                  : "pl-0"
+              }`}
+            >
+              {replies.map((reply) => renderComment(reply, depth + 1))}
             </ul>
           )}
         </div>
@@ -349,11 +364,17 @@ export function PostComments({
 
   return (
     <div className="mt-4 border-t border-royal-500/15 pt-4">
+      {comments.length === 0 && (
+        <div className="rounded-2xl border border-white/10 bg-night-950/35 px-4 py-3 text-sm text-ivory/58">
+          Aucun commentaire pour le moment. Soyez le premier à répondre.
+        </div>
+      )}
+
       <ul className="space-y-3">
         {topLevelComments.map((comment) => renderComment(comment))}
       </ul>
 
-      <form onSubmit={submit} className="mt-3 flex items-start gap-3">
+      <form onSubmit={submit} className="mt-3 flex min-w-0 items-start gap-2.5 sm:gap-3">
         <AvatarImage
           candidates={[user?.avatar]}
           fallbackSeed={user?.id ?? "anon"}
@@ -378,8 +399,8 @@ export function PostComments({
             </div>
           )}
 
-          <div className="flex gap-2">
-            <input
+          <div className="flex items-end gap-2">
+            <textarea
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               placeholder={
@@ -389,13 +410,14 @@ export function PostComments({
                     : "Commenter cette parole..."
                   : "Connecte-toi pour commenter..."
               }
-              className="glass-input flex-1"
+              rows={1}
+              className="glass-input min-h-11 flex-1 resize-none py-2.5 [overflow-wrap:anywhere]"
               disabled={!user}
             />
             <button
               type="submit"
-              className="btn-gold"
-              disabled={!user || !draft.trim()}
+              className="btn-gold min-h-11 px-4"
+              disabled={!user || !draft.trim() || posting}
             >
               <Send className="h-3.5 w-3.5" />
             </button>

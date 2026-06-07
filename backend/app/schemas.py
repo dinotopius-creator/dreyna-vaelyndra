@@ -185,6 +185,7 @@ class UserProfileUpsert(BaseModel):
 
     id: str = Field(..., min_length=1, max_length=128)
     username: str = Field(..., min_length=1, max_length=64)
+    bio: Optional[str] = Field(default=None, max_length=500)
     # Peut être :
     # - une URL courte (DiceBear, CDN, image hébergée)
     # - un data URI base64 généré par l'écran /moi après import local
@@ -386,6 +387,7 @@ class UserProfileOut(BaseModel):
     handle: Optional[str] = None
     handleUpdatedAt: Optional[str] = None
     avatarImageUrl: str
+    bio: str = ""
     avatarUrl: Optional[str] = None
     inventory: List[str] = []
     equipped: Dict[str, str] = {}

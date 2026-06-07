@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import unicodedata
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
@@ -87,6 +88,24 @@ from ..schemas import (
 # avoir mis à jour la règle côté posts.
 XP_PER_SYLVIN_RECEIVED = 1
 XP_PER_SUBSCRIBER = 50
+
+
+def _clean_profile_text(value: str, *, field: str, max_graphemes: int) -> str:
+    cleaned = value.strip()
+    if field == "pseudo" and len([ch for ch in cleaned]) < 2:
+        raise HTTPException(status_code=400, detail="Ton pseudo est trop court.")
+    if len([ch for ch in cleaned]) > max_graphemes:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{field.capitalize()} trop long ({max_graphemes} caractères maximum).",
+        )
+    for ch in cleaned:
+        if unicodedata.category(ch) in ("Cc", "Cs"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"{field.capitalize()} invalide : caractères de contrôle interdits.",
+            )
+    return cleaned
 
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -293,6 +312,7 @@ def _to_out(p: UserProfile, session: Session | None = None) -> UserProfileOut:
         handle=p.handle,
         handleUpdatedAt=p.handle_updated_at,
         avatarImageUrl=p.avatar_image_url,
+        bio=p.bio or "",
         avatarUrl=p.avatar_url,
         inventory=json.loads(p.inventory_json or "[]"),
         equipped=json.loads(p.equipped_json or "{}"),
@@ -519,7 +539,9 @@ def upsert_user(
     # + _auto_follow_officials qui peut déclencher un autoflush + commit)
     # doit être dans le try/except pour attraper l'IntegrityError quel
     # que soit son point de déclenchement.
-    base_handle = slugify_handle(payload.username)
+    username = _clean_profile_text(payload.username, field="pseudo", max_graphemes=64)
+    bio = _clean_profile_text(payload.bio or "", field="bio", max_graphemes=500)
+    base_handle = slugify_handle(username)
     for attempt in range(3):
         p = session.get(UserProfile, payload.id)
         is_new = p is None
@@ -533,7 +555,8 @@ def upsert_user(
                 )
                 p = UserProfile(
                     id=payload.id,
-                    username=payload.username,
+                    username=username,
+                    bio=bio,
                     handle=handle,
                     avatar_image_url=payload.avatar_image_url,
                     creature_id=creature_id,
@@ -545,7 +568,8 @@ def upsert_user(
                 # déclencher ici — d'où le try/except englobant.
                 session.flush()
             else:
-                p.username = payload.username
+                p.username = username
+                p.bio = bio
                 # On ne remplace l'avatar_image_url que s'il n'en avait pas
                 # (pour ne pas écraser un rendu RPM déjà généré par
                 # l'utilisateur).

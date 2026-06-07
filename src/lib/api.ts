@@ -320,6 +320,7 @@ export interface UserProfileDto {
   /** ISO du dernier changement de handle (cooldown 30 j côté backend). */
   handleUpdatedAt: string | null;
   avatarImageUrl: string;
+  bio?: string;
   avatarUrl: string | null;
   inventory: string[];
   equipped: Record<string, string>;
@@ -461,6 +462,7 @@ export async function apiUpsertProfile(input: {
   id: string;
   username: string;
   avatarImageUrl: string;
+  bio?: string;
   /** Optionnel : envoyé uniquement au premier upsert (inscription). */
   creatureId?: string;
 }): Promise<UserProfileDto> {
@@ -469,6 +471,7 @@ export async function apiUpsertProfile(input: {
     body: JSON.stringify({
       id: input.id,
       username: input.username,
+      bio: input.bio,
       avatar_image_url: input.avatarImageUrl,
       creature_id: input.creatureId,
     }),

@@ -237,7 +237,7 @@ function backendToStored(me: AuthMe): StoredUser {
     avatar: me.avatar_image_url || `https://i.pravatar.cc/150?u=${me.id}`,
     role: normalizeRole(me.role),
     joinedAt: me.created_at,
-    bio: "",
+    bio: me.bio ?? "",
     creatureId: me.creature_id ?? undefined,
     passwordHash: "__backend__",
   };
@@ -292,6 +292,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 email: me.email ?? u.email,
                 avatar: me.avatar_image_url || u.avatar,
                 role: normalizeRole(me.role),
+                bio: me.bio ?? u.bio,
                 creatureId: me.creature_id ?? u.creatureId,
               }
             : u,
@@ -608,8 +609,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const updateProfile = useCallback(
     async (patch: { username?: string; avatar?: string; bio?: string }) => {
       if (!userId) return { ok: false, error: "Non connecté." };
-      if (patch.username !== undefined && patch.username.trim().length < 2)
+      if (patch.username !== undefined && Array.from(patch.username.trim()).length < 2)
         return { ok: false, error: "Ton pseudo est trop court." };
+      if (patch.username !== undefined && Array.from(patch.username.trim()).length > 64)
+        return { ok: false, error: "Ton pseudo est trop long." };
+      if (patch.bio !== undefined && Array.from(patch.bio.trim()).length > 500)
+        return { ok: false, error: "Ta bio est trop longue." };
       if (patch.avatar !== undefined && patch.avatar.length > 200_000)
         return {
           ok: false,
@@ -621,6 +626,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // `/auth/me`.
       const trimmedUsername =
         patch.username !== undefined ? patch.username.trim() : undefined;
+      const trimmedBio = patch.bio !== undefined ? patch.bio.trim() : undefined;
       const trimmedAvatar =
         patch.avatar !== undefined && patch.avatar.trim().length > 0
           ? patch.avatar.trim()
@@ -637,7 +643,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       let savedUsername = false;
       let savedAvatar = false;
 
-      if (trimmedUsername !== undefined) {
+      if (trimmedUsername !== undefined || trimmedBio !== undefined) {
         try {
           // `upsert_user` met à jour le username même si le profil existe
           // déjà ; il n'écrase pas `avatar_image_url` s'il est non-vide,
@@ -645,8 +651,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // le rendu RPM.
           await apiUpsertProfile({
             id: userId,
-            username: trimmedUsername,
+            username: trimmedUsername ?? user?.username ?? "Membre",
             avatarImageUrl: trimmedAvatar ?? "",
+            bio: trimmedBio,
           });
           savedUsername = true;
         } catch (err) {
@@ -672,7 +679,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                   ? {
                       ...u,
                       username: trimmedUsername ?? u.username,
-                      bio: patch.bio !== undefined ? patch.bio : u.bio,
+                      bio: trimmedBio !== undefined ? trimmedBio : u.bio,
                     }
                   : u,
               ),
@@ -695,7 +702,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             ...u,
             username: trimmedUsername ?? u.username,
             avatar: savedAvatar && trimmedAvatar ? trimmedAvatar : u.avatar,
-            bio: patch.bio !== undefined ? patch.bio : u.bio,
+            bio: trimmedBio !== undefined ? trimmedBio : u.bio,
           };
         }),
       );
@@ -714,7 +721,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       return { ok: true };
     },
-    [userId, syncBackendUser, syncProfileAvatar],
+    [user?.username, userId, syncBackendUser, syncProfileAvatar],
   );
 
   const value = useMemo<AuthCtx>(
