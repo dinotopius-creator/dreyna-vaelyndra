@@ -130,15 +130,16 @@ function normalizeJoystickInput(rawX: number, rawY: number): AnalogInput {
 function addCameraRelativeJoystickMovement(
   movement: THREE.Vector3,
   joystick: AnalogInput,
-  cameraYaw: number,
+  playerYaw: number,
 ) {
   if (!joystick.active) return;
 
-  // Mobile convention: up = into the camera view, down = back, left/right = screen left/right.
-  const cameraForward = new THREE.Vector3(Math.sin(cameraYaw), 0, -Math.cos(cameraYaw));
-  const cameraRight = new THREE.Vector3(Math.cos(cameraYaw), 0, Math.sin(cameraYaw));
-  movement.addScaledVector(cameraForward, -joystick.y);
-  movement.addScaledVector(cameraRight, joystick.x);
+  // Touch convention, same as the desktop movement basis:
+  // up = forward, down = backward, left = left, right = right.
+  const forward = new THREE.Vector3(Math.sin(playerYaw), 0, Math.cos(playerYaw));
+  const right = new THREE.Vector3(Math.cos(playerYaw), 0, -Math.sin(playerYaw));
+  movement.addScaledVector(forward, -joystick.y);
+  movement.addScaledVector(right, joystick.x);
 }
 
 function pctToWorld(x: number, y: number) {
@@ -1356,11 +1357,11 @@ export function World3DStage({
       <div className="pointer-events-none absolute left-4 top-4 hidden rounded-2xl border border-white/10 bg-night-950/70 px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-ivory/60 backdrop-blur md:block">
         ZQSD/WASD pour marcher, A/D pour tourner, Q/E strafe, Shift courir, Espace sauter
       </div>
-      <div className="pointer-events-none absolute left-[calc(1rem+env(safe-area-inset-left))] top-[calc(0.75rem+env(safe-area-inset-top))] z-20 hidden rounded-full border border-cyan-200/20 bg-night-950/55 px-3 py-1.5 text-[9px] uppercase tracking-[0.18em] text-cyan-100/70 backdrop-blur landscape:block md:hidden">
+      <div className="pointer-events-none absolute left-[calc(1rem+env(safe-area-inset-left))] top-[calc(0.75rem+env(safe-area-inset-top))] z-20 hidden rounded-full border border-cyan-200/20 bg-night-950/55 px-3 py-1.5 text-[9px] uppercase tracking-[0.18em] text-cyan-100/70 backdrop-blur landscape:block [@media(pointer:fine)]:hidden">
         Tourne la caméra à gauche
       </div>
       <div
-        className={`pointer-events-none absolute bottom-[calc(1rem+env(safe-area-inset-bottom))] left-[calc(1rem+env(safe-area-inset-left))] top-[calc(3.6rem+env(safe-area-inset-top))] w-[48%] rounded-[28px] border border-white/10 bg-night-950/10 backdrop-blur-[1px] transition md:hidden ${
+        className={`pointer-events-none absolute bottom-[calc(1rem+env(safe-area-inset-bottom))] left-[calc(1rem+env(safe-area-inset-left))] top-[calc(3.6rem+env(safe-area-inset-top))] w-[48%] rounded-[28px] border border-white/10 bg-night-950/10 backdrop-blur-[1px] transition [@media(pointer:fine)]:hidden ${
           cameraTouchActive ? "border-cyan-200/30 bg-cyan-200/8" : "opacity-55"
         }`}
         aria-hidden
@@ -1371,7 +1372,7 @@ export function World3DStage({
       </div>
       <div
         ref={joystickPadRef}
-        className="absolute bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-[calc(1.25rem+env(safe-area-inset-right))] z-20 h-32 w-32 touch-none select-none rounded-full border border-white/15 bg-night-950/35 shadow-[0_18px_60px_rgba(0,0,0,0.35)] backdrop-blur-xl md:hidden landscape:h-36 landscape:w-36"
+        className="absolute bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-[calc(1.25rem+env(safe-area-inset-right))] z-20 h-32 w-32 touch-none select-none rounded-full border border-white/15 bg-night-950/35 shadow-[0_18px_60px_rgba(0,0,0,0.35)] backdrop-blur-xl landscape:h-36 landscape:w-36 [@media(pointer:fine)]:hidden"
         onPointerDown={handleJoystickPointerDown}
         onPointerMove={handleJoystickPointerMove}
         onPointerUp={handleJoystickPointerUp}
