@@ -64,6 +64,42 @@ function cooldownFromLastCleaned(lastCleanedAt: string | null) {
   return Math.max(0, Math.ceil((readyAt - Date.now()) / 1000));
 }
 
+function playFeedSound() {
+  try {
+    const AudioContextCtor =
+      window.AudioContext ??
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextCtor) return;
+
+    const context = new AudioContextCtor();
+    const firstTone = context.createOscillator();
+    const secondTone = context.createOscillator();
+    const gain = context.createGain();
+    const now = context.currentTime;
+
+    firstTone.type = "sine";
+    secondTone.type = "triangle";
+    firstTone.frequency.setValueAtTime(660, now);
+    firstTone.frequency.exponentialRampToValueAtTime(880, now + 0.09);
+    secondTone.frequency.setValueAtTime(990, now + 0.06);
+    secondTone.frequency.exponentialRampToValueAtTime(1320, now + 0.17);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.055, now + 0.025);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+
+    firstTone.connect(gain);
+    secondTone.connect(gain);
+    gain.connect(context.destination);
+    firstTone.start(now);
+    secondTone.start(now + 0.055);
+    firstTone.stop(now + 0.18);
+    secondTone.stop(now + 0.24);
+    window.setTimeout(() => void context.close(), 320);
+  } catch {
+    // Browsers can block audio contexts; the visual feedback still runs.
+  }
+}
+
 function affectionFromFamiliar(familiar: OwnedFamiliar | null): FamiliarAffectionState {
   if (!familiar) return DEFAULT_AFFECTION;
   return {
@@ -96,6 +132,7 @@ export function FamiliarEnclosure() {
   const [displayedLueurs, setDisplayedLueurs] = useState(() => profile?.lueurs ?? 0);
   const [heartPulse, setHeartPulse] = useState<number | null>(null);
   const [guideOpen, setGuideOpen] = useState(false);
+  const [feedBurstId, setFeedBurstId] = useState(0);
 
   useEffect(() => {
     setDisplayedLueurs(profile?.lueurs ?? 0);
@@ -200,6 +237,8 @@ export function FamiliarEnclosure() {
       setAffection(result.affection);
       setDisplayedLueurs(result.profileLueurs);
       setFeedback(result.message);
+      playFeedSound();
+      setFeedBurstId((current) => current + 1);
       notify(result.message, result.heartGained ? "success" : "info");
       if (result.heartGained) {
         setHeartPulse(result.heartGained);
@@ -311,7 +350,10 @@ export function FamiliarEnclosure() {
                   hearts={affection.affectionHearts}
                   pulseHeart={heartPulse}
                 />
-                <FamiliarPortrait familiar={active} size="lg" />
+                <div className="relative">
+                  <FamiliarPortrait familiar={active} size="lg" />
+                  <FeedHeartBurst burstId={feedBurstId} />
+                </div>
                 <div className="mt-2 rounded-full border border-white/10 bg-night-950/72 px-3 py-1 text-center text-xs text-ivory/80 backdrop-blur">
                   {active.nickname || active.name}
                 </div>
@@ -522,6 +564,31 @@ function AffectionHearts({
                 filled ? "fill-rose-300 text-rose-200" : "text-white/30"
               }`}
             />
+          </motion.span>
+        );
+      })}
+    </div>
+  );
+}
+
+function FeedHeartBurst({ burstId }: { burstId: number }) {
+  if (burstId <= 0) return null;
+
+  return (
+    <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center">
+      {[0, 1, 2, 3, 4].map((index) => {
+        const x = [-28, -12, 8, 22, 34][index];
+        const y = [-32, -44, -54, -40, -26][index];
+        const delay = index * 0.045;
+        return (
+          <motion.span
+            key={`${burstId}-${index}`}
+            className="absolute rounded-full border border-rose-100/25 bg-rose-400/15 p-1.5 text-rose-100 shadow-[0_0_18px_rgba(251,113,133,0.45)] backdrop-blur"
+            initial={{ opacity: 0, scale: 0.35, x: 0, y: 10 }}
+            animate={{ opacity: [0, 1, 0], scale: [0.35, 1.1, 0.7], x, y }}
+            transition={{ duration: 0.95, delay, ease: "easeOut" }}
+          >
+            <Heart className="h-3.5 w-3.5 fill-rose-200 text-rose-100" />
           </motion.span>
         );
       })}
