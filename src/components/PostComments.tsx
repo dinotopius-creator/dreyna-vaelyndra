@@ -56,6 +56,23 @@ export function PostComments({
       }, {}),
     [comments],
   );
+
+  const flatThread = useMemo(() => {
+    const rows: Comment[] = [];
+    const seen = new Set<string>();
+
+    const appendWithReplies = (comment: Comment) => {
+      if (seen.has(comment.id)) return;
+      seen.add(comment.id);
+      rows.push(comment);
+      (repliesByParent[comment.id] ?? []).forEach(appendWithReplies);
+    };
+
+    topLevelComments.forEach(appendWithReplies);
+    comments.forEach(appendWithReplies);
+
+    return rows;
+  }, [comments, repliesByParent, topLevelComments]);
   const mentionTargets = useMemo(() => {
     return buildMentionLookup([
       ...users.map((entry) => ({
@@ -193,11 +210,10 @@ export function PostComments({
     }
   }
 
-  function renderComment(comment: Comment, depth = 0) {
+  function renderComment(comment: Comment) {
     const canDelete =
       isQueen || user?.id === comment.authorId || user?.id === postAuthorId;
-    const replies = repliesByParent[comment.id] ?? [];
-    const isReply = depth > 0;
+    const isReply = Boolean(comment.parentId || comment.replyToAuthorName);
     const profile = profileOverrides[comment.authorId];
     const displayName = profile?.username || comment.authorName;
     const displayHandle = profile?.handle ?? comment.authorHandle ?? null;
@@ -214,8 +230,8 @@ export function PostComments({
       <li
         key={comment.id}
         id={`comment-${comment.id}`}
-        className={`flex min-w-0 items-start gap-2.5 sm:gap-3 ${
-          isReply ? "rounded-2xl bg-night-950/18 py-2 pl-2 pr-1 sm:pl-3" : ""
+        className={`flex w-full min-w-0 items-start gap-2.5 sm:gap-3 ${
+          isReply ? "rounded-2xl bg-night-950/18 py-2" : ""
         }`}
       >
         <Link to={profileHref(comment.authorId)} className="shrink-0">
@@ -339,18 +355,6 @@ export function PostComments({
               </button>
             )}
           </div>
-
-          {replies.length > 0 && (
-            <ul
-              className={`mt-3 space-y-2.5 ${
-                depth === 0
-                  ? "border-l border-royal-500/25 pl-3 sm:pl-4"
-                  : "pl-0"
-              }`}
-            >
-              {replies.map((reply) => renderComment(reply, depth + 1))}
-            </ul>
-          )}
         </div>
       </li>
     );
@@ -370,8 +374,8 @@ export function PostComments({
         </div>
       )}
 
-      <ul className="space-y-3">
-        {topLevelComments.map((comment) => renderComment(comment))}
+      <ul className="space-y-2.5 overflow-x-hidden">
+        {flatThread.map((comment) => renderComment(comment))}
       </ul>
 
       <form onSubmit={submit} className="mt-3 flex min-w-0 items-start gap-2.5 sm:gap-3">
