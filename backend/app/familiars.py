@@ -376,18 +376,6 @@ FAMILIAR_COSMETICS: List[FamiliarCosmeticDef] = [
         "accent": "Lueurs",
     },
     {
-        "id": "accessory-collier-lueur",
-        "slot": "accessory",
-        "name": "Collier de lueur",
-        "description": "Collier lumineux pour souligner le compagnon.",
-        "rarity": "rare",
-        "currency": "lueurs",
-        "price": 360,
-        "icon": "◇",
-        "color": "#67e8f9",
-        "accent": "Lueurs",
-    },
-    {
         "id": "accessory-mini-couronne",
         "slot": "accessory",
         "name": "Mini-couronne",
