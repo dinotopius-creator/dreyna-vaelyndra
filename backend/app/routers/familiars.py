@@ -51,7 +51,7 @@ user_router = APIRouter(prefix="/users", tags=["familiers"])
 
 AFFECTION_HEART_REQUIREMENTS = [10, 15, 20, 30, 45, 60, 80, 105, 135, 170]
 AFFECTION_HEART_REWARDS = [50, 75, 100, 150, 200, 275, 350, 450, 600, 800]
-ENCLOSURE_CLEANING_COOLDOWN_SECONDS = 20 * 60
+ENCLOSURE_CLEANING_COOLDOWN_SECONDS = 6 * 60 * 60
 
 
 def _session_dep() -> Session:
@@ -235,6 +235,7 @@ class OwnedFamiliarOut(BaseModel):
     heartRequirements: List[int] = []
     heartRewards: List[int] = []
     enclosureLastCleanedAt: Optional[str] = None
+    enclosureCooldownRemainingSeconds: int = 0
 
 
 class FamiliarAffectionOut(BaseModel):
@@ -452,6 +453,7 @@ def _owned_out(row: UserFamiliar) -> OwnedFamiliarOut:
         heartRequirements=affection.heartRequirements,
         heartRewards=affection.heartRewards,
         enclosureLastCleanedAt=row.enclosure_last_cleaned_at,
+        enclosureCooldownRemainingSeconds=_cleaning_cooldown_remaining(row),
     )
 
 
