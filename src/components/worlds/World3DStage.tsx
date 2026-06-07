@@ -101,7 +101,7 @@ const WORLD_DEPTH = 18;
 const SELF_ID = "__self__";
 const REMOTE_AVATAR_GRACE_MS = 8000;
 const MAX_PIXEL_RATIO = 1.65;
-const MOBILE_JOYSTICK_DEADZONE = 0.13;
+type MobileDirection = "up" | "down" | "left" | "right";
 
 interface AnalogInput {
   active: boolean;
@@ -114,32 +114,31 @@ interface CameraInput {
   pitchDelta: number;
 }
 
-function normalizeJoystickInput(rawX: number, rawY: number): AnalogInput {
-  const magnitude = THREE.MathUtils.clamp(Math.hypot(rawX, rawY), 0, 1);
-  if (magnitude < MOBILE_JOYSTICK_DEADZONE) {
-    return { active: false, x: 0, y: 0 };
-  }
-  const scaledMagnitude = (magnitude - MOBILE_JOYSTICK_DEADZONE) / (1 - MOBILE_JOYSTICK_DEADZONE);
-  return {
-    active: true,
-    x: (rawX / magnitude) * scaledMagnitude,
-    y: (rawY / magnitude) * scaledMagnitude,
-  };
+function digitalDirectionsToInput(directions: Set<MobileDirection>): AnalogInput {
+  let x = 0;
+  let y = 0;
+  if (directions.has("left")) x -= 1;
+  if (directions.has("right")) x += 1;
+  if (directions.has("up")) y -= 1;
+  if (directions.has("down")) y += 1;
+  if (x === 0 && y === 0) return { active: false, x: 0, y: 0 };
+  const length = Math.hypot(x, y);
+  return { active: true, x: x / length, y: y / length };
 }
 
-function addCameraRelativeJoystickMovement(
+function addCameraRelativeMobileMovement(
   movement: THREE.Vector3,
-  joystick: AnalogInput,
+  input: AnalogInput,
   playerYaw: number,
 ) {
-  if (!joystick.active) return;
+  if (!input.active) return;
 
-  // Touch convention, same as the desktop movement basis:
+  // Mobile arrows use the same basis as desktop controls:
   // up = forward, down = backward, left = left, right = right.
   const forward = new THREE.Vector3(Math.sin(playerYaw), 0, Math.cos(playerYaw));
   const right = new THREE.Vector3(Math.cos(playerYaw), 0, -Math.sin(playerYaw));
-  movement.addScaledVector(forward, -joystick.y);
-  movement.addScaledVector(right, joystick.x);
+  movement.addScaledVector(forward, -input.y);
+  movement.addScaledVector(right, input.x);
 }
 
 function pctToWorld(x: number, y: number) {
@@ -923,9 +922,7 @@ export function World3DStage({
   onTriggerHotspot,
 }: Props) {
   const hostRef = useRef<HTMLDivElement | null>(null);
-  const joystickPadRef = useRef<HTMLDivElement | null>(null);
-  const joystickPointerIdRef = useRef<number | null>(null);
-  const joystickInputRef = useRef<AnalogInput>({ active: false, x: 0, y: 0 });
+  const mobileDirectionsRef = useRef<Set<MobileDirection>>(new Set());
   const cameraInputRef = useRef<CameraInput>({ yawDelta: 0, pitchDelta: 0 });
   const playersRef = useRef(players);
   const lueursRef = useRef(lueurs);
@@ -944,55 +941,42 @@ export function World3DStage({
   onTriggerHotspotRef.current = onTriggerHotspot;
 
   const self = useMemo(() => players.find((player) => player.isSelf), [players]);
-  const [joystickUi, setJoystickUi] = useState({ active: false, x: 0, y: 0 });
+  const [pressedDirections, setPressedDirections] = useState<Set<MobileDirection>>(
+    () => new Set(),
+  );
   const [cameraTouchActive, setCameraTouchActive] = useState(false);
 
-  const updateJoystickFromPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const pad = joystickPadRef.current;
-    if (!pad) return;
-    const rect = pad.getBoundingClientRect();
-    const radius = Math.max(1, rect.width / 2);
-    const rawX = event.clientX - (rect.left + radius);
-    const rawY = event.clientY - (rect.top + radius);
-    const distance = Math.min(radius, Math.hypot(rawX, rawY));
-    const angle = Math.atan2(rawY, rawX);
-    const normalized = normalizeJoystickInput(
-      (Math.cos(angle) * distance) / radius,
-      (Math.sin(angle) * distance) / radius,
-    );
-    joystickInputRef.current = normalized;
-    setJoystickUi(normalized);
+  const syncPressedDirections = () => {
+    setPressedDirections(new Set(mobileDirectionsRef.current));
   };
 
-  const resetJoystick = () => {
-    joystickPointerIdRef.current = null;
-    joystickInputRef.current = { active: false, x: 0, y: 0 };
-    setJoystickUi({ active: false, x: 0, y: 0 });
-  };
-
-  const handleJoystickPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    joystickPointerIdRef.current = event.pointerId;
+  const pressDirection = (
+    direction: MobileDirection,
+    event: ReactPointerEvent<HTMLButtonElement>,
+  ) => {
     event.preventDefault();
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
-    updateJoystickFromPointer(event);
+    mobileDirectionsRef.current.add(direction);
+    syncPressedDirections();
   };
 
-  const handleJoystickPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (joystickPointerIdRef.current !== event.pointerId) return;
-    event.preventDefault();
-    event.stopPropagation();
-    updateJoystickFromPointer(event);
-  };
-
-  const handleJoystickPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (joystickPointerIdRef.current !== event.pointerId) return;
+  const releaseDirection = (
+    direction: MobileDirection,
+    event: ReactPointerEvent<HTMLButtonElement>,
+  ) => {
     event.preventDefault();
     event.stopPropagation();
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
-    resetJoystick();
+    mobileDirectionsRef.current.delete(direction);
+    syncPressedDirections();
+  };
+
+  const resetMobileDirections = () => {
+    mobileDirectionsRef.current.clear();
+    setPressedDirections(new Set());
   };
 
   useEffect(() => {
@@ -1061,8 +1045,7 @@ export function World3DStage({
     };
     const clearPressedKeys = () => {
       keyState.clear();
-      joystickInputRef.current = { active: false, x: 0, y: 0 };
-      setJoystickUi({ active: false, x: 0, y: 0 });
+      resetMobileDirections();
     };
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
@@ -1095,7 +1078,7 @@ export function World3DStage({
         event.pointerType === "pen" ||
         navigator.maxTouchPoints > 0 ||
         window.matchMedia("(pointer: coarse)").matches;
-      const isLeftCameraZone = event.clientX <= rect.left + rect.width * 0.56;
+      const isLeftCameraZone = event.clientX <= rect.left + rect.width * 0.62;
       if (isTouchLike && isLeftCameraZone) {
         cameraPointerId = event.pointerId;
         cameraLastX = event.clientX;
@@ -1116,8 +1099,8 @@ export function World3DStage({
       cameraLastX = event.clientX;
       cameraLastY = event.clientY;
       cameraDragDistance += Math.abs(dx) + Math.abs(dy);
-      cameraInputRef.current.yawDelta -= dx * 0.006;
-      cameraInputRef.current.pitchDelta += dy * 0.0035;
+      cameraInputRef.current.yawDelta -= dx * 0.0052;
+      cameraInputRef.current.pitchDelta += dy * 0.003;
       event.preventDefault();
     };
 
@@ -1223,12 +1206,11 @@ export function World3DStage({
           cameraInput.pitchDelta = 0;
         }
         const run = keyState.has("ShiftLeft") || keyState.has("ShiftRight");
-        const joystick = joystickInputRef.current;
-        const joystickPower = joystick.active
-          ? THREE.MathUtils.clamp(Math.hypot(joystick.x, joystick.y), 0, 1)
+        const mobileInput = digitalDirectionsToInput(mobileDirectionsRef.current);
+        const mobilePower = mobileInput.active
+          ? THREE.MathUtils.clamp(Math.hypot(mobileInput.x, mobileInput.y), 0, 1)
           : 0;
-        const analogSpeedScale = joystick.active ? Math.max(0.45, joystickPower) : 1;
-        const speed = (run || joystickPower > 0.86 ? 7.2 : 4.2) * analogSpeedScale * delta;
+        const speed = (run || mobilePower > 0.86 ? 7.2 : 4.2) * delta;
         const turnSpeed = 2.8 * delta;
         if (keyState.has("KeyA") || keyState.has("ArrowLeft")) yaw += turnSpeed;
         if (keyState.has("KeyD") || keyState.has("ArrowRight")) yaw -= turnSpeed;
@@ -1239,7 +1221,7 @@ export function World3DStage({
         if (keyState.has("KeyS") || keyState.has("ArrowDown")) movement.sub(forward);
         if (keyState.has("KeyQ")) movement.sub(right);
         if (keyState.has("KeyE")) movement.add(right);
-        addCameraRelativeJoystickMovement(movement, joystick, yaw);
+        addCameraRelativeMobileMovement(movement, mobileInput, yaw);
         if (movement.lengthSq() > 0) {
           if (movement.lengthSq() > 1) {
             movement.normalize();
@@ -1307,7 +1289,7 @@ export function World3DStage({
           cameraHeight,
           -Math.cos(yaw) * flatDistance,
         );
-        camera.position.lerp(cameraTarget.clone().add(offset), 0.08);
+        camera.position.lerp(cameraTarget.clone().add(offset), 0.11);
         camera.lookAt(cameraTarget);
       } else {
         camera.lookAt(0, 0.8, 0);
@@ -1361,43 +1343,48 @@ export function World3DStage({
         Tourne la caméra à gauche
       </div>
       <div
-        className={`pointer-events-none absolute bottom-[calc(1rem+env(safe-area-inset-bottom))] left-[calc(1rem+env(safe-area-inset-left))] top-[calc(3.6rem+env(safe-area-inset-top))] w-[48%] rounded-[28px] border border-white/10 bg-night-950/10 backdrop-blur-[1px] transition [@media(pointer:fine)]:hidden ${
-          cameraTouchActive ? "border-cyan-200/30 bg-cyan-200/8" : "opacity-55"
+        className={`pointer-events-none absolute bottom-[calc(1rem+env(safe-area-inset-bottom))] left-[calc(1rem+env(safe-area-inset-left))] z-20 rounded-full border px-3 py-2 text-[9px] uppercase tracking-[0.18em] backdrop-blur transition [@media(pointer:fine)]:hidden ${
+          cameraTouchActive
+            ? "border-cyan-200/45 bg-cyan-200/15 text-cyan-100"
+            : "border-white/10 bg-night-950/45 text-ivory/50"
         }`}
         aria-hidden
       >
-        <div className="absolute left-3 top-3 rounded-full border border-white/10 bg-night-950/60 px-3 py-1 text-[9px] uppercase tracking-[0.18em] text-ivory/55">
+        <span>
           Caméra
-        </div>
+        </span>
       </div>
       <div
-        ref={joystickPadRef}
-        className="absolute bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-[calc(1.25rem+env(safe-area-inset-right))] z-20 h-32 w-32 touch-none select-none rounded-full border border-white/15 bg-night-950/35 shadow-[0_18px_60px_rgba(0,0,0,0.35)] backdrop-blur-xl landscape:h-36 landscape:w-36 [@media(pointer:fine)]:hidden"
-        onPointerDown={handleJoystickPointerDown}
-        onPointerMove={handleJoystickPointerMove}
-        onPointerUp={handleJoystickPointerUp}
-        onPointerCancel={handleJoystickPointerUp}
-        onLostPointerCapture={resetJoystick}
-        aria-label="Joystick de déplacement"
-        role="application"
+        className="absolute bottom-[calc(1.1rem+env(safe-area-inset-bottom))] right-[calc(1rem+env(safe-area-inset-right))] z-20 grid touch-none select-none grid-cols-3 grid-rows-3 gap-2 rounded-[1.75rem] border border-white/12 bg-night-950/35 p-2 shadow-[0_18px_60px_rgba(0,0,0,0.35)] backdrop-blur-xl [@media(pointer:fine)]:hidden"
+        aria-label="Flèches de déplacement"
+        role="group"
       >
-        <div className="absolute inset-3 rounded-full border border-gold-200/12 bg-[radial-gradient(circle,rgba(250,204,21,0.10),rgba(15,23,42,0.26)_58%,rgba(15,23,42,0.58))]" />
-        <div className="absolute left-1/2 top-1/2 h-px w-20 -translate-x-1/2 bg-white/10" />
-        <div className="absolute left-1/2 top-1/2 h-20 w-px -translate-y-1/2 bg-white/10" />
-        <div
-          className={`absolute left-1/2 top-1/2 flex h-14 w-14 items-center justify-center rounded-full border transition ${
-            joystickUi.active
-              ? "border-gold-200/70 bg-gold-300/25 shadow-[0_0_28px_rgba(250,204,21,0.28)]"
-              : "border-white/18 bg-white/10"
-          }`}
-          style={{
-            transform: `translate(calc(-50% + ${joystickUi.x * 48}px), calc(-50% + ${
-              joystickUi.y * 48
-            }px))`,
-          }}
-        >
-          <span className="h-3 w-3 rounded-full bg-gold-100/90" />
-        </div>
+        {[
+          { direction: "up" as const, label: "Avancer", glyph: "▲", className: "col-start-2 row-start-1" },
+          { direction: "left" as const, label: "Aller à gauche", glyph: "◀", className: "col-start-1 row-start-2" },
+          { direction: "right" as const, label: "Aller à droite", glyph: "▶", className: "col-start-3 row-start-2" },
+          { direction: "down" as const, label: "Reculer", glyph: "▼", className: "col-start-2 row-start-3" },
+        ].map((control) => {
+          const pressed = pressedDirections.has(control.direction);
+          return (
+            <button
+              key={control.direction}
+              type="button"
+              aria-label={control.label}
+              className={`${control.className} flex h-12 w-12 items-center justify-center rounded-2xl border text-base font-bold transition landscape:h-14 landscape:w-14 ${
+                pressed
+                  ? "border-gold-200/75 bg-gold-300/30 text-gold-50 shadow-[0_0_24px_rgba(250,204,21,0.3)]"
+                  : "border-white/15 bg-white/10 text-ivory/80 active:border-gold-200/60 active:bg-gold-300/20"
+              }`}
+              onPointerDown={(event) => pressDirection(control.direction, event)}
+              onPointerUp={(event) => releaseDirection(control.direction, event)}
+              onPointerCancel={(event) => releaseDirection(control.direction, event)}
+              onLostPointerCapture={(event) => releaseDirection(control.direction, event)}
+            >
+              {control.glyph}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
