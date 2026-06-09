@@ -194,6 +194,51 @@ function Cuboid({
   );
 }
 
+function HumanoidPart({
+  width,
+  height,
+  color,
+  transform,
+  borderRadius = "999px",
+  clipPath,
+  opacity = 1,
+  children,
+}: {
+  width: number;
+  height: number;
+  color: string;
+  transform: string;
+  borderRadius?: string;
+  clipPath?: string;
+  opacity?: number;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: "50%",
+        top: "50%",
+        width,
+        height,
+        marginLeft: -width / 2,
+        marginTop: -height / 2,
+        transform,
+        transformStyle: "preserve-3d",
+        borderRadius,
+        clipPath,
+        opacity,
+        background: `radial-gradient(circle at 34% 18%, ${shade(color, 1.24)} 0 12%, ${color} 42%, ${shade(color, 0.74)} 100%)`,
+        border: "1px solid rgba(255,255,255,0.12)",
+        boxShadow:
+          "inset 7px 8px 16px rgba(255,255,255,0.14), inset -10px -14px 24px rgba(0,0,0,0.26), 0 14px 24px rgba(0,0,0,0.2)",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 function outfitPalette(theme: OutfitTheme) {
   switch (theme) {
     case "base":
@@ -264,7 +309,6 @@ export function Avatar3DModel({
     ? { shoulders: 76, waist: 38, torsoH: 88, armW: 14, legW: 16, hip: 46 }
     : { shoulders: 66, waist: 34, torsoH: 84, armW: 13, legW: 15, hip: 42 };
   const faceScale = config.faceShape === "sharp" ? 0.94 : 1.02;
-  const hairDepth = config.hairStyle === "fade" ? 44 : 58;
   const aspectClass =
     size === "square"
       ? "aspect-square"
@@ -331,271 +375,256 @@ export function Avatar3DModel({
           transform: `translate3d(0,0,0) scale(${layout.scale}) rotateX(${pitch}deg) rotateY(${yaw}deg)`,
         }}
       >
-        <Cuboid
-          width={44 * faceScale}
-          height={14}
-          depth={18}
+        <HumanoidPart
+          width={24}
+          height={22}
+          color={shade(config.skinTone, 0.96)}
+          transform="translate3d(0,-18px,8px)"
+          borderRadius="42% 42% 46% 46%"
+        />
+        <HumanoidPart
+          width={58 * faceScale}
+          height={70}
           color={config.skinTone}
-          transform="translate3d(0,-18px,0)"
+          transform="translate3d(0,-58px,22px)"
+          borderRadius="46% 46% 52% 52% / 42% 42% 58% 58%"
         />
-        <Cuboid
-          width={60 * faceScale}
-          height={60}
-          depth={44}
-          color={config.skinTone}
-          transform="translate3d(0,-58px,0)"
-        />
-        <Cuboid
-          width={60 * faceScale}
-          height={34}
-          depth={hairDepth}
-          color={config.hairColor}
-          transform="translate3d(0,-84px,0)"
-        />
-        <Cuboid
-          width={54 * faceScale}
+        <HumanoidPart
+          width={64 * faceScale}
           height={42}
-          depth={20}
           color={config.hairColor}
-          transform="translate3d(0,-66px,-24px)"
+          transform="translate3d(0,-90px,24px)"
+          borderRadius="52% 52% 24% 24% / 72% 72% 28% 28%"
+        />
+        <HumanoidPart
+          width={54 * faceScale}
+          height={48}
+          color={shade(config.hairColor, 0.86)}
+          transform="translate3d(0,-68px,-8px)"
+          borderRadius="44% 44% 58% 58%"
         />
         {config.hairStyle === "wave" && (
           <>
-            <Cuboid
+            <HumanoidPart
               width={18}
-              height={44}
-              depth={20}
+              height={48}
               color={config.hairColor}
-              transform="translate3d(-28px,-40px,-8px) rotateZ(8deg)"
+              transform="translate3d(-30px,-42px,10px) rotateZ(8deg)"
             />
-            <Cuboid
+            <HumanoidPart
               width={18}
-              height={44}
-              depth={20}
+              height={48}
               color={config.hairColor}
-              transform="translate3d(28px,-40px,-8px) rotateZ(-8deg)"
+              transform="translate3d(30px,-42px,10px) rotateZ(-8deg)"
             />
-            <Cuboid
+            <HumanoidPart
               width={52}
               height={58}
-              depth={18}
               color={config.hairColor}
-              transform="translate3d(0,-38px,-28px)"
+              transform="translate3d(0,-36px,-12px)"
+              borderRadius="45% 45% 64% 64%"
             />
           </>
         )}
         {config.hairStyle === "bob" && (
           <>
-            <Cuboid
-              width={20}
-              height={30}
-              depth={24}
+            <HumanoidPart
+              width={22}
+              height={38}
               color={config.hairColor}
-              transform="translate3d(-28px,-48px,0)"
+              transform="translate3d(-30px,-48px,12px)"
             />
-            <Cuboid
-              width={20}
-              height={30}
-              depth={24}
+            <HumanoidPart
+              width={22}
+              height={38}
               color={config.hairColor}
-              transform="translate3d(28px,-48px,0)"
+              transform="translate3d(30px,-48px,12px)"
             />
-            <Cuboid
+            <HumanoidPart
               width={56}
               height={34}
-              depth={18}
               color={config.hairColor}
-              transform="translate3d(0,-42px,-24px)"
+              transform="translate3d(0,-42px,-12px)"
+              borderRadius="45% 45% 58% 58%"
             />
           </>
         )}
         {config.hairStyle === "fade" && (
           <>
-            <Cuboid
+            <HumanoidPart
               width={52}
-              height={18}
-              depth={12}
+              height={22}
               color={config.hairColor}
-              transform="translate3d(0,-88px,-18px)"
+              transform="translate3d(0,-90px,10px)"
+              borderRadius="62% 62% 38% 38%"
             />
-            <Cuboid
+            <HumanoidPart
               width={48}
               height={22}
-              depth={12}
               color={shade(config.hairColor, 0.92)}
-              transform="translate3d(0,-62px,-20px)"
+              transform="translate3d(0,-62px,-10px)"
+              borderRadius="44% 44% 56% 56%"
             />
           </>
         )}
         {config.hairStyle === "braids" && (
           <>
-            <Cuboid
-              width={10}
-              height={60}
-              depth={12}
+            <HumanoidPart
+              width={12}
+              height={64}
               color={config.hairColor}
-              transform="translate3d(-30px,-22px,8px)"
+              transform="translate3d(-32px,-22px,18px)"
             />
-            <Cuboid
-              width={10}
-              height={60}
-              depth={12}
+            <HumanoidPart
+              width={12}
+              height={64}
               color={config.hairColor}
-              transform="translate3d(30px,-22px,8px)"
+              transform="translate3d(32px,-22px,18px)"
             />
-            <Cuboid
+            <HumanoidPart
               width={54}
               height={48}
-              depth={18}
               color={config.hairColor}
-              transform="translate3d(0,-52px,-26px)"
+              transform="translate3d(0,-52px,-12px)"
+              borderRadius="50% 50% 58% 58%"
             />
           </>
         )}
         {config.hairStyle === "ponytail" && (
           <>
-            <Cuboid
+            <HumanoidPart
               width={54}
               height={34}
-              depth={18}
               color={config.hairColor}
-              transform="translate3d(0,-70px,-16px)"
+              transform="translate3d(0,-72px,2px)"
+              borderRadius="52% 52% 38% 38%"
             />
-            <Cuboid
+            <HumanoidPart
               width={18}
               height={64}
-              depth={14}
               color={config.hairColor}
-              transform="translate3d(0,-24px,-32px)"
+              transform="translate3d(0,-24px,-22px)"
             />
           </>
         )}
         {config.hairStyle === "afro" && (
           <>
-            <Cuboid
+            <HumanoidPart
               width={76}
               height={74}
-              depth={64}
               color={config.hairColor}
-              transform="translate3d(0,-78px,-4px)"
+              transform="translate3d(0,-80px,4px)"
+              borderRadius="50%"
             />
-            <Cuboid
+            <HumanoidPart
               width={56}
               height={34}
-              depth={20}
               color={shade(config.hairColor, 0.92)}
-              transform="translate3d(0,-52px,-26px)"
+              transform="translate3d(0,-52px,-12px)"
+              borderRadius="48% 48% 58% 58%"
             />
           </>
         )}
         {config.hairStyle === "pixie" && (
           <>
-            <Cuboid
+            <HumanoidPart
               width={60}
               height={26}
-              depth={16}
               color={config.hairColor}
-              transform="translate3d(0,-84px,-12px)"
+              transform="translate3d(0,-86px,12px)"
+              borderRadius="60% 60% 34% 34%"
             />
-            <Cuboid
+            <HumanoidPart
               width={44}
               height={20}
-              depth={20}
               color={shade(config.hairColor, 0.9)}
-              transform="translate3d(6px,-60px,-22px) rotateZ(-8deg)"
+              transform="translate3d(6px,-62px,10px) rotateZ(-8deg)"
+              borderRadius="62% 36% 56% 44%"
             />
           </>
         )}
-        <Cuboid
-          width={10}
-          height={12}
-          depth={16}
-          color={shade(config.skinTone, 0.96)}
-          transform="translate3d(0,-52px,26px)"
-        />
-        <Cuboid
+        <HumanoidPart
           width={body.shoulders}
           height={body.torsoH}
-          depth={34}
           color={palette.top}
-          transform="translate3d(0,22px,0)"
+          transform="translate3d(0,20px,4px)"
+          borderRadius="42% 42% 34% 34% / 20% 20% 72% 72%"
+          clipPath="polygon(16% 0, 84% 0, 72% 100%, 28% 100%)"
         />
-        <Cuboid
-          width={body.hip}
-          height={26}
-          depth={30}
+        <HumanoidPart
+          width={body.waist + 22}
+          height={34}
           color={palette.accent}
-          transform="translate3d(0,70px,0)"
+          transform="translate3d(0,70px,6px)"
+          borderRadius="46% 46% 56% 56%"
         />
-        <Cuboid
-          width={body.legW}
-          height={64}
-          depth={20}
+        <HumanoidPart
+          width={body.legW + 8}
+          height={76}
           color={palette.bottom}
-          transform={`translate3d(-${body.legW / 1.05}px,118px,0)`}
+          transform={`translate3d(-${body.legW / 1.1}px,122px,4px) rotateZ(2deg)`}
+          borderRadius="48% 48% 42% 42% / 20% 20% 80% 80%"
         />
-        <Cuboid
-          width={body.legW}
-          height={64}
-          depth={20}
+        <HumanoidPart
+          width={body.legW + 8}
+          height={76}
           color={palette.bottom}
-          transform={`translate3d(${body.legW / 1.05}px,118px,0)`}
+          transform={`translate3d(${body.legW / 1.1}px,122px,4px) rotateZ(-2deg)`}
+          borderRadius="48% 48% 42% 42% / 20% 20% 80% 80%"
         />
-        <Cuboid
-          width={body.armW}
-          height={70}
-          depth={18}
+        <HumanoidPart
+          width={body.armW + 6}
+          height={74}
           color={palette.top}
-          transform={`translate3d(-${body.shoulders / 2 + 12}px,26px,0) rotateZ(5deg)`}
+          transform={`translate3d(-${body.shoulders / 2 + 9}px,24px,4px) rotateZ(9deg)`}
+          borderRadius="999px"
         />
-        <Cuboid
-          width={body.armW}
-          height={70}
-          depth={18}
+        <HumanoidPart
+          width={body.armW + 6}
+          height={74}
           color={palette.top}
-          transform={`translate3d(${body.shoulders / 2 + 12}px,26px,0) rotateZ(-5deg)`}
+          transform={`translate3d(${body.shoulders / 2 + 9}px,24px,4px) rotateZ(-9deg)`}
+          borderRadius="999px"
         />
-        <Cuboid
-          width={body.armW - 2}
+        <HumanoidPart
+          width={body.armW + 1}
           height={46}
-          depth={16}
           color={config.skinTone}
-          transform={`translate3d(-${body.shoulders / 2 + 16}px,78px,4px) rotateZ(4deg)`}
+          transform={`translate3d(-${body.shoulders / 2 + 15}px,80px,8px) rotateZ(6deg)`}
         />
-        <Cuboid
-          width={body.armW - 2}
+        <HumanoidPart
+          width={body.armW + 1}
           height={46}
-          depth={16}
           color={config.skinTone}
-          transform={`translate3d(${body.shoulders / 2 + 16}px,78px,4px) rotateZ(-4deg)`}
+          transform={`translate3d(${body.shoulders / 2 + 15}px,80px,8px) rotateZ(-6deg)`}
         />
-        <Cuboid
-          width={body.armW + 4}
-          height={16}
-          depth={18}
+        <HumanoidPart
+          width={body.armW + 8}
+          height={18}
           color={shade(config.skinTone, 0.98)}
-          transform={`translate3d(-${body.shoulders / 2 + 20}px,110px,6px) rotateZ(4deg)`}
+          transform={`translate3d(-${body.shoulders / 2 + 20}px,112px,10px) rotateZ(8deg)`}
+          borderRadius="52% 48% 46% 54%"
         />
-        <Cuboid
-          width={body.armW + 4}
-          height={16}
-          depth={18}
+        <HumanoidPart
+          width={body.armW + 8}
+          height={18}
           color={shade(config.skinTone, 0.98)}
-          transform={`translate3d(${body.shoulders / 2 + 20}px,110px,6px) rotateZ(-4deg)`}
+          transform={`translate3d(${body.shoulders / 2 + 20}px,112px,10px) rotateZ(-8deg)`}
+          borderRadius="48% 52% 54% 46%"
         />
-        <Cuboid
-          width={body.legW + 10}
-          height={12}
-          depth={34}
-          color={shade(palette.bottom, 0.78)}
-          transform={`translate3d(-${body.legW / 1.05}px,154px,8px)`}
+        <HumanoidPart
+          width={body.legW + 18}
+          height={14}
+          color={shade(palette.bottom, 0.72)}
+          transform={`translate3d(-${body.legW / 1.1}px,160px,14px)`}
+          borderRadius="52% 52% 48% 48%"
         />
-        <Cuboid
-          width={body.legW + 10}
-          height={12}
-          depth={34}
-          color={shade(palette.bottom, 0.78)}
-          transform={`translate3d(${body.legW / 1.05}px,154px,8px)`}
+        <HumanoidPart
+          width={body.legW + 18}
+          height={14}
+          color={shade(palette.bottom, 0.72)}
+          transform={`translate3d(${body.legW / 1.1}px,160px,14px)`}
+          borderRadius="52% 52% 48% 48%"
         />
         {outfit === "mystic" && (
           <Cuboid

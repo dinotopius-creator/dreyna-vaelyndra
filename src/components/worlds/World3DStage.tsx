@@ -229,7 +229,7 @@ function terrainHeightAt(x: number, z: number, district: World3DDistrictId) {
 
 function makeLimb(material: THREE.Material, height = 0.72) {
   const group = new THREE.Group();
-  const mesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.12, height, 4, 8), material);
+  const mesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.105, height, 8, 16), material);
   mesh.castShadow = true;
   mesh.position.y = -height / 2;
   group.add(mesh);
@@ -313,7 +313,7 @@ function createOutfitDetails(theme: OutfitTheme, trimColor: number) {
   }
   if (theme === "neon" || theme === "street" || theme === "frost") {
     [-0.43, 0.43].forEach((x) => {
-      const strip = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.74, 0.035), trim);
+      const strip = new THREE.Mesh(new THREE.CapsuleGeometry(0.028, 0.68, 4, 10), trim);
       strip.position.set(x, 1.62, 0.33);
       root.add(strip);
     });
