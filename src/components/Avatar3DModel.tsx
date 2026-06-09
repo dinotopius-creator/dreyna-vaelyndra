@@ -84,6 +84,9 @@ function Cuboid({
   className?: string;
   children?: React.ReactNode;
 }) {
+  const radius = Math.max(5, Math.min(width, height, depth) * 0.42);
+  const premiumFaceShadow =
+    "inset 0 1px 0 rgba(255,255,255,0.22), inset 0 -10px 20px rgba(0,0,0,0.18), 0 8px 18px rgba(0,0,0,0.16)";
   const front = { width, height, transform: `translateZ(${depth / 2}px)` };
   const back = {
     width,
@@ -119,6 +122,8 @@ function Cuboid({
     marginLeft: 0,
     marginTop: 0,
     border: "1px solid rgba(255,255,255,0.05)",
+    borderRadius: radius,
+    boxShadow: premiumFaceShadow,
     boxSizing: "border-box",
   };
   return (
@@ -136,7 +141,7 @@ function Cuboid({
           ...front,
           marginLeft: -width / 2,
           marginTop: -height / 2,
-          background: color,
+          background: `linear-gradient(135deg, ${shade(color, 1.16)}, ${color} 52%, ${shade(color, 0.78)})`,
         }}
       />
       <div
@@ -145,7 +150,7 @@ function Cuboid({
           ...back,
           marginLeft: -width / 2,
           marginTop: -height / 2,
-          background: shade(color, 0.72),
+          background: `linear-gradient(135deg, ${shade(color, 0.82)}, ${shade(color, 0.7)})`,
         }}
       />
       <div
@@ -154,7 +159,7 @@ function Cuboid({
           ...left,
           marginLeft: -depth / 2,
           marginTop: -height / 2,
-          background: shade(color, 0.78),
+          background: `linear-gradient(135deg, ${shade(color, 0.9)}, ${shade(color, 0.72)})`,
         }}
       />
       <div
@@ -163,7 +168,7 @@ function Cuboid({
           ...right,
           marginLeft: -depth / 2,
           marginTop: -height / 2,
-          background: shade(color, 0.88),
+          background: `linear-gradient(135deg, ${shade(color, 1.02)}, ${shade(color, 0.8)})`,
         }}
       />
       <div
@@ -172,7 +177,7 @@ function Cuboid({
           ...top,
           marginLeft: -width / 2,
           marginTop: -depth / 2,
-          background: shade(color, 1.08),
+          background: `linear-gradient(135deg, ${shade(color, 1.2)}, ${shade(color, 0.96)})`,
         }}
       />
       <div
@@ -256,8 +261,8 @@ export function Avatar3DModel({
 
   const palette = useMemo(() => outfitPalette(outfit), [outfit]);
   const body = config.bodyType === "homme"
-    ? { shoulders: 84, waist: 52, torsoH: 82, armW: 18, legW: 20, hip: 56 }
-    : { shoulders: 72, waist: 46, torsoH: 78, armW: 16, legW: 18, hip: 52 };
+    ? { shoulders: 76, waist: 38, torsoH: 88, armW: 14, legW: 16, hip: 46 }
+    : { shoulders: 66, waist: 34, torsoH: 84, armW: 13, legW: 15, hip: 42 };
   const faceScale = config.faceShape === "sharp" ? 0.94 : 1.02;
   const hairDepth = config.hairStyle === "fade" ? 44 : 58;
   const aspectClass =
@@ -523,18 +528,18 @@ export function Avatar3DModel({
           transform="translate3d(0,70px,0)"
         />
         <Cuboid
-          width={body.waist}
+          width={body.legW}
           height={64}
-          depth={24}
+          depth={20}
           color={palette.bottom}
-          transform={`translate3d(-${body.legW / 1.2}px,118px,0)`}
+          transform={`translate3d(-${body.legW / 1.05}px,118px,0)`}
         />
         <Cuboid
-          width={body.waist}
+          width={body.legW}
           height={64}
-          depth={24}
+          depth={20}
           color={palette.bottom}
-          transform={`translate3d(${body.legW / 1.2}px,118px,0)`}
+          transform={`translate3d(${body.legW / 1.05}px,118px,0)`}
         />
         <Cuboid
           width={body.armW}
@@ -563,6 +568,34 @@ export function Avatar3DModel({
           depth={16}
           color={config.skinTone}
           transform={`translate3d(${body.shoulders / 2 + 16}px,78px,4px) rotateZ(-4deg)`}
+        />
+        <Cuboid
+          width={body.armW + 4}
+          height={16}
+          depth={18}
+          color={shade(config.skinTone, 0.98)}
+          transform={`translate3d(-${body.shoulders / 2 + 20}px,110px,6px) rotateZ(4deg)`}
+        />
+        <Cuboid
+          width={body.armW + 4}
+          height={16}
+          depth={18}
+          color={shade(config.skinTone, 0.98)}
+          transform={`translate3d(${body.shoulders / 2 + 20}px,110px,6px) rotateZ(-4deg)`}
+        />
+        <Cuboid
+          width={body.legW + 10}
+          height={12}
+          depth={34}
+          color={shade(palette.bottom, 0.78)}
+          transform={`translate3d(-${body.legW / 1.05}px,154px,8px)`}
+        />
+        <Cuboid
+          width={body.legW + 10}
+          height={12}
+          depth={34}
+          color={shade(palette.bottom, 0.78)}
+          transform={`translate3d(${body.legW / 1.05}px,154px,8px)`}
         />
         {outfit === "mystic" && (
           <Cuboid
@@ -900,8 +933,8 @@ export function Avatar3DModel({
             width: 12,
             height: 12,
             borderRadius: "999px",
-            background: config.eyeColor,
-            boxShadow: "0 0 12px rgba(127,216,255,0.55)",
+            background: `radial-gradient(circle at 35% 30%, #ffffff 0 12%, ${config.eyeColor} 24%, ${shade(config.eyeColor, 0.54)} 100%)`,
+            boxShadow: "0 0 12px rgba(127,216,255,0.55), inset 0 -2px 4px rgba(0,0,0,0.28)",
             transform: "translate3d(-12px,0,24px)",
           }}
         />
@@ -913,9 +946,59 @@ export function Avatar3DModel({
             width: 12,
             height: 12,
             borderRadius: "999px",
-            background: config.eyeColor,
-            boxShadow: "0 0 12px rgba(127,216,255,0.55)",
+            background: `radial-gradient(circle at 35% 30%, #ffffff 0 12%, ${config.eyeColor} 24%, ${shade(config.eyeColor, 0.54)} 100%)`,
+            boxShadow: "0 0 12px rgba(127,216,255,0.55), inset 0 -2px 4px rgba(0,0,0,0.28)",
             transform: "translate3d(12px,0,24px)",
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            left: -22,
+            top: -72,
+            width: 18,
+            height: 4,
+            borderRadius: "999px",
+            background: shade(config.hairColor, 0.72),
+            transform: "translate3d(0,0,27px) rotateZ(-8deg)",
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            left: 4,
+            top: -72,
+            width: 18,
+            height: 4,
+            borderRadius: "999px",
+            background: shade(config.hairColor, 0.72),
+            transform: "translate3d(0,0,27px) rotateZ(8deg)",
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            left: -4,
+            top: -50,
+            width: 8,
+            height: 12,
+            borderRadius: "999px",
+            background: shade(config.skinTone, 0.86),
+            transform: "translate3d(0,0,28px)",
+            boxShadow: "inset 0 -2px 3px rgba(0,0,0,0.16)",
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            left: -15,
+            top: -42,
+            width: 30,
+            height: 14,
+            borderBottom: `3px solid ${shade(config.skinTone, 0.55)}`,
+            borderRadius: "0 0 999px 999px",
+            transform: "translate3d(0,0,29px)",
+            boxShadow: "0 5px 8px rgba(0,0,0,0.08)",
           }}
         />
       </div>
