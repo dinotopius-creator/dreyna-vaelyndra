@@ -14,6 +14,7 @@ import {
   type ShopCategory,
   type ShopItem,
 } from "../lib/avatarShop";
+import { compatibilityForItem } from "../lib/avatarHumanoidCompatibility";
 
 const CATEGORY_LABEL: Record<ShopCategory, string> = {
   style: "Style",
@@ -212,6 +213,7 @@ export function AvatarShop() {
     const slot = slotForCategory(item.category);
     const equipped = !!slot && equippedBySlot[slot] === item.id;
     const selected = selectedItem?.id === item.id;
+    const humanoidCompatibility = compatibilityForItem(item);
 
     return (
       <article
@@ -275,6 +277,18 @@ export function AvatarShop() {
         <p className="mt-1 min-h-10 text-[12px] leading-5 text-ivory/65">
           {item.description}
         </p>
+        {humanoidCompatibility && (
+          <span
+            className={clsx(
+              "mt-3 inline-flex w-fit rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]",
+              humanoidCompatibility.status === "classic-fallback"
+                ? "border-amber-300/30 bg-amber-500/10 text-amber-100"
+                : "border-emerald-300/25 bg-emerald-500/10 text-emerald-100",
+            )}
+          >
+            {humanoidCompatibility.label}
+          </span>
+        )}
 
         <div className="mt-4 flex items-center justify-between gap-2 border-t border-white/10 pt-3">
           <span
