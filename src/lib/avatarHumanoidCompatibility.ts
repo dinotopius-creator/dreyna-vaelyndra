@@ -5,8 +5,13 @@ export type HumanoidAttachmentSlot =
   | "face"
   | "neck"
   | "torso"
+  | "arms"
+  | "hands"
+  | "legs"
+  | "feet"
   | "back"
   | "aura"
+  | "full-outfit"
   | "classic";
 
 export type HumanoidCompatibilityStatus =
@@ -60,7 +65,7 @@ export function compatibilityForItem(item: ShopItem): HumanoidCompatibility | nu
   if (item.category === "outfit3d") {
     return {
       status: "adapted",
-      slot: "torso",
+      slot: "full-outfit",
       label: "Adapté à l'avatar humanoïde",
     };
   }
