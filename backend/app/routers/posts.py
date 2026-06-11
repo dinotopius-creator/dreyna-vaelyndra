@@ -89,7 +89,7 @@ def _is_queen(user_id: str) -> bool:
 # posts/commentaires d'autres utilisateurs). `queen` est conservé pour la
 # rétro-compatibilité avec les comptes seedés avant PR R ; `admin` est le
 # rôle actuel dans le panneau d'administration.
-_MOD_ROLES = {"admin", "queen"}
+_MOD_ROLES = {"architect", "admin", "queen"}
 
 
 def _is_moderator(session: Session, user_id: str) -> bool:
@@ -446,6 +446,8 @@ def _serialize_post(
         content=post.content,
         imageUrl=post.image_url,
         videoUrl=post.video_url,
+        postType=post.post_type or "standard",
+        officialLabel=post.official_label,
         createdAt=post.created_at,
         reactions=reactions,
         comments=[

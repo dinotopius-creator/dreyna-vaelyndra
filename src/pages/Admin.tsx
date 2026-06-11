@@ -29,6 +29,8 @@ import {
 import clsx from "clsx";
 import { AdminUsersTab } from "../components/AdminUsersTab";
 import { AdminReportsTab } from "../components/AdminReportsTab";
+import { AdminRequestsTab } from "../components/AdminRequestsTab";
+import { AdminOfficialEventsTab } from "../components/AdminOfficialEventsTab";
 import { adminReportsStats } from "../lib/adminApi";
 import {
   createArticleRemote,
@@ -44,25 +46,36 @@ const TABS = [
   { id: "products", label: "Boutique" },
   { id: "lives", label: "Lives" },
   { id: "users", label: "Utilisateurs" },
+  { id: "requests", label: "Demandes" },
+  { id: "events", label: "Événements" },
   { id: "reports", label: "Signalements" },
   { id: "moderation", label: "Modération" },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
 const ANIMATOR_TABS = [{ id: "articles", label: "Chroniques" }] as const;
+const STAFF_TABS = [
+  { id: "articles", label: "Chroniques" },
+  { id: "users", label: "Utilisateurs" },
+  { id: "requests", label: "Demandes" },
+  { id: "events", label: "Événements" },
+  { id: "reports", label: "Signalements" },
+  { id: "moderation", label: "Modération" },
+] as const;
 
 export function Admin() {
   const { user, backendMe } = useAuth();
   const { articles, products, lives, posts, orders, isLiveOn } = useStore();
   const [tab, setTab] = useState<TabId>("dashboard");
   const [openReportsCount, setOpenReportsCount] = useState<number>(0);
-  const isAdmin = backendMe?.role === "admin";
-  const tabs = isAdmin ? TABS : ANIMATOR_TABS;
+  const isArchitect = backendMe?.role === "architect";
+  const isStaff = backendMe?.role === "admin";
+  const tabs = isArchitect ? TABS : isStaff ? STAFF_TABS : ANIMATOR_TABS;
 
   // Charge le compteur de reports ouverts pour afficher le badge sur l'onglet.
   // Rafraîchi à chaque changement d'onglet pour rester à peu près à jour
   // sans polling lourd.
   useEffect(() => {
-    if (backendMe?.role !== "admin") return;
+    if (backendMe?.role !== "admin" && backendMe?.role !== "architect") return;
     adminReportsStats()
       .then((s) => setOpenReportsCount(s.byStatus.open ?? 0))
       .catch(() => {
@@ -83,10 +96,18 @@ export function Admin() {
         <div>
           <span className="tag-gold">
             <ShieldCheck className="h-3 w-3" />{" "}
-            {isAdmin ? "Espace admin" : "Espace animateur"}
+            {isArchitect
+              ? "Espace Architecte"
+              : isStaff
+                ? "Espace Administratrice"
+                : "Espace animateur"}
           </span>
           <h1 className="heading-gold mt-3 text-4xl md:text-5xl">
-            {isAdmin ? "Dashboard Administrateur" : "Gestion des chroniques"}
+            {isArchitect
+              ? "Dashboard Architecte"
+              : isStaff
+                ? "Gestion staff"
+                : "Gestion des chroniques"}
           </h1>
           <p className="mt-2 text-ivory/70">
             Publications, boutique, lives et modération — pilote toute la
@@ -146,13 +167,15 @@ export function Admin() {
           />
         )}
         {tab === "articles" && <ArticlesAdmin />}
-        {isAdmin && tab === "products" && <ProductsAdmin />}
-        {isAdmin && tab === "lives" && <LivesAdmin />}
-        {isAdmin && tab === "users" && <AdminUsersTab />}
-        {isAdmin && tab === "reports" && (
+        {isArchitect && tab === "products" && <ProductsAdmin />}
+        {isArchitect && tab === "lives" && <LivesAdmin />}
+        {(isArchitect || isStaff) && tab === "users" && <AdminUsersTab />}
+        {(isArchitect || isStaff) && tab === "requests" && <AdminRequestsTab />}
+        {(isArchitect || isStaff) && tab === "events" && <AdminOfficialEventsTab />}
+        {(isArchitect || isStaff) && tab === "reports" && (
           <AdminReportsTab onCountChange={setOpenReportsCount} />
         )}
-        {isAdmin && tab === "moderation" && <ModerationAdmin />}
+        {(isArchitect || isStaff) && tab === "moderation" && <ModerationAdmin />}
       </motion.div>
     </div>
   );

@@ -99,6 +99,10 @@ def _apply_migrations() -> None:
             ("reply_to_author_id", "TEXT"),
             ("reply_to_author_name", "TEXT"),
         ],
+        "post": [
+            ("post_type", "TEXT NOT NULL DEFAULT 'standard'"),
+            ("official_label", "TEXT"),
+        ],
         "catalogproduct": [
             ("lueurs", "INTEGER"),
         ],
@@ -173,6 +177,14 @@ def _apply_migrations() -> None:
         conn.exec_driver_sql(
             "CREATE UNIQUE INDEX IF NOT EXISTS worldpresence_world_user_unique "
             "ON worldpresence (world_id, user_id)"
+        )
+        conn.exec_driver_sql(
+            "CREATE INDEX IF NOT EXISTS adminrequest_status_created "
+            "ON adminrequest (status, created_at)"
+        )
+        conn.exec_driver_sql(
+            "CREATE INDEX IF NOT EXISTS adminrequest_target_status "
+            "ON adminrequest (target_id, status)"
         )
 
         # One-shot : reset du wallet de Dreyna (dé-Dreyna-isation du site).

@@ -34,6 +34,7 @@ import {
   adminAdjustWallet,
   adminBanUser,
   adminChangeEmail,
+  adminCreateRequest,
   adminDisableTotp,
   adminGetUser,
   adminHardDeleteUser,
@@ -106,11 +107,12 @@ export function AdminUserPanel({
   /** Slug sélectionné dans le select « grade manuel » (hors bouton Légende). */
   const [overrideDraft, setOverrideDraft] = useState<string>("");
 
-  const isAdmin = backendMe?.role === "admin";
+  const isStaff = backendMe?.role === "admin" || backendMe?.role === "architect";
+  const isArchitect = backendMe?.role === "architect";
   const isSelf = backendMe?.id === targetUserId;
 
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!isStaff) return;
     let cancelled = false;
     setLoading(true);
     adminGetUser(targetUserId)
@@ -130,13 +132,13 @@ export function AdminUserPanel({
     return () => {
       cancelled = true;
     };
-  }, [isAdmin, targetUserId]);
+  }, [isStaff, targetUserId]);
 
   // Charge le grade + override courant (endpoints publics, pas admin).
   // Permet au bouton "Sacrer Légende" de savoir s'il doit afficher
   // "Sacrer" ou "Révoquer" et de grîner le <select> si déjà Légende.
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!isStaff) return;
     let cancelled = false;
     apiGetProfile(targetUserId)
       .then((p) => {
@@ -153,9 +155,9 @@ export function AdminUserPanel({
     return () => {
       cancelled = true;
     };
-  }, [isAdmin, targetUserId]);
+  }, [isStaff, targetUserId]);
 
-  if (!isAdmin) return null;
+  if (!isStaff) return null;
 
   async function handleWalletAdjust(e: React.FormEvent) {
     e.preventDefault();
@@ -166,6 +168,37 @@ export function AdminUserPanel({
     }
     if (reason.trim().length < 2) {
       notify("Donne une raison (min. 2 caractères) pour le journal.", "error");
+      return;
+    }
+    if (!isArchitect) {
+      if (pot !== "lueurs" && pot !== "sylvins_promo") {
+        notify(
+          "Cette action doit être validée par l'Architecte. Utilise une demande de lueurs ou de Sylvins promo.",
+          "error",
+        );
+        return;
+      }
+      setLoading(true);
+      try {
+        await adminCreateRequest({
+          targetUserId,
+          actionType: pot === "lueurs" ? "grant_lueurs" : "grant_sylvins",
+          amount: Math.trunc(Math.abs(parsed)),
+          reason: reason.trim(),
+          context: "autre",
+        });
+        setDelta("");
+        setReason("");
+        notify("Demande envoyée à l'Architecte Vaelyndra pour validation.", "success");
+        onChange?.();
+      } catch (err) {
+        notify(
+          err instanceof Error ? err.message : "Échec de l'envoi de la demande.",
+          "error",
+        );
+      } finally {
+        setLoading(false);
+      }
       return;
     }
     setLoading(true);
@@ -195,6 +228,11 @@ export function AdminUserPanel({
 
   async function handleRoleChange() {
     if (!detail || roleDraft === detail.role) return;
+    if (!isArchitect) {
+      notify("Seul l'Architecte Vaelyndra peut modifier les rôles.", "error");
+      setRoleDraft(detail.role);
+      return;
+    }
     setLoading(true);
     try {
       const updated = await adminSetRole(targetUserId, roleDraft);

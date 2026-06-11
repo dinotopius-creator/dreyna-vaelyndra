@@ -82,6 +82,8 @@ class PostOut(BaseModel):
     content: str
     imageUrl: Optional[str] = None
     videoUrl: Optional[str] = None
+    postType: str = "standard"
+    officialLabel: Optional[str] = None
     createdAt: str
     reactions: Dict[str, List[str]] = {}
     comments: List[CommentOut] = []

@@ -7,6 +7,7 @@ import {
   Flame,
   Gift,
   Image,
+  Megaphone,
   MessageCircle,
   Pencil,
   Search,
@@ -19,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
+import clsx from "clsx";
 import { useStore } from "../contexts/StoreContext";
 import { useAuth } from "../contexts/AuthContext";
 import { useProfile } from "../contexts/ProfileContext";
@@ -672,7 +674,11 @@ export function Community() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.04 }}
-                  className="card-royal p-5"
+                  className={clsx(
+                    "card-royal p-5",
+                    post.postType === "official_event" &&
+                      "border-gold-300/45 bg-gradient-to-br from-gold-500/10 via-royal-900/45 to-night-950",
+                  )}
                 >
                 <header className="flex flex-wrap items-start gap-3">
                   <Link
@@ -727,6 +733,12 @@ export function Community() {
                     >
                       <Handle handle={displayHandle} />
                     </Link>
+                    {post.postType === "official_event" && (
+                      <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-gold-300/50 bg-gold-500/15 px-3 py-1 font-regal text-[10px] font-semibold uppercase tracking-[0.22em] text-gold-100">
+                        <Megaphone className="h-3.5 w-3.5" />
+                        {post.officialLabel ?? "Annonce officielle"}
+                      </div>
+                    )}
                     {editingPost === post.id ? (
                       <div className="mt-2">
                         <textarea
