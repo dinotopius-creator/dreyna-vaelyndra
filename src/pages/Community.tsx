@@ -63,9 +63,16 @@ export function Community() {
   const [videoUrl, setVideoUrl] = useState("");
   const [openComments, setOpenComments] = useState<Record<string, boolean>>({});
   const [brokenImages, setBrokenImages] = useState<Record<string, boolean>>({});
-  const [profileAvatars, setProfileAvatars] = useState<Record<string, string>>(
-    {},
-  );
+  const [profileDetails, setProfileDetails] = useState<
+    Record<
+      string,
+      {
+        avatarImageUrl?: string;
+        creatureId?: string | null;
+        role?: string | null;
+      }
+    >
+  >({});
   const [activityLeaderboard, setActivityLeaderboard] = useState<
     Array<{
       id: string;
@@ -113,31 +120,35 @@ export function Community() {
     activityLeaderboard.forEach((member) => {
       if (member.id) authorIds.add(member.id);
     });
-    const missingIds = Array.from(authorIds).filter(
-      (userId) => !profileAvatars[userId],
-    );
+    const missingIds = Array.from(authorIds).filter((userId) => !profileDetails[userId]);
     if (missingIds.length === 0) return;
 
     let cancelled = false;
     Promise.allSettled(missingIds.map((userId) => apiGetProfile(userId))).then(
       (results) => {
         if (cancelled) return;
-        const next: Record<string, string> = {};
+        const next: Record<
+          string,
+          { avatarImageUrl?: string; creatureId?: string | null; role?: string | null }
+        > = {};
         results.forEach((result, index) => {
           if (result.status !== "fulfilled") return;
-          const avatar = result.value.avatarImageUrl?.trim();
-          if (!avatar) return;
-          next[missingIds[index]] = avatar;
+          const profile = result.value;
+          next[missingIds[index]] = {
+            avatarImageUrl: profile.avatarImageUrl?.trim() || undefined,
+            creatureId: profile.creature?.id ?? null,
+            role: profile.role ?? null,
+          };
         });
         if (Object.keys(next).length === 0) return;
-        setProfileAvatars((current) => ({ ...current, ...next }));
+        setProfileDetails((current) => ({ ...current, ...next }));
       },
     );
 
     return () => {
       cancelled = true;
     };
-  }, [activityLeaderboard, posts, profileAvatars]);
+  }, [activityLeaderboard, posts, profileDetails]);
 
   useEffect(() => {
     let cancelled = false;
@@ -344,7 +355,7 @@ export function Community() {
                   >
                     <AvatarImage
                       candidates={[
-                        profileAvatars[post.authorId],
+                        profileDetails[post.authorId]?.avatarImageUrl,
                         usersById.get(post.authorId)?.avatar,
                         post.authorAvatar,
                       ]}
@@ -365,8 +376,15 @@ export function Community() {
                         const official = getOfficial(post.authorId);
                         return (
                           <UserBadges
-                            role={official?.role}
-                            creatureId={official?.creatureId}
+                            role={
+                              profileDetails[post.authorId]?.role ??
+                              (official?.role ?? null)
+                            }
+                            creatureId={
+                              usersById.get(post.authorId)?.creatureId ??
+                              profileDetails[post.authorId]?.creatureId ??
+                              official?.creatureId
+                            }
                           />
                         );
                       })()}
@@ -461,7 +479,7 @@ export function Community() {
                     postId={post.id}
                     comments={post.comments}
                     postAuthorId={post.authorId}
-                    avatarOverrides={profileAvatars}
+                    profileOverrides={profileDetails}
                   />
                 )}
               </motion.li>
@@ -519,6 +537,9 @@ export function Community() {
               Classement live du fil de la semaine. Il bouge en temps reel
               selon les posts, commentaires et reactions.
             </p>
+            <p className="mt-1 text-[10px] italic text-ivory/40">
+              Classement réservé aux membres de la communauté.
+            </p>
             <div className="mt-4 rounded-2xl border border-gold-400/20 bg-gold-500/10 p-3">
               <p className="flex items-center gap-2 text-sm font-medium text-gold-100">
                 <Gift className="h-4 w-4 text-gold-300" />
@@ -548,7 +569,7 @@ export function Community() {
                     </div>
                     <AvatarImage
                       candidates={[
-                        profileAvatars[member.id],
+                        profileDetails[member.id]?.avatarImageUrl,
                         member.avatarImageUrl,
                       ]}
                       fallbackSeed={member.id}
@@ -556,9 +577,22 @@ export function Community() {
                       className="h-10 w-10 rounded-full object-cover ring-2 ring-gold-400/35"
                     />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-display text-sm text-gold-200 group-hover:text-gold-100">
-                        {member.username}
-                      </p>
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        <p className="truncate font-display text-sm text-gold-200 group-hover:text-gold-100">
+                          {member.username}
+                        </p>
+                        <UserBadges
+                          role={
+                            profileDetails[member.id]?.role ??
+                            (getOfficial(member.id)?.role ?? null)
+                          }
+                          creatureId={
+                            usersById.get(member.id)?.creatureId ??
+                            profileDetails[member.id]?.creatureId ??
+                            getOfficial(member.id)?.creatureId
+                          }
+                        />
+                      </div>
                       <Handle handle={member.handle} size="xs" />
                       <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-ivory/55">
                         <span>

@@ -57,6 +57,32 @@ MOCK_COMMUNITY_USER_IDS = {
     "user-sylas",
     "user-thalia",
 }
+# Rôles à exclure du classement communauté (Top 5 les plus actifs).
+# Un utilisateur avec un rôle staff ou supérieur ne doit jamais apparaître
+# dans le Top 5 communauté, même s'il a beaucoup posté/commenté.
+STAFF_ROLES = {
+    "architect",
+    "architecte",
+    "developer",
+    "dev",
+    "dev_platform",
+    "platform_developer",
+    "super_admin",
+    "owner",
+    "founder",
+    "admin",
+    "administrator",
+    "administrateur",
+    "administratrice",
+    "moderator",
+    "modérateur",
+    "staff",
+    "support",
+    "internal",
+    "manager",
+    "operator",
+    "animator",
+}
 _UNSUPPORTED_IMAGE_PAGE_HOSTS = {
     "instagram.com",
     "tiktok.com",
@@ -194,7 +220,11 @@ def _community_activity_rows(
     profiles = {
         p.id: p
         for p in session.exec(select(UserProfile)).all()
-        if p.id not in MOCK_COMMUNITY_USER_IDS and p.banned_at is None
+        if (
+            p.id not in MOCK_COMMUNITY_USER_IDS
+            and p.banned_at is None
+            and (p.role or "user").lower() not in STAFF_ROLES
+        )
     }
 
     stats: dict[str, dict] = {}
@@ -203,6 +233,8 @@ def _community_activity_rows(
         if not user_id or user_id in MOCK_COMMUNITY_USER_IDS:
             return None
         profile = profiles.get(user_id)
+        if profile is None:
+            return None
         current = stats.get(user_id)
         if current is None:
             current = {

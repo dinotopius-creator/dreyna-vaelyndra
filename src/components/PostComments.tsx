@@ -5,26 +5,35 @@ import { useAuth } from "../contexts/AuthContext";
 import { useProfile } from "../contexts/ProfileContext";
 import { useStore } from "../contexts/StoreContext";
 import { useToast } from "../contexts/ToastContext";
+import { getOfficial } from "../data/officials";
 import { formatRelative } from "../lib/helpers";
 import { apiAddComment, apiDeleteComment } from "../lib/api";
 import type { Comment } from "../types";
 import { Handle } from "./Handle";
 import { ReportButton } from "./ReportButton";
 import { AvatarImage } from "./AvatarImage";
+import { UserBadges } from "./UserBadges";
 
 interface Props {
   postId: string;
   comments: Comment[];
   /** Auteur du post : seul lui (ou la reine) peut supprimer un commentaire. */
   postAuthorId: string;
-  avatarOverrides?: Record<string, string>;
+  profileOverrides?: Record<
+    string,
+    {
+      avatarImageUrl?: string;
+      creatureId?: string | null;
+      role?: string | null;
+    }
+  >;
 }
 
 export function PostComments({
   postId,
   comments,
   postAuthorId,
-  avatarOverrides = {},
+  profileOverrides = {},
 }: Props) {
   const { user, users, isQueen } = useAuth();
   const { refresh: refreshProfile } = useProfile();
@@ -89,7 +98,7 @@ export function PostComments({
               <Link to={profileHref(c.authorId)} className="shrink-0">
                 <AvatarImage
                   candidates={[
-                    avatarOverrides[c.authorId],
+                    profileOverrides[c.authorId]?.avatarImageUrl,
                     usersById.get(c.authorId)?.avatar,
                     c.authorAvatar,
                   ]}
@@ -106,6 +115,17 @@ export function PostComments({
                   >
                     {c.authorName}
                   </Link>
+                  <UserBadges
+                    role={
+                      profileOverrides[c.authorId]?.role ??
+                      (getOfficial(c.authorId)?.role ?? null)
+                    }
+                    creatureId={
+                      usersById.get(c.authorId)?.creatureId ??
+                      profileOverrides[c.authorId]?.creatureId ??
+                      getOfficial(c.authorId)?.creatureId
+                    }
+                  />
                   {/* PR S — @handle sous le pseudo du commentateur. */}
                   <Link
                     to={profileHref(c.authorId)}

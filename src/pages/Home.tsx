@@ -13,10 +13,12 @@ import {
 } from "lucide-react";
 import { useStore } from "../contexts/StoreContext";
 import { useAuth } from "../contexts/AuthContext";
-import { TOP_FANS } from "../data/mock";
 import { formatNumber } from "../lib/helpers";
 import { SectionHeading } from "../components/SectionHeading";
 import { RuneDivider } from "../components/RuneDivider";
+import { AvatarImage } from "../components/AvatarImage";
+import { useHomeCommunityMembers } from "../hooks/useHomeCommunityMembers";
+import type { HomeCommunityMember } from "../hooks/useHomeCommunityMembers";
 
 export function Home() {
   const { articles, products, isLiveOn } = useStore();
@@ -24,16 +26,24 @@ export function Home() {
   const isRegistered = Boolean(user);
   const featuredArticle = articles[0];
   const topProducts = products.filter((p) => p.featured).slice(0, 3);
+  const spotlightMembers = useHomeCommunityMembers(5);
 
   return (
     <div>
-      <Hero isLiveOn={isLiveOn} isRegistered={isRegistered} />
+      <Hero
+        isLiveOn={isLiveOn}
+        isRegistered={isRegistered}
+        spotlightMembers={spotlightMembers}
+      />
       <StatsBar />
       <RuneDivider label="✦ Les portes de Vaelyndra ✦" />
       <Pillars />
       <FeaturedArticle article={featuredArticle} />
       <ShopShowcase products={topProducts} />
-      <CommunityTeaser isRegistered={isRegistered} />
+      <CommunityTeaser
+        isRegistered={isRegistered}
+        spotlightMembers={spotlightMembers}
+      />
       <CTA isRegistered={isRegistered} />
     </div>
   );
@@ -42,9 +52,11 @@ export function Home() {
 function Hero({
   isLiveOn,
   isRegistered,
+  spotlightMembers,
 }: {
   isLiveOn: boolean;
   isRegistered: boolean;
+  spotlightMembers: HomeCommunityMember[];
 }) {
   return (
     <section className="relative overflow-hidden pb-24 pt-14 md:pt-24">
@@ -91,14 +103,29 @@ function Hero({
           </div>
           <div className="mt-10 flex items-center gap-6 text-sm text-ivory/60">
             <div className="flex -space-x-3">
-              {TOP_FANS.slice(0, 4).map((f) => (
-                <img
-                  key={f.name}
-                  src={f.avatar}
-                  alt={f.name}
-                  className="h-9 w-9 rounded-full border-2 border-night-900 object-cover"
-                />
-              ))}
+              {spotlightMembers.slice(0, 4).map((member) => {
+                const avatar = (
+                  <AvatarImage
+                    candidates={[member.avatar]}
+                    fallbackSeed={member.id}
+                    alt={member.name}
+                    className="h-9 w-9 rounded-full border-2 border-night-900 object-cover"
+                  />
+                );
+                if (!member.avatar?.trim()) {
+                  return <span key={member.id}>{avatar}</span>;
+                }
+                return (
+                  <Link
+                    key={member.id}
+                    to={`/u/${member.id}`}
+                    className="relative transition hover:z-10 hover:scale-105"
+                    title={member.name}
+                  >
+                    {avatar}
+                  </Link>
+                );
+              })}
             </div>
             <p>Chaque membre écrit sa propre page de Vaelyndra.</p>
           </div>
@@ -420,7 +447,13 @@ function ShopShowcase({
   );
 }
 
-function CommunityTeaser({ isRegistered }: { isRegistered: boolean }) {
+function CommunityTeaser({
+  isRegistered,
+  spotlightMembers,
+}: {
+  isRegistered: boolean;
+  spotlightMembers: HomeCommunityMember[];
+}) {
   return (
     <section className="mx-auto max-w-7xl px-6 pt-24">
       <div className="card-royal relative overflow-hidden p-10 md:p-14">
@@ -452,26 +485,33 @@ function CommunityTeaser({ isRegistered }: { isRegistered: boolean }) {
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            {TOP_FANS.map((f, i) => (
+            {spotlightMembers.map((member, i) => (
               <motion.div
-                key={f.name}
+                key={member.id}
                 initial={{ opacity: 0, y: 12 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.08 }}
-                className="flex items-center gap-3 rounded-2xl border border-royal-500/30 bg-night-800/60 p-3"
               >
-                <img
-                  src={f.avatar}
-                  alt={f.name}
-                  className="h-10 w-10 rounded-full object-cover ring-2 ring-gold-400/60"
-                />
-                <div>
-                  <p className="font-display text-sm text-gold-200">{f.name}</p>
-                  <p className="font-regal text-[10px] tracking-[0.22em] text-ivory/60">
-                    {formatNumber(f.score)} pts
-                  </p>
-                </div>
+                <Link
+                  to={`/u/${member.id}`}
+                  className="group flex items-center gap-3 rounded-2xl border border-royal-500/30 bg-night-800/60 p-3 transition hover:border-gold-400/50"
+                >
+                  <AvatarImage
+                    candidates={[member.avatar]}
+                    fallbackSeed={member.id}
+                    alt={member.name}
+                    className="h-10 w-10 rounded-full object-cover ring-2 ring-gold-400/60"
+                  />
+                  <div>
+                    <p className="font-display text-sm text-gold-200 group-hover:text-gold-100">
+                      {member.name}
+                    </p>
+                    <p className="font-regal text-[10px] tracking-[0.22em] text-ivory/60">
+                      {formatNumber(member.score)} pts
+                    </p>
+                  </div>
+                </Link>
               </motion.div>
             ))}
           </div>
