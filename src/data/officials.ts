@@ -8,7 +8,7 @@
 export interface Official {
   id: string;
   username: string;
-  role: "admin" | "animator";
+  role: "architect" | "admin" | "animator";
   creatureId: string;
 }
 
@@ -16,7 +16,7 @@ export const OFFICIALS: Official[] = [
   {
     id: "user-dreyna",
     username: "Dreyna",
-    role: "animator",
+    role: "admin",
     creatureId: "elfe",
   },
   {
@@ -28,7 +28,7 @@ export const OFFICIALS: Official[] = [
   {
     id: "user-roi-des-zems",
     username: "Le roi des zems💎",
-    role: "admin",
+    role: "architect",
     creatureId: "dragon",
   },
 ];

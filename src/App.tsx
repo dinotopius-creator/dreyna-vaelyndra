@@ -283,7 +283,7 @@ function AnimatedRoutes() {
               path="/admin"
               element={
                 <Guarded
-                  allowBackendRoles={["admin", "animator", "queen"]}
+                  allowBackendRoles={["architect", "admin", "animator", "queen"]}
                 >
                   <Admin />
                 </Guarded>

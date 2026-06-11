@@ -24,6 +24,8 @@ class Post(SQLModel, table=True):
     content: str
     image_url: Optional[str] = None
     video_url: Optional[str] = None
+    post_type: str = Field(default="standard", index=True, max_length=32)
+    official_label: Optional[str] = Field(default=None, max_length=64)
     created_at: str = Field(default_factory=_now_iso, index=True)
 
 
@@ -249,6 +251,34 @@ class AdminAuditLog(SQLModel, table=True):
     action: str = Field(index=True)
     details_json: str = Field(default="{}")
     created_at: str = Field(default_factory=_now_iso, index=True)
+
+
+class AdminRequest(SQLModel, table=True):
+    """Demande staff pour toute action sensible economie/inventaire.
+
+    Les administratrices peuvent creer ces demandes, mais seul le role
+    `architect` peut les valider/refuser. Le statut rend l'action idempotente :
+    une demande traitee ne peut pas etre appliquee une seconde fois.
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    requester_id: str = Field(index=True)
+    requester_username: str
+    requester_role: str = Field(index=True)
+    target_id: str = Field(index=True)
+    target_username: str
+    action_type: str = Field(index=True, max_length=48)
+    currency: Optional[str] = Field(default=None, max_length=24)
+    amount: int = Field(default=0)
+    item_id: Optional[str] = Field(default=None, max_length=128)
+    reason: str
+    context: str = Field(default="autre", max_length=64)
+    status: str = Field(default="pending", index=True, max_length=24)
+    reviewer_id: Optional[str] = Field(default=None, index=True)
+    reviewer_username: Optional[str] = None
+    reviewer_comment: Optional[str] = None
+    created_at: str = Field(default_factory=_now_iso, index=True)
+    reviewed_at: Optional[str] = None
 
 
 class Report(SQLModel, table=True):

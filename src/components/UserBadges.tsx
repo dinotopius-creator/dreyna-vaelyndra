@@ -1,11 +1,3 @@
-/**
- * Petits badges réutilisables pour afficher la créature et le rôle d'un user
- * (fil, profils, live, boutique, etc.). Usage groupé via `<UserBadges>` ou
- * individuel (`<CreatureBadge>`, `<RoleBadge>`).
- *
- * On prend volontairement du texte court façon "🐉 Dragon" pour tenir dans
- * les cards serrées, et une variante "dot" pour les listes denses.
- */
 import { getCreature } from "../data/creatures";
 
 export type BadgeSize = "sm" | "md";
@@ -13,7 +5,6 @@ export type BadgeSize = "sm" | "md";
 interface CreatureBadgeProps {
   creatureId: string | null | undefined;
   size?: BadgeSize;
-  /** Retire le fond/pilule, utile dans un en-tête déjà stylé. */
   bare?: boolean;
 }
 
@@ -60,40 +51,52 @@ interface RoleBadgeProps {
   size?: BadgeSize;
 }
 
-/**
- * Badge spécial :
- * - `admin` → 👑 Admin (gold shine)
- * - `animator` → 🎭 Animatrice officielle
- * - `user` ou inconnu → rien (on n'encombre pas l'UI)
- */
 export function RoleBadge({ role, size = "sm" }: RoleBadgeProps) {
   if (!role || role === "user") return null;
   const base =
     size === "md"
       ? "gap-1.5 px-2.5 py-1 text-xs"
       : "gap-1 px-2 py-0.5 text-[11px]";
+
+  if (role === "architect") {
+    return (
+      <span
+        className={`inline-flex items-center rounded-full border border-gold-300/80 bg-gradient-to-r from-gold-500/30 via-sky-500/20 to-fuchsia-500/25 ${base} font-semibold text-gold-100 shadow-[0_0_18px_rgba(214,170,70,0.35)]`}
+        title="Architecte Vaelyndra"
+        aria-label="Badge officiel Architecte Vaelyndra"
+      >
+        <span aria-hidden>♛</span>
+        <span>Architecte</span>
+      </span>
+    );
+  }
+
   if (role === "admin") {
     return (
       <span
-        className={`inline-flex items-center rounded-full border border-gold-400/60 bg-gold-500/15 ${base} font-semibold text-gold-200`}
-        title="Administrateur de la plateforme"
+        className={`inline-flex items-center rounded-full border border-emerald-300/70 bg-emerald-500/15 ${base} font-semibold text-emerald-100 shadow-[0_0_12px_rgba(16,185,129,0.22)]`}
+        title="Administratrice Vaelyndra"
+        aria-label="Badge officiel Administratrice Vaelyndra"
       >
-        <span aria-hidden>🛡️</span>
-        <span>Administrateur</span>
+        <span aria-hidden>✓</span>
+        <span>Administratrice</span>
       </span>
     );
   }
+
   if (role === "animator") {
     return (
       <span
-        className={`inline-flex items-center rounded-full border border-fuchsia-400/50 bg-fuchsia-500/15 ${base} font-semibold text-fuchsia-200`}
-        title="Animateur / animatrice officiel·le Vaelyndra"
+        className={`inline-flex items-center rounded-full border border-cyan-300/55 bg-cyan-500/12 ${base} font-semibold text-cyan-100`}
+        title="Créateur officiel Vaelyndra"
+        aria-label="Badge officiel Créateur Vaelyndra"
       >
-        <span aria-hidden>🎭</span>
-        <span>Animateur</span>
+        <span aria-hidden>✦</span>
+        <span>Officiel</span>
       </span>
     );
   }
+
   return null;
 }
 

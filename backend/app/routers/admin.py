@@ -23,7 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
-from ..auth.dependencies import require_admin
+from ..auth.dependencies import require_admin, require_architect
 from ..auth import emailer
 from ..auth.crypto import generate_opaque_token, hash_opaque_token
 from ..auth.models import (
@@ -36,6 +36,7 @@ from ..auth.models import (
 from ..db import get_session
 from ..models import (
     AdminAuditLog,
+    AdminRequest,
     Comment,
     DirectMessage,
     Follow,
@@ -75,7 +76,16 @@ WALLET_POTS: set[str] = {
     "earnings_promo",
     "earnings_paid",
 }
-ROLES: set[str] = {"user", "animator", "admin"}
+ROLES: set[str] = {"user", "animator", "admin", "architect"}
+ADMIN_REQUEST_ACTIONS: set[str] = {"grant_lueurs", "grant_sylvins", "grant_item"}
+ADMIN_REQUEST_CONTEXTS: set[str] = {
+    "recompense_evenement",
+    "correction",
+    "concours",
+    "animation_live",
+    "compensation",
+    "autre",
+}
 
 # Sentinel posé sur les lignes qui référencent un compte hard-delete
 # (`GiftLedger.sender_id`, `DirectMessage.sender_id` / `recipient_id`,
@@ -237,6 +247,54 @@ class AuditLogOut(BaseModel):
     createdAt: str
 
 
+class AdminRequestCreateIn(BaseModel):
+    target_user_id: str = Field(..., min_length=1, max_length=128)
+    action_type: str = Field(..., max_length=48)
+    amount: int = Field(default=0, ge=0, le=1_000_000)
+    item_id: Optional[str] = Field(default=None, max_length=128)
+    reason: str = Field(..., min_length=8, max_length=500)
+    context: str = Field(default="autre", max_length=64)
+
+
+class AdminRequestReviewIn(BaseModel):
+    comment: Optional[str] = Field(default=None, max_length=500)
+
+
+class OfficialEventCreateIn(BaseModel):
+    title: str = Field(..., min_length=3, max_length=120)
+    description: str = Field(..., min_length=8, max_length=1800)
+    event_date: Optional[str] = Field(default=None, max_length=80)
+    image_url: Optional[str] = Field(default=None, max_length=1024)
+
+
+class AdminRequestOut(BaseModel):
+    id: int
+    requesterId: str
+    requesterUsername: str
+    requesterRole: str
+    targetId: str
+    targetUsername: str
+    actionType: str
+    currency: Optional[str]
+    amount: int
+    itemId: Optional[str]
+    reason: str
+    context: str
+    status: str
+    reviewerId: Optional[str]
+    reviewerUsername: Optional[str]
+    reviewerComment: Optional[str]
+    createdAt: str
+    reviewedAt: Optional[str]
+
+
+class OfficialEventOut(BaseModel):
+    id: str
+    postType: str
+    officialLabel: str
+    createdAt: str
+
+
 def _audit_out(entry: AdminAuditLog) -> AuditLogOut:
     try:
         details = json.loads(entry.details_json) if entry.details_json else {}
@@ -251,6 +309,322 @@ def _audit_out(entry: AdminAuditLog) -> AuditLogOut:
         action=entry.action,
         details=details,
         createdAt=entry.created_at,
+    )
+
+
+def _admin_request_out(row: AdminRequest) -> AdminRequestOut:
+    return AdminRequestOut(
+        id=row.id or 0,
+        requesterId=row.requester_id,
+        requesterUsername=row.requester_username,
+        requesterRole=row.requester_role,
+        targetId=row.target_id,
+        targetUsername=row.target_username,
+        actionType=row.action_type,
+        currency=row.currency,
+        amount=row.amount,
+        itemId=row.item_id,
+        reason=row.reason,
+        context=row.context,
+        status=row.status,
+        reviewerId=row.reviewer_id,
+        reviewerUsername=row.reviewer_username,
+        reviewerComment=row.reviewer_comment,
+        createdAt=row.created_at,
+        reviewedAt=row.reviewed_at,
+    )
+
+
+def _normalize_admin_request(
+    body: AdminRequestCreateIn,
+) -> tuple[str, Optional[str], int, Optional[str]]:
+    action = body.action_type.strip()
+    if action not in ADMIN_REQUEST_ACTIONS:
+        raise HTTPException(
+            400,
+            f"Type de demande invalide. Valeurs : {sorted(ADMIN_REQUEST_ACTIONS)}.",
+        )
+    if body.context not in ADMIN_REQUEST_CONTEXTS:
+        raise HTTPException(
+            400,
+            f"Contexte invalide. Valeurs : {sorted(ADMIN_REQUEST_CONTEXTS)}.",
+        )
+    if action in {"grant_lueurs", "grant_sylvins"}:
+        if body.amount <= 0:
+            raise HTTPException(400, "Le montant doit être strictement positif.")
+        currency = "lueurs" if action == "grant_lueurs" else "sylvins_promo"
+        return action, currency, int(body.amount), None
+    item_id = (body.item_id or "").strip()
+    if not item_id:
+        raise HTTPException(400, "L'objet à donner est obligatoire.")
+    return action, None, 1, item_id
+
+
+def _apply_admin_request(
+    session: Session,
+    row: AdminRequest,
+    reviewer: UserProfile,
+) -> UserProfile:
+    target = _user_or_404(session, row.target_id)
+    if row.action_type == "grant_lueurs":
+        old_value = int(target.lueurs or 0)
+        target.lueurs = old_value + int(row.amount or 0)
+        details = {
+            "request_id": row.id,
+            "pot": "lueurs",
+            "delta": row.amount,
+            "old_value": old_value,
+            "new_value": target.lueurs,
+            "reason": row.reason,
+            "context": row.context,
+        }
+        _log_action(
+            session,
+            actor=reviewer,
+            target=target,
+            action="admin_request_wallet_grant",
+            details=details,
+        )
+    elif row.action_type == "grant_sylvins":
+        old_value = int(target.sylvins or 0)
+        target.sylvins = old_value + int(row.amount or 0)
+        details = {
+            "request_id": row.id,
+            "pot": "sylvins_promo",
+            "delta": row.amount,
+            "old_value": old_value,
+            "new_value": target.sylvins,
+            "reason": row.reason,
+            "context": row.context,
+        }
+        _log_action(
+            session,
+            actor=reviewer,
+            target=target,
+            action="admin_request_wallet_grant",
+            details=details,
+        )
+    elif row.action_type == "grant_item":
+        item_id = (row.item_id or "").strip()
+        if not item_id:
+            raise HTTPException(400, "Demande d'objet invalide.")
+        try:
+            inventory = json.loads(target.inventory_json or "[]")
+            if not isinstance(inventory, list):
+                inventory = []
+        except Exception:
+            inventory = []
+        already_owned = item_id in inventory
+        if not already_owned:
+            inventory.append(item_id)
+            target.inventory_json = json.dumps(inventory, ensure_ascii=False)
+        _log_action(
+            session,
+            actor=reviewer,
+            target=target,
+            action="admin_request_item_grant",
+            details={
+                "request_id": row.id,
+                "item_id": item_id,
+                "already_owned": already_owned,
+                "reason": row.reason,
+                "context": row.context,
+            },
+        )
+    else:
+        raise HTTPException(400, "Type de demande non supporté.")
+    target.updated_at = _now_iso()
+    session.add(target)
+    return target
+
+
+# --- Endpoints : demandes administratives ---------------------------------
+
+
+@router.post("/requests", response_model=AdminRequestOut, status_code=status.HTTP_201_CREATED)
+def create_admin_request(
+    body: AdminRequestCreateIn,
+    admin: UserProfile = Depends(require_admin),
+    session: Session = Depends(_session_dep),
+) -> AdminRequestOut:
+    action, currency, amount, item_id = _normalize_admin_request(body)
+    target = _user_or_404(session, body.target_user_id)
+    row = AdminRequest(
+        requester_id=admin.id,
+        requester_username=admin.username,
+        requester_role=admin.role or "user",
+        target_id=target.id,
+        target_username=target.username,
+        action_type=action,
+        currency=currency,
+        amount=amount,
+        item_id=item_id,
+        reason=body.reason.strip(),
+        context=body.context,
+        status="pending",
+    )
+    session.add(row)
+    _log_action(
+        session,
+        actor=admin,
+        target=target,
+        action="admin_request_created",
+        details={
+            "action_type": action,
+            "currency": currency,
+            "amount": amount,
+            "item_id": item_id,
+            "reason": body.reason.strip(),
+            "context": body.context,
+        },
+    )
+    session.commit()
+    session.refresh(row)
+    return _admin_request_out(row)
+
+
+@router.get("/requests", response_model=list[AdminRequestOut])
+def list_admin_requests(
+    status_filter: Optional[str] = Query(None, alias="status"),
+    target_id: Optional[str] = Query(None),
+    limit: int = Query(100, ge=1, le=500),
+    admin: UserProfile = Depends(require_admin),
+    session: Session = Depends(_session_dep),
+) -> list[AdminRequestOut]:
+    stmt = select(AdminRequest)
+    if admin.role != "architect":
+        stmt = stmt.where(AdminRequest.requester_id == admin.id)
+    if status_filter:
+        stmt = stmt.where(AdminRequest.status == status_filter)
+    if target_id:
+        stmt = stmt.where(AdminRequest.target_id == target_id)
+    rows = session.exec(stmt).all()
+    rows.sort(key=lambda row: row.created_at, reverse=True)
+    return [_admin_request_out(row) for row in rows[:limit]]
+
+
+@router.post("/requests/{request_id}/approve", response_model=AdminRequestOut)
+def approve_admin_request(
+    request_id: int,
+    body: AdminRequestReviewIn,
+    architect: UserProfile = Depends(require_architect),
+    session: Session = Depends(_session_dep),
+) -> AdminRequestOut:
+    row = session.get(AdminRequest, request_id)
+    if row is None:
+        raise HTTPException(404, "Demande administrative introuvable.")
+    if row.status != "pending":
+        raise HTTPException(409, "Cette demande a déjà été traitée.")
+    if row.requester_id == architect.id:
+        raise HTTPException(403, "Tu ne peux pas valider ta propre demande.")
+    target = _apply_admin_request(session, row, architect)
+    now = _now_iso()
+    row.status = "approved"
+    row.reviewer_id = architect.id
+    row.reviewer_username = architect.username
+    row.reviewer_comment = (body.comment or "").strip() or None
+    row.reviewed_at = now
+    session.add(row)
+    _log_action(
+        session,
+        actor=architect,
+        target=target,
+        action="admin_request_approved",
+        details={
+            "request_id": row.id,
+            "action_type": row.action_type,
+            "currency": row.currency,
+            "amount": row.amount,
+            "item_id": row.item_id,
+            "comment": row.reviewer_comment or "",
+        },
+    )
+    session.commit()
+    session.refresh(row)
+    return _admin_request_out(row)
+
+
+@router.post("/requests/{request_id}/reject", response_model=AdminRequestOut)
+def reject_admin_request(
+    request_id: int,
+    body: AdminRequestReviewIn,
+    architect: UserProfile = Depends(require_architect),
+    session: Session = Depends(_session_dep),
+) -> AdminRequestOut:
+    row = session.get(AdminRequest, request_id)
+    if row is None:
+        raise HTTPException(404, "Demande administrative introuvable.")
+    if row.status != "pending":
+        raise HTTPException(409, "Cette demande a déjà été traitée.")
+    target = _user_or_404(session, row.target_id)
+    now = _now_iso()
+    row.status = "rejected"
+    row.reviewer_id = architect.id
+    row.reviewer_username = architect.username
+    row.reviewer_comment = (body.comment or "").strip() or None
+    row.reviewed_at = now
+    session.add(row)
+    _log_action(
+        session,
+        actor=architect,
+        target=target,
+        action="admin_request_rejected",
+        details={
+            "request_id": row.id,
+            "action_type": row.action_type,
+            "comment": row.reviewer_comment or "",
+        },
+    )
+    session.commit()
+    session.refresh(row)
+    return _admin_request_out(row)
+
+
+# --- Endpoints : annonces officielles communautaires ----------------------
+
+
+@router.post(
+    "/community/events",
+    response_model=OfficialEventOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_official_event(
+    body: OfficialEventCreateIn,
+    admin: UserProfile = Depends(require_admin),
+    session: Session = Depends(_session_dep),
+) -> OfficialEventOut:
+    content_parts = [f"## {body.title.strip()}", body.description.strip()]
+    if body.event_date and body.event_date.strip():
+        content_parts.append(f"Date : {body.event_date.strip()}")
+    post = Post(
+        id=f"post-{uuid.uuid4().hex[:12]}",
+        author_id=admin.id,
+        author_name=admin.username,
+        author_avatar=admin.avatar_image_url or "",
+        content="\n\n".join(content_parts),
+        image_url=(body.image_url or "").strip() or None,
+        post_type="official_event",
+        official_label="Annonce officielle",
+    )
+    session.add(post)
+    _log_action(
+        session,
+        actor=admin,
+        target=admin,
+        action="official_event_created",
+        details={
+            "post_id": post.id,
+            "title": body.title.strip(),
+            "event_date": (body.event_date or "").strip(),
+        },
+    )
+    session.commit()
+    session.refresh(post)
+    return OfficialEventOut(
+        id=post.id,
+        postType=post.post_type,
+        officialLabel=post.official_label or "Annonce officielle",
+        createdAt=post.created_at,
     )
 
 
@@ -297,7 +671,7 @@ def get_user(
 def adjust_wallet(
     user_id: str,
     body: WalletAdjustIn,
-    admin: UserProfile = Depends(require_admin),
+    admin: UserProfile = Depends(require_architect),
     session: Session = Depends(_session_dep),
 ) -> AdminUserOut:
     if body.pot not in WALLET_POTS:
@@ -347,14 +721,14 @@ def adjust_wallet(
 def change_role(
     user_id: str,
     body: RoleChangeIn,
-    admin: UserProfile = Depends(require_admin),
+    admin: UserProfile = Depends(require_architect),
     session: Session = Depends(_session_dep),
 ) -> AdminUserOut:
     if body.role not in ROLES:
         raise HTTPException(400, f"Rôle invalide. Valeurs : {sorted(ROLES)}.")
     user = _user_or_404(session, user_id)
-    if user.id == admin.id and body.role != "admin":
-        raise HTTPException(400, "Tu ne peux pas retirer ton propre rôle admin.")
+    if user.id == admin.id and body.role != "architect":
+        raise HTTPException(400, "Tu ne peux pas retirer ton propre rôle Architecte.")
     old_role = user.role or "user"
     if old_role == body.role:
         return _admin_user_out(session, user)
@@ -381,7 +755,7 @@ def change_role(
 def admin_reset_password(
     user_id: str,
     body: PasswordResetIn,
-    admin: UserProfile = Depends(require_admin),
+    admin: UserProfile = Depends(require_architect),
     session: Session = Depends(_session_dep),
 ) -> AdminUserOut:
     """Permet à un admin de définir directement le mot de passe d'un user.
@@ -468,7 +842,7 @@ def _normalize_admin_email(email: str) -> str:
 def admin_change_email(
     user_id: str,
     body: AdminEmailChangeIn,
-    admin: UserProfile = Depends(require_admin),
+    admin: UserProfile = Depends(require_architect),
     session: Session = Depends(_session_dep),
 ) -> AdminUserOut:
     """Change l'email backend d'un user et renvoie une vérification.
@@ -547,7 +921,7 @@ def admin_change_email(
 def admin_disable_totp(
     user_id: str,
     body: Disable2FAIn,
-    admin: UserProfile = Depends(require_admin),
+    admin: UserProfile = Depends(require_architect),
     session: Session = Depends(_session_dep),
 ) -> AdminUserOut:
     """Désactive le 2FA (TOTP) d'un utilisateur.
@@ -842,7 +1216,7 @@ def _hard_delete_user(
 def hard_delete_user(
     user_id: str,
     body: HardDeleteIn,
-    admin: UserProfile = Depends(require_admin),
+    admin: UserProfile = Depends(require_architect),
     session: Session = Depends(_session_dep),
 ) -> HardDeleteOut:
     """Supprime définitivement un compte et toutes ses données liées.
@@ -1083,7 +1457,7 @@ def _list_unverified(
     response_model=CleanupUnverifiedOut,
 )
 def list_unverified_accounts(
-    admin: UserProfile = Depends(require_admin),
+    admin: UserProfile = Depends(require_architect),
     session: Session = Depends(_session_dep),
 ) -> CleanupUnverifiedOut:
     """Dry-run : liste les comptes qui seraient supprimés par POST
@@ -1111,7 +1485,7 @@ def list_unverified_accounts(
     response_model=CleanupUnverifiedOut,
 )
 def delete_unverified_accounts(
-    admin: UserProfile = Depends(require_admin),
+    admin: UserProfile = Depends(require_architect),
     session: Session = Depends(_session_dep),
 ) -> CleanupUnverifiedOut:
     """Supprime définitivement les comptes dont l'email n'a jamais été

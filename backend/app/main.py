@@ -121,7 +121,7 @@ OFFICIAL_ACCOUNTS: list[dict[str, str]] = [
     {
         "id": "user-dreyna",
         "username": "Dreyna",
-        "role": "animator",
+        "role": "admin",
         # Dreyna existe déjà ; pas d'avatar par défaut ici, on ne veut pas
         # écraser sa photo déjà configurée si elle en a une.
         "avatar_image_url": "",
@@ -143,7 +143,7 @@ OFFICIAL_ACCOUNTS: list[dict[str, str]] = [
     {
         "id": "user-roi-des-zems",
         "username": "Le roi des zems💎",
-        "role": "admin",
+        "role": "architect",
         "avatar_image_url": "https://api.dicebear.com/7.x/personas/svg?seed=RoiDesZems",
         "creature_id": "dragon",
         "email": "dinotopius@gmail.com",
@@ -167,7 +167,7 @@ def _seed_official_accounts() -> None:
         #    reste qu'un seul admin après migration (cf. transfert de
         #    Dreyna vers `Le roi des zems💎`).
         stale_admins = session.exec(
-            select(UserProfile).where(UserProfile.role == "admin")
+            select(UserProfile).where(UserProfile.role.in_(["admin", "architect"]))
         ).all()
         for p in stale_admins:
             if p.id not in official_ids:

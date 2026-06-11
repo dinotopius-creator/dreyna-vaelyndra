@@ -138,6 +138,8 @@ export interface CommunityPost {
   content: string;
   imageUrl?: string;
   videoUrl?: string;
+  postType?: "standard" | "official_event" | string;
+  officialLabel?: string | null;
   createdAt: string;
   reactions: Record<string, string[]>; // emoji -> userIds
   comments: Comment[];
