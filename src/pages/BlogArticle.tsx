@@ -66,7 +66,9 @@ export function BlogArticle() {
     {},
   );
   const canModerateComments =
-    backendMe?.role === "admin" || backendMe?.role === "animator";
+    backendMe?.role === "architect" ||
+    backendMe?.role === "admin" ||
+    backendMe?.role === "animator";
 
   async function submitComment(e: React.FormEvent) {
     e.preventDefault();

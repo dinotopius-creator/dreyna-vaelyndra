@@ -938,21 +938,23 @@ export async function apiGetStreamerLeaderboard(
 ): Promise<StreamerLeaderboardDto> {
   return (await request<StreamerLeaderboardDto>(
     `/streamers/leaderboard?week=${week}&limit=${limit}`,
+    { cache: "no-store" },
   )) as StreamerLeaderboardDto;
 }
 
 /**
  * Duos BFF : pour chaque streamer, son plus gros donateur.
- * `week="all"` par défaut (historique complet) — choix délibéré pour
- * refléter une relation stable plutôt qu'éphémère.
+ * `week="this"` par défaut : classement hebdomadaire, remis à zéro chaque
+ * lundi avec le classement streamer.
  */
 export async function apiGetBFFs(
-  week: "this" | "last" | "all" = "all",
+  week: "this" | "last" | "all" = "this",
   limit = 20,
 ): Promise<BFFEntryDto[]> {
   return (
     (await request<BFFEntryDto[]>(
       `/streamers/bff?week=${week}&limit=${limit}`,
+      { cache: "no-store" },
     )) ?? []
   );
 }

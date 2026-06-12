@@ -3,9 +3,9 @@
  *
  * Architecture :
  * - Source de vérité = backend (`/streamers/leaderboard`). On poll toutes
- *   les 10 s pour rester en ~quasi-temps-réel sans ouvrir une vraie
+ *   les 2 s pour rester en temps réel sans ouvrir une vraie
  *   WebSocket (cohérent avec le pattern `ProfileContext` de PR 1).
- * - Polling "this" = court (10 s). Polling "last" = désactivé (snapshot
+ * - Polling "this" = court (2 s). Polling "last" = désactivé (snapshot
  *   figé côté backend, pas la peine de retaper).
  * - Le parent peut passer un `refreshTick` pour forcer un refetch immédiat
  *   après un gift envoyé (mise à jour "instantanée" perçue).
@@ -73,7 +73,7 @@ const PODIUM_STYLES: Array<{
   },
 ];
 
-const POLL_MS_THIS = 10_000; // temps réel « doux » pour la semaine courante
+const POLL_MS_THIS = 2_000; // classement live : mise à jour très rapide
 const POLL_MS_LAST = 0; // snapshot figé — pas de polling
 
 export function StreamerLeaderboard({ refreshTick }: Props) {
@@ -96,8 +96,7 @@ export function StreamerLeaderboard({ refreshTick }: Props) {
           weekStart: data.weekStart,
         };
       }
-      const fallback = lastGoodByPeriodRef.current[target];
-      setEntries(nextEntries.length > 0 ? nextEntries : fallback?.entries ?? []);
+      setEntries(nextEntries);
       setWeekStart(data.weekStart);
       setError(null);
     } catch (err) {
@@ -125,9 +124,14 @@ export function StreamerLeaderboard({ refreshTick }: Props) {
       return () => window.clearTimeout(initialFetch);
     }
     const id = window.setInterval(() => void fetchNow(period), interval);
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") void fetchNow(period);
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
     return () => {
       window.clearTimeout(initialFetch);
       window.clearInterval(id);
+      document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, [period, fetchNow]);
 

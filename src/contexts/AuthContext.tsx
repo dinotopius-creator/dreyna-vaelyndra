@@ -221,7 +221,7 @@ function seedUsers(): StoredUser[] {
 
 /** Transforme un `AuthMe` backend en `StoredUser` local (pour sync cache). */
 function normalizeRole(role: string): StoredUser["role"] {
-  if (role === "admin" || role === "queen") return "queen";
+  if (role === "architect" || role === "admin" || role === "queen") return "queen";
   if (role === "knight") return "knight";
   return "elf";
 }
@@ -738,7 +738,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         bio: u.bio,
         creatureId: u.creatureId,
       })),
-      isQueen: user?.role === "queen",
+      isQueen: user?.role === "queen" || backendMe?.role === "architect",
       initializing,
       backendMe,
       login,

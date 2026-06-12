@@ -1,9 +1,9 @@
 /**
  * Module BFF (Best Friend Forever) — pour chaque streamer top, son plus
- * gros donateur de tous les temps.
+ * gros donateur de la semaine.
  *
  * Visuel : petite pile de duos "Streamer ❤️ Donateur · X Sylvins", le tout
- * cliquable vers les deux profils. Polling aligné sur le leaderboard (10 s
+ * cliquable vers les deux profils. Polling aligné sur le leaderboard (2 s
  * côté semaine en cours) pour que le duo se réarrange si un donateur est
  * dépassé en direct.
  */
@@ -16,19 +16,19 @@ import { formatNumber } from "../lib/helpers";
 
 interface Props {
   refreshTick?: number;
-  /** Période d'agrégation des donateurs. "all" par défaut (tout-temps). */
+  /** Période d'agrégation des donateurs. "this" par défaut (hebdomadaire). */
   period?: "this" | "last" | "all";
   /** Nombre max de duos à afficher. */
   limit?: number;
 }
 
-const POLL_MS = 10_000;
+const POLL_MS = 2_000;
 const FALLBACK_AVATAR =
   "https://api.dicebear.com/7.x/shapes/svg?seed=vaelyndra-bff";
 
 export function BFFModule({
   refreshTick,
-  period = "all",
+  period = "this",
   limit = 8,
 }: Props) {
   const [entries, setEntries] = useState<BFFEntryDto[]>([]);
@@ -51,10 +51,17 @@ export function BFFModule({
   useEffect(() => {
     setLoading(true);
     void fetchNow();
-    // "all" et "this" bougent en direct (nouveaux dons), "last" est figé
-    // mais on garde un polling léger pour la cohérence.
+    // "this" bouge en direct; "last" et "all" restent consultables si un
+    // parent les demande explicitement.
     const id = window.setInterval(() => void fetchNow(), POLL_MS);
-    return () => window.clearInterval(id);
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") void fetchNow();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, [fetchNow]);
 
   useEffect(() => {
@@ -68,7 +75,7 @@ export function BFFModule({
         <Heart className="h-4 w-4 text-rose-300" />
         <h3 className="font-display text-lg text-gold-200">BFF</h3>
         <span className="ml-auto font-regal text-[10px] tracking-[0.22em] text-ivory/45">
-          Duos de membres
+          Duos de la semaine
         </span>
       </header>
       <p className="mt-2 flex items-center gap-1.5 text-xs text-ivory/55">

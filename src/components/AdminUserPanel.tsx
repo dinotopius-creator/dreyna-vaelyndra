@@ -70,7 +70,8 @@ const POTS: WalletPot[] = [
 const ROLES: { id: string; label: string }[] = [
   { id: "user", label: "Membre (user)" },
   { id: "animator", label: "Animateur (🎭 badge)" },
-  { id: "admin", label: "Admin (🛡️ droits complets)" },
+  { id: "admin", label: "Administratrice (demandes + modération)" },
+  { id: "architect", label: "Architecte (accès extrême)" },
 ];
 
 export function AdminUserPanel({
@@ -109,6 +110,8 @@ export function AdminUserPanel({
 
   const isStaff = backendMe?.role === "admin" || backendMe?.role === "architect";
   const isArchitect = backendMe?.role === "architect";
+  const isProtectedStaffTarget =
+    detail?.role === "admin" || detail?.role === "architect";
   const isSelf = backendMe?.id === targetUserId;
 
   useEffect(() => {
@@ -365,8 +368,8 @@ export function AdminUserPanel({
       notify("Tu ne peux pas supprimer ton propre compte depuis ici.", "error");
       return;
     }
-    if (detail.role === "admin") {
-      notify("Retire d'abord le rôle admin avant de supprimer.", "error");
+    if (isProtectedStaffTarget) {
+      notify("Retire d'abord le rôle staff avant de supprimer.", "error");
       return;
     }
     if (deleteConfirm.trim() !== targetUsername) {
@@ -936,14 +939,14 @@ export function AdminUserPanel({
               className="rounded-full border border-rose-400/60 bg-rose-500/20 px-4 py-2 font-regal text-[11px] font-semibold tracking-[0.22em] text-rose-100 hover:bg-rose-500/40 disabled:opacity-40"
               onClick={handleBan}
               disabled={
-                loading || !banReason.trim() || detail?.role === "admin"
+                loading || !banReason.trim() || isProtectedStaffTarget
               }
             >
               <Ban className="mr-1 inline h-4 w-4" /> Bannir ce compte
             </button>
-            {detail?.role === "admin" && (
+            {isProtectedStaffTarget && (
               <p className="text-[11px] text-ivory/50">
-                Retire d'abord le rôle admin avant de bannir.
+                Retire d'abord le rôle staff avant de bannir.
               </p>
             )}
           </div>
@@ -951,7 +954,7 @@ export function AdminUserPanel({
       </div>
 
       {/* --- Suppression définitive ------------------------------------- */}
-      {!isSelf && detail?.role !== "admin" && (
+      {!isSelf && !isProtectedStaffTarget && (
         <div className="mt-6 space-y-3 rounded-lg border-2 border-rose-500/60 bg-rose-950/40 p-4">
           <h3 className="flex items-center gap-2 font-display text-sm text-rose-100">
             <Trash2 className="h-4 w-4 text-rose-300" /> Zone dangereuse

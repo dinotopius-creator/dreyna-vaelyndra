@@ -1,8 +1,8 @@
 """Endpoints admin pour la modération et la gestion économique (PR J + K).
 
-Tous les endpoints sont protégés par `require_admin` — seul un user dont
-`UserProfile.role == "admin"` peut y accéder. Le `roi-des-zems` est
-l'admin par défaut seedé au démarrage.
+Tous les endpoints sont protégés par `require_admin` — seuls les rôles
+`architect` et `admin` peuvent y accéder. L'Architecte garde les droits
+extrêmes et les actions sensibles définitives.
 
 Convention :
 - Chaque action (wallet_adjust, role_change, ban/unban) est loggée dans
@@ -979,8 +979,8 @@ def ban_user(
     user = _user_or_404(session, user_id)
     if user.id == admin.id:
         raise HTTPException(400, "Tu ne peux pas te bannir toi-même.")
-    if user.role == "admin":
-        raise HTTPException(400, "Impossible de bannir un autre admin. Retire-lui d'abord le rôle.")
+    if user.role in {"admin", "architect"}:
+        raise HTTPException(400, "Impossible de bannir un staff. Retire-lui d'abord le rôle.")
     # Refuse un second ban sur un compte déjà banni : sinon on écraserait
     # silencieusement `banned_at / banned_reason / banned_by` avec les valeurs
     # du second appel, ce qui ferait perdre la trace du ban initial côté
@@ -1236,10 +1236,10 @@ def hard_delete_user(
         raise HTTPException(400, "Compte officiel protégé — suppression interdite.")
     if user.id == admin.id:
         raise HTTPException(400, "Tu ne peux pas supprimer ton propre compte depuis ici.")
-    if user.role == "admin":
+    if user.role in {"admin", "architect"}:
         raise HTTPException(
             400,
-            "Impossible de supprimer un autre admin. Retire-lui d'abord le rôle.",
+            "Impossible de supprimer un staff. Retire-lui d'abord le rôle.",
         )
     if body.confirm_username.strip() != user.username:
         raise HTTPException(
@@ -1441,8 +1441,8 @@ def _list_unverified(
         if cred.user_id in PROTECTED_USER_IDS:
             continue
         profile = session.get(UserProfile, cred.user_id)
-        if profile is not None and (profile.role or "user") == "admin":
-            # Parachute : jamais de suppression d'un admin, même non vérifié.
+        if profile is not None and (profile.role or "user") in {"admin", "architect"}:
+            # Parachute : jamais de suppression d'un staff, même non vérifié.
             continue
         out.append((profile, cred))
     out.sort(
