@@ -14,7 +14,7 @@
  * l'UI en temps réel sans rafraîchir la page.
  */
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Navigate } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   Crown,
@@ -860,6 +860,7 @@ export function Compte() {
 
   // Legacy users (non-backend) : on leur montre un bandeau explicatif.
   const isLegacy = !backendMe;
+  const isArchitect = backendMe?.role === "architect";
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-16">
@@ -893,6 +894,41 @@ export function Compte() {
               migrerons automatiquement ton pseudo / créature.
             </span>
           </p>
+        </motion.div>
+      )}
+
+      {isArchitect && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mt-6 overflow-hidden rounded-2xl border border-gold-400/40 bg-gradient-to-br from-gold-500/20 via-royal-500/15 to-night-900 p-5 shadow-glow-gold"
+        >
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gold-shine text-night-950 shadow-glow-gold">
+                <ShieldCheck className="h-5 w-5" />
+              </span>
+              <div>
+                <p className="font-regal text-[10px] uppercase tracking-[0.24em] text-gold-200">
+                  Accès Architecte
+                </p>
+                <h2 className="mt-1 font-display text-2xl text-gold-100">
+                  Salle du Trône
+                </h2>
+                <p className="mt-1 max-w-xl text-sm text-ivory/70">
+                  Accès complet aux droits extrêmes : utilisateurs, demandes,
+                  rôles, modération, événements, boutique et outils sensibles.
+                </p>
+              </div>
+            </div>
+            <Link
+              to="/admin"
+              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-gold-shine px-5 py-3 font-regal text-[11px] font-semibold uppercase tracking-[0.22em] text-night-950 transition hover:brightness-110"
+            >
+              <Crown className="h-4 w-4" />
+              Entrer au Trône
+            </Link>
+          </div>
         </motion.div>
       )}
 
