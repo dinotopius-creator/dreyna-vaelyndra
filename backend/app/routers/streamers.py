@@ -31,6 +31,7 @@ from ..grades import (
     progress_in_current_grade,
 )
 from ..models import GiftLedger, UserProfile
+from ..ranking_eligibility import is_public_ranking_member
 from ..schemas import (
     BFFEntryOut,
     CreatureOut,
@@ -125,7 +126,7 @@ def _streamer_profile_fallback_entries(
     profiles = [
         p
         for p in session.exec(select(UserProfile)).all()
-        if p.banned_at is None
+        if is_public_ranking_member(p)
     ]
     ranked: list[tuple[UserProfile, int, int]] = []
     for profile in profiles:
@@ -195,7 +196,6 @@ def streamer_leaderboard(
         .where(GiftLedger.week_start_iso == start.isoformat())
         .group_by(GiftLedger.receiver_id)
         .order_by(func.sum(GiftLedger.amount).desc())
-        .limit(limit)
     )
     rows = session.exec(stmt).all()
 
@@ -208,25 +208,18 @@ def streamer_leaderboard(
         ).all()
         profiles = {p.id: p for p in profile_rows}
 
-    entries: list[StreamerLeaderboardEntryOut] = []
-    for rank, (receiver_id, total) in enumerate(rows, start=1):
+    eligible_rows: list[tuple[str, int]] = []
+    for receiver_id, total in rows:
         p = profiles.get(receiver_id)
-        if p is None:
-            # Le receiver a été supprimé — on garde la ligne avec un nom
-            # de fallback pour ne pas casser le classement.
-            entries.append(
-                StreamerLeaderboardEntryOut(
-                    rank=rank,
-                    userId=receiver_id,
-                    username="(compte supprimé)",
-                    avatarImageUrl="",
-                    totalSylvins=int(total or 0),
-                    creature=None,
-                    role="user",
-                    grade=None,
-                )
-            )
+        if not is_public_ranking_member(p):
             continue
+        eligible_rows.append((receiver_id, int(total or 0)))
+        if len(eligible_rows) >= limit:
+            break
+
+    entries: list[StreamerLeaderboardEntryOut] = []
+    for rank, (receiver_id, total) in enumerate(eligible_rows, start=1):
+        p = profiles[receiver_id]
         entries.append(
             StreamerLeaderboardEntryOut(
                 rank=rank,
@@ -234,7 +227,7 @@ def streamer_leaderboard(
                 username=p.username,
                 handle=p.handle,
                 avatarImageUrl=p.avatar_image_url,
-                totalSylvins=int(total or 0),
+                totalSylvins=total,
                 creature=_creature_dto(p.creature_id),
                 role=p.role or "user",
                 grade=_grade_out_for(p),
@@ -287,9 +280,24 @@ def streamers_bff(
 
     rows = session.exec(stmt).all()
 
-    # 2. Pour chaque receiver, garder le couple (sender, total) maximal.
+    user_ids: set[str] = set()
+    for receiver_id, sender_id, _total in rows:
+        user_ids.add(receiver_id)
+        user_ids.add(sender_id)
+    profile_rows = session.exec(
+        select(UserProfile).where(UserProfile.id.in_(list(user_ids)))
+    ).all()
+    profiles = {p.id: p for p in profile_rows}
+
+    # 2. Pour chaque receiver eligible, garder le couple (sender, total)
+    # maximal. Les classements publics ne montrent ni staff ni comptes
+    # internes, meme quand ils ont beaucoup donne ou recu.
     best_by_receiver: dict[str, tuple[str, int]] = {}
     for receiver_id, sender_id, total in rows:
+        if not is_public_ranking_member(profiles.get(receiver_id)):
+            continue
+        if not is_public_ranking_member(profiles.get(sender_id)):
+            continue
         amount = int(total or 0)
         current = best_by_receiver.get(receiver_id)
         if current is None or amount > current[1]:
@@ -305,28 +313,8 @@ def streamers_bff(
         reverse=True,
     )[:limit]
 
-    # 4. Hydrate les profils en 1 seule requête.
-    user_ids: set[str] = set()
-    for receiver_id, (sender_id, _amount) in pairs:
-        user_ids.add(receiver_id)
-        user_ids.add(sender_id)
-    profile_rows = session.exec(
-        select(UserProfile).where(UserProfile.id.in_(list(user_ids)))
-    ).all()
-    profiles = {p.id: p for p in profile_rows}
-
     def _mini(user_id: str) -> dict:
-        p = profiles.get(user_id)
-        if p is None:
-            return {
-                "id": user_id,
-                "username": "(compte supprimé)",
-                "handle": None,
-                "avatarImageUrl": "",
-                "creature": None,
-                "role": "user",
-                "grade": None,
-            }
+        p = profiles[user_id]
         return {
             "id": p.id,
             "username": p.username,
