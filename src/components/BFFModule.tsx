@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { Heart, Sparkles } from "lucide-react";
+import { Heart, ShieldCheck, Sparkles } from "lucide-react";
 import { apiGetBFFs, type BFFEntryDto } from "../lib/api";
 import { formatNumber } from "../lib/helpers";
 
@@ -68,9 +68,13 @@ export function BFFModule({
         <Heart className="h-4 w-4 text-rose-300" />
         <h3 className="font-display text-lg text-gold-200">BFF</h3>
         <span className="ml-auto font-regal text-[10px] tracking-[0.22em] text-ivory/45">
-          Duos sacrés
+          Duos de membres
         </span>
       </header>
+      <p className="mt-2 flex items-center gap-1.5 text-xs text-ivory/55">
+        <ShieldCheck className="h-3.5 w-3.5 text-emerald-200/80" />
+        Les duos BFF publics excluent les comptes staff et internes.
+      </p>
 
       {loading && entries.length === 0 && (
         <p className="mt-4 text-center text-sm text-ivory/55">
@@ -81,9 +85,9 @@ export function BFFModule({
         <p className="mt-4 text-center text-sm text-rose-300/80">{error}</p>
       )}
 
-      <ul className="mt-3 space-y-2">
+      <ul className="mt-3 space-y-2.5">
         <AnimatePresence initial={false}>
-          {entries.map((e) => (
+          {entries.map((e, index) => (
             <motion.li
               key={`${e.streamer.id}-${e.donor.id}`}
               layout
@@ -91,8 +95,17 @@ export function BFFModule({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ type: "spring", stiffness: 260, damping: 22 }}
-              className="rounded-xl border border-rose-400/20 bg-gradient-to-r from-rose-900/20 via-night-900/40 to-fuchsia-900/20 p-2.5"
+              className="rounded-2xl border border-rose-400/20 bg-gradient-to-r from-rose-900/25 via-night-900/55 to-fuchsia-900/20 p-3 shadow-[0_14px_34px_rgba(10,7,25,0.28)]"
             >
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <span className="rounded-full border border-gold-400/25 bg-gold-500/10 px-2 py-0.5 font-regal text-[10px] tracking-[0.18em] text-gold-100/85">
+                  Duo #{index + 1}
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full border border-gold-400/30 bg-night-900/50 px-2 py-0.5 text-[10px] font-regal tracking-[0.16em] text-gold-100">
+                  <Sparkles className="h-3 w-3" />
+                  {formatNumber(e.totalSylvins)} offerts
+                </span>
+              </div>
               <div className="flex items-center gap-2">
                 <Link
                   to={`/u/${e.streamer.id}`}
@@ -110,7 +123,7 @@ export function BFFModule({
                 </Link>
                 <motion.span
                   aria-hidden
-                  className="text-rose-300"
+                  className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-rose-300/30 bg-rose-500/10 text-rose-300"
                   animate={{ scale: [1, 1.15, 1] }}
                   transition={{ duration: 1.8, repeat: Infinity }}
                 >
@@ -130,12 +143,6 @@ export function BFFModule({
                     loading="lazy"
                   />
                 </Link>
-              </div>
-              <div className="mt-1.5 text-center">
-                <span className="inline-flex items-center gap-1 rounded-full border border-gold-400/30 bg-night-900/50 px-2 py-0.5 text-[10px] font-regal tracking-[0.16em] text-gold-100">
-                  <Sparkles className="h-3 w-3" />
-                  {formatNumber(e.totalSylvins)} offerts
-                </span>
               </div>
             </motion.li>
           ))}

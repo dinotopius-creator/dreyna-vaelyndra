@@ -32,6 +32,7 @@ from ..models import (  # noqa: E402
     Reaction,
     UserProfile,
 )
+from ..ranking_eligibility import is_public_ranking_member  # noqa: E402
 from ..schemas import (  # noqa: E402
     CommentCreate,
     CommunityActivityEntryOut,
@@ -54,30 +55,6 @@ from .users import _grade_out  # noqa: E402
 # Sylvins reçus (=engagement) et des nouveaux liens d'âme.
 XP_PER_POST = 10
 COMMUNITY_REWARD_BY_RANK = {1: 600, 2: 450, 3: 300}
-COMMUNITY_RANKING_EXCLUDED_ROLES = {
-    "admin",
-    "administrateur",
-    "administratrice",
-    "administrator",
-    "animator",
-    "architect",
-    "architecte",
-    "dev",
-    "dev_platform",
-    "developer",
-    "founder",
-    "internal",
-    "manager",
-    "moderator",
-    "modérateur",
-    "operator",
-    "owner",
-    "platform_developer",
-    "queen",
-    "staff",
-    "super_admin",
-    "support",
-}
 MOCK_COMMUNITY_USER_IDS = {
     "user-lyria",
     "user-caelum",
@@ -218,11 +195,9 @@ def _week_start(date: datetime | None = None) -> datetime:
 
 def _is_community_ranking_eligible(profile: UserProfile) -> bool:
     """Le Top 5 communauté est réservé aux membres sans permissions staff."""
-    role = (profile.role or "user").strip().lower()
     return (
         profile.id not in MOCK_COMMUNITY_USER_IDS
-        and profile.banned_at is None
-        and role not in COMMUNITY_RANKING_EXCLUDED_ROLES
+        and is_public_ranking_member(profile)
     )
 
 

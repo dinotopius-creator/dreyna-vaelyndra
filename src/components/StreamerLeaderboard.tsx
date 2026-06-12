@@ -20,14 +20,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { Crown, Sparkles, Trophy } from "lucide-react";
+import { ShieldCheck, Sparkles, Trophy } from "lucide-react";
 import {
   apiGetStreamerLeaderboard,
   type StreamerLeaderboardEntryDto,
 } from "../lib/api";
 import { formatNumber } from "../lib/helpers";
 import { formatWeekShort } from "../lib/weeklyRanking";
-import { CreatureBadge, RoleBadge } from "./UserBadges";
+import { CreatureBadge } from "./UserBadges";
 import StreamerGradeBadge from "./StreamerGradeBadge";
 import { WeeklyRankingCountdown } from "./WeeklyRankingCountdown";
 
@@ -154,6 +154,10 @@ export function StreamerLeaderboard({ refreshTick }: Props) {
           </span>
         )}
       </header>
+      <p className="mt-2 flex items-center gap-1.5 text-xs text-ivory/55">
+        <ShieldCheck className="h-3.5 w-3.5 text-emerald-200/80" />
+        Classement réservé aux membres de la communauté.
+      </p>
 
       <div
         className="mt-3 inline-flex rounded-full border border-gold-400/30 bg-night-900/60 p-1"
@@ -204,7 +208,7 @@ export function StreamerLeaderboard({ refreshTick }: Props) {
 
       {/* Podium Top 1/2/3 */}
       {podium.length > 0 && (
-        <ol className="mt-5 grid grid-cols-3 items-end gap-2">
+        <ol className="mt-5 grid grid-cols-3 items-end gap-2 rounded-3xl border border-gold-400/15 bg-gradient-to-b from-gold-500/10 via-night-900/20 to-night-950/40 p-3">
           {[1, 0, 2].map((idx) => {
             const entry = podium[idx];
             if (!entry) return <li key={`ghost-${idx}`} />;
@@ -274,9 +278,9 @@ export function StreamerLeaderboard({ refreshTick }: Props) {
               >
                 <Link
                   to={`/u/${entry.userId}`}
-                  className="flex items-center gap-3 rounded-lg border border-transparent bg-night-900/30 px-2 py-1.5 text-sm transition hover:border-gold-400/40 hover:bg-night-900/60"
+                  className="flex items-center gap-3 rounded-2xl border border-white/5 bg-night-900/35 px-2.5 py-2 text-sm transition hover:border-gold-400/40 hover:bg-night-900/65"
                 >
-                  <span className="w-7 shrink-0 text-center font-display text-xs text-ivory/55">
+                  <span className="w-8 shrink-0 rounded-full border border-gold-400/20 bg-gold-500/10 py-1 text-center font-display text-xs text-gold-100/80">
                     #{entry.rank}
                   </span>
                   <img
@@ -290,9 +294,6 @@ export function StreamerLeaderboard({ refreshTick }: Props) {
                       <p className="truncate font-display text-xs text-ivory/90">
                         {entry.username}
                       </p>
-                      {entry.role === "admin" && (
-                        <Crown className="h-3 w-3 shrink-0 text-gold-300" />
-                      )}
                     </div>
                     <div className="mt-0.5 flex flex-wrap items-center gap-1">
                       {entry.creature && (
@@ -300,9 +301,6 @@ export function StreamerLeaderboard({ refreshTick }: Props) {
                           creatureId={entry.creature.id}
                           size="sm"
                         />
-                      )}
-                      {entry.role === "animator" && (
-                        <RoleBadge role={entry.role} size="sm" />
                       )}
                       {entry.grade && (
                         <StreamerGradeBadge grade={entry.grade} size="sm" />
