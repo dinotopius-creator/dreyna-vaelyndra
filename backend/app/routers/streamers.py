@@ -19,7 +19,7 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 from typing import List, Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy import func
 from sqlmodel import Session, select
 
@@ -118,59 +118,11 @@ def _pick_week_start(week: str) -> tuple[date, date]:
     return this_week, this_week
 
 
-def _streamer_profile_fallback_entries(
-    session: Session,
-    limit: int,
-) -> list[StreamerLeaderboardEntryOut]:
-    """Classement de secours base sur les vrais profils actifs."""
-    profiles = [
-        p
-        for p in session.exec(select(UserProfile)).all()
-        if is_public_ranking_member(p)
-    ]
-    ranked: list[tuple[UserProfile, int, int]] = []
-    for profile in profiles:
-        total_sylvins = int(profile.sylvins_earnings or 0) + int(
-            profile.earnings_paid or 0
-        )
-        streamer_xp = int(profile.streamer_xp or 0)
-        if total_sylvins <= 0 and streamer_xp <= 0:
-            continue
-        ranked.append((profile, total_sylvins, streamer_xp))
-
-    ranked.sort(
-        key=lambda item: (
-            -item[1],
-            -item[2],
-            item[0].username.lower(),
-        )
-    )
-
-    entries: list[StreamerLeaderboardEntryOut] = []
-    for rank, (profile, total_sylvins, _streamer_xp) in enumerate(
-        ranked[:limit],
-        start=1,
-    ):
-        entries.append(
-            StreamerLeaderboardEntryOut(
-                rank=rank,
-                userId=profile.id,
-                username=profile.username,
-                handle=profile.handle,
-                avatarImageUrl=profile.avatar_image_url,
-                totalSylvins=total_sylvins,
-                creature=_creature_dto(profile.creature_id),
-                role=profile.role or "user",
-                grade=_grade_out_for(profile),
-            )
-        )
-    return entries
-
-
 @router.get("/leaderboard", response_model=StreamerLeaderboardOut)
 def streamer_leaderboard(
     week: Literal["this", "last"] = Query("this"),
     limit: int = Query(50, ge=1, le=100),
+    response: Response = None,
     session: Session = Depends(_session_dep),
 ) -> StreamerLeaderboardOut:
     """Classement des streamers par Sylvins reçus sur la semaine demandée.
@@ -184,6 +136,8 @@ def streamer_leaderboard(
     sans aucun don sur la période ne sont pas inclus (performance :
     seulement les receivers présents dans le ledger de la semaine).
     """
+    if response is not None:
+        response.headers["Cache-Control"] = "no-store, max-age=0"
     start, _ = _pick_week_start(week)
     end = start + timedelta(days=7)
 
@@ -238,9 +192,6 @@ def streamer_leaderboard(
     # l'intervalle affiché [weekStart, weekEnd] soit intuitivement
     # "lundi → dimanche". NB : `date - timedelta(seconds=1)` est un no-op
     # (timedelta.days == 0), il faut bien passer par `days=1`.
-    if not entries and week == "this":
-        entries = _streamer_profile_fallback_entries(session, limit)
-
     return StreamerLeaderboardOut(
         week=week,
         weekStart=start.isoformat(),
@@ -251,22 +202,24 @@ def streamer_leaderboard(
 
 @router.get("/bff", response_model=List[BFFEntryOut])
 def streamers_bff(
-    week: Literal["this", "last", "all"] = Query("all"),
+    week: Literal["this", "last", "all"] = Query("this"),
     limit: int = Query(20, ge=1, le=100),
+    response: Response = None,
     session: Session = Depends(_session_dep),
 ) -> List[BFFEntryOut]:
     """Liste les duos BFF : pour chaque streamer top, son plus gros donateur.
 
-    - `week=all` (défaut) : BFF calculé sur l'intégralité de l'historique,
-      pour une relation stable et meaningful ("best friend forever" →
-      tout-temps par défaut).
-    - `week=this|last` : BFF réduit à la semaine demandée (utile pour
-      afficher un duo contextuel sur la "Cette semaine" du classement).
+    - `week=this` (défaut) : BFF hebdomadaire en temps réel, remis à zéro
+      chaque lundi avec le classement live.
+    - `week=last` : BFF de la semaine précédente, figé.
+    - `week=all` : BFF calculé sur l'intégralité de l'historique.
 
     Retourne jusqu'à `limit` duos, triés par montant donné (décroissant).
     Chaque streamer apparaît au plus une fois (son plus gros donateur
     uniquement).
     """
+    if response is not None:
+        response.headers["Cache-Control"] = "no-store, max-age=0"
     # 1. Agrégation (receiver, sender) → somme donnée.
     stmt = select(
         GiftLedger.receiver_id,

@@ -55,7 +55,10 @@ export function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
   const canAccessAdmin =
-    isQueen || backendMe?.role === "admin" || backendMe?.role === "animator";
+    isQueen ||
+    backendMe?.role === "architect" ||
+    backendMe?.role === "admin" ||
+    backendMe?.role === "animator";
   const adminLabel =
     backendMe?.role === "animator" ? "Chroniques" : "Salle du Trône";
 
