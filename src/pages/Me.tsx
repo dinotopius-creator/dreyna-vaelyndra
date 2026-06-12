@@ -168,6 +168,7 @@ export function Me() {
     )
     .slice(0, 6);
   const myOrders = orders.filter((o) => o.userId === user.id);
+  const isArchitect = backendMe?.role === "architect";
 
   async function saveProfile(e: React.FormEvent) {
     e.preventDefault();
@@ -338,6 +339,31 @@ export function Me() {
           </div>
 
         </div>
+        {isArchitect && (
+          <div className="mt-6 rounded-2xl border border-gold-400/40 bg-gradient-to-r from-gold-500/20 via-royal-500/15 to-night-900 p-4 shadow-glow-gold">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-regal text-[10px] uppercase tracking-[0.24em] text-gold-200">
+                  Accès Architecte
+                </p>
+                <h2 className="mt-1 font-display text-2xl text-gold-100">
+                  Salle du Trône
+                </h2>
+                <p className="mt-1 max-w-xl text-sm text-ivory/70">
+                  Votre espace de contrôle complet : utilisateurs, demandes,
+                  rôles, modération, événements et outils sensibles.
+                </p>
+              </div>
+              <Link
+                to="/admin"
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-gold-shine px-5 py-3 font-regal text-[11px] font-semibold uppercase tracking-[0.22em] text-night-950 transition hover:brightness-110"
+              >
+                <Crown className="h-4 w-4" />
+                Ouvrir la Salle du Trône
+              </Link>
+            </div>
+          </div>
+        )}
         <CreaturePickerModal
           open={creaturePickerOpen}
           currentCreatureId={

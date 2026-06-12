@@ -11,9 +11,10 @@
  * `localStorage` seed.
  *
  * Le `role` du backend est la source de vérité quand il est disponible :
- * `admin` | `animator` | `user`.
+ * `architect` | `admin` | `animator` | `user`.
  */
 export type UserRole =
+  | "architect"
   | "admin"
   | "animator"
   | "user"
@@ -25,6 +26,7 @@ export type UserRole =
   | undefined;
 
 export function roleLabel(role: UserRole): string {
+  if (role === "architect") return "Architecte";
   if (role === "admin" || role === "queen") return "Administrateur";
   if (role === "animator" || role === "knight") return "Animateur";
   return "Membre";
@@ -32,6 +34,7 @@ export function roleLabel(role: UserRole): string {
 
 /** Avec une pincée d'emoji pour les cartes profil. */
 export function roleLabelWithIcon(role: UserRole): string {
+  if (role === "architect") return "♛ Architecte";
   if (role === "admin" || role === "queen") return "🛡️ Administrateur";
   if (role === "animator" || role === "knight") return "🎭 Animateur";
   return "✨ Membre";
