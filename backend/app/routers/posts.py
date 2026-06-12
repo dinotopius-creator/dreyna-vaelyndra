@@ -54,6 +54,30 @@ from .users import _grade_out  # noqa: E402
 # Sylvins reçus (=engagement) et des nouveaux liens d'âme.
 XP_PER_POST = 10
 COMMUNITY_REWARD_BY_RANK = {1: 600, 2: 450, 3: 300}
+COMMUNITY_RANKING_EXCLUDED_ROLES = {
+    "admin",
+    "administrateur",
+    "administratrice",
+    "administrator",
+    "animator",
+    "architect",
+    "architecte",
+    "dev",
+    "dev_platform",
+    "developer",
+    "founder",
+    "internal",
+    "manager",
+    "moderator",
+    "modérateur",
+    "operator",
+    "owner",
+    "platform_developer",
+    "queen",
+    "staff",
+    "super_admin",
+    "support",
+}
 MOCK_COMMUNITY_USER_IDS = {
     "user-lyria",
     "user-caelum",
@@ -192,6 +216,16 @@ def _week_start(date: datetime | None = None) -> datetime:
     )
 
 
+def _is_community_ranking_eligible(profile: UserProfile) -> bool:
+    """Le Top 5 communauté est réservé aux membres sans permissions staff."""
+    role = (profile.role or "user").strip().lower()
+    return (
+        profile.id not in MOCK_COMMUNITY_USER_IDS
+        and profile.banned_at is None
+        and role not in COMMUNITY_RANKING_EXCLUDED_ROLES
+    )
+
+
 def _serialize_reward(row: CommunityActivityReward) -> CommunityActivityRewardOut:
     return CommunityActivityRewardOut(
         weekStartIso=row.week_start_iso,
@@ -215,7 +249,7 @@ def _community_activity_rows(
     profiles = {
         p.id: p
         for p in session.exec(select(UserProfile)).all()
-        if p.id not in MOCK_COMMUNITY_USER_IDS and p.banned_at is None
+        if _is_community_ranking_eligible(p)
     }
 
     stats: dict[str, dict] = {}
@@ -224,6 +258,8 @@ def _community_activity_rows(
         if not user_id or user_id in MOCK_COMMUNITY_USER_IDS:
             return None
         profile = profiles.get(user_id)
+        if profile is None:
+            return None
         current = stats.get(user_id)
         if current is None:
             current = {
