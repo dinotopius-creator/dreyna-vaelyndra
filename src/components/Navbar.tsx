@@ -7,7 +7,9 @@ import {
   Bell,
   Crown,
   CheckCheck,
+  Gamepad2,
   Gift,
+  House,
   Menu,
   MessageCircle,
   ShoppingBag,
@@ -17,6 +19,8 @@ import {
   UserCircle2,
   ShieldCheck,
   ShieldAlert,
+  UserRound,
+  Users,
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -31,6 +35,38 @@ const NAV = [
   { to: "/mondes", label: "Mondes" },
   { to: "/wiki", label: "Wiki" },
   { to: "/communaute", label: "Communauté" },
+];
+
+const MOBILE_TABS = [
+  { to: "/", label: "Accueil", icon: House, match: (path: string) => path === "/" },
+  {
+    to: "/mondes",
+    label: "Monde",
+    icon: Gamepad2,
+    match: (path: string) => path.startsWith("/mondes"),
+  },
+  {
+    to: "/live",
+    label: "Lives",
+    icon: Radio,
+    match: (path: string) => path.startsWith("/live"),
+  },
+  {
+    to: "/communaute",
+    label: "Social",
+    icon: Users,
+    match: (path: string) => path.startsWith("/communaute"),
+  },
+  {
+    to: "/moi",
+    label: "Profil",
+    icon: UserRound,
+    match: (path: string) =>
+      path.startsWith("/moi") ||
+      path.startsWith("/compte") ||
+      path.startsWith("/avatar") ||
+      path.startsWith("/familier"),
+  },
 ];
 
 export function Navbar() {
@@ -92,7 +128,7 @@ export function Navbar() {
   return (
     <header className="sticky top-0 z-50">
       <div className="border-b border-royal-600/20 bg-night-900/80 backdrop-blur-xl">
-        <div className="mx-auto flex items-center justify-between gap-2 px-3 py-3 sm:gap-4 sm:px-5 lg:px-8 xl:px-10">
+        <div className="mx-auto flex items-center justify-between gap-2 px-3 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:gap-4 sm:px-5 lg:px-8 lg:pt-3 xl:px-10">
           <Link to="/" className="group flex min-w-0 items-center gap-2">
             <span className="relative flex h-9 w-9 items-center justify-center rounded-full bg-gold-shine text-night-900 shadow-glow-gold transition group-hover:scale-105">
               <Crown className="h-5 w-5" />
@@ -597,6 +633,32 @@ export function Navbar() {
           </div>
         )}
       </div>
+      <nav
+        className="mobile-tabbar fixed inset-x-3 bottom-[calc(0.55rem+env(safe-area-inset-bottom))] z-50 grid grid-cols-5 rounded-[1.55rem] border border-white/10 bg-night-950/88 p-1.5 shadow-[0_20px_70px_rgba(0,0,0,0.5)] backdrop-blur-2xl lg:hidden"
+        aria-label="Navigation mobile principale"
+      >
+        {MOBILE_TABS.map((tab) => {
+          const Icon = tab.icon;
+          const active = tab.match(location.pathname);
+          const target = tab.to === "/moi" && !user ? "/connexion" : tab.to;
+          return (
+            <Link
+              key={tab.to}
+              to={target}
+              className={clsx(
+                "flex min-h-[3.15rem] flex-col items-center justify-center gap-1 rounded-[1.15rem] text-[10px] font-semibold transition active:scale-95",
+                active
+                  ? "bg-gold-shine text-night-950 shadow-glow-gold"
+                  : "text-ivory/62 hover:bg-white/5 hover:text-gold-100",
+              )}
+              aria-current={active ? "page" : undefined}
+            >
+              <Icon className="h-5 w-5" aria-hidden />
+              <span>{tab.label}</span>
+            </Link>
+          );
+        })}
+      </nav>
     </header>
   );
 }

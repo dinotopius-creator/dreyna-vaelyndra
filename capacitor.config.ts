@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.vaelyndra.app',
-  appName: 'Vaelyndra Creature',
+  appName: 'Vaelyndra',
   webDir: 'dist',
   bundledWebRuntime: false,
   android: {

@@ -140,6 +140,16 @@ function normalizeJoystickInput(rawX: number, rawY: number): AnalogInput {
   };
 }
 
+function getCameraRelativeMovementBasis(playerYaw: number) {
+  // The camera sits behind the player using (-sin(yaw), -cos(yaw)).
+  // Forward is therefore the direction the camera looks at, while right must
+  // match the screen-space right side so joystick left/right is never inverted.
+  return {
+    forward: new THREE.Vector3(Math.sin(playerYaw), 0, Math.cos(playerYaw)),
+    right: new THREE.Vector3(-Math.cos(playerYaw), 0, Math.sin(playerYaw)),
+  };
+}
+
 function addCameraRelativeMobileMovement(
   movement: THREE.Vector3,
   input: AnalogInput,
@@ -149,8 +159,7 @@ function addCameraRelativeMobileMovement(
 
   // Joystick DOM Y goes down. Negative Y means "thumb up", so it moves forward.
   // X is never inverted: negative = left strafe, positive = right strafe.
-  const forward = new THREE.Vector3(Math.sin(playerYaw), 0, Math.cos(playerYaw));
-  const right = new THREE.Vector3(Math.cos(playerYaw), 0, -Math.sin(playerYaw));
+  const { forward, right } = getCameraRelativeMovementBasis(playerYaw);
   movement.addScaledVector(forward, -input.y);
   movement.addScaledVector(right, input.x);
 }
@@ -1293,8 +1302,7 @@ export function World3DStage({
         const turnSpeed = 2.8 * delta;
         if (keyState.has("KeyA") || keyState.has("ArrowLeft")) yaw += turnSpeed;
         if (keyState.has("KeyD") || keyState.has("ArrowRight")) yaw -= turnSpeed;
-        const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
-        const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
+        const { forward, right } = getCameraRelativeMovementBasis(yaw);
         const movement = new THREE.Vector3();
         if (keyState.has("KeyW") || keyState.has("ArrowUp")) movement.add(forward);
         if (keyState.has("KeyS") || keyState.has("ArrowDown")) movement.sub(forward);
