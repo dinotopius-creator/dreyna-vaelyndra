@@ -245,7 +245,7 @@ export function Me() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-14">
+    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-14">
       {paymentStatus === "success" && (
         <div className="mb-6 rounded-2xl border border-emerald-400/30 bg-emerald-500/10 p-4 text-sm text-emerald-100">
           <div className="flex items-start gap-3">
@@ -266,10 +266,10 @@ export function Me() {
       <motion.header
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="card-royal relative overflow-hidden p-8 md:p-10"
+        className="card-royal relative overflow-hidden p-5 sm:p-8 md:p-10"
       >
-        <div className="flex flex-wrap items-center gap-6">
-          <div className="relative">
+        <div className="flex flex-col items-center gap-5 text-center sm:flex-row sm:text-left">
+          <div className="relative shrink-0">
             <img
               src={avatar || user.avatar}
               alt={user.username}
@@ -285,7 +285,7 @@ export function Me() {
               <Camera className="h-4 w-4" />
             </button>
           </div>
-          <div className="flex-1">
+          <div className="w-full flex-1">
             <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
               {roleLabelWithIcon(serverProfile?.role ?? user.role)}
             </p>
@@ -309,7 +309,7 @@ export function Me() {
             <p className="mt-2 text-sm text-ivory/60">
               Inscrit·e le {formatDate(user.joinedAt)}
             </p>
-            <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-ivory/70">
+            <div className="mt-3 flex flex-wrap items-center justify-center gap-3 text-sm text-ivory/70 sm:justify-start sm:gap-4">
               <button
                 type="button"
                 onClick={() => setBondsTab("followers")}
@@ -413,13 +413,17 @@ export function Me() {
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
-                className="btn-royal"
+                className="btn-royal w-full sm:w-auto"
               >
                 <Upload className="h-4 w-4" />
-                <span className="hidden sm:inline">Importer depuis mon ordinateur</span>
-                <span className="sm:hidden">Importer depuis mon mobile</span>
+                <span className="hidden sm:inline">
+                  Importer une image depuis votre ordinateur
+                </span>
+                <span className="sm:hidden">
+                  Importer une photo depuis votre téléphone
+                </span>
               </button>
-              <div className="relative flex-1 min-w-[240px]">
+              <div className="relative min-w-0 flex-1">
                 <LinkIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ivory/40" />
                 <input
                   value={avatar}
@@ -431,10 +435,10 @@ export function Me() {
             </div>
             <p className="mt-2 text-[11px] text-ivory/50">
               <span className="hidden sm:inline">
-                Astuce : tu peux sauvegarder ton avatar sur ton ordinateur, puis cliquer "Importer". Max 5 Mo.
+                Astuce : choisissez une image nette depuis votre ordinateur. Max 5 Mo.
               </span>
               <span className="sm:hidden">
-                Astuce : choisis une photo depuis ton téléphone ou ta galerie. Max 5 Mo.
+                Astuce : choisissez une photo depuis votre téléphone ou votre galerie. Max 5 Mo.
               </span>
             </p>
           </motion.div>
@@ -475,8 +479,8 @@ export function Me() {
               placeholder="Parle de toi, de tes lives, de ta passion..."
             />
           </div>
-          <div className="md:col-span-2 flex justify-end">
-            <button type="submit" className="btn-gold">
+          <div className="flex md:col-span-2 sm:justify-end">
+            <button type="submit" className="btn-gold w-full sm:w-auto">
               <Save className="h-4 w-4" /> Enregistrer mon profil
             </button>
           </div>

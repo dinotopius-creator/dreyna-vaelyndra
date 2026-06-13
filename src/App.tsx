@@ -337,7 +337,7 @@ function App() {
       <EasterEggs />
       <Navbar />
       <OfflineBanner />
-      <main className="flex-1">
+      <main className="flex-1 pb-[calc(4.75rem+env(safe-area-inset-bottom))] lg:pb-0">
         <AnimatedRoutes />
       </main>
       <Footer />

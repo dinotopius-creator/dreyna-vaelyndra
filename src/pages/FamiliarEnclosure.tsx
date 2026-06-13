@@ -25,14 +25,14 @@ import {
 } from "../lib/familiarsApi";
 
 const CLEANING_ITEMS = [
-  { id: "leaf-1", label: "Feuilles dorées", icon: "🍃", x: 15, y: 59 },
-  { id: "dust-1", label: "Poussière de lune", icon: "✨", x: 30, y: 62 },
-  { id: "trace-1", label: "Trace dans l'herbe", icon: "🌿", x: 48, y: 58 },
-  { id: "toy-1", label: "Jouet renversé", icon: "🧸", x: 66, y: 62 },
-  { id: "leaf-2", label: "Brindilles", icon: "🪵", x: 80, y: 52 },
-  { id: "spark-1", label: "Éclat instable", icon: "💫", x: 55, y: 42 },
-  { id: "dust-2", label: "Nuage de poussière", icon: "☁️", x: 25, y: 46 },
-  { id: "flower-1", label: "Fleurs froissées", icon: "🌸", x: 42, y: 70 },
+  { id: "leaf-1", label: "Feuilles dorées", icon: "🍃", x: 16, y: 44 },
+  { id: "dust-1", label: "Poussière de lune", icon: "✨", x: 30, y: 52 },
+  { id: "trace-1", label: "Trace dans l'herbe", icon: "🌿", x: 47, y: 46 },
+  { id: "toy-1", label: "Jouet renversé", icon: "🧸", x: 66, y: 55 },
+  { id: "leaf-2", label: "Brindilles", icon: "🪵", x: 82, y: 42 },
+  { id: "spark-1", label: "Éclat instable", icon: "💫", x: 57, y: 34 },
+  { id: "dust-2", label: "Nuage de poussière", icon: "☁️", x: 24, y: 35 },
+  { id: "flower-1", label: "Fleurs froissées", icon: "🌸", x: 42, y: 57 },
 ];
 
 const DEFAULT_AFFECTION: FamiliarAffectionState = {
@@ -317,7 +317,7 @@ export function FamiliarEnclosure() {
         </header>
 
         <div className="grid gap-5 p-4 lg:grid-cols-[1.35fr,0.65fr] lg:p-6">
-          <div className="relative min-h-[620px] overflow-hidden rounded-[30px] border border-white/10 bg-[radial-gradient(circle_at_50%_28%,rgba(74,222,128,0.16),transparent_28%),linear-gradient(180deg,rgba(16,185,129,0.12),rgba(15,23,42,0.92))] sm:min-h-[640px]">
+          <div className="relative min-h-[560px] overflow-hidden rounded-[30px] border border-white/10 bg-[radial-gradient(circle_at_50%_28%,rgba(74,222,128,0.16),transparent_28%),linear-gradient(180deg,rgba(16,185,129,0.12),rgba(15,23,42,0.92))] sm:min-h-[640px]">
             <div className="absolute inset-x-0 bottom-0 h-[48%] rounded-t-[50%] bg-[radial-gradient(ellipse_at_center,rgba(34,197,94,0.35),rgba(20,83,45,0.2)_48%,transparent_72%)]" />
             <div className="absolute left-[8%] top-[16%] h-32 w-32 rounded-full bg-gold-200/10 blur-3xl" />
             <div className="absolute right-[10%] top-[10%] h-40 w-40 rounded-full bg-cyan-200/10 blur-3xl" />

@@ -65,6 +65,10 @@ body.vaelyndra-world-game-open {
     min-height: 100dvh;
   }
 
+  body.native-app-body footer {
+    display: none;
+  }
+
   *,
   *::before,
   *::after {
@@ -292,6 +296,19 @@ body.vaelyndra-world-game-open {
 
   .glass-input {
     @apply w-full rounded-xl border border-royal-500/30 bg-night-800/60 px-4 py-3 text-ivory placeholder:text-ivory/40 outline-none backdrop-blur transition focus:border-gold-400/70 focus:shadow-glow-violet;
+  }
+
+  .mobile-tabbar {
+    padding-bottom: max(0.375rem, env(safe-area-inset-bottom));
+    transform: translateZ(0);
+    will-change: transform, opacity;
+  }
+
+  body.native-keyboard-open .mobile-tabbar,
+  body.vaelyndra-world-game-open .mobile-tabbar {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(120%) translateZ(0);
   }
 
   .tag {

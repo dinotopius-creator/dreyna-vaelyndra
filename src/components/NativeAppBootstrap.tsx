@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { App as CapacitorApp } from "@capacitor/app";
+import { Keyboard } from "@capacitor/keyboard";
 import {
   configureNativeAppShell,
   exitNativeApp,
@@ -14,6 +15,23 @@ export function NativeAppBootstrap() {
 
   useEffect(() => {
     void configureNativeAppShell();
+  }, []);
+
+  useEffect(() => {
+    if (!isNativeApp()) return;
+
+    const showListener = Keyboard.addListener("keyboardWillShow", () => {
+      document.body.classList.add("native-keyboard-open");
+    });
+    const hideListener = Keyboard.addListener("keyboardWillHide", () => {
+      document.body.classList.remove("native-keyboard-open");
+    });
+
+    return () => {
+      void showListener.then((handle) => handle.remove());
+      void hideListener.then((handle) => handle.remove());
+      document.body.classList.remove("native-keyboard-open");
+    };
   }, []);
 
   useEffect(() => {
