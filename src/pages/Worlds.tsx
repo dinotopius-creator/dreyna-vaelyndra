@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   CalendarDays,
@@ -16,6 +16,7 @@ import {
   MessageCircle,
   Mic,
   MicOff,
+  MoreHorizontal,
   Radio,
   Sparkles,
   Volume2,
@@ -55,6 +56,10 @@ import { formatRelative } from "../lib/helpers";
 type DistrictId = "place" | "arcades" | "observatory";
 
 const World3DStage = lazy(() => import("../components/worlds/World3DStage"));
+
+interface WorldsProps {
+  dedicatedMode?: boolean;
+}
 
 const WORLD_BOOT_STEPS = [
   "Connexion au monde...",
@@ -491,7 +496,9 @@ function toApiDetail(error: unknown, fallback: string) {
   return match?.[1] ?? fallback;
 }
 
-export function Worlds() {
+export function Worlds({ dedicatedMode = false }: WorldsProps) {
+  const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const { profile, setProfile } = useProfile();
   const { liveRegistry } = useLive();
@@ -551,8 +558,10 @@ export function Worlds() {
 
   const mapRef = useRef<HTMLDivElement | null>(null);
   const [isWorldFullscreen, setIsWorldFullscreen] = useState(false);
-  const [worldBooting, setWorldBooting] = useState(false);
+  const [worldBooting, setWorldBooting] = useState(dedicatedMode);
   const [worldBootStep, setWorldBootStep] = useState(0);
+  const [worldMenuOpen, setWorldMenuOpen] = useState(false);
+  const worldGameActive = dedicatedMode || isWorldFullscreen;
   function handlePointerDown() {
     // Clicking or tapping the map should not teleport the player.
   }
@@ -566,17 +575,42 @@ export function Worlds() {
   }
 
   const enterWorldGame = useCallback(() => {
+    if (!dedicatedMode) {
+      navigate("/mondes/play", {
+        state: {
+          returnTo: `${location.pathname}${location.search}${location.hash}`,
+        },
+      });
+      return;
+    }
     if (worldBooting || isWorldFullscreen) return;
     setWorldBooting(true);
     setWorldBootStep(0);
-  }, [isWorldFullscreen, worldBooting]);
+  }, [
+    dedicatedMode,
+    isWorldFullscreen,
+    location.hash,
+    location.pathname,
+    location.search,
+    navigate,
+    worldBooting,
+  ]);
 
   const exitWorldGame = useCallback(() => {
     setWorldBooting(false);
     setIsWorldFullscreen(false);
+    setWorldMenuOpen(false);
     setWorldBootStep(0);
     void document.exitFullscreen?.().catch(() => undefined);
-  }, []);
+    if (dedicatedMode) {
+      const state = location.state as { returnTo?: string } | null;
+      const returnTo =
+        state?.returnTo && state.returnTo !== location.pathname
+          ? state.returnTo
+          : "/mondes";
+      navigate(returnTo, { replace: true });
+    }
+  }, [dedicatedMode, location.pathname, location.state, navigate]);
 
   useEffect(() => {
     if (!worldBooting) return undefined;
@@ -597,15 +631,17 @@ export function Worlds() {
   }, [worldBooting]);
 
   useEffect(() => {
-    if (!isWorldFullscreen) {
+    if (!worldGameActive) {
       document.body.classList.remove("vaelyndra-world-game-open");
       return undefined;
     }
     document.body.classList.add("vaelyndra-world-game-open");
     const node = mapRef.current;
-    void node?.requestFullscreen?.().catch(() => undefined);
+    if (!dedicatedMode) {
+      void node?.requestFullscreen?.().catch(() => undefined);
+    }
     const onFullscreenChange = () => {
-      if (!document.fullscreenElement) {
+      if (!dedicatedMode && !document.fullscreenElement) {
         setIsWorldFullscreen(false);
       }
     };
@@ -614,7 +650,7 @@ export function Worlds() {
       document.body.classList.remove("vaelyndra-world-game-open");
       document.removeEventListener("fullscreenchange", onFullscreenChange);
     };
-  }, [isWorldFullscreen]);
+  }, [dedicatedMode, worldGameActive]);
 
   const refreshWorldPresence = useCallback(async () => {
     try {
@@ -1136,7 +1172,7 @@ export function Worlds() {
   }, [user?.id]);
 
   useEffect(() => {
-    if (!isWorldFullscreen) return;
+    if (!worldGameActive) return;
     const previousBodyOverflow = document.body.style.overflow;
     const previousHtmlOverflow = document.documentElement.style.overflow;
     document.body.style.overflow = "hidden";
@@ -1151,7 +1187,18 @@ export function Worlds() {
       document.body.style.overflow = previousBodyOverflow;
       document.documentElement.style.overflow = previousHtmlOverflow;
     };
-  }, [isWorldFullscreen]);
+  }, [worldGameActive]);
+
+  useEffect(() => {
+    if (!worldMenuOpen) return undefined;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setWorldMenuOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [worldMenuOpen]);
 
   useEffect(() => {
     if (!worldVoiceError) return;
@@ -1496,18 +1543,27 @@ export function Worlds() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-12">
+    <div
+      className={
+        dedicatedMode
+          ? "h-[100dvh] w-screen overflow-hidden bg-night-950"
+          : "mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-12"
+      }
+    >
       <VoiceAudioLayer />
-      <SectionHeading
-        eyebrow="Mondes"
-        title={
-          <>
-            La place <span className="text-mystic">virtuelle</span> de Vaelyndra
-          </>
-        }
-        subtitle="Un hub social vivant où les membres se déplacent avec leur familier, repèrent les lives en direct et rejoignent les événements du royaume."
-      />
+      {!dedicatedMode && (
+        <SectionHeading
+          eyebrow="Mondes"
+          title={
+            <>
+              La place <span className="text-mystic">virtuelle</span> de Vaelyndra
+            </>
+          }
+          subtitle="Un hub social vivant où les membres se déplacent avec leur familier, repèrent les lives en direct et rejoignent les événements du royaume."
+        />
+      )}
 
+      {!dedicatedMode && (
       <section className="mt-8 overflow-hidden rounded-[34px] border border-gold-400/20 bg-[radial-gradient(circle_at_top,rgba(250,204,21,0.12),transparent_34%),linear-gradient(135deg,rgba(8,15,31,0.96),rgba(20,10,39,0.92)_55%,rgba(7,23,28,0.96))] shadow-[0_28px_120px_rgba(2,6,23,0.5)]">
         <div className="grid gap-8 px-4 py-5 sm:px-6 sm:py-6 lg:grid-cols-[1.15fr,0.85fr] lg:px-8 lg:py-8">
           <div className="relative">
@@ -1577,9 +1633,11 @@ export function Worlds() {
           </div>
         </div>
       </section>
+      )}
 
-      <div className="mt-8 grid gap-4 xl:grid-cols-[1.52fr,0.48fr]">
-        <section className="overflow-hidden rounded-[28px] border border-royal-500/30 bg-night-900/70 shadow-[0_24px_80px_rgba(2,6,23,0.45)]">
+      <div className={dedicatedMode ? "h-[100dvh] w-screen" : "mt-8 grid gap-4 xl:grid-cols-[1.52fr,0.48fr]"}>
+        <section className={dedicatedMode ? "h-[100dvh] overflow-hidden bg-night-950" : "overflow-hidden rounded-[28px] border border-royal-500/30 bg-night-900/70 shadow-[0_24px_80px_rgba(2,6,23,0.45)]"}>
+          {!dedicatedMode && (
           <div className="border-b border-royal-500/20 bg-gradient-to-r from-night-900 via-night-900/80 to-night-900/50 px-5 py-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -1596,27 +1654,38 @@ export function Worlds() {
                   {selectedDistrict.mood}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={toggleVoice}
-                disabled={voiceLoading}
-                className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm transition ${
-                  micEnabled
-                    ? "border-emerald-400/60 bg-emerald-400/10 text-emerald-200"
-                    : voiceEnabled
-                      ? "border-gold-400/60 bg-gold-500/10 text-gold-100"
-                    : "border-royal-500/30 text-ivory/75 hover:border-gold-400/60 hover:text-gold-200"
-                }`}
-              >
-                {micEnabled ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
-                {voiceLoading
-                  ? "Activation..."
-                  : micEnabled
-                    ? "Couper le micro"
-                    : voiceEnabled
-                      ? "Activer le micro"
-                      : "Rejoindre le vocal"}
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={enterWorldGame}
+                  disabled={worldBooting}
+                  className="hidden items-center gap-2 rounded-full border border-gold-300/35 bg-gold-500/12 px-4 py-2 text-sm font-semibold text-gold-100 shadow-[0_12px_36px_rgba(250,204,21,0.12)] transition hover:border-gold-200/60 disabled:cursor-wait disabled:opacity-70 md:inline-flex"
+                >
+                  <Sparkles className="h-4 w-4" />
+                  {worldBooting ? "Ouverture..." : "Entrer dans le monde"}
+                </button>
+                <button
+                  type="button"
+                  onClick={toggleVoice}
+                  disabled={voiceLoading}
+                  className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm transition ${
+                    micEnabled
+                      ? "border-emerald-400/60 bg-emerald-400/10 text-emerald-200"
+                      : voiceEnabled
+                        ? "border-gold-400/60 bg-gold-500/10 text-gold-100"
+                      : "border-royal-500/30 text-ivory/75 hover:border-gold-400/60 hover:text-gold-200"
+                  }`}
+                >
+                  {micEnabled ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
+                  {voiceLoading
+                    ? "Activation..."
+                    : micEnabled
+                      ? "Couper le micro"
+                      : voiceEnabled
+                        ? "Activer le micro"
+                        : "Rejoindre le vocal"}
+                </button>
+              </div>
             </div>
 
             <div className="mt-4 flex flex-wrap gap-2">
@@ -1636,8 +1705,10 @@ export function Worlds() {
               ))}
             </div>
           </div>
+          )}
 
-            <div className="relative overflow-hidden p-4 md:p-5">
+            <div className={dedicatedMode ? "relative h-[100dvh] overflow-hidden p-0" : "relative overflow-hidden p-4 md:p-5"}>
+              {!dedicatedMode && (
               <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-[1.2fr,0.8fr]">
                 <div className="rounded-[24px] border border-white/10 bg-night-950/55 p-4 backdrop-blur-xl">
                 <div className="text-[11px] uppercase tracking-[0.24em] text-gold-200/75">
@@ -1658,7 +1729,9 @@ export function Worlds() {
                 <CompactStat label="Secrets" value={String(districtHotspots.length)} />
               </div>
             </div>
+              )}
 
+            {!dedicatedMode && (
             <div className="mb-3 flex justify-end md:hidden">
               <button
                 type="button"
@@ -1670,6 +1743,7 @@ export function Worlds() {
                 {worldBooting ? "Ouverture..." : "Entrer dans le monde"}
               </button>
             </div>
+            )}
 
             <div
               ref={mapRef}
@@ -1678,7 +1752,7 @@ export function Worlds() {
               onPointerUp={handlePointerUp}
               onPointerCancel={handlePointerUp}
               className={`relative overflow-hidden border border-white/10 bg-gradient-to-br [perspective:1200px] ${
-                isWorldFullscreen
+                worldGameActive
                   ? "fixed inset-0 z-[80] h-[100dvh] w-screen min-h-[100dvh] rounded-none border-0"
                   : "min-h-[420px] rounded-[30px] sm:min-h-[560px] md:min-h-[680px] xl:min-h-[780px]"
               } ${selectedDistrict.accent}`}
@@ -1720,24 +1794,16 @@ export function Worlds() {
                   </motion.div>
                 </div>
               )}
-              {isWorldFullscreen && (
+              {worldGameActive && (
                 <div className="absolute right-[calc(0.75rem+env(safe-area-inset-right))] top-[calc(0.75rem+env(safe-area-inset-top))] z-40 flex items-center gap-3">
-                  <div className="hidden rounded-2xl border border-white/10 bg-night-950/58 px-3 py-2 text-right backdrop-blur landscape:block">
+                  <div className="rounded-2xl border border-white/10 bg-night-950/58 px-3 py-2 text-right backdrop-blur">
                     <p className="text-[9px] uppercase tracking-[0.22em] text-gold-200/70">
-                      Monde 3D APK
+                      Mode monde
                     </p>
                     <p className="font-display text-sm text-gold-100">
                       {selectedDistrict.name}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={exitWorldGame}
-                    className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-night-950/75 text-ivory/80 shadow-xl backdrop-blur transition hover:border-gold-300/45 hover:text-gold-100"
-                    aria-label="Quitter le monde plein écran"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
                 </div>
               )}
               <DistrictBackdrop district={district} />
@@ -1836,7 +1902,7 @@ export function Worlds() {
 
               <div
                 className={`absolute z-30 rounded-2xl border border-white/10 bg-night-950/70 px-4 py-3 backdrop-blur ${
-                  isWorldFullscreen
+                  worldGameActive
                     ? "left-[calc(0.75rem+env(safe-area-inset-left))] top-[calc(0.75rem+env(safe-area-inset-top))] max-w-[min(15rem,42vw)]"
                     : "right-5 top-5 md:bottom-5 md:top-auto"
                 }`}
@@ -1858,7 +1924,7 @@ export function Worlds() {
                   {Array.from({ length: 10 }).map((_, index) => (
                     <span
                       key={index}
-                      className={`${isWorldFullscreen ? "h-7 w-1.5" : "h-10 w-2"} rounded-full bg-emerald-300/15 transition`}
+                      className={`${worldGameActive ? "h-7 w-1.5" : "h-10 w-2"} rounded-full bg-emerald-300/15 transition`}
                       style={{
                         background:
                           index < Math.max(1, Math.round(voiceLevel / 10))
@@ -1879,6 +1945,49 @@ export function Worlds() {
                   </button>
                 )}
               </div>
+
+              {worldGameActive && (
+                <div className="absolute bottom-[calc(0.85rem+env(safe-area-inset-bottom))] right-[calc(0.85rem+env(safe-area-inset-right))] z-50">
+                  {worldMenuOpen && (
+                    <>
+                      <button
+                        type="button"
+                        className="fixed inset-0 z-40 cursor-default bg-transparent"
+                        aria-label="Fermer le menu du monde"
+                        onClick={() => setWorldMenuOpen(false)}
+                      />
+                      <div className="absolute bottom-14 right-0 z-50 w-56 overflow-hidden rounded-[24px] border border-white/12 bg-night-950/88 p-2 shadow-[0_24px_80px_rgba(0,0,0,0.48)] backdrop-blur-2xl">
+                        <div className="px-3 pb-2 pt-1">
+                          <p className="text-[10px] uppercase tracking-[0.22em] text-gold-200/68">
+                            Menu du monde
+                          </p>
+                          <p className="mt-1 text-sm text-ivory/62">
+                            Interface de jeu dédiée
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={exitWorldGame}
+                          className="flex min-h-12 w-full items-center justify-between rounded-2xl border border-rose-300/25 bg-rose-500/10 px-3 py-2 text-left text-sm font-semibold text-rose-100 transition hover:border-rose-200/60 hover:bg-rose-500/16"
+                        >
+                          <span>Quitter le monde</span>
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setWorldMenuOpen((current) => !current)}
+                    className="inline-flex h-12 min-h-12 w-12 min-w-12 items-center justify-center rounded-full border border-white/15 bg-night-950/76 text-ivory/86 shadow-[0_18px_58px_rgba(0,0,0,0.42)] backdrop-blur-xl transition hover:border-gold-300/45 hover:text-gold-100 active:scale-95"
+                    aria-haspopup="menu"
+                    aria-expanded={worldMenuOpen}
+                    aria-label="Ouvrir le menu du monde"
+                  >
+                    <MoreHorizontal className="h-6 w-6" />
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </section>

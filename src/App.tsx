@@ -165,8 +165,26 @@ function RouteFallback() {
   );
 }
 
+function WorldRouteFallback() {
+  return (
+    <div className="fixed inset-0 flex min-h-[100dvh] items-center justify-center overflow-hidden bg-[#05010c] px-5 text-center">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_18%,rgba(250,204,21,0.18),transparent_34%),radial-gradient(circle_at_20%_82%,rgba(34,211,238,0.14),transparent_34%),linear-gradient(135deg,rgba(15,23,42,0.98),rgba(6,3,16,0.99))]" />
+      <div className="relative w-full max-w-md rounded-[34px] border border-gold-200/20 bg-night-950/72 p-6 shadow-[0_30px_100px_rgba(0,0,0,0.55)] backdrop-blur-xl">
+        <div className="mx-auto h-16 w-16 animate-pulse rounded-[24px] border border-gold-200/25 bg-gold-300/10 shadow-glow-gold" />
+        <p className="mt-5 text-[11px] uppercase tracking-[0.28em] text-gold-200/75">
+          Mode jeu Vaelyndra
+        </p>
+        <p className="mt-2 font-display text-3xl text-gold-100">
+          Connexion au monde...
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function AnimatedRoutes() {
   const location = useLocation();
+  const isWorldPlayRoute = location.pathname === "/mondes/play";
   return (
     <AnimatePresence mode="wait">
       <motion.div
@@ -176,7 +194,7 @@ function AnimatedRoutes() {
         exit={{ opacity: 0, y: -8 }}
         transition={{ duration: 0.35 }}
       >
-        <Suspense fallback={<RouteFallback />}>
+        <Suspense fallback={isWorldPlayRoute ? <WorldRouteFallback /> : <RouteFallback />}>
           <Routes location={location}>
             <Route path="/" element={<Home />} />
             <Route path="/blog" element={<BlogList />} />
@@ -194,6 +212,7 @@ function AnimatedRoutes() {
             />
             <Route path="/live/:broadcasterId" element={<Live />} />
             <Route path="/communaute" element={<Community />} />
+            <Route path="/mondes/play" element={<Worlds dedicatedMode />} />
             <Route path="/mondes" element={<Worlds />} />
             <Route path="/wiki" element={<Wiki />} />
             <Route path="/wiki/:slug" element={<Wiki />} />
@@ -304,6 +323,8 @@ function AnimatedRoutes() {
 
 function App() {
   const location = useLocation();
+  const isWorldPlayRoute = location.pathname === "/mondes/play";
+
   if (location.pathname.startsWith("/live/overlay/chat/")) {
     return (
       <Routes>
@@ -333,16 +354,22 @@ function App() {
   return (
     <div className="relative flex min-h-screen flex-col">
       <NativeAppBootstrap />
-      <MagicBackground />
-      <EasterEggs />
-      <Navbar />
-      <OfflineBanner />
-      <main className="flex-1 pb-[calc(4.75rem+env(safe-area-inset-bottom))] lg:pb-0">
+      {!isWorldPlayRoute && <MagicBackground />}
+      {!isWorldPlayRoute && <EasterEggs />}
+      {!isWorldPlayRoute && <Navbar />}
+      {!isWorldPlayRoute && <OfflineBanner />}
+      <main
+        className={
+          isWorldPlayRoute
+            ? "fixed inset-0 h-[100dvh] w-screen overflow-hidden bg-night-950"
+            : "flex-1 pb-[calc(4.75rem+env(safe-area-inset-bottom))] lg:pb-0"
+        }
+      >
         <AnimatedRoutes />
       </main>
-      <Footer />
-      <CookieBanner />
-      <FamiliarOnboardingGate />
+      {!isWorldPlayRoute && <Footer />}
+      {!isWorldPlayRoute && <CookieBanner />}
+      {!isWorldPlayRoute && <FamiliarOnboardingGate />}
     </div>
   );
 }
