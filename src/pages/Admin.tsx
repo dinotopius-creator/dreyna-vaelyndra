@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   BookPlus,
@@ -65,6 +65,7 @@ const STAFF_TABS = [
 export function Admin() {
   const { user, backendMe } = useAuth();
   const { articles, products, lives, posts, orders, isLiveOn } = useStore();
+  const [searchParams] = useSearchParams();
   const [tab, setTab] = useState<TabId>("dashboard");
   const [openReportsCount, setOpenReportsCount] = useState<number>(0);
   const isArchitect = backendMe?.role === "architect";
@@ -87,6 +88,16 @@ export function Admin() {
     if (tabs.some((t) => t.id === tab)) return;
     setTab("articles");
   }, [tab, tabs]);
+
+  useEffect(() => {
+    const requestedTab = searchParams.get("tab");
+    if (!requestedTab) return;
+    if (!tabs.some((t) => t.id === requestedTab)) return;
+    const timer = window.setTimeout(() => {
+      setTab(requestedTab as TabId);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [searchParams, tabs]);
 
   if (!user) return null;
 

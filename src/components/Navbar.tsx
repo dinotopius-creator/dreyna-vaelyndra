@@ -206,7 +206,11 @@ export function Navbar() {
     markRead(notification.id);
     setNotificationsOpen(false);
     setNotificationSettingsOpen(false);
-    navigate(resolveNotificationUrl(notification));
+    navigate(resolveNotificationUrl(notification), {
+      state: {
+        notificationId: notification.id,
+      },
+    });
   };
 
   const notificationIcon = (notification: AppNotification) => {

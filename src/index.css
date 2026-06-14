@@ -404,7 +404,8 @@ body.vaelyndra-world-game-open {
   }
 
   [id^="post-"]:target,
-  [id^="comment-"]:target {
+  [id^="comment-"]:target,
+  .notification-target-highlight {
     animation: notification-target-glow 2.8s ease-out 1;
   }
 
