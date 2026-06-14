@@ -60,10 +60,7 @@ import {
   SORT_LEVELS,
   type SortLevel,
 } from "../components/SortDAppelCaster";
-import {
-  GIFT_CATALOGUE,
-  INITIAL_LIVES,
-} from "../data/mock";
+import { GIFT_CATALOGUE, INITIAL_LIVES } from "../data/mock";
 import type {
   ChatMessage,
   Gift,
@@ -158,7 +155,11 @@ function readLiveLocalValue(prefix: string, key?: string | null) {
   }
 }
 
-function writeLiveLocalValue(prefix: string, key: string | undefined, value: string) {
+function writeLiveLocalValue(
+  prefix: string,
+  key: string | undefined,
+  value: string,
+) {
   if (!key || typeof window === "undefined") return;
   try {
     window.localStorage.setItem(`${prefix}${key}`, value);
@@ -241,7 +242,8 @@ function LiveVideoStage({
       attemptPlay();
     };
     const handlePause = () => {
-      if (!el.ended && stream.active) window.setTimeout(attemptPlayIfVisible, 250);
+      if (!el.ended && stream.active)
+        window.setTimeout(attemptPlayIfVisible, 250);
     };
     const handleVisibility = () => {
       if (typeof document !== "undefined" && !document.hidden) {
@@ -574,10 +576,16 @@ function BroadcasterControls() {
     setStoppingLive(true);
     try {
       stopLive();
-      notify("Live terminé. Les flux caméra et micro sont en cours de fermeture.", "info");
+      notify(
+        "Live terminé. Les flux caméra et micro sont en cours de fermeture.",
+        "info",
+      );
     } catch (error) {
       console.error("stopLive button failed", error);
-      notify("Le live est en cours d'arrêt. Réessaie dans quelques secondes.", "error");
+      notify(
+        "Le live est en cours d'arrêt. Réessaie dans quelques secondes.",
+        "error",
+      );
     } finally {
       window.setTimeout(() => setStoppingLive(false), 1200);
     }
@@ -751,394 +759,475 @@ function BroadcasterControls() {
   }
 
   return (
-    <section className="card-royal mt-8 p-5 md:p-6">
-      <div className="flex items-center gap-2">
-        <Video className="h-4 w-4 text-gold-300" />
-        <h3 className="font-display text-lg text-gold-200">Studio Live</h3>
+    <section className="card-royal mt-6 overflow-hidden p-0 md:mt-8">
+      <div className="flex items-start gap-3 border-b border-gold-400/10 bg-gradient-to-br from-gold-500/12 via-royal-500/10 to-night-900/70 p-4 md:p-6">
+        <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-gold-300/35 bg-gold-400/15 text-gold-100 shadow-[0_0_28px_rgba(250,204,21,0.12)]">
+          <Video className="h-4 w-4" />
+        </span>
+        <div className="min-w-0">
+          <h3 className="font-display text-xl text-gold-100">Studio Live</h3>
+          <p className="mt-1 text-xs leading-5 text-ivory/62">
+            Prépare ton direct en quelques taps : titre, description, catégorie,
+            offrandes et mode de diffusion restent au même endroit.
+          </p>
+        </div>
         {isLive && (
-          <span className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-rose-400/50 bg-rose-500/20 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-rose-200">
+          <span className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-full border border-rose-400/50 bg-rose-500/20 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-rose-200">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-rose-400" />
             En direct
           </span>
         )}
       </div>
 
-      <div className="mt-4 grid gap-4 md:grid-cols-2">
-        <label className="block">
-          <span className="mb-1 flex items-center justify-between font-regal text-[11px] uppercase tracking-[0.22em] text-ivory/60">
-            Titre
-            <span
-              className={`font-mono text-[10px] ${
-                config.title.length > LIVE_TITLE_MAX - 3
-                  ? "text-rose-300"
-                  : "text-ivory/40"
-              }`}
-            >
-              {config.title.length}/{LIVE_TITLE_MAX}
+      <div className="p-4 md:p-6">
+        <div className="rounded-3xl border border-royal-400/20 bg-night-950/45 p-4 shadow-inner shadow-night-950/30">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-400/45 bg-rose-500/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-rose-100">
+              <span className="h-1.5 w-1.5 rounded-full bg-rose-300" />
+              Aperçu du live
             </span>
-          </span>
-          <input
-            type="text"
-            maxLength={LIVE_TITLE_MAX}
-            value={config.title}
-            onChange={(e) => updateConfig({ title: e.target.value })}
-            placeholder={
-              isQueen ? "Nuit Étoilée de Vaelyndra" : "Mon live du soir"
-            }
-            className="input-royal"
-            disabled={isLive}
-          />
-        </label>
-
-        <label className="block">
-          <span className="mb-1 flex items-center justify-between font-regal text-[11px] uppercase tracking-[0.22em] text-ivory/60">
-            Description
             <span
-              className={`font-mono text-[10px] ${
-                config.description.length > LIVE_DESCRIPTION_MAX - 10
-                  ? "text-rose-300"
-                  : "text-ivory/40"
-              }`}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold ${getLiveCategory(config.category).chipClass}`}
             >
-              {config.description.length}/{LIVE_DESCRIPTION_MAX}
+              <span aria-hidden>{getLiveCategory(config.category).icon}</span>
+              {getLiveCategory(config.category).label}
             </span>
-          </span>
-          <input
-            type="text"
-            maxLength={LIVE_DESCRIPTION_MAX}
-            value={config.description}
-            onChange={(e) => updateConfig({ description: e.target.value })}
-            placeholder="Rituel d'ouverture, salon sucré, discussion…"
-            className="input-royal"
-            disabled={isLive}
-          />
-        </label>
-      </div>
-
-      <fieldset className="mt-5">
-        <legend className="mb-2 font-regal text-[11px] uppercase tracking-[0.22em] text-ivory/60">
-          Catégorie du live
-        </legend>
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          {LIVE_CATEGORIES.map((c) => {
-            const selected = config.category === c.id;
-            return (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => !isLive && updateConfig({ category: c.id })}
-                disabled={isLive}
-                className={`flex items-start gap-2 rounded-xl border bg-night-900/40 p-3 text-left transition ${
-                  selected
-                    ? "border-gold-400/60 ring-1 ring-gold-400/40"
-                    : "border-royal-500/30 opacity-80 hover:opacity-100 hover:border-gold-400/30"
-                } disabled:cursor-not-allowed`}
-              >
-                <span className="text-xl leading-none" aria-hidden>
-                  {c.icon}
-                </span>
-                <span>
-                  <span className="block font-display text-sm text-gold-200">
-                    {c.label}
-                  </span>
-                  <span className="mt-0.5 block text-[11px] leading-snug text-ivory/55">
-                    {c.description}
-                  </span>
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </fieldset>
-
-      <fieldset className="mt-5">
-        <legend className="mb-2 font-regal text-[11px] uppercase tracking-[0.22em] text-ivory/60">
-          Mode de diffusion
-        </legend>
-        <div className="grid gap-3 md:grid-cols-3">
-          <button
-            type="button"
-            onClick={() =>
-              !isLive && cameraSupported && updateConfig({ mode: "camera" })
-            }
-            disabled={isLive || !cameraSupported}
-            className={`card-royal flex items-start gap-3 p-4 text-left transition ${
-              config.mode === "camera"
-                ? "ring-1 ring-gold-400/60"
-                : "opacity-80 hover:opacity-100"
-            } disabled:cursor-not-allowed disabled:opacity-40`}
-          >
-            <Camera className="mt-0.5 h-5 w-5 text-gold-300" />
-            <div>
-              <p className="font-display text-base text-gold-200">
-                Caméra
-                <span className="ml-2 rounded-full border border-emerald-300/40 bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.2em] text-emerald-200">
-                  mobile + pc
-                </span>
-              </p>
-              <p className="mt-1 text-xs text-ivory/60">
-                {cameraSupported
-                  ? "Lance un live depuis ta caméra (frontale ou arrière sur mobile, webcam sur PC). Le mode le plus simple."
-                  : "Ton navigateur ne donne pas accès à la caméra."}
-              </p>
-            </div>
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              !isLive &&
-              screenEffectiveSupported &&
-              updateConfig({ mode: "screen" })
-            }
-            disabled={isLive || !screenEffectiveSupported}
-            className={`card-royal flex items-start gap-3 p-4 text-left transition ${
-              config.mode === "screen"
-                ? "ring-1 ring-gold-400/60"
-                : "opacity-80 hover:opacity-100"
-            } disabled:cursor-not-allowed disabled:opacity-40`}
-            title={
-              screenEffectiveSupported
-                ? undefined
-                : isMobile
-                  ? "Le partage d'écran web n'est pas supporté sur mobile (Android, Samsung, iPhone). Utilise le mode Caméra ci-dessus."
-                  : "Le partage d'écran web n'est pas supporté sur ton navigateur. Utilise le mode Caméra ci-dessus."
-            }
-          >
-            <Monitor className="mt-0.5 h-5 w-5 text-gold-300" />
-            <div>
-              <p className="font-display text-base text-gold-200">
-                Partage d'écran
-                <span className="ml-2 rounded-full border border-sky-300/40 bg-sky-500/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.2em] text-sky-200">
-                  pc uniquement
-                </span>
-              </p>
-              <p className="mt-1 text-xs text-ivory/60">
-                {screenEffectiveSupported
-                  ? nativeScreenShareSupported
-                    ? "Autorise Android à capturer ton écran. Le relais vidéo natif est en cours de raccordement à Vaelyndra Live."
-                    : "Stream ton écran (jeu, appli, navigateur…) directement depuis ton PC."
-                  : isMobile
-                    ? "Le partage d'écran n'est pas dispo sur téléphone — choisis « Caméra » juste au-dessus (ça marche sur Samsung, iPhone et toutes les tablettes)."
-                    : "Ton navigateur ne permet pas le partage d'écran."}
-              </p>
-            </div>
-          </button>
-          <button
-            type="button"
-            onClick={() => !isLive && updateConfig({ mode: "twitch" })}
-            disabled={isLive}
-            className={`card-royal flex items-start gap-3 p-4 text-left transition ${
-              config.mode === "twitch"
-                ? "ring-1 ring-gold-400/60"
-                : "opacity-80 hover:opacity-100"
-            } disabled:cursor-not-allowed`}
-          >
-            <Gamepad2 className="mt-0.5 h-5 w-5 text-gold-300" />
-            <div>
-              <p className="font-display text-base text-gold-200">
-                OBS + Twitch
-                <span className="ml-2 rounded-full border border-fuchsia-300/40 bg-fuchsia-500/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.2em] text-fuchsia-200">
-                  mobile + pc
-                </span>
-              </p>
-              <p className="mt-1 text-xs text-ivory/60">
-                Tu streames depuis OBS (PC) ou l'app Twitch mobile. Le site
-                embed le lecteur officiel Twitch. Marche sur iPhone et Android.
-              </p>
-            </div>
-          </button>
-        </div>
-        {isMobile && (
-          <div className="mt-3 rounded-2xl border border-gold-300/20 bg-gold-500/10 px-4 py-3 text-xs leading-5 text-gold-100/90">
-            Sur téléphone, le mode <strong>Caméra</strong> reste le plus stable.
-            Le partage d'écran mobile est volontairement désactivé pour cette
-            version Play Store afin d'eviter les coupures et les faux demarrages.
-            Le partage d'écran ordinateur reste conservé.
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-gold-300/30 bg-gold-400/10 px-3 py-1 text-[11px] font-semibold text-gold-100">
+              <GiftIcon className="h-3.5 w-3.5" />
+              Offrandes prêtes
+            </span>
           </div>
-        )}
-      </fieldset>
+          <p className="mt-3 line-clamp-2 font-display text-xl text-gold-100 md:text-2xl">
+            {config.title.trim() || "Donnez un titre à votre live"}
+          </p>
+          <p className="mt-1 line-clamp-2 text-sm leading-5 text-ivory/65">
+            {config.description.trim() ||
+              "Ajoutez une description courte pour expliquer ce que vous allez partager."}
+          </p>
+        </div>
 
-      <IosStreamingHelp
-        prominent={!screenEffectiveSupported}
-        isQueen={isQueen}
-      />
-
-      {config.mode === "twitch" && (
-        <div className="mt-5 grid gap-4 md:grid-cols-2">
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
           <label className="block">
-            <span className="mb-1 block font-regal text-[11px] uppercase tracking-[0.22em] text-ivory/60">
-              Chaîne Twitch
+            <span className="mb-1 flex items-center justify-between font-regal text-[11px] uppercase tracking-[0.22em] text-ivory/60">
+              Titre du live
+              <span
+                className={`font-mono text-[10px] ${
+                  config.title.length > LIVE_TITLE_MAX - 3
+                    ? "text-rose-300"
+                    : "text-ivory/40"
+                }`}
+              >
+                {config.title.length}/{LIVE_TITLE_MAX}
+              </span>
             </span>
             <input
               type="text"
-              value={config.twitchChannel}
-              onChange={(e) => updateConfig({ twitchChannel: e.target.value })}
-              placeholder="ton_pseudo_twitch"
+              maxLength={LIVE_TITLE_MAX}
+              value={config.title}
+              onChange={(e) => updateConfig({ title: e.target.value })}
+              placeholder={
+                isQueen
+                  ? "Nuit Étoilée de Vaelyndra"
+                  : "Donnez un titre à votre live"
+              }
               className="input-royal"
               disabled={isLive}
             />
-            <span className="mt-1 block text-[10px] text-ivory/45">
-              Nom d'utilisateur Twitch ou URL complète. Nécessite un compte
-              Twitch.
-            </span>
           </label>
 
           <label className="block">
             <span className="mb-1 flex items-center justify-between font-regal text-[11px] uppercase tracking-[0.22em] text-ivory/60">
-              Clé de stream OBS
-              <button
-                type="button"
-                onClick={() => setShowKey((v) => !v)}
-                className="inline-flex items-center gap-1 rounded-full border border-ivory/15 px-2 py-0.5 text-[10px] text-ivory/60 hover:text-ivory"
+              Description du live
+              <span
+                className={`font-mono text-[10px] ${
+                  config.description.length > LIVE_DESCRIPTION_MAX - 10
+                    ? "text-rose-300"
+                    : "text-ivory/40"
+                }`}
               >
-                {showKey ? (
-                  <>
-                    <EyeOff className="h-3 w-3" /> Masquer
-                  </>
-                ) : (
-                  <>
-                    <Eye className="h-3 w-3" /> Voir
-                  </>
-                )}
-              </button>
+                {config.description.length}/{LIVE_DESCRIPTION_MAX}
+              </span>
             </span>
-            <div className="flex gap-2">
-              <input
-                type={showKey ? "text" : "password"}
-                value={config.obsKey}
-                onChange={(e) => updateConfig({ obsKey: e.target.value })}
-                placeholder="live_xxxxxxxxxx"
-                className="input-royal flex-1"
-                autoComplete="off"
-              />
-              {config.obsKey && (
-                <button
-                  type="button"
-                  onClick={copyKey}
-                  className="btn-ghost"
-                  title="Copier"
-                >
-                  <Copy className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
-            <span className="mt-1 block text-[10px] text-ivory/45">
-              Reste uniquement dans ton navigateur. Jamais envoyé au site —
-              c'est ton garde-mémoire pour coller dans OBS.
-            </span>
+            <textarea
+              maxLength={LIVE_DESCRIPTION_MAX}
+              value={config.description}
+              onChange={(e) => updateConfig({ description: e.target.value })}
+              placeholder="Expliquez ce que vous allez partager pendant ce live"
+              className="input-royal min-h-[5.5rem] resize-none leading-5"
+              disabled={isLive}
+            />
           </label>
         </div>
-      )}
 
-      {/* Préparation du live : option pour intégrer l'avatar 3D existant.
+        <fieldset className="mt-5 rounded-3xl border border-royal-400/20 bg-night-900/35 p-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <legend className="font-regal text-[11px] uppercase tracking-[0.22em] text-ivory/60">
+              Catégorie
+            </legend>
+            <span className="text-[11px] text-ivory/45">
+              Accessible sans descendre en bas de page
+            </span>
+          </div>
+          <div className="-mx-1 flex snap-x gap-2 overflow-x-auto px-1 pb-1 sm:grid sm:grid-cols-2 sm:overflow-visible lg:grid-cols-4">
+            {LIVE_CATEGORIES.map((c) => {
+              const selected = config.category === c.id;
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => !isLive && updateConfig({ category: c.id })}
+                  disabled={isLive}
+                  className={`min-w-[11.5rem] snap-start rounded-2xl border bg-night-900/55 p-3 text-left transition sm:min-w-0 ${
+                    selected
+                      ? "border-gold-400/60 bg-gold-400/10 ring-1 ring-gold-400/40"
+                      : "border-royal-500/30 opacity-80 hover:border-gold-400/30 hover:opacity-100"
+                  } disabled:cursor-not-allowed`}
+                >
+                  <span className="text-xl leading-none" aria-hidden>
+                    {c.icon}
+                  </span>
+                  <span>
+                    <span className="block font-display text-sm text-gold-200">
+                      {c.label}
+                    </span>
+                    <span className="mt-0.5 line-clamp-2 block text-[11px] leading-snug text-ivory/55">
+                      {c.description}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </fieldset>
+
+        <section className="mt-5 rounded-3xl border border-gold-300/20 bg-gradient-to-br from-gold-500/12 via-night-900/50 to-royal-500/10 p-4">
+          <div className="flex items-start gap-3">
+            <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-gold-300/35 bg-night-950/60 text-gold-100">
+              <GiftIcon className="h-5 w-5" />
+            </span>
+            <div className="min-w-0">
+              <p className="font-display text-base text-gold-100">Offrandes</p>
+              <p className="mt-1 text-sm leading-5 text-ivory/65">
+                Les spectateurs peuvent envoyer des offrandes pendant ton live.
+                Elles restent accessibles depuis le bouton Offrande côté viewer,
+                sans quitter l’écran du direct.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-ivory/70">
+                <span className="rounded-full border border-gold-300/25 bg-gold-400/10 px-3 py-1">
+                  Activées pendant le live
+                </span>
+                <span className="rounded-full border border-ivory/10 bg-night-950/55 px-3 py-1">
+                  Cadeaux en Sylvins
+                </span>
+                <span className="rounded-full border border-ivory/10 bg-night-950/55 px-3 py-1">
+                  Animation visible sur scène
+                </span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <fieldset className="mt-5">
+          <legend className="mb-2 font-regal text-[11px] uppercase tracking-[0.22em] text-ivory/60">
+            Mode de diffusion
+          </legend>
+          <div className="grid gap-3 md:grid-cols-3">
+            <button
+              type="button"
+              onClick={() =>
+                !isLive && cameraSupported && updateConfig({ mode: "camera" })
+              }
+              disabled={isLive || !cameraSupported}
+              className={`card-royal flex items-start gap-3 p-4 text-left transition ${
+                config.mode === "camera"
+                  ? "ring-1 ring-gold-400/60"
+                  : "opacity-80 hover:opacity-100"
+              } disabled:cursor-not-allowed disabled:opacity-40`}
+            >
+              <Camera className="mt-0.5 h-5 w-5 text-gold-300" />
+              <div>
+                <p className="font-display text-base text-gold-200">
+                  Caméra
+                  <span className="ml-2 rounded-full border border-emerald-300/40 bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.2em] text-emerald-200">
+                    mobile + pc
+                  </span>
+                </p>
+                <p className="mt-1 text-xs text-ivory/60">
+                  {cameraSupported
+                    ? "Lance un live depuis ta caméra (frontale ou arrière sur mobile, webcam sur PC). Le mode le plus simple."
+                    : "Ton navigateur ne donne pas accès à la caméra."}
+                </p>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                !isLive &&
+                screenEffectiveSupported &&
+                updateConfig({ mode: "screen" })
+              }
+              disabled={isLive || !screenEffectiveSupported}
+              className={`card-royal flex items-start gap-3 p-4 text-left transition ${
+                config.mode === "screen"
+                  ? "ring-1 ring-gold-400/60"
+                  : "opacity-80 hover:opacity-100"
+              } disabled:cursor-not-allowed disabled:opacity-40`}
+              title={
+                screenEffectiveSupported
+                  ? undefined
+                  : isMobile
+                    ? "Le partage d'écran web n'est pas supporté sur mobile (Android, Samsung, iPhone). Utilise le mode Caméra ci-dessus."
+                    : "Le partage d'écran web n'est pas supporté sur ton navigateur. Utilise le mode Caméra ci-dessus."
+              }
+            >
+              <Monitor className="mt-0.5 h-5 w-5 text-gold-300" />
+              <div>
+                <p className="font-display text-base text-gold-200">
+                  Partage d'écran
+                  <span className="ml-2 rounded-full border border-sky-300/40 bg-sky-500/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.2em] text-sky-200">
+                    pc uniquement
+                  </span>
+                </p>
+                <p className="mt-1 text-xs text-ivory/60">
+                  {screenEffectiveSupported
+                    ? nativeScreenShareSupported
+                      ? "Autorise Android à capturer ton écran. Le relais vidéo natif est en cours de raccordement à Vaelyndra Live."
+                      : "Stream ton écran (jeu, appli, navigateur…) directement depuis ton PC."
+                    : isMobile
+                      ? "Le partage d'écran n'est pas dispo sur téléphone — choisis « Caméra » juste au-dessus (ça marche sur Samsung, iPhone et toutes les tablettes)."
+                      : "Ton navigateur ne permet pas le partage d'écran."}
+                </p>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => !isLive && updateConfig({ mode: "twitch" })}
+              disabled={isLive}
+              className={`card-royal flex items-start gap-3 p-4 text-left transition ${
+                config.mode === "twitch"
+                  ? "ring-1 ring-gold-400/60"
+                  : "opacity-80 hover:opacity-100"
+              } disabled:cursor-not-allowed`}
+            >
+              <Gamepad2 className="mt-0.5 h-5 w-5 text-gold-300" />
+              <div>
+                <p className="font-display text-base text-gold-200">
+                  OBS + Twitch
+                  <span className="ml-2 rounded-full border border-fuchsia-300/40 bg-fuchsia-500/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.2em] text-fuchsia-200">
+                    mobile + pc
+                  </span>
+                </p>
+                <p className="mt-1 text-xs text-ivory/60">
+                  Tu streames depuis OBS (PC) ou l'app Twitch mobile. Le site
+                  embed le lecteur officiel Twitch. Marche sur iPhone et
+                  Android.
+                </p>
+              </div>
+            </button>
+          </div>
+          {isMobile && (
+            <div className="mt-3 rounded-2xl border border-gold-300/20 bg-gold-500/10 px-4 py-3 text-xs leading-5 text-gold-100/90">
+              Sur téléphone, le mode <strong>Caméra</strong> reste le plus
+              stable. Le partage d'écran mobile est volontairement désactivé
+              pour cette version Play Store afin d'eviter les coupures et les
+              faux demarrages. Le partage d'écran ordinateur reste conservé.
+            </div>
+          )}
+        </fieldset>
+
+        <IosStreamingHelp
+          prominent={!screenEffectiveSupported}
+          isQueen={isQueen}
+        />
+
+        {config.mode === "twitch" && (
+          <div className="mt-5 grid gap-4 md:grid-cols-2">
+            <label className="block">
+              <span className="mb-1 block font-regal text-[11px] uppercase tracking-[0.22em] text-ivory/60">
+                Chaîne Twitch
+              </span>
+              <input
+                type="text"
+                value={config.twitchChannel}
+                onChange={(e) =>
+                  updateConfig({ twitchChannel: e.target.value })
+                }
+                placeholder="ton_pseudo_twitch"
+                className="input-royal"
+                disabled={isLive}
+              />
+              <span className="mt-1 block text-[10px] text-ivory/45">
+                Nom d'utilisateur Twitch ou URL complète. Nécessite un compte
+                Twitch.
+              </span>
+            </label>
+
+            <label className="block">
+              <span className="mb-1 flex items-center justify-between font-regal text-[11px] uppercase tracking-[0.22em] text-ivory/60">
+                Clé de stream OBS
+                <button
+                  type="button"
+                  onClick={() => setShowKey((v) => !v)}
+                  className="inline-flex items-center gap-1 rounded-full border border-ivory/15 px-2 py-0.5 text-[10px] text-ivory/60 hover:text-ivory"
+                >
+                  {showKey ? (
+                    <>
+                      <EyeOff className="h-3 w-3" /> Masquer
+                    </>
+                  ) : (
+                    <>
+                      <Eye className="h-3 w-3" /> Voir
+                    </>
+                  )}
+                </button>
+              </span>
+              <div className="flex gap-2">
+                <input
+                  type={showKey ? "text" : "password"}
+                  value={config.obsKey}
+                  onChange={(e) => updateConfig({ obsKey: e.target.value })}
+                  placeholder="live_xxxxxxxxxx"
+                  className="input-royal flex-1"
+                  autoComplete="off"
+                />
+                {config.obsKey && (
+                  <button
+                    type="button"
+                    onClick={copyKey}
+                    className="btn-ghost"
+                    title="Copier"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+              <span className="mt-1 block text-[10px] text-ivory/45">
+                Reste uniquement dans ton navigateur. Jamais envoyé au site —
+                c'est ton garde-mémoire pour coller dans OBS.
+              </span>
+            </label>
+          </div>
+        )}
+
+        {/* Préparation du live : option pour intégrer l'avatar 3D existant.
           On ne recrée PAS d'avatar — on coche pour qu'il soit affiché en
           overlay au-dessus du flux, à côté du familier. Voir
           `LiveStageOverlay` pour le rendu + drag & rotate côté host. */}
-      <fieldset className="mt-5 rounded-2xl border border-royal-500/30 bg-night-900/40 p-4">
-        <legend className="px-2 font-regal text-[11px] uppercase tracking-[0.22em] text-ivory/60">
-          Avatar 3D dans le live
-        </legend>
-        <label className="flex items-start gap-3">
-          <input
-            type="checkbox"
-            checked={avatar3dInLive}
-            onChange={(event) => onToggleAvatar3dInLive(event.target.checked)}
-            className="mt-1 h-4 w-4 cursor-pointer accent-gold-400"
-          />
-          <span>
-            <span className="block font-display text-sm text-gold-200">
-              Afficher mon avatar 3D pendant le live
+        <fieldset className="mt-5 rounded-2xl border border-royal-500/30 bg-night-900/40 p-4">
+          <legend className="px-2 font-regal text-[11px] uppercase tracking-[0.22em] text-ivory/60">
+            Avatar 3D dans le live
+          </legend>
+          <label className="flex items-start gap-3">
+            <input
+              type="checkbox"
+              checked={avatar3dInLive}
+              onChange={(event) => onToggleAvatar3dInLive(event.target.checked)}
+              className="mt-1 h-4 w-4 cursor-pointer accent-gold-400"
+            />
+            <span>
+              <span className="block font-display text-sm text-gold-200">
+                Afficher mon avatar 3D pendant le live
+              </span>
+              <span className="mt-0.5 block text-[11px] leading-snug text-ivory/60">
+                Charge automatiquement l'avatar de ton profil et le pose à côté
+                de ton familier sur le live. Tu pourras déplacer, tourner,
+                mettre en miroir et verrouiller l'avatar et le familier
+                directement sur l'écran de diffusion. Compatible caméra, partage
+                d'écran, mobile et plein écran.
+              </span>
             </span>
-            <span className="mt-0.5 block text-[11px] leading-snug text-ivory/60">
-              Charge automatiquement l'avatar de ton profil et le pose
-              à côté de ton familier sur le live. Tu pourras déplacer,
-              tourner, mettre en miroir et verrouiller l'avatar et le
-              familier directement sur l'écran de diffusion. Compatible
-              caméra, partage d'écran, mobile et plein écran.
-            </span>
-          </span>
-        </label>
-      </fieldset>
+          </label>
+        </fieldset>
 
-      <div className="mt-6 flex flex-wrap items-center gap-3">
-        {!isLive ? (
-          <button onClick={goLive} className="btn-royal">
-            <Radio className="h-4 w-4" />
-            {config.mode === "camera"
-              ? "Démarrer en caméra"
-              : config.mode === "screen"
-                ? "Démarrer le partage"
-                : "Publier le live Twitch"}
-          </button>
-        ) : (
-          <button onClick={handleStopLive} className="btn-ghost" disabled={stoppingLive}>
-            <StopCircle className="h-4 w-4" />
-            {stoppingLive ? "Arrêt du live..." : "Terminer mon live"}
-          </button>
-        )}
-        {isLive && config.mode === "camera" && (
-          <p className="text-xs text-ivory/55">
-            Autorise caméra + micro dans ton navigateur. Tu peux changer
-            d'objectif sans couper le live, puis garder cet onglet ouvert.
-          </p>
-        )}
-        {isLive && config.mode === "android-screen" && (
-          <p className="text-xs text-ivory/55">
-            Android maintient ton partage d'écran via le service natif.
-            Si l'appareil refuse la capture, Vaelyndra affichera une erreur
-            claire au lieu de laisser le live figé.
-          </p>
-        )}
-        {isLive && config.mode === "screen" && (
-          <p className="text-xs text-ivory/55">
-            Garde cet onglet ouvert — le flux s'interrompt si tu le fermes.
-          </p>
-        )}
-        {isLive && config.mode === "twitch" && (
-          <p className="text-xs text-ivory/55">
-            Lance aussi le stream depuis OBS pour que la diffusion démarre.
-          </p>
-        )}
-        {isLive && (
-          <Link
-            to={`/live/${user?.id}`}
-            className="btn-ghost"
-            title="Voir mon live côté viewer"
-          >
-            Voir ma page publique
-          </Link>
-        )}
-        {isLive && (
-          <>
-            <button
-              type="button"
-              onClick={openDesktopChatPopout}
-              className="btn-gold"
-              title="Ouvrir le chat live dans une vraie fenêtre PC déplaçable"
-            >
-              <MessageSquare className="h-4 w-4" />
-              Chat pop-out
-            </button>
-            <button
-              type="button"
-              onClick={openOverlayPopout}
-              className="btn-ghost"
-              title="Ouvrir le chat Vaelyndra dans une fenêtre séparée"
-            >
-              <ExternalLink className="h-4 w-4" />
-              Overlay chat
-            </button>
-            <button
-              type="button"
-              onClick={copyOverlayUrl}
-              className="btn-ghost"
-              title="Copier l'URL à ajouter dans OBS comme source navigateur"
-            >
-              <Copy className="h-4 w-4" />
-              URL OBS
-            </button>
-          </>
-        )}
+        <div className="sticky bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-20 mt-6 rounded-3xl border border-gold-300/18 bg-night-950/88 p-3 shadow-2xl shadow-night-950/35 backdrop-blur-md sm:static sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none sm:backdrop-blur-0">
+          <div className="flex flex-wrap items-center gap-3">
+            {!isLive ? (
+              <button
+                onClick={goLive}
+                className="btn-royal w-full justify-center sm:w-auto"
+              >
+                <Radio className="h-4 w-4" />
+                {config.mode === "camera"
+                  ? "Démarrer en caméra"
+                  : config.mode === "screen"
+                    ? "Démarrer le partage"
+                    : "Publier le live Twitch"}
+              </button>
+            ) : (
+              <button
+                onClick={handleStopLive}
+                className="btn-ghost"
+                disabled={stoppingLive}
+              >
+                <StopCircle className="h-4 w-4" />
+                {stoppingLive ? "Arrêt du live..." : "Terminer mon live"}
+              </button>
+            )}
+            {isLive && config.mode === "camera" && (
+              <p className="text-xs text-ivory/55">
+                Autorise caméra + micro dans ton navigateur. Tu peux changer
+                d'objectif sans couper le live, puis garder cet onglet ouvert.
+              </p>
+            )}
+            {isLive && config.mode === "android-screen" && (
+              <p className="text-xs text-ivory/55">
+                Android maintient ton partage d'écran via le service natif. Si
+                l'appareil refuse la capture, Vaelyndra affichera une erreur
+                claire au lieu de laisser le live figé.
+              </p>
+            )}
+            {isLive && config.mode === "screen" && (
+              <p className="text-xs text-ivory/55">
+                Garde cet onglet ouvert — le flux s'interrompt si tu le fermes.
+              </p>
+            )}
+            {isLive && config.mode === "twitch" && (
+              <p className="text-xs text-ivory/55">
+                Lance aussi le stream depuis OBS pour que la diffusion démarre.
+              </p>
+            )}
+            {isLive && (
+              <Link
+                to={`/live/${user?.id}`}
+                className="btn-ghost"
+                title="Voir mon live côté viewer"
+              >
+                Voir ma page publique
+              </Link>
+            )}
+            {isLive && (
+              <>
+                <button
+                  type="button"
+                  onClick={openDesktopChatPopout}
+                  className="btn-gold"
+                  title="Ouvrir le chat live dans une vraie fenêtre PC déplaçable"
+                >
+                  <MessageSquare className="h-4 w-4" />
+                  Chat pop-out
+                </button>
+                <button
+                  type="button"
+                  onClick={openOverlayPopout}
+                  className="btn-ghost"
+                  title="Ouvrir le chat Vaelyndra dans une fenêtre séparée"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  Overlay chat
+                </button>
+                <button
+                  type="button"
+                  onClick={copyOverlayUrl}
+                  className="btn-ghost"
+                  title="Copier l'URL à ajouter dans OBS comme source navigateur"
+                >
+                  <Copy className="h-4 w-4" />
+                  URL OBS
+                </button>
+              </>
+            )}
+          </div>
+        </div>
       </div>
     </section>
   );
@@ -1230,10 +1319,7 @@ export function Live() {
     syncAvatar3dPreference();
 
     const handleStorage = (event: StorageEvent) => {
-      if (
-        event.key &&
-        event.key !== LIVE_AVATAR3D_PREF_STORAGE_KEY
-      ) {
+      if (event.key && event.key !== LIVE_AVATAR3D_PREF_STORAGE_KEY) {
         return;
       }
       syncAvatar3dPreference();
@@ -1267,12 +1353,18 @@ export function Live() {
   // Priorité au cache local `users` (StoredUser), sinon fallback sur le
   // profil serveur chargé via apiGetProfile (les viewers qui n'ont jamais
   // croisé le broadcaster n'ont pas son entrée dans localStorage).
-  const [broadcasterServerProfile, setBroadcasterServerProfile] =
-    useState<{ id: string; username: string; avatar: string } | null>(null);
+  const [broadcasterServerProfile, setBroadcasterServerProfile] = useState<{
+    id: string;
+    username: string;
+    avatar: string;
+  } | null>(null);
   const broadcasterProfile = useMemo<User | null>(() => {
     const local = users.find((u) => u.id === broadcasterId) ?? null;
     if (local) return local;
-    if (broadcasterServerProfile && broadcasterServerProfile.id === broadcasterId) {
+    if (
+      broadcasterServerProfile &&
+      broadcasterServerProfile.id === broadcasterId
+    ) {
       return {
         id: broadcasterServerProfile.id,
         username: broadcasterServerProfile.username,
@@ -1351,7 +1443,9 @@ export function Live() {
   const liveInteractionScopeKey =
     user && broadcasterId ? `${user.id}:${broadcasterId}` : undefined;
   const currentLiveStartedAt =
-    registryEntry?.startedAt ?? (amBroadcaster ? config.startedAt : null) ?? null;
+    registryEntry?.startedAt ??
+    (amBroadcaster ? config.startedAt : null) ??
+    null;
   const liveInteractionSessionKey =
     currentLiveStartedAt ??
     readLiveLocalValue(LIVE_LAST_SESSION_PREFIX, liveInteractionScopeKey) ??
@@ -1369,7 +1463,9 @@ export function Live() {
       ? [user.id, broadcasterId, liveInteractionSessionKey].join(":")
       : undefined;
   const isNativeAndroidHost =
-    amBroadcaster && activeMode === "android-screen" && config.status === "live";
+    amBroadcaster &&
+    activeMode === "android-screen" &&
+    config.status === "live";
   const isHost = amBroadcaster && (!!localStream || isNativeAndroidHost);
   useEffect(() => {
     if (!amBroadcaster || !isActiveLive) {
@@ -1465,9 +1561,7 @@ export function Live() {
   // vrais cadeaux reçus via le canal `gift-event` du WebRTC — plus
   // aucune donnée fictive (cf. demande Alexandre : "je ne veux pas de
   // top soutien fake, je veux les vrais top soutien en temps réel").
-  const [tributes, setTributes] = useState<Record<string, TributeEntry>>(
-    {},
-  );
+  const [tributes, setTributes] = useState<Record<string, TributeEntry>>({});
 
   // Le player passe en vrai plein écran navigateur via la Fullscreen API.
   // On cible la carte entière pour embarquer vidéo + barre d'actions +
@@ -1505,7 +1599,9 @@ export function Live() {
     };
     function onFsChange() {
       const activeElement =
-        document.fullscreenElement ?? fullscreenDoc.webkitFullscreenElement ?? null;
+        document.fullscreenElement ??
+        fullscreenDoc.webkitFullscreenElement ??
+        null;
       const active = activeElement === playerCardRef.current;
       setIsFullscreen(active);
       setFullscreenMode((current) => {
@@ -1514,7 +1610,10 @@ export function Live() {
       });
     }
     document.addEventListener("fullscreenchange", onFsChange);
-    document.addEventListener("webkitfullscreenchange", onFsChange as EventListener);
+    document.addEventListener(
+      "webkitfullscreenchange",
+      onFsChange as EventListener,
+    );
     return () => {
       document.removeEventListener("fullscreenchange", onFsChange);
       document.removeEventListener(
@@ -1539,7 +1638,9 @@ export function Live() {
     }
     function handleEndFullscreen() {
       setIsFullscreen(false);
-      setFullscreenMode((current) => (current === "ios-video" ? null : current));
+      setFullscreenMode((current) =>
+        current === "ios-video" ? null : current,
+      );
     }
     video.addEventListener("webkitbeginfullscreen", handleBeginFullscreen);
     video.addEventListener("webkitendfullscreen", handleEndFullscreen);
@@ -1585,7 +1686,11 @@ export function Live() {
       // de hauteur en dessous puis on verrouille). On scroll un poil
       // au-dela de la hauteur de l'URL bar (~ 60-100 px).
       try {
-        window.scrollTo({ top: 120, left: 0, behavior: "instant" as ScrollBehavior });
+        window.scrollTo({
+          top: 120,
+          left: 0,
+          behavior: "instant" as ScrollBehavior,
+        });
       } catch {
         window.scrollTo(0, 120);
       }
@@ -1644,10 +1749,7 @@ export function Live() {
       autoResumeAttemptRef.current = null;
       return;
     }
-    if (
-      resumableLive.mode !== "camera" &&
-      resumableLive.mode !== "twitch"
-    ) {
+    if (resumableLive.mode !== "camera" && resumableLive.mode !== "twitch") {
       return;
     }
     const key = `${resumableLive.userId}:${resumableLive.mode}:${resumableLive.savedAt}`;
@@ -1663,7 +1765,8 @@ export function Live() {
       webkitExitFullscreen?: () => Promise<void> | void;
       webkitFullscreenElement?: Element | null;
     };
-    const fullscreenEl = document.fullscreenElement ?? fullscreenDoc.webkitFullscreenElement;
+    const fullscreenEl =
+      document.fullscreenElement ?? fullscreenDoc.webkitFullscreenElement;
     const fullscreenTarget = el as HTMLDivElement & {
       webkitRequestFullscreen?: () => Promise<void> | void;
     };
@@ -1709,7 +1812,10 @@ export function Live() {
       } else if (fullscreenTarget.webkitRequestFullscreen) {
         await fullscreenTarget.webkitRequestFullscreen();
         return;
-      } else if (videoEl && typeof videoEl.webkitEnterFullscreen === "function") {
+      } else if (
+        videoEl &&
+        typeof videoEl.webkitEnterFullscreen === "function"
+      ) {
         videoEl.webkitEnterFullscreen();
         return;
       }
@@ -2398,10 +2504,7 @@ export function Live() {
           */}
           {!asOverlay && isActiveLive && (
             <div className="mt-3">
-              <LiveGuestsStrip
-                broadcasterId={broadcasterId}
-                variant="panel"
-              />
+              <LiveGuestsStrip broadcasterId={broadcasterId} variant="panel" />
             </div>
           )}
         </div>
@@ -2583,7 +2686,9 @@ export function Live() {
                   <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.2em] text-ivory/55">
                     <span className="inline-flex h-2 w-2 rounded-full bg-rose-400 shadow-[0_0_12px_rgba(251,113,133,0.7)]" />
                     En direct
-                    <span className={`rounded-full border px-2 py-0.5 ${heroCategory.chipClass}`}>
+                    <span
+                      className={`rounded-full border px-2 py-0.5 ${heroCategory.chipClass}`}
+                    >
                       {heroCategory.label}
                     </span>
                   </div>
@@ -2663,20 +2768,25 @@ export function Live() {
                     : undefined
                 }
               >
-                {fullscreenActive && isActiveLive && broadcasterProfile && !amBroadcaster && (
-                  <button
-                    type="button"
-                    onClick={toggleOfferingPanel}
-                    className="pointer-events-auto inline-flex h-8 items-center gap-1.5 rounded-full bg-gold-500/18 px-3 text-xs font-semibold text-gold-100 backdrop-blur transition hover:bg-gold-500/28"
-                    aria-label={
-                      isOfferingOpen ? "Fermer les offrandes" : "Envoyer une offrande"
-                    }
-                    aria-pressed={isOfferingOpen}
-                  >
-                    <GiftIcon className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Offrande</span>
-                  </button>
-                )}
+                {fullscreenActive &&
+                  isActiveLive &&
+                  broadcasterProfile &&
+                  !amBroadcaster && (
+                    <button
+                      type="button"
+                      onClick={toggleOfferingPanel}
+                      className="pointer-events-auto inline-flex h-8 items-center gap-1.5 rounded-full bg-gold-500/18 px-3 text-xs font-semibold text-gold-100 backdrop-blur transition hover:bg-gold-500/28"
+                      aria-label={
+                        isOfferingOpen
+                          ? "Fermer les offrandes"
+                          : "Envoyer une offrande"
+                      }
+                      aria-pressed={isOfferingOpen}
+                    >
+                      <GiftIcon className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">Offrande</span>
+                    </button>
+                  )}
                 {amBroadcaster && isActiveLive && (
                   <button
                     type="button"
@@ -2835,7 +2945,8 @@ export function Live() {
                         Paramètres du live
                       </p>
                       <p className="mt-1 text-xs text-ivory/55">
-                        Mets à jour le titre et la catégorie sans couper le direct.
+                        Mets à jour le titre et la catégorie sans couper le
+                        direct.
                       </p>
                     </div>
                     <button
@@ -2929,7 +3040,9 @@ export function Live() {
                         disabled={isSavingLiveSettings}
                         className="rounded-full border border-gold-300/45 bg-gold-400/20 px-4 py-2 text-xs font-semibold text-gold-100 transition hover:bg-gold-400/30 disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        {isSavingLiveSettings ? "Enregistrement..." : "Enregistrer"}
+                        {isSavingLiveSettings
+                          ? "Enregistrement..."
+                          : "Enregistrer"}
                       </button>
                     </div>
                   </div>
@@ -2984,35 +3097,39 @@ export function Live() {
                   )}
                 </div>
               )}
-              {fullscreenActive && isOfferingOpen && broadcasterProfile && !amBroadcaster && (
-                <>
-                  <button
-                    type="button"
-                    aria-label="Fermer les offrandes"
-                    onClick={() => setIsOfferingOpen(false)}
-                    className="absolute inset-0 z-[35] bg-night-950/30 backdrop-blur-[1px]"
-                  />
-                  <div
-                    className="absolute inset-x-3 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-[45] max-h-[min(68dvh,34rem)] overflow-y-auto rounded-[2rem] border border-gold-300/25 bg-night-950/94 shadow-[0_30px_90px_rgba(0,0,0,0.55)] backdrop-blur-xl sm:left-auto sm:right-4 sm:w-[min(26rem,calc(100%-2rem))]"
-                    style={
-                      isViewportFullscreen
-                        ? {
-                            left: "calc(0.75rem + env(safe-area-inset-left))",
-                            right: "calc(0.75rem + env(safe-area-inset-right))",
-                          }
-                        : undefined
-                    }
-                  >
-                    <GiftPanel
-                      hostId={broadcasterProfile.id}
-                      hostName={broadcasterProfile.username}
-                      onGiftSent={onGiftSent}
-                      variant="overlay"
-                      onClose={() => setIsOfferingOpen(false)}
+              {fullscreenActive &&
+                isOfferingOpen &&
+                broadcasterProfile &&
+                !amBroadcaster && (
+                  <>
+                    <button
+                      type="button"
+                      aria-label="Fermer les offrandes"
+                      onClick={() => setIsOfferingOpen(false)}
+                      className="absolute inset-0 z-[35] bg-night-950/30 backdrop-blur-[1px]"
                     />
-                  </div>
-                </>
-              )}
+                    <div
+                      className="absolute inset-x-3 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-[45] max-h-[min(68dvh,34rem)] overflow-y-auto rounded-[2rem] border border-gold-300/25 bg-night-950/94 shadow-[0_30px_90px_rgba(0,0,0,0.55)] backdrop-blur-xl sm:left-auto sm:right-4 sm:w-[min(26rem,calc(100%-2rem))]"
+                      style={
+                        isViewportFullscreen
+                          ? {
+                              left: "calc(0.75rem + env(safe-area-inset-left))",
+                              right:
+                                "calc(0.75rem + env(safe-area-inset-right))",
+                            }
+                          : undefined
+                      }
+                    >
+                      <GiftPanel
+                        hostId={broadcasterProfile.id}
+                        hostName={broadcasterProfile.username}
+                        onGiftSent={onGiftSent}
+                        variant="overlay"
+                        onClose={() => setIsOfferingOpen(false)}
+                      />
+                    </div>
+                  </>
+                )}
             </div>
             {/* Bloc d'infos du live (badge En direct, catégorie, titre,
                 description, "avec [streamer]") rendu SOUS le player en
@@ -3047,7 +3164,9 @@ export function Live() {
                   disabled={!broadcasterProfile || !isActiveLive}
                   className="btn-ghost min-h-10 w-full justify-center sm:min-h-0 sm:w-auto"
                   aria-label={
-                    isOfferingOpen ? "Fermer les offrandes" : "Ouvrir les offrandes"
+                    isOfferingOpen
+                      ? "Fermer les offrandes"
+                      : "Ouvrir les offrandes"
                   }
                   aria-pressed={isOfferingOpen}
                 >
@@ -3180,52 +3299,50 @@ export function Live() {
 
           {amBroadcaster && <BroadcasterControls />}
 
-            {replays.length > 0 ? (
-              <section className="mt-12">
-                <SectionHeading
-                  align="left"
-                  eyebrow="Archives des rituels"
-                  title="Lives passés"
-                  subtitle="Revivez les moments marquants de la cour."
-                />
-                <div className="mt-6 grid gap-4 md:grid-cols-3">
-                  {replays.map((l) => (
-                    <div key={l.id} className="card-royal group overflow-hidden">
-                      <div className="relative aspect-video overflow-hidden">
-                        <img
-                          src={l.cover}
-                          alt={l.title}
-                          className="h-full w-full object-cover transition duration-700 group-hover:scale-110"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-night-900 via-night-900/30 to-transparent" />
-                        <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-night-900/70 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-gold-300">
-                          <Archive className="h-3 w-3" /> Replay
-                        </span>
-                        <span className="absolute bottom-3 right-3 inline-flex items-center gap-1 rounded-full bg-night-900/80 px-2 py-0.5 text-xs text-ivory/80">
-                          <Users className="h-3 w-3 text-gold-300" />{" "}
-                          {l.peakViewers}
-                        </span>
-                        <button className="absolute inset-0 m-auto flex h-12 w-12 items-center justify-center rounded-full bg-gold-shine text-night-900 opacity-0 shadow-glow-gold transition group-hover:opacity-100">
-                          <Play className="h-5 w-5" />
-                        </button>
-                      </div>
-                      <div className="p-4">
-                        <h4 className="font-display text-lg text-gold-200">
-                          {l.title}
-                        </h4>
-                        <p className="mt-2 line-clamp-2 text-xs text-ivory/60">
-                          {l.description}
-                        </p>
-                      </div>
+          {replays.length > 0 ? (
+            <section className="mt-12">
+              <SectionHeading
+                align="left"
+                eyebrow="Archives des rituels"
+                title="Lives passés"
+                subtitle="Revivez les moments marquants de la cour."
+              />
+              <div className="mt-6 grid gap-4 md:grid-cols-3">
+                {replays.map((l) => (
+                  <div key={l.id} className="card-royal group overflow-hidden">
+                    <div className="relative aspect-video overflow-hidden">
+                      <img
+                        src={l.cover}
+                        alt={l.title}
+                        className="h-full w-full object-cover transition duration-700 group-hover:scale-110"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-night-900 via-night-900/30 to-transparent" />
+                      <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-night-900/70 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-gold-300">
+                        <Archive className="h-3 w-3" /> Replay
+                      </span>
+                      <span className="absolute bottom-3 right-3 inline-flex items-center gap-1 rounded-full bg-night-900/80 px-2 py-0.5 text-xs text-ivory/80">
+                        <Users className="h-3 w-3 text-gold-300" />{" "}
+                        {l.peakViewers}
+                      </span>
+                      <button className="absolute inset-0 m-auto flex h-12 w-12 items-center justify-center rounded-full bg-gold-shine text-night-900 opacity-0 shadow-glow-gold transition group-hover:opacity-100">
+                        <Play className="h-5 w-5" />
+                      </button>
                     </div>
-                  ))}
-                </div>
-              </section>
-            ) : null}
+                    <div className="p-4">
+                      <h4 className="font-display text-lg text-gold-200">
+                        {l.title}
+                      </h4>
+                      <p className="mt-2 line-clamp-2 text-xs text-ivory/60">
+                        {l.description}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
         </div>
       </div>
     </div>
   );
 }
-
-
