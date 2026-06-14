@@ -14,12 +14,25 @@ import { useToast } from "./ToastContext";
 import type { CommunityPost, User } from "../types";
 import { apiGetProfile, type UserProfileDto } from "../lib/api";
 import { fetchReceivedFamiliarGifts } from "../lib/familiarsApi";
+import { resolveNotificationUrl } from "../lib/notificationRoutes";
 
 export type NotificationKind =
   | "community_like"
   | "community_comment"
   | "community_mention"
+  | "official_event"
+  | "live_mention"
+  | "admin_request"
   | "familiar_gift"
+  | "system";
+
+export type NotificationEntityType =
+  | "community_post"
+  | "community_comment"
+  | "live"
+  | "official_event"
+  | "admin_request"
+  | "profile"
   | "system";
 
 export interface AppNotification {
@@ -30,6 +43,19 @@ export interface AppNotification {
   createdAt: string;
   readAt?: string;
   url?: string;
+  entityType?: NotificationEntityType;
+  entityId?: string;
+  parentEntityId?: string;
+  communityId?: string;
+  communityName?: string;
+  postId?: string;
+  postTitle?: string;
+  commentId?: string;
+  liveId?: string;
+  liveTitle?: string;
+  eventId?: string;
+  locationLabel?: string;
+  priority?: "normal" | "mention" | "important";
   actorId?: string;
   actorName?: string;
   actorAvatar?: string;
@@ -44,6 +70,7 @@ export interface NotificationPreferences {
   communityComments: boolean;
   mentions: boolean;
   familiarGifts: boolean;
+  vibration: boolean;
 }
 
 interface NotificationInput {
@@ -52,6 +79,19 @@ interface NotificationInput {
   title: string;
   body: string;
   url?: string;
+  entityType?: NotificationEntityType;
+  entityId?: string;
+  parentEntityId?: string;
+  communityId?: string;
+  communityName?: string;
+  postId?: string;
+  postTitle?: string;
+  commentId?: string;
+  liveId?: string;
+  liveTitle?: string;
+  eventId?: string;
+  locationLabel?: string;
+  priority?: "normal" | "mention" | "important";
   actorId?: string;
   actorName?: string;
   actorAvatar?: string;
@@ -83,6 +123,7 @@ const DEFAULT_PREFERENCES: NotificationPreferences = {
   communityComments: true,
   mentions: true,
   familiarGifts: true,
+  vibration: true,
 };
 
 const MAX_NOTIFICATIONS = 80;
@@ -147,6 +188,36 @@ function avatarFor(userId: string, usersById: Map<string, User>) {
   return usersById.get(userId)?.avatar;
 }
 
+function excerpt(value: string, fallback: string) {
+  const clean = value.replace(/\s+/g, " ").trim();
+  if (!clean) return fallback;
+  return clean.length > 52 ? `${clean.slice(0, 49)}...` : clean;
+}
+
+function vibrateForNotification(notification: AppNotification) {
+  if (
+    typeof window === "undefined" ||
+    !("vibrate" in navigator) ||
+    typeof navigator.vibrate !== "function"
+  ) {
+    return;
+  }
+
+  const target = resolveNotificationUrl(notification);
+  const current = `${window.location.pathname}${window.location.hash}`;
+  if (current === target) return;
+
+  try {
+    if (notification.priority === "mention") {
+      navigator.vibrate([80, 40, 80]);
+      return;
+    }
+    navigator.vibrate(notification.priority === "important" ? [100, 40, 60] : 90);
+  } catch {
+    // Fallback silencieux : certains navigateurs/WebViews refusent la vibration.
+  }
+}
+
 function shouldFetchProfileAvatar(avatar: string | null | undefined) {
   if (!avatar) return true;
   const trimmed = avatar.trim();
@@ -155,6 +226,115 @@ function shouldFetchProfileAvatar(avatar: string | null | undefined) {
   if (trimmed === "/favicon.svg") return true;
   if (trimmed.startsWith("/")) return true;
   return false;
+}
+
+function findCommunityTarget(event: NotificationInput, posts: CommunityPost[]) {
+  const commentId = event.url?.match(/#comment-([^#?]+)/)?.[1];
+  const postIdFromUrl = event.url?.match(/#post-([^#?]+)/)?.[1];
+  const post =
+    posts.find((entry) => entry.id === postIdFromUrl) ??
+    posts.find((entry) =>
+      commentId
+        ? entry.comments.some((comment) => comment.id === commentId)
+        : false,
+    );
+  const comment = commentId
+    ? post?.comments.find((entry) => entry.id === commentId)
+    : undefined;
+  return { post, comment, commentId };
+}
+
+function enrichCommunityEvent(
+  event: NotificationInput,
+  posts: CommunityPost[],
+): NotificationInput {
+  const { post, comment, commentId } = findCommunityTarget(event, posts);
+  if (!post) return event;
+
+  const postTitle = excerpt(post.content, "Publication communauté");
+  const isOfficialEvent = post.postType === "official_event";
+  const communityName = isOfficialEvent ? "Événements Vaelyndra" : "Vaelyndra";
+  const actorName = event.actorName ?? "Un membre";
+
+  if (event.kind === "community_mention" && comment) {
+    return {
+      ...event,
+      title: `${actorName} vous a identifié`,
+      body: `${actorName} vous a identifié dans un commentaire sous « ${postTitle} ».`,
+      entityType: "community_comment",
+      entityId: comment.id,
+      parentEntityId: post.id,
+      postId: post.id,
+      postTitle,
+      commentId: comment.id,
+      communityId: "vaelyndra",
+      communityName,
+      locationLabel: "Mention en commentaire",
+      priority: "mention",
+    };
+  }
+
+  if (event.kind === "community_mention") {
+    return {
+      ...event,
+      title: `${actorName} vous a identifié`,
+      body: `${actorName} vous a identifié dans une publication de la communauté ${communityName}.`,
+      entityType: isOfficialEvent ? "official_event" : "community_post",
+      entityId: post.id,
+      postId: post.id,
+      postTitle,
+      communityId: "vaelyndra",
+      communityName,
+      locationLabel: isOfficialEvent ? "Événement Vaelyndra" : "Fil communauté",
+      priority: "mention",
+    };
+  }
+
+  if (event.kind === "community_comment" && comment) {
+    const isReply = Boolean(comment.replyToAuthorId);
+    return {
+      ...event,
+      title: isReply
+        ? `${actorName} a répondu à votre commentaire`
+        : `${actorName} a commenté votre publication`,
+      body: isReply
+        ? `${actorName} a répondu à votre commentaire sous « ${postTitle} ».`
+        : `${actorName} a commenté votre publication « ${postTitle} ».`,
+      entityType: "community_comment",
+      entityId: comment.id,
+      parentEntityId: post.id,
+      postId: post.id,
+      postTitle,
+      commentId: comment.id,
+      communityId: "vaelyndra",
+      communityName,
+      locationLabel: isReply ? "Réponse à votre commentaire" : "Commentaire communauté",
+    };
+  }
+
+  if (event.kind === "community_like") {
+    const likedComment = commentId ? comment : undefined;
+    return {
+      ...event,
+      title: likedComment
+        ? `${actorName} a aimé votre commentaire`
+        : `${actorName} a réagi à votre publication`,
+      body: likedComment
+        ? `${actorName} a aimé votre commentaire sous « ${postTitle} ».`
+        : `${actorName} a réagi à votre publication dans le fil communauté.`,
+      entityType: likedComment ? "community_comment" : "community_post",
+      entityId: likedComment?.id ?? post.id,
+      parentEntityId: likedComment ? post.id : undefined,
+      postId: post.id,
+      postTitle,
+      commentId: likedComment?.id,
+      communityId: "vaelyndra",
+      communityName,
+      locationLabel: likedComment ? "Commentaire communauté" : "Fil communauté",
+    };
+  }
+
+  return event;
 }
 
 function collectCommunityEvents(
@@ -279,7 +459,7 @@ function collectCommunityEvents(
     });
   });
 
-  return events;
+  return events.map((event) => enrichCommunityEvent(event, posts));
 }
 
 function isKindEnabled(
@@ -307,6 +487,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     NotificationPermission | "unsupported"
   >(() => getPermission());
   const seenEventIdsRef = useRef<Set<string>>(new Set());
+  const deliveredNotificationIdsRef = useRef<Set<string>>(new Set());
   const bootstrappedUserRef = useRef<string | null>(null);
   const giftsBootstrappedRef = useRef<string | null>(null);
 
@@ -320,6 +501,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       setPreferences(DEFAULT_PREFERENCES);
       setProfilesById({});
       seenEventIdsRef.current = new Set();
+      deliveredNotificationIdsRef.current = new Set();
       bootstrappedUserRef.current = null;
       giftsBootstrappedRef.current = null;
       return;
@@ -337,6 +519,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     setPreferences(savedPreferences);
     setProfilesById({});
     seenEventIdsRef.current = new Set(
+      savedNotifications.map((item) => item.id),
+    );
+    deliveredNotificationIdsRef.current = new Set(
       savedNotifications.map((item) => item.id),
     );
     bootstrappedUserRef.current = null;
@@ -443,11 +628,11 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           body: notification.body,
           icon: notification.actorAvatar || "/favicon.svg",
           tag: notification.id,
-          data: { url: notification.url },
+          data: { url: resolveNotificationUrl(notification) },
         });
         systemNotification.onclick = () => {
           window.focus();
-          if (notification.url) window.location.assign(notification.url);
+          window.location.assign(resolveNotificationUrl(notification));
           systemNotification.close();
         };
       } catch {
@@ -468,6 +653,11 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         createdAt: new Date().toISOString(),
       };
 
+      if (deliveredNotificationIdsRef.current.has(notification.id)) {
+        return;
+      }
+      deliveredNotificationIdsRef.current.add(notification.id);
+
       if (preferences.inApp) {
         setNotifications((current) => {
           if (current.some((item) => item.id === notification.id))
@@ -475,6 +665,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           return [notification, ...current].slice(0, MAX_NOTIFICATIONS);
         });
         notify(notification.title, "info");
+        if (preferences.vibration) {
+          vibrateForNotification(notification);
+        }
       }
 
       emitBrowserNotification(notification);
@@ -585,6 +778,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           title: "Offrande à ton familier 🎁",
           body: `${gift.senderName} a offert ${gift.amount} Sylvins à ton familier (+${gift.xpGranted} XP).`,
           url: profileUrl,
+          entityType: "profile",
+          entityId: gift.senderId,
+          locationLabel: "Profil du membre",
+          priority: "important",
           actionLabel: "Offrir en retour",
           actionUrl: profileUrl,
           actorId: gift.senderId,
