@@ -23,7 +23,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import clsx from "clsx";
 
@@ -69,6 +69,14 @@ const MOBILE_TABS = [
   },
 ];
 
+type MobileMenuLink = {
+  to: string;
+  label: string;
+  icon: typeof House;
+  end?: boolean;
+  badge?: string;
+};
+
 export function Navbar() {
   const { user, isQueen, logout, backendMe } = useAuth();
   const { cartCount } = useStore();
@@ -95,8 +103,70 @@ export function Navbar() {
     backendMe?.role === "architect" ||
     backendMe?.role === "admin" ||
     backendMe?.role === "animator";
-  const adminLabel =
-    backendMe?.role === "animator" ? "Chroniques" : "Salle du Trône";
+  const adminLabel = "Salle du Trône";
+  const mobileMainLinks: MobileMenuLink[] = [
+    { to: "/", label: "Accueil", icon: House, end: true },
+    { to: "/blog", label: "Chroniques", icon: Crown },
+    { to: "/communaute", label: "Communauté", icon: Users },
+    { to: "/mondes", label: "Monde", icon: Gamepad2 },
+    { to: "/live", label: "Lives", icon: Radio, end: true },
+    { to: "/boutique", label: "Boutique", icon: ShoppingBag },
+    { to: "/wiki", label: "Wiki / Aide", icon: Settings },
+  ];
+  const mobileAccountLinks: MobileMenuLink[] = user
+    ? [
+        { to: "/moi", label: "Profil", icon: UserRound },
+        {
+          to: "/messages",
+          label: "Messages",
+          icon: MessageCircle,
+          badge: unreadCount > 0 ? (unreadCount > 99 ? "99+" : String(unreadCount)) : undefined,
+        },
+        { to: "/familier", label: "Familiers", icon: Gift },
+        { to: "/compte", label: "Compte", icon: Settings },
+        { to: "/connexions", label: "Appareils", icon: ShieldCheck },
+        {
+          to: "/panier",
+          label: "Panier",
+          icon: ShoppingBag,
+          badge: cartCount > 0 ? String(cartCount) : undefined,
+        },
+      ]
+    : [];
+  const mobileStaffLinks: MobileMenuLink[] =
+    canAccessAdmin ? [{ to: "/admin", label: adminLabel, icon: ShieldCheck }] : [];
+
+  const renderMobileMenuLink = (link: MobileMenuLink, tone: "default" | "staff" = "default") => {
+    const Icon = link.icon;
+    return (
+      <NavLink
+        key={link.to}
+        to={link.to}
+        end={link.end}
+        onClick={() => setOpen(false)}
+        className={({ isActive }) =>
+          clsx(
+            "flex min-h-10 items-center gap-2.5 rounded-2xl border px-3 py-2 text-sm font-semibold transition active:scale-[0.99]",
+            tone === "staff"
+              ? isActive
+                ? "border-gold-200/60 bg-gold-300/18 text-gold-50 shadow-[0_0_26px_rgba(250,204,21,0.16)]"
+                : "border-gold-300/35 bg-gold-500/10 text-gold-100 hover:border-gold-200/60"
+              : isActive
+                ? "border-gold-300/40 bg-gold-500/14 text-gold-100"
+                : "border-white/8 bg-white/[0.035] text-ivory/74 hover:border-white/16 hover:bg-white/[0.06] hover:text-ivory",
+          )
+        }
+      >
+        <Icon className="h-4 w-4 shrink-0" />
+        <span className="min-w-0 flex-1 truncate">{link.label}</span>
+        {link.badge && (
+          <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-gold-shine px-1.5 text-[10px] font-bold text-night-950">
+            {link.badge}
+          </span>
+        )}
+      </NavLink>
+    );
+  };
 
   useEffect(() => {
     if (!notificationsOpen) return;
@@ -114,6 +184,17 @@ export function Navbar() {
     return () => {
       document.body.style.overflow = previous;
     };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
   }, [open]);
 
   useEffect(() => {
@@ -556,82 +637,64 @@ export function Navbar() {
             </button>
           </div>
         </div>
-        {open && (
-          <div className="border-t border-royal-600/20 bg-night-900/95 lg:hidden">
-            <nav className="mx-auto grid max-h-[calc(100dvh-4.5rem)] max-w-7xl gap-2 overflow-y-auto px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-4">
-              {NAV.map((n) => (
-                <NavLink
-                  key={n.to}
-                  to={n.to}
-                  end={n.to === "/" || n.to === "/live"}
-                  onClick={() => setOpen(false)}
-                  className={({ isActive }) =>
-                    clsx(
-                      "rounded-2xl px-4 py-3 font-regal text-xs font-semibold tracking-[0.18em] transition",
-                      isActive
-                        ? "bg-gold-500/15 text-gold-200"
-                        : "border border-royal-500/20 text-ivory/75",
-                    )
-                  }
-                >
-                  {n.label}
-                </NavLink>
-              ))}
-              {user && (
-                <>
-                  <NavLink
-                    to="/live/studio"
-                    onClick={() => setOpen(false)}
-                    className="rounded-2xl border border-royal-500/30 px-4 py-3 font-regal text-xs font-semibold tracking-[0.18em] text-ivory/80"
-                  >
-                    Mon live
-                  </NavLink>
-                  <NavLink
-                    to="/messages"
-                    onClick={() => setOpen(false)}
-                    className="rounded-2xl border border-royal-500/30 px-4 py-3 font-regal text-xs font-semibold tracking-[0.18em] text-ivory/80"
-                  >
-                    Messages
-                  </NavLink>
-                  <NavLink
-                    to="/compte"
-                    onClick={() => setOpen(false)}
-                    className="rounded-2xl border border-royal-500/30 px-4 py-3 font-regal text-xs font-semibold tracking-[0.18em] text-ivory/80"
-                  >
-                    Mon compte
-                  </NavLink>
-                  <NavLink
-                    to="/connexions"
-                    onClick={() => setOpen(false)}
-                    className="rounded-2xl border border-royal-500/30 px-4 py-3 font-regal text-xs font-semibold tracking-[0.18em] text-ivory/80"
-                  >
-                    Historique & appareils
-                  </NavLink>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setOpen(false);
-                      logout();
-                      navigate("/");
-                    }}
-                    className="rounded-2xl border border-royal-500/30 px-4 py-3 text-left font-regal text-xs font-semibold tracking-[0.18em] text-ivory/80"
-                  >
-                    Déconnexion
-                  </button>
-                </>
-              )}
-              {canAccessAdmin && (
-                <NavLink
-                  to="/admin"
-                  onClick={() => setOpen(false)}
-                  className="rounded-2xl border border-gold-400/40 bg-gold-500/10 px-4 py-3 font-regal text-xs font-semibold tracking-[0.18em] text-gold-200"
-                >
-                  {adminLabel}
-                </NavLink>
-              )}
-            </nav>
-          </div>
-        )}
+        {open &&
+          createPortal(
+            <div className="fixed inset-0 z-[95] lg:hidden">
+              <button
+                type="button"
+                aria-label="Fermer le menu"
+                className="absolute inset-0 bg-night-950/45 backdrop-blur-[2px]"
+                onClick={() => setOpen(false)}
+              />
+              <nav
+                className="absolute right-3 top-[calc(4.35rem+env(safe-area-inset-top))] flex max-h-[calc(100dvh-5.35rem)] w-[min(21rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-[1.55rem] border border-white/10 bg-night-950/94 shadow-[0_26px_90px_rgba(0,0,0,0.58)] backdrop-blur-2xl"
+                aria-label="Menu mobile"
+              >
+                <div className="border-b border-white/8 px-4 py-3">
+                  <p className="text-[10px] uppercase tracking-[0.24em] text-gold-200/70">
+                    Menu Vaelyndra
+                  </p>
+                  <p className="mt-1 truncate text-sm text-ivory/58">
+                    {user ? user.username : "Navigation rapide"}
+                  </p>
+                </div>
+                <div className="min-h-0 overflow-y-auto px-3 py-3">
+                  <MobileMenuSection title="Principal">
+                    {mobileMainLinks.map((link) => renderMobileMenuLink(link))}
+                  </MobileMenuSection>
+
+                  {user && (
+                    <MobileMenuSection title="Compte">
+                      {mobileAccountLinks.map((link) => renderMobileMenuLink(link))}
+                    </MobileMenuSection>
+                  )}
+
+                  {mobileStaffLinks.length > 0 && (
+                    <MobileMenuSection title="Staff">
+                      {mobileStaffLinks.map((link) => renderMobileMenuLink(link, "staff"))}
+                    </MobileMenuSection>
+                  )}
+                </div>
+                {user && (
+                  <div className="border-t border-white/8 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOpen(false);
+                        logout();
+                        navigate("/");
+                      }}
+                      className="flex min-h-10 w-full items-center gap-2.5 rounded-2xl border border-white/10 bg-white/[0.035] px-3 py-2 text-left text-sm font-semibold text-ivory/70 transition hover:border-rose-300/35 hover:bg-rose-500/10 hover:text-rose-100 active:scale-[0.99]"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      <span>Déconnexion</span>
+                    </button>
+                  </div>
+                )}
+              </nav>
+            </div>,
+            document.body,
+          )}
       </div>
       <nav
         className="mobile-tabbar fixed inset-x-3 bottom-[calc(0.55rem+env(safe-area-inset-bottom))] z-50 grid grid-cols-5 rounded-[1.55rem] border border-white/10 bg-night-950/88 p-1.5 shadow-[0_20px_70px_rgba(0,0,0,0.5)] backdrop-blur-2xl lg:hidden"
@@ -660,5 +723,22 @@ export function Navbar() {
         })}
       </nav>
     </header>
+  );
+}
+
+function MobileMenuSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="mt-3 first:mt-0">
+      <p className="mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-ivory/38">
+        {title}
+      </p>
+      <div className="grid gap-1.5">{children}</div>
+    </section>
   );
 }
