@@ -41,6 +41,7 @@ import {
   parsePostImageUrl,
   parseVideoUrl,
 } from "../lib/helpers";
+import { scrollToDeepLinkTarget } from "../lib/deepLinkScroll";
 import {
   apiCreatePost,
   apiDeletePost,
@@ -281,36 +282,42 @@ export function Community() {
 
   useEffect(() => {
     const hash = location.hash.replace(/^#/, "").trim();
-    if (!hash.startsWith("comment-")) return;
-    const commentId = hash.slice("comment-".length);
-    if (!commentId) return;
-    const parentPost = posts.find((post) =>
-      post.comments.some((comment) => comment.id === commentId),
-    );
-    if (!parentPost) return;
+    if (!hash) return;
 
-    setOpenComments((current) => ({
-      ...current,
-      [parentPost.id]: true,
-    }));
+    let targetId = "";
+    let targetExists = false;
 
-    const scrollToComment = () => {
-      const element = document.getElementById(`comment-${commentId}`);
-      if (!element) return false;
-      element.scrollIntoView({ behavior: "smooth", block: "center" });
-      return true;
-    };
+    if (hash.startsWith("comment-")) {
+      const commentId = hash.slice("comment-".length);
+      const parentPost = posts.find((post) =>
+        post.comments.some((comment) => comment.id === commentId),
+      );
+      targetId = `comment-${commentId}`;
+      targetExists = Boolean(parentPost);
+      if (parentPost) {
+        window.setTimeout(() => {
+          setOpenComments((current) => ({
+            ...current,
+            [parentPost.id]: true,
+          }));
+        }, 0);
+      }
+    } else if (hash.startsWith("post-")) {
+      const postId = hash.slice("post-".length);
+      targetId = `post-${postId}`;
+      targetExists = posts.some((post) => post.id === postId);
+    }
 
-    if (scrollToComment()) return;
+    if (!targetId) return;
 
-    const frame = window.requestAnimationFrame(() => {
-      window.setTimeout(() => {
-        scrollToComment();
-      }, 80);
+    return scrollToDeepLinkTarget(targetId, {
+      onMissing: () => {
+        if (!targetExists && posts.length > 0) {
+          notify("Le contenu lié à cette notification n'est plus disponible.", "info");
+        }
+      },
     });
-
-    return () => window.cancelAnimationFrame(frame);
-  }, [location.hash, posts]);
+  }, [location.hash, location.key, notify, posts]);
 
   async function publish(e: React.FormEvent) {
     e.preventDefault();

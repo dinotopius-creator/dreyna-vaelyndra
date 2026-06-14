@@ -1,7 +1,6 @@
 import type { AppNotification } from "../contexts/NotificationsContext";
 
 export function resolveNotificationUrl(notification: AppNotification) {
-  if (notification.url) return notification.url;
   if (notification.entityType === "community_comment" && notification.commentId) {
     return `/communaute#comment-${notification.commentId}`;
   }
@@ -21,5 +20,6 @@ export function resolveNotificationUrl(notification: AppNotification) {
   if (notification.entityType === "profile" && notification.actorId) {
     return `/u/${notification.actorId}`;
   }
+  if (notification.url) return notification.url;
   return "/communaute";
 }

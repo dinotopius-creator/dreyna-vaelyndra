@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { CheckCircle2, ClipboardList, XCircle } from "lucide-react";
+import { useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
 import {
@@ -9,6 +10,7 @@ import {
   type AdminRequestEntry,
 } from "../lib/adminApi";
 import { formatDate } from "../lib/helpers";
+import { scrollToDeepLinkTarget } from "../lib/deepLinkScroll";
 
 const ACTION_LABELS: Record<string, string> = {
   grant_lueurs: "Don de lueurs",
@@ -26,6 +28,7 @@ const STATUS_LABELS: Record<string, string> = {
 export function AdminRequestsTab() {
   const { backendMe } = useAuth();
   const { notify } = useToast();
+  const location = useLocation();
   const [requests, setRequests] = useState<AdminRequestEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [reviewingId, setReviewingId] = useState<number | null>(null);
@@ -53,6 +56,18 @@ export function AdminRequestsTab() {
     }, 0);
     return () => window.clearTimeout(timer);
   }, [load]);
+
+  useEffect(() => {
+    const hash = location.hash.replace(/^#/, "").trim();
+    if (!hash.startsWith("request-")) return;
+    return scrollToDeepLinkTarget(hash, {
+      onMissing: () => {
+        if (requests.length > 0) {
+          notify("La demande liée à cette notification n'est plus disponible.", "info");
+        }
+      },
+    });
+  }, [location.hash, location.key, notify, requests]);
 
   async function review(
     request: AdminRequestEntry,
@@ -107,6 +122,7 @@ export function AdminRequestsTab() {
         {requests.map((request) => (
           <li
             key={request.id}
+            id={`request-${request.id}`}
             className="rounded-2xl border border-royal-500/30 bg-night-900/45 p-4"
           >
             <div className="flex flex-wrap items-start justify-between gap-3">
