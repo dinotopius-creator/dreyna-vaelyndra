@@ -1462,6 +1462,7 @@ export function Live() {
     user && broadcasterId
       ? [user.id, broadcasterId, liveInteractionSessionKey].join(":")
       : undefined;
+  const liveInteractionsEnabled = isActiveLive && !!broadcasterProfile;
   const isNativeAndroidHost =
     amBroadcaster &&
     activeMode === "android-screen" &&
@@ -2321,6 +2322,10 @@ export function Live() {
   // gardent uniquement l'animation cœur, sans remplir le chat.
   const announcedHeartKeysRef = useRef<Set<string>>(new Set());
   function shootHeart() {
+    if (!liveInteractionsEnabled) {
+      notify("Les cœurs sont disponibles uniquement pendant le live.", "info");
+      return;
+    }
     const emitterId = user?.id ?? "anon";
     // Position horizontale aléatoire mais bornée pour rester centrée.
     const x = 20 + Math.random() * 60;
@@ -2348,6 +2353,10 @@ export function Live() {
   function castSortDAppel(level: SortLevel): boolean {
     if (!user) {
       notify("Connectez-vous pour lancer un sort d'appel.", "info");
+      return false;
+    }
+    if (!liveInteractionsEnabled) {
+      notify("Les sorts sont disponibles uniquement pendant le live.", "info");
       return false;
     }
     const tier = SORT_LEVELS.find((s) => s.level === level);
@@ -2378,6 +2387,13 @@ export function Live() {
    */
   function onGiftSent(gift: Gift) {
     if (!user) return;
+    if (!liveInteractionsEnabled) {
+      notify(
+        "Les offrandes sont disponibles uniquement pendant le live.",
+        "info",
+      );
+      return;
+    }
     setIsOfferingOpen(false);
     const event: LiveGiftEvent = {
       id: generateId("giftevt"),
@@ -2391,7 +2407,13 @@ export function Live() {
   }
 
   function toggleOfferingPanel() {
-    if (!broadcasterProfile || !isActiveLive) return;
+    if (!liveInteractionsEnabled) {
+      notify(
+        "Les offrandes sont disponibles uniquement pendant le live.",
+        "info",
+      );
+      return;
+    }
     setIsOfferingOpen((open) => !open);
   }
 
@@ -3098,6 +3120,7 @@ export function Live() {
                 </div>
               )}
               {fullscreenActive &&
+                liveInteractionsEnabled &&
                 isOfferingOpen &&
                 broadcasterProfile &&
                 !amBroadcaster && (
@@ -3147,28 +3170,43 @@ export function Live() {
               <div className="pointer-events-auto grid w-full grid-cols-3 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
                 <button
                   onClick={shootHeart}
-                  className="btn-ghost min-h-10 w-full justify-center sm:min-h-0 sm:w-auto"
+                  disabled={!liveInteractionsEnabled}
+                  className="btn-ghost min-h-10 w-full justify-center disabled:cursor-not-allowed disabled:opacity-45 sm:min-h-0 sm:w-auto"
                   aria-label="Envoyer un cœur"
+                  title={
+                    liveInteractionsEnabled
+                      ? "Envoyer un cœur"
+                      : "Les cœurs sont disponibles uniquement pendant le live"
+                  }
                 >
                   <Heart className="h-3.5 w-3.5" /> Cœur
                 </button>
                 <SortDAppelCaster
                   onCast={castSortDAppel}
-                  disabled={!user}
+                  disabled={!user || !liveInteractionsEnabled}
                   persistenceKey={liveSpellPersistenceKey}
-                  className="min-h-10 w-full justify-center sm:min-h-0 sm:w-auto"
+                  className="min-h-10 w-full justify-center disabled:cursor-not-allowed disabled:opacity-45 sm:min-h-0 sm:w-auto"
                 />
                 <button
                   type="button"
                   onClick={toggleOfferingPanel}
-                  disabled={!broadcasterProfile || !isActiveLive}
-                  className="btn-ghost min-h-10 w-full justify-center sm:min-h-0 sm:w-auto"
+                  disabled={!liveInteractionsEnabled}
+                  className="btn-ghost min-h-10 w-full justify-center disabled:cursor-not-allowed disabled:opacity-45 sm:min-h-0 sm:w-auto"
                   aria-label={
-                    isOfferingOpen
-                      ? "Fermer les offrandes"
-                      : "Ouvrir les offrandes"
+                    liveInteractionsEnabled
+                      ? isOfferingOpen
+                        ? "Fermer les offrandes"
+                        : "Ouvrir les offrandes"
+                      : "Les offrandes sont disponibles uniquement pendant le live"
                   }
                   aria-pressed={isOfferingOpen}
+                  title={
+                    liveInteractionsEnabled
+                      ? isOfferingOpen
+                        ? "Fermer les offrandes"
+                        : "Ouvrir les offrandes"
+                      : "Les offrandes sont disponibles uniquement pendant le live"
+                  }
                 >
                   <GiftIcon className="h-3.5 w-3.5" /> Offrande
                 </button>
@@ -3182,20 +3220,23 @@ export function Live() {
                   ? "Chat live intégré au lecteur. Les Sorts I/II/III gardent leur cooldown (10 / 25 / 60 s)."
                   : broadcasterProfile && amBroadcaster
                     ? "Configure puis démarre ton direct depuis le studio."
-                    : "Aucun direct actif pour le moment."}
+                    : "Aucun direct actif pour le moment. Les interactions sont désactivées."}
               </p>
             </div>
-            {isOfferingOpen && broadcasterProfile && !fullscreenActive && (
-              <div className="px-4 pb-4">
-                <GiftPanel
-                  hostId={broadcasterProfile.id}
-                  hostName={broadcasterProfile.username}
-                  onGiftSent={onGiftSent}
-                  variant="overlay"
-                  onClose={() => setIsOfferingOpen(false)}
-                />
-              </div>
-            )}
+            {liveInteractionsEnabled &&
+              isOfferingOpen &&
+              broadcasterProfile &&
+              !fullscreenActive && (
+                <div className="px-4 pb-4">
+                  <GiftPanel
+                    hostId={broadcasterProfile.id}
+                    hostName={broadcasterProfile.username}
+                    onGiftSent={onGiftSent}
+                    variant="overlay"
+                    onClose={() => setIsOfferingOpen(false)}
+                  />
+                </div>
+              )}
           </div>
 
           {/* Carte « présentation du streamer » : nom en grand juste

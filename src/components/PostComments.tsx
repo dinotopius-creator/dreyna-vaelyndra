@@ -6,7 +6,12 @@ import { useProfile } from "../contexts/ProfileContext";
 import { useStore } from "../contexts/StoreContext";
 import { useToast } from "../contexts/ToastContext";
 import { formatRelative } from "../lib/helpers";
-import { apiAddComment, apiDeleteComment, apiToggleCommentLike, type UserProfileDto } from "../lib/api";
+import {
+  apiAddComment,
+  apiDeleteComment,
+  apiToggleCommentLike,
+  type UserProfileDto,
+} from "../lib/api";
 import type { Comment } from "../types";
 import { getOfficial } from "../data/officials";
 import { Handle } from "./Handle";
@@ -205,7 +210,12 @@ export function PostComments({
       dispatch({ type: "replaceComment", postId, comment: updated });
     } catch (err) {
       console.warn(err);
-      dispatch({ type: "toggleCommentLike", postId, commentId, userId: user.id });
+      dispatch({
+        type: "toggleCommentLike",
+        postId,
+        commentId,
+        userId: user.id,
+      });
       notify("Like perdu en route.", "error");
     }
   }
@@ -230,8 +240,8 @@ export function PostComments({
       <li
         key={comment.id}
         id={`comment-${comment.id}`}
-        className={`flex w-full min-w-0 items-start gap-2.5 sm:gap-3 ${
-          isReply ? "rounded-2xl bg-night-950/18 py-2" : ""
+        className={`flex w-full min-w-0 items-start gap-2.5 rounded-3xl border border-white/8 px-3 py-2.5 sm:gap-3 ${
+          isReply ? "bg-night-950/18" : "bg-night-900/28"
         }`}
       >
         <Link to={profileHref(comment.authorId)} className="shrink-0">
@@ -277,7 +287,7 @@ export function PostComments({
             </p>
 
             {comment.replyToAuthorName && (
-              <p className="mt-1 text-[11px] text-gold-300/85">
+              <p className="mt-1 inline-flex max-w-full items-center gap-1 rounded-full border border-gold-400/15 bg-gold-500/10 px-2 py-0.5 text-[11px] text-gold-300/85">
                 Réponse à{" "}
                 {comment.replyToAuthorId ? (
                   <Link
@@ -321,7 +331,9 @@ export function PostComments({
               >
                 <Heart
                   className="h-3.5 w-3.5"
-                  fill={comment.likes.includes(user.id) ? "currentColor" : "none"}
+                  fill={
+                    comment.likes.includes(user.id) ? "currentColor" : "none"
+                  }
                 />
                 {comment.likes.length > 0 && (
                   <span>{comment.likes.length}</span>
@@ -367,18 +379,21 @@ export function PostComments({
     : null;
 
   return (
-    <div className="mt-4 border-t border-royal-500/15 pt-4">
+    <div className="mt-4 rounded-3xl border border-white/8 bg-night-950/25 p-3 shadow-inner shadow-night-950/20 sm:p-4">
       {comments.length === 0 && (
         <div className="rounded-2xl border border-white/10 bg-night-950/35 px-4 py-3 text-sm text-ivory/58">
           Aucun commentaire pour le moment. Soyez le premier à répondre.
         </div>
       )}
 
-      <ul className="space-y-2.5 overflow-x-hidden">
+      <ul className="space-y-3 overflow-x-hidden">
         {flatThread.map((comment) => renderComment(comment))}
       </ul>
 
-      <form onSubmit={submit} className="mt-3 flex min-w-0 items-start gap-2.5 sm:gap-3">
+      <form
+        onSubmit={submit}
+        className="mt-3 flex min-w-0 items-start gap-2.5 rounded-3xl border border-white/8 bg-night-900/40 p-3 sm:gap-3"
+      >
         <AvatarImage
           candidates={[user?.avatar]}
           fallbackSeed={user?.id ?? "anon"}

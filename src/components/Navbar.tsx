@@ -44,7 +44,12 @@ const NAV = [
 ];
 
 const MOBILE_TABS = [
-  { to: "/", label: "Accueil", icon: House, match: (path: string) => path === "/" },
+  {
+    to: "/",
+    label: "Accueil",
+    icon: House,
+    match: (path: string) => path === "/",
+  },
   {
     to: "/mondes",
     label: "Monde",
@@ -138,7 +143,12 @@ export function Navbar() {
           to: "/messages",
           label: "Messages",
           icon: MessageCircle,
-          badge: unreadCount > 0 ? (unreadCount > 99 ? "99+" : String(unreadCount)) : undefined,
+          badge:
+            unreadCount > 0
+              ? unreadCount > 99
+                ? "99+"
+                : String(unreadCount)
+              : undefined,
         },
         { to: "/familier", label: "Familiers", icon: Gift },
         { to: "/compte", label: "Compte", icon: Settings },
@@ -151,26 +161,42 @@ export function Navbar() {
         },
       ]
     : [];
-  const mobileStaffLinks: MobileMenuLink[] =
-    canAccessAdmin ? [{ to: "/admin", label: adminLabel, icon: ShieldCheck }] : [];
+  const mobileStaffLinks: MobileMenuLink[] = canAccessAdmin
+    ? [{ to: "/admin", label: adminLabel, icon: ShieldCheck }]
+    : [];
   const filteredNotifications = notifications.filter((notification) => {
     if (notificationFilter === "all") return true;
     if (notificationFilter === "mentions") {
-      return notification.kind === "community_mention" || notification.kind === "live_mention";
+      return (
+        notification.kind === "community_mention" ||
+        notification.kind === "live_mention"
+      );
     }
     if (notificationFilter === "community") {
-      return notification.kind.startsWith("community_") || notification.kind === "official_event";
+      return (
+        notification.kind.startsWith("community_") ||
+        notification.kind === "official_event"
+      );
     }
     if (notificationFilter === "lives") {
-      return notification.kind === "live_mention" || notification.entityType === "live";
+      return (
+        notification.kind === "live_mention" ||
+        notification.entityType === "live"
+      );
     }
     if (notificationFilter === "staff") {
-      return notification.kind === "admin_request" || notification.entityType === "admin_request";
+      return (
+        notification.kind === "admin_request" ||
+        notification.entityType === "admin_request"
+      );
     }
     return true;
   });
 
-  const renderMobileMenuLink = (link: MobileMenuLink, tone: "default" | "staff" = "default") => {
+  const renderMobileMenuLink = (
+    link: MobileMenuLink,
+    tone: "default" | "staff" = "default",
+  ) => {
     const Icon = link.icon;
     return (
       <NavLink
@@ -180,7 +206,7 @@ export function Navbar() {
         onClick={() => setOpen(false)}
         className={({ isActive }) =>
           clsx(
-            "flex min-h-10 items-center gap-2.5 rounded-2xl border px-3 py-2 text-sm font-semibold transition active:scale-[0.99]",
+            "flex min-h-10 items-center gap-2.5 rounded-2xl border px-3 py-2.5 text-sm font-semibold transition active:scale-[0.99]",
             tone === "staff"
               ? isActive
                 ? "border-gold-200/60 bg-gold-300/18 text-gold-50 shadow-[0_0_26px_rgba(250,204,21,0.16)]"
@@ -210,7 +236,10 @@ export function Navbar() {
   };
 
   const notificationIcon = (notification: AppNotification) => {
-    if (notification.kind === "community_mention" || notification.kind === "live_mention") {
+    if (
+      notification.kind === "community_mention" ||
+      notification.kind === "live_mention"
+    ) {
       return AtSign;
     }
     if (notification.kind === "community_like") return Heart;
@@ -314,7 +343,9 @@ export function Navbar() {
                   aria-expanded={notificationsOpen}
                 >
                   <Bell className="h-4 w-4" />
-                  <span className="hidden sm:inline lg:hidden 2xl:inline">Notifs</span>
+                  <span className="hidden sm:inline lg:hidden 2xl:inline">
+                    Notifs
+                  </span>
                   {notificationUnreadCount > 0 && (
                     <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-gold-shine px-1 text-[10px] font-bold text-night-900">
                       {notificationUnreadCount > 99
@@ -412,7 +443,8 @@ export function Navbar() {
                                 Aucune notification pour le moment
                               </p>
                               <p className="mt-1 max-w-56 text-xs leading-relaxed text-ivory/55">
-                                Les mentions, commentaires, lives et événements importants arriveront ici.
+                                Les mentions, commentaires, lives et événements
+                                importants arriveront ici.
                               </p>
                             </div>
                           ) : filteredNotifications.length === 0 ? (
@@ -422,102 +454,117 @@ export function Navbar() {
                                 Rien dans ce filtre
                               </p>
                               <p className="mt-1 max-w-56 text-xs leading-relaxed text-ivory/50">
-                                Change de catégorie pour voir les autres notifications.
+                                Change de catégorie pour voir les autres
+                                notifications.
                               </p>
                             </div>
                           ) : (
-                            filteredNotifications.slice(0, 20).map((notification) => {
-                              const Icon = notificationIcon(notification);
-                              const targetUrl = resolveNotificationUrl(notification);
-                              return (
-                              <div
-                                key={notification.id}
-                                className={clsx(
-                                  "flex gap-3 border-b border-royal-600/15 px-4 py-3 transition last:border-b-0",
-                                  notification.readAt
-                                    ? "bg-transparent"
-                                    : "bg-gold-500/10 shadow-[inset_3px_0_0_rgba(230,194,116,0.65)]",
-                                )}
-                              >
-                                <button
-                                  type="button"
-                                  onClick={() => openNotification(notification)}
-                                  className="relative h-10 w-10 flex-none overflow-hidden rounded-full bg-night-800 text-left ring-1 ring-gold-400/25 transition hover:ring-gold-300/60"
-                                >
-                                  {notification.actorAvatar ? (
-                                    <img
-                                      src={notification.actorAvatar}
-                                      alt={notification.actorName ?? "Notification"}
-                                      className="h-full w-full object-cover"
-                                    />
-                                  ) : (
-                                    <span className="flex h-full w-full items-center justify-center">
-                                      <Icon className="h-4 w-4 text-gold-200/80" />
-                                    </span>
-                                  )}
-                                  {notification.actorAvatar && (
-                                    <span className="absolute -bottom-0.5 -right-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-night-950 ring-1 ring-gold-400/35">
-                                      <Icon className="h-3 w-3 text-gold-200" />
-                                    </span>
-                                  )}
-                                </button>
-                                <div className="min-w-0 flex-1">
-                                  <button
-                                    type="button"
-                                    onClick={() => openNotification(notification)}
-                                    className="block w-full text-left"
+                            filteredNotifications
+                              .slice(0, 20)
+                              .map((notification) => {
+                                const Icon = notificationIcon(notification);
+                                const targetUrl =
+                                  resolveNotificationUrl(notification);
+                                return (
+                                  <div
+                                    key={notification.id}
+                                    className={clsx(
+                                      "flex gap-3 border-b border-royal-600/15 px-4 py-3 transition last:border-b-0",
+                                      notification.readAt
+                                        ? "bg-transparent"
+                                        : "bg-gold-500/10 shadow-[inset_3px_0_0_rgba(230,194,116,0.65)]",
+                                    )}
                                   >
-                                    <div className="flex items-start justify-between gap-2">
-                                      <p className="min-w-0 flex-1 truncate text-sm font-semibold text-ivory">
-                                        {notification.title}
-                                      </p>
-                                      {!notification.readAt && (
-                                        <span className="mt-1 h-2 w-2 flex-none rounded-full bg-gold-300 shadow-[0_0_10px_rgba(230,194,116,0.75)]" />
-                                      )}
-                                    </div>
-                                    <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-ivory/68">
-                                      {notification.body}
-                                    </p>
-                                    <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-gold-200/70">
-                                      {notification.locationLabel && (
-                                        <span className="max-w-full truncate rounded-full border border-gold-400/20 bg-gold-500/10 px-2 py-0.5">
-                                          {notification.locationLabel}
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        openNotification(notification)
+                                      }
+                                      className="relative h-10 w-10 flex-none overflow-hidden rounded-full bg-night-800 text-left ring-1 ring-gold-400/25 transition hover:ring-gold-300/60"
+                                    >
+                                      {notification.actorAvatar ? (
+                                        <img
+                                          src={notification.actorAvatar}
+                                          alt={
+                                            notification.actorName ??
+                                            "Notification"
+                                          }
+                                          className="h-full w-full object-cover"
+                                        />
+                                      ) : (
+                                        <span className="flex h-full w-full items-center justify-center">
+                                          <Icon className="h-4 w-4 text-gold-200/80" />
                                         </span>
                                       )}
-                                      <span>{formatRelative(notification.createdAt)}</span>
+                                      {notification.actorAvatar && (
+                                        <span className="absolute -bottom-0.5 -right-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-night-950 ring-1 ring-gold-400/35">
+                                          <Icon className="h-3 w-3 text-gold-200" />
+                                        </span>
+                                      )}
+                                    </button>
+                                    <div className="min-w-0 flex-1">
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          openNotification(notification)
+                                        }
+                                        className="block w-full text-left"
+                                      >
+                                        <div className="flex items-start justify-between gap-2">
+                                          <p className="min-w-0 flex-1 truncate text-sm font-semibold text-ivory">
+                                            {notification.title}
+                                          </p>
+                                          {!notification.readAt && (
+                                            <span className="mt-1 h-2 w-2 flex-none rounded-full bg-gold-300 shadow-[0_0_10px_rgba(230,194,116,0.75)]" />
+                                          )}
+                                        </div>
+                                        <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-ivory/68">
+                                          {notification.body}
+                                        </p>
+                                        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-gold-200/70">
+                                          {notification.locationLabel && (
+                                            <span className="max-w-full truncate rounded-full border border-gold-400/20 bg-gold-500/10 px-2 py-0.5">
+                                              {notification.locationLabel}
+                                            </span>
+                                          )}
+                                          <span>
+                                            {formatRelative(
+                                              notification.createdAt,
+                                            )}
+                                          </span>
+                                        </div>
+                                      </button>
+                                      {notification.actionUrl && (
+                                        <Link
+                                          to={notification.actionUrl}
+                                          onClick={() => {
+                                            markRead(notification.id);
+                                            setNotificationsOpen(false);
+                                            setNotificationSettingsOpen(false);
+                                          }}
+                                          className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-gold-500/15 px-3 py-1 text-[11px] font-semibold text-gold-200 ring-1 ring-gold-400/30 transition hover:bg-gold-500/25"
+                                        >
+                                          <Gift className="h-3.5 w-3.5" />
+                                          {notification.actionLabel ?? "Voir"}
+                                        </Link>
+                                      )}
+                                      <p className="mt-1 truncate text-[10px] text-ivory/35">
+                                        Ouvre : {targetUrl}
+                                      </p>
                                     </div>
-                                  </button>
-                                  {notification.actionUrl && (
-                                    <Link
-                                      to={notification.actionUrl}
-                                      onClick={() => {
-                                        markRead(notification.id);
-                                        setNotificationsOpen(false);
-                                        setNotificationSettingsOpen(false);
-                                      }}
-                                      className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-gold-500/15 px-3 py-1 text-[11px] font-semibold text-gold-200 ring-1 ring-gold-400/30 transition hover:bg-gold-500/25"
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        clearNotification(notification.id)
+                                      }
+                                      className="self-start rounded-full p-1 text-ivory/45 transition hover:text-gold-200"
+                                      aria-label="Supprimer la notification"
                                     >
-                                      <Gift className="h-3.5 w-3.5" />
-                                      {notification.actionLabel ?? "Voir"}
-                                    </Link>
-                                  )}
-                                  <p className="mt-1 truncate text-[10px] text-ivory/35">
-                                    Ouvre : {targetUrl}
-                                  </p>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    clearNotification(notification.id)
-                                  }
-                                  className="self-start rounded-full p-1 text-ivory/45 transition hover:text-gold-200"
-                                  aria-label="Supprimer la notification"
-                                >
-                                  <X className="h-3.5 w-3.5" />
-                                </button>
-                              </div>
-                              );
-                            })
+                                      <X className="h-3.5 w-3.5" />
+                                    </button>
+                                  </div>
+                                );
+                              })
                           )}
                         </div>
 
@@ -661,7 +708,9 @@ export function Navbar() {
                 aria-label="Messagerie privée"
               >
                 <MessageCircle className="h-4 w-4" />
-                <span className="hidden sm:inline lg:hidden 2xl:inline">Messages</span>
+                <span className="hidden sm:inline lg:hidden 2xl:inline">
+                  Messages
+                </span>
                 {unreadCount > 0 && (
                   <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-gold-shine px-1 text-[10px] font-bold text-night-900">
                     {unreadCount > 99 ? "99+" : unreadCount}
@@ -674,7 +723,9 @@ export function Navbar() {
               className="relative inline-flex h-10 w-10 items-center justify-center gap-1.5 rounded-full border border-royal-500/30 p-0 text-xs text-ivory/80 transition hover:border-gold-400/60 hover:text-gold-200 sm:w-auto sm:px-3 lg:w-10 lg:p-0 2xl:w-auto 2xl:px-3"
             >
               <ShoppingBag className="h-4 w-4" />
-              <span className="hidden sm:inline lg:hidden 2xl:inline">Panier</span>
+              <span className="hidden sm:inline lg:hidden 2xl:inline">
+                Panier
+              </span>
               {cartCount > 0 && (
                 <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-gold-shine px-1 text-[10px] font-bold text-night-900">
                   {cartCount}
@@ -760,16 +811,24 @@ export function Navbar() {
                 onClick={() => setOpen(false)}
               />
               <nav
-                className="absolute right-3 top-[calc(4.35rem+env(safe-area-inset-top))] flex max-h-[calc(100dvh-5.35rem)] w-[min(21rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-[1.55rem] border border-white/10 bg-night-950/94 shadow-[0_26px_90px_rgba(0,0,0,0.58)] backdrop-blur-2xl"
+                className="absolute right-3 top-[calc(4.15rem+env(safe-area-inset-top))] flex max-h-[calc(100dvh-5rem)] w-[min(19rem,calc(100vw-1.2rem))] flex-col overflow-hidden rounded-[1.45rem] border border-white/10 bg-night-950/94 shadow-[0_26px_90px_rgba(0,0,0,0.58)] backdrop-blur-2xl"
                 aria-label="Menu mobile"
               >
                 <div className="border-b border-white/8 px-4 py-3">
                   <p className="text-[10px] uppercase tracking-[0.24em] text-gold-200/70">
-                    Menu Vaelyndra
+                    Menu mobile
                   </p>
-                  <p className="mt-1 truncate text-sm text-ivory/58">
-                    {user ? user.username : "Navigation rapide"}
-                  </p>
+                  <div className="mt-1 flex items-center justify-between gap-3">
+                    <p className="truncate text-sm text-ivory/58">
+                      {user ? user.username : "Navigation rapide"}
+                    </p>
+                    {canAccessAdmin && (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-gold-300/20 bg-gold-500/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-gold-100">
+                        <ShieldCheck className="h-3 w-3" />
+                        Staff
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="min-h-0 overflow-y-auto px-3 py-3">
                   <MobileMenuSection title="Principal">
@@ -778,13 +837,17 @@ export function Navbar() {
 
                   {user && (
                     <MobileMenuSection title="Compte">
-                      {mobileAccountLinks.map((link) => renderMobileMenuLink(link))}
+                      {mobileAccountLinks.map((link) =>
+                        renderMobileMenuLink(link),
+                      )}
                     </MobileMenuSection>
                   )}
 
                   {mobileStaffLinks.length > 0 && (
-                    <MobileMenuSection title="Staff">
-                      {mobileStaffLinks.map((link) => renderMobileMenuLink(link, "staff"))}
+                    <MobileMenuSection title="Salle du Trône" accent>
+                      {mobileStaffLinks.map((link) =>
+                        renderMobileMenuLink(link, "staff"),
+                      )}
                     </MobileMenuSection>
                   )}
                 </div>
@@ -822,7 +885,7 @@ export function Navbar() {
               key={tab.to}
               to={target}
               className={clsx(
-                "flex min-h-[3.15rem] flex-col items-center justify-center gap-1 rounded-[1.15rem] text-[10px] font-semibold transition active:scale-95",
+                "flex min-h-[3.15rem] flex-col items-center justify-center gap-1 rounded-[1.15rem] text-[9.5px] font-semibold transition active:scale-95",
                 active
                   ? "bg-gold-shine text-night-950 shadow-glow-gold"
                   : "text-ivory/62 hover:bg-white/5 hover:text-gold-100",
@@ -842,13 +905,20 @@ export function Navbar() {
 function MobileMenuSection({
   title,
   children,
+  accent = false,
 }: {
   title: string;
   children: ReactNode;
+  accent?: boolean;
 }) {
   return (
     <section className="mt-3 first:mt-0">
-      <p className="mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-ivory/38">
+      <p
+        className={clsx(
+          "mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-[0.2em]",
+          accent ? "text-gold-200/75" : "text-ivory/38",
+        )}
+      >
         {title}
       </p>
       <div className="grid gap-1.5">{children}</div>

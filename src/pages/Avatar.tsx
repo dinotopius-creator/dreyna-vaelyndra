@@ -96,11 +96,11 @@ export function Avatar() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14">
-      <div className="mb-8 flex items-center justify-between">
+    <div className="mx-auto max-w-6xl px-3 py-8 sm:px-6 sm:py-14">
+      <div className="mb-6 flex items-center justify-between gap-3 sm:mb-8">
         <Link
           to="/moi"
-          className="inline-flex items-center gap-2 rounded-full border border-royal-500/30 px-4 py-2 font-regal text-[10px] tracking-[0.22em] text-ivory/70 hover:text-gold-200"
+          className="inline-flex items-center gap-2 rounded-full border border-royal-500/30 px-3 py-2 font-regal text-[10px] tracking-[0.22em] text-ivory/70 hover:text-gold-200"
         >
           <ArrowLeft className="h-4 w-4" /> Mon domaine
         </Link>
@@ -246,8 +246,8 @@ export function Avatar() {
               </ol>
               <p className="mt-3 text-xs text-ivory/50">
                 Le rendu 3D est local au site. Ajoutez ensuite tenues,
-                accessoires, cadres et scènes à votre collection via la
-                boutique avatar ci-dessous.
+                accessoires, cadres et scènes à votre collection via la boutique
+                avatar ci-dessous.
               </p>
             </div>
           )}
