@@ -1303,26 +1303,16 @@ export function Live() {
     "";
   const amBroadcaster = !!user && !!broadcasterId && user.id === broadcasterId;
 
-  // Préférence host : afficher l'avatar 3D dans le live. On stocke en
-  // localStorage pour que ça reste actif d'un live à l'autre, et on lit
-  // la valeur du broadcaster courant (pas seulement du user connecté)
-  // pour que les viewers voient aussi l'avatar quand le host l'a activé.
-  const [avatar3dEnabled, setAvatar3dEnabled] = useState<boolean>(() =>
-    broadcasterId ? loadAvatar3DEnabled(broadcasterId) : false,
-  );
+  // La préférence d'avatar 3D reste stockée pour l'avenir, mais le player
+  // live PC rendu ici est volontairement limité au familier seul afin
+  // d'éviter les overlays lourds / parasites sur partage d'écran.
   useEffect(() => {
-    const syncAvatar3dPreference = () => {
-      setAvatar3dEnabled(
-        broadcasterId ? loadAvatar3DEnabled(broadcasterId) : false,
-      );
-    };
-    syncAvatar3dPreference();
+    if (!broadcasterId) return;
 
     const handleStorage = (event: StorageEvent) => {
       if (event.key && event.key !== LIVE_AVATAR3D_PREF_STORAGE_KEY) {
         return;
       }
-      syncAvatar3dPreference();
     };
 
     const handleAvatar3dPreferenceChanged = (event: Event) => {
@@ -1330,7 +1320,6 @@ export function Live() {
         event as CustomEvent<{ userId?: string; enabled?: boolean }>
       ).detail;
       if (detail?.userId && detail.userId !== broadcasterId) return;
-      syncAvatar3dPreference();
     };
 
     window.addEventListener("storage", handleStorage);
@@ -2714,7 +2703,7 @@ export function Live() {
                   }
                   fallbackAvatar={broadcasterAvatarUrl}
                   canEdit={amBroadcaster}
-                  showAvatar={avatar3dEnabled}
+                  showAvatar={false}
                   giftTick={giftTick}
                   lastGiftColor={lastGiftColor}
                   heartTick={heartTick}
