@@ -124,6 +124,15 @@ body.vaelyndra-world-game-open {
     background: linear-gradient(#4d1f96, #d4a94a);
     border-radius: 8px;
   }
+
+  .hide-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 @layer components {
