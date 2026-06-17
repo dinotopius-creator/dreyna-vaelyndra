@@ -45,11 +45,20 @@ export interface World3DHotspot {
   glyph: string;
 }
 
+export interface WorldSpeechBubble {
+  id: string;
+  userId: string;
+  content: string;
+  createdAt: number;
+  expiresAt: number;
+}
+
 interface Props {
   district: World3DDistrictId;
   players: World3DPlayer[];
   lueurs: World3DLueur[];
   hotspots: World3DHotspot[];
+  speechBubbles: WorldSpeechBubble[];
   onMove: (position: { x: number; y: number }) => void;
   onSelectPlayer: (playerId: string, anchor: { x: number; y: number }) => void;
   onCollectLueur: (id: string) => void;
@@ -76,8 +85,12 @@ interface AvatarEntity {
   accessoryRoot: THREE.Group;
   parureRoot: THREE.Group;
   familiarRoot: THREE.Group | null;
+  labelRoot: THREE.Group;
+  bubbleRoot: THREE.Group;
   appearanceKey: string;
   familiarKey: string;
+  labelKey: string;
+  bubbleKey: string;
   jumpVelocity: number;
   jumpHeight: number;
   phase: number;
@@ -102,6 +115,8 @@ const SELF_ID = "__self__";
 const REMOTE_AVATAR_GRACE_MS = 8000;
 const MAX_PIXEL_RATIO = 1.65;
 const JOYSTICK_DEADZONE = 0.12;
+const PLAYER_AVATAR_IMAGE_CACHE = new Map<string, HTMLImageElement>();
+const PLAYER_AVATAR_IMAGE_LOADING = new Set<string>();
 
 interface AnalogInput {
   active: boolean;
@@ -233,6 +248,263 @@ function familiarKey(player: World3DPlayer) {
     player.familiarAccessoryIcon ?? "",
     player.familiarHairIcon ?? "",
   ].join("|");
+}
+
+function playerLabelKey(player: World3DPlayer) {
+  return [
+    player.username,
+    player.appearance?.avatarUrl ?? "",
+    player.voiceEnabled ? "voice" : "silent",
+    player.isSpeaking ? "speaking" : "idle",
+    playerAvatarPreviewState(player),
+  ].join("|");
+}
+
+function playerAvatarPreviewState(player: World3DPlayer) {
+  const url = player.appearance?.avatarUrl;
+  if (!url) return "no-avatar";
+  return PLAYER_AVATAR_IMAGE_CACHE.has(url) ? "avatar-ready" : "avatar-loading";
+}
+
+function ensurePlayerAvatarImage(url: string) {
+  if (PLAYER_AVATAR_IMAGE_CACHE.has(url) || PLAYER_AVATAR_IMAGE_LOADING.has(url)) return;
+  PLAYER_AVATAR_IMAGE_LOADING.add(url);
+  const image = new Image();
+  image.crossOrigin = "anonymous";
+  image.onload = () => {
+    PLAYER_AVATAR_IMAGE_LOADING.delete(url);
+    PLAYER_AVATAR_IMAGE_CACHE.set(url, image);
+  };
+  image.onerror = () => {
+    PLAYER_AVATAR_IMAGE_LOADING.delete(url);
+  };
+  image.src = url;
+}
+
+function speechBubbleKey(bubble: WorldSpeechBubble | null | undefined) {
+  if (!bubble) return "";
+  return `${bubble.id}|${bubble.content}|${bubble.expiresAt}`;
+}
+
+function roundRectPath(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+) {
+  const r = Math.min(radius, width / 2, height / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + width, y, x + width, y + height, r);
+  ctx.arcTo(x + width, y + height, x, y + height, r);
+  ctx.arcTo(x, y + height, x, y, r);
+  ctx.arcTo(x, y, x + width, y, r);
+  ctx.closePath();
+}
+
+function wrapCanvasLines(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number,
+  maxLines: number,
+) {
+  const words = text.split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let current = "";
+  for (const word of words) {
+    const next = current ? `${current} ${word}` : word;
+    if (ctx.measureText(next).width <= maxWidth || !current) {
+      current = next;
+      continue;
+    }
+    lines.push(current);
+    current = word;
+    if (lines.length >= maxLines) break;
+  }
+  if (current && lines.length < maxLines) lines.push(current);
+  if (!lines.length) lines.push(text.slice(0, 1) || " ");
+  if (lines.length === maxLines && words.join(" ").length > lines.join(" ").length) {
+    lines[maxLines - 1] = `${lines[maxLines - 1].replace(/\.\.\.$/, "")}…`;
+  }
+  return lines.slice(0, maxLines);
+}
+
+function initialsForName(name: string) {
+  const cleaned = name.trim();
+  if (!cleaned) return "U";
+  const parts = cleaned.split(/\s+/);
+  if (parts.length === 1) return cleaned.slice(0, 2).toUpperCase();
+  return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
+}
+
+function createTexturedSprite(texture: THREE.CanvasTexture, width: number, height: number) {
+  const material = new THREE.SpriteMaterial({
+    map: texture,
+    transparent: true,
+    depthWrite: false,
+  });
+  const sprite = new THREE.Sprite(material);
+  sprite.scale.set(width, height, 1);
+  return sprite;
+}
+
+function createCanvasTexture(
+  player: World3DPlayer,
+  mode: "label" | "bubble",
+  bubbleText?: string | null,
+) {
+  const width = mode === "label" ? 512 : 520;
+  const height = mode === "label" ? 180 : 150;
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
+  }
+
+  ctx.clearRect(0, 0, width, height);
+  ctx.font = "700 28px Inter, Arial, sans-serif";
+  ctx.textBaseline = "middle";
+  ctx.imageSmoothingEnabled = true;
+
+  if (mode === "label") {
+    const badgeWidth = 364;
+    const badgeHeight = 102;
+    const x = 70;
+    const y = 32;
+    const gradient = ctx.createLinearGradient(x, y, x + badgeWidth, y + badgeHeight);
+    gradient.addColorStop(0, "rgba(11,18,32,0.86)");
+    gradient.addColorStop(1, "rgba(22,28,44,0.72)");
+    ctx.fillStyle = gradient;
+    roundRectPath(ctx, x, y, badgeWidth, badgeHeight, 34);
+    ctx.fill();
+    ctx.strokeStyle = player.isSelf ? "rgba(250,204,21,0.72)" : "rgba(255,255,255,0.16)";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    const avatarX = x + 26;
+    const avatarY = y + 18;
+    const avatarSize = 66;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(avatarX + avatarSize / 2, avatarY + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2);
+    ctx.clip();
+    const avatarUrl = player.appearance?.avatarUrl ?? null;
+    if (avatarUrl) {
+      ensurePlayerAvatarImage(avatarUrl);
+      const cachedImage = PLAYER_AVATAR_IMAGE_CACHE.get(avatarUrl);
+      if (cachedImage) {
+        ctx.drawImage(cachedImage, avatarX, avatarY, avatarSize, avatarSize);
+      } else {
+        ctx.fillStyle = player.isSelf ? "rgba(250,204,21,0.22)" : "rgba(148,163,184,0.16)";
+        ctx.fillRect(avatarX, avatarY, avatarSize, avatarSize);
+        const initials = initialsForName(player.username);
+        ctx.fillStyle = "rgba(255,255,255,0.92)";
+        ctx.font = "800 24px Inter, Arial, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(initials, avatarX + avatarSize / 2, avatarY + avatarSize / 2 + 1);
+      }
+    } else {
+      ctx.fillStyle = player.isSelf ? "rgba(250,204,21,0.22)" : "rgba(148,163,184,0.16)";
+      ctx.fillRect(avatarX, avatarY, avatarSize, avatarSize);
+      const initials = initialsForName(player.username);
+      ctx.fillStyle = "rgba(255,255,255,0.92)";
+      ctx.font = "800 24px Inter, Arial, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(initials, avatarX + avatarSize / 2, avatarY + avatarSize / 2 + 1);
+    }
+    ctx.restore();
+
+    ctx.textAlign = "left";
+    ctx.font = "700 24px Inter, Arial, sans-serif";
+    ctx.fillStyle = "rgba(248,250,252,0.98)";
+    const name = player.username || "Joueur";
+    ctx.fillText(name.slice(0, 20), x + 112, y + 41);
+    ctx.font = "600 18px Inter, Arial, sans-serif";
+    ctx.fillStyle = player.isSpeaking ? "rgba(34,197,94,0.94)" : "rgba(203,213,225,0.88)";
+    const status = player.isSelf
+      ? player.voiceEnabled
+        ? "Vous • micro actif"
+        : "Vous • hors micro"
+      : player.isSpeaking
+        ? "En train de parler"
+        : player.voiceEnabled
+          ? "Micro actif"
+          : "Connecté";
+    ctx.fillText(status, x + 112, y + 72);
+    if (player.isSpeaking) {
+      ctx.fillStyle = "rgba(34,197,94,0.16)";
+      roundRectPath(ctx, x + 256, y + 28, 116, 38, 19);
+      ctx.fill();
+      ctx.fillStyle = "rgba(236,253,245,0.98)";
+      ctx.font = "700 15px Inter, Arial, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("Parle", x + 314, y + 47);
+    }
+  } else {
+    const content = bubbleText ?? "";
+    const panelWidth = 450;
+    const panelHeight = 112;
+    const x = 35;
+    const y = 22;
+    const gradient = ctx.createLinearGradient(x, y, x + panelWidth, y + panelHeight);
+    gradient.addColorStop(0, "rgba(17,24,39,0.95)");
+    gradient.addColorStop(1, "rgba(45,20,80,0.88)");
+    ctx.fillStyle = gradient;
+    roundRectPath(ctx, x, y, panelWidth, panelHeight, 28);
+    ctx.fill();
+    ctx.strokeStyle = player.isSelf ? "rgba(250,204,21,0.55)" : "rgba(255,255,255,0.12)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = "rgba(250,204,21,0.9)";
+    ctx.font = "700 17px Inter, Arial, sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText(player.username.slice(0, 18), x + 20, y + 28);
+    ctx.fillStyle = "rgba(248,250,252,0.98)";
+    ctx.font = "600 19px Inter, Arial, sans-serif";
+    const lines = wrapCanvasLines(ctx, content, 388, 3);
+    lines.forEach((line, index) => {
+      ctx.fillText(line, x + 20, y + 56 + index * 24);
+    });
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+function createPlayerLabel(player: World3DPlayer) {
+  const texture = createCanvasTexture(player, "label");
+  const group = new THREE.Group();
+  const sprite = createTexturedSprite(texture, 3.8, 1.36);
+  sprite.position.set(0, 0, 0);
+  group.add(sprite);
+  group.userData.texture = texture;
+  group.userData.key = playerLabelKey(player);
+  return group;
+}
+
+function createSpeechBubble(player: World3DPlayer, content: string) {
+  const texture = createCanvasTexture(player, "bubble", content);
+  const group = new THREE.Group();
+  const sprite = createTexturedSprite(texture, 4.45, 1.28);
+  group.add(sprite);
+  group.userData.texture = texture;
+  group.userData.key = speechBubbleKey({
+    id: `${player.id}-${content}`,
+    userId: player.id,
+    content,
+    createdAt: Date.now(),
+    expiresAt: Date.now() + 1000,
+  });
+  return group;
 }
 
 function setObjectUserData(object: THREE.Object3D, data: Record<string, string>) {
@@ -663,6 +935,15 @@ function createAvatar(player: World3DPlayer) {
   group.add(accessoryRoot);
   const parureRoot = new THREE.Group();
   group.add(parureRoot);
+  const labelRoot = new THREE.Group();
+  const bubbleRoot = new THREE.Group();
+  const initialLabel = createPlayerLabel(player);
+  initialLabel.children.forEach((child) => labelRoot.add(child));
+  labelRoot.userData.texture = initialLabel.userData.texture;
+  const initialBubble = createSpeechBubble(player, " ");
+  initialBubble.children.forEach((child) => bubbleRoot.add(child));
+  bubbleRoot.userData.texture = initialBubble.userData.texture;
+  bubbleRoot.visible = false;
 
   setObjectUserData(group, { kind: "player", id: player.id });
 
@@ -686,8 +967,12 @@ function createAvatar(player: World3DPlayer) {
     accessoryRoot,
     parureRoot,
     familiarRoot: null,
+    labelRoot,
+    bubbleRoot,
     appearanceKey: "",
     familiarKey: "",
+    labelKey: "",
+    bubbleKey: "",
     jumpVelocity: 0,
     jumpHeight: 0,
     phase: 0,
@@ -974,6 +1259,7 @@ export function World3DStage({
   players,
   lueurs,
   hotspots,
+  speechBubbles,
   onMove,
   onSelectPlayer,
   onCollectLueur,
@@ -987,6 +1273,7 @@ export function World3DStage({
   const playersRef = useRef(players);
   const lueursRef = useRef(lueurs);
   const hotspotsRef = useRef(hotspots);
+  const speechBubblesRef = useRef(speechBubbles);
   const onMoveRef = useRef(onMove);
   const onSelectPlayerRef = useRef(onSelectPlayer);
   const onCollectLueurRef = useRef(onCollectLueur);
@@ -1000,11 +1287,12 @@ export function World3DStage({
     playersRef.current = players;
     lueursRef.current = lueurs;
     hotspotsRef.current = hotspots;
+    speechBubblesRef.current = speechBubbles;
     onMoveRef.current = onMove;
     onSelectPlayerRef.current = onSelectPlayer;
     onCollectLueurRef.current = onCollectLueur;
     onTriggerHotspotRef.current = onTriggerHotspot;
-  }, [hotspots, lueurs, onCollectLueur, onMove, onSelectPlayer, onTriggerHotspot, players]);
+  }, [hotspots, lueurs, onCollectLueur, onMove, onSelectPlayer, onTriggerHotspot, players, speechBubbles]);
 
   const resetJoystick = () => {
     joystickInputRef.current = idleAnalogInput();
@@ -1252,9 +1540,17 @@ export function World3DStage({
       syncCollections();
 
       const playersById = new Map(playersRef.current.map((player) => [player.id, player]));
+      const wallClockNow = Date.now();
+      const bubblesByUserId = new Map(
+        speechBubblesRef.current
+          .filter((bubble) => bubble.expiresAt > wallClockNow)
+          .map((bubble) => [bubble.userId, bubble] as const),
+      );
       const now = performance.now();
       entities.forEach((entity, id) => {
         if (!playersById.has(id) && now - entity.lastSeenAt > REMOTE_AVATAR_GRACE_MS) {
+          if (entity.labelRoot.parent) scene.remove(entity.labelRoot);
+          if (entity.bubbleRoot.parent) scene.remove(entity.bubbleRoot);
           scene.remove(entity.group);
           entities.delete(id);
         }
@@ -1266,6 +1562,8 @@ export function World3DStage({
           entity = createAvatar(player);
           entities.set(player.id, entity);
           scene.add(entity.group);
+          scene.add(entity.labelRoot);
+          scene.add(entity.bubbleRoot);
         }
         entity.lastSeenAt = now;
         if (player.isSelf) {
@@ -1281,6 +1579,38 @@ export function World3DStage({
         micMaterial.emissiveIntensity = player.voiceEnabled ? (player.isSpeaking ? 0.9 : 0.28) : 0.08;
         applyAppearance(entity, player);
         syncFamiliar(entity, player);
+
+        const nextLabelKey = playerLabelKey(player);
+        if (entity.labelKey !== nextLabelKey) {
+          entity.labelKey = nextLabelKey;
+          const existingTexture = entity.labelRoot.userData.texture as THREE.CanvasTexture | undefined;
+          existingTexture?.dispose();
+          entity.labelRoot.clear();
+          const labelSprite = createTexturedSprite(createCanvasTexture(player, "label"), 3.8, 1.36);
+          entity.labelRoot.userData.texture = (labelSprite.material as THREE.SpriteMaterial).map;
+          entity.labelRoot.add(labelSprite);
+        }
+
+        const bubble = bubblesByUserId.get(player.id) ?? null;
+        const nextBubbleKey = speechBubbleKey(bubble);
+        if (entity.bubbleKey !== nextBubbleKey) {
+          entity.bubbleKey = nextBubbleKey;
+          const existingTexture = entity.bubbleRoot.userData.texture as THREE.CanvasTexture | undefined;
+          existingTexture?.dispose();
+          entity.bubbleRoot.clear();
+          if (bubble) {
+            const bubbleSprite = createTexturedSprite(
+              createCanvasTexture(player, "bubble", bubble.content),
+              4.45,
+              1.28,
+            );
+            entity.bubbleRoot.userData.texture = (bubbleSprite.material as THREE.SpriteMaterial).map;
+            entity.bubbleRoot.add(bubbleSprite);
+            entity.bubbleRoot.visible = true;
+          } else {
+            entity.bubbleRoot.visible = false;
+          }
+        }
       });
 
       const currentSelf = self;
@@ -1364,6 +1694,18 @@ export function World3DStage({
           0.12,
           0.28 - entity.jumpHeight * 0.06,
         );
+        const labelOffset = entity.userId === currentSelf?.id ? 3.3 : 3.15;
+        entity.labelRoot.position.set(entity.current.x, entity.jumpHeight + labelOffset, entity.current.z);
+        entity.labelRoot.quaternion.copy(camera.quaternion);
+        entity.labelRoot.visible = entity.current.distanceTo(camera.position) <= 24;
+        const activeBubble = bubblesByUserId.get(entity.userId) ?? null;
+        if (activeBubble && activeBubble.expiresAt > wallClockNow) {
+          entity.bubbleRoot.position.set(entity.current.x, entity.jumpHeight + 4.25, entity.current.z);
+          entity.bubbleRoot.quaternion.copy(camera.quaternion);
+          entity.bubbleRoot.visible = entity.current.distanceTo(camera.position) <= 22;
+        } else {
+          entity.bubbleRoot.visible = false;
+        }
       });
 
       if (selfEntity) {

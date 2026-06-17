@@ -55,6 +55,14 @@ import { formatRelative } from "../lib/helpers";
 
 type DistrictId = "place" | "arcades" | "observatory";
 
+interface WorldSpeechBubble {
+  id: string;
+  userId: string;
+  content: string;
+  createdAt: number;
+  expiresAt: number;
+}
+
 const World3DStage = lazy(() => import("../components/worlds/World3DStage"));
 
 interface WorldsProps {
@@ -511,6 +519,7 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
   const familiarsLoadingRef = useRef<Record<string, boolean>>({});
   const [chatMessages, setChatMessages] = useState<WorldChatMessage[]>(BASE_CHAT);
   const [chatInput, setChatInput] = useState("");
+  const [worldSpeechBubbles, setWorldSpeechBubbles] = useState<WorldSpeechBubble[]>([]);
   const [worldMembers, setWorldMembers] = useState<WorldPresenceDto[]>([]);
   const [selectedMember, setSelectedMember] = useState<SelectedWorldMember | null>(null);
   const [memberActionBusy, setMemberActionBusy] = useState<string | null>(null);
@@ -561,6 +570,8 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
   const [worldBooting, setWorldBooting] = useState(dedicatedMode);
   const [worldBootStep, setWorldBootStep] = useState(0);
   const [worldMenuOpen, setWorldMenuOpen] = useState(false);
+  const [worldSwitchingTo, setWorldSwitchingTo] = useState<DistrictId | null>(null);
+  const worldSwitchTimerRef = useRef<number | null>(null);
   const worldGameActive = dedicatedMode || isWorldFullscreen;
   function handlePointerDown() {
     // Clicking or tapping the map should not teleport the player.
@@ -600,6 +611,12 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
     setWorldBooting(false);
     setIsWorldFullscreen(false);
     setWorldMenuOpen(false);
+    setWorldSwitchingTo(null);
+    setWorldSpeechBubbles([]);
+    if (worldSwitchTimerRef.current !== null) {
+      window.clearTimeout(worldSwitchTimerRef.current);
+      worldSwitchTimerRef.current = null;
+    }
     setWorldBootStep(0);
     void document.exitFullscreen?.().catch(() => undefined);
     if (dedicatedMode) {
@@ -611,6 +628,42 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
       navigate(returnTo, { replace: true });
     }
   }, [dedicatedMode, location.pathname, location.state, navigate]);
+
+  const switchWorld = useCallback(
+    (nextDistrict: DistrictId) => {
+      if (nextDistrict === district || worldSwitchingTo) return;
+      setWorldMenuOpen(false);
+      setWorldSwitchingTo(nextDistrict);
+      if (worldSwitchTimerRef.current !== null) {
+        window.clearTimeout(worldSwitchTimerRef.current);
+      }
+      worldSwitchTimerRef.current = window.setTimeout(() => {
+        setDistrict(nextDistrict);
+        setWorldSwitchingTo(null);
+        setWorldBooting(false);
+        setIsWorldFullscreen(true);
+        worldSwitchTimerRef.current = null;
+      }, 560);
+    },
+    [district, worldSwitchingTo],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (worldSwitchTimerRef.current !== null) {
+        window.clearTimeout(worldSwitchTimerRef.current);
+        worldSwitchTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const now = Date.now();
+      setWorldSpeechBubbles((current) => current.filter((bubble) => bubble.expiresAt > now));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (!worldBooting) return undefined;
@@ -1264,6 +1317,7 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
     const cleaned = chatInput.trim();
     if (!cleaned) return;
     const author = user?.username ?? "Visiteur";
+    const now = Date.now();
     setChatMessages((current) => {
       const nextMessage: WorldChatMessage = {
         id: `msg-${Date.now()}`,
@@ -1276,6 +1330,20 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
       };
       return [nextMessage, ...current].slice(0, 12);
     });
+    if (user?.id) {
+      setWorldSpeechBubbles((current) => {
+        const nextBubble: WorldSpeechBubble = {
+          id: `bubble-${user.id}-${now}`,
+          userId: user.id,
+          content: cleaned,
+          createdAt: now,
+          expiresAt: now + 5400,
+        };
+        return [nextBubble, ...current]
+          .filter((bubble) => bubble.expiresAt > now)
+          .slice(0, 10);
+      });
+    }
     setChatInput("");
   }
 
@@ -1794,14 +1862,17 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
                   </motion.div>
                 </div>
               )}
-              {worldGameActive && (
-                <div className="absolute right-[calc(0.75rem+env(safe-area-inset-right))] top-[calc(0.75rem+env(safe-area-inset-top))] z-40 flex items-center gap-3">
-                  <div className="rounded-2xl border border-white/10 bg-night-950/58 px-3 py-2 text-right backdrop-blur">
-                    <p className="text-[9px] uppercase tracking-[0.22em] text-gold-200/70">
-                      Mode monde
+              {worldSwitchingTo && (
+                <div className="absolute inset-0 z-[85] flex items-center justify-center bg-night-950/32 px-5 text-center backdrop-blur-sm">
+                  <div className="rounded-[28px] border border-white/12 bg-night-950/82 px-5 py-4 shadow-[0_24px_70px_rgba(0,0,0,0.38)]">
+                    <p className="text-[10px] uppercase tracking-[0.22em] text-gold-200/70">
+                      Changement de monde
                     </p>
-                    <p className="font-display text-sm text-gold-100">
-                      {selectedDistrict.name}
+                    <p className="mt-2 font-display text-lg text-gold-100">
+                      {DISTRICTS.find((entry) => entry.id === worldSwitchingTo)?.name ?? "Nouveau monde"}
+                    </p>
+                    <p className="mt-1 text-sm text-ivory/68">
+                      Synchronisation de la room et de l’avatar...
                     </p>
                   </div>
                 </div>
@@ -1827,6 +1898,7 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
                   players={world3DPlayers}
                   lueurs={visibleLueurs}
                   hotspots={districtHotspots}
+                  speechBubbles={worldSpeechBubbles}
                   onMove={moveTo}
                   onSelectPlayer={selectWorld3DPlayer}
                   onCollectLueur={collectWorld3DLueur}
@@ -1947,46 +2019,115 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
               </div>
 
               {worldGameActive && (
-                <div className="absolute bottom-[calc(0.85rem+env(safe-area-inset-bottom))] right-[calc(0.85rem+env(safe-area-inset-right))] z-50">
+                <>
+                  <button
+                    type="button"
+                    className="fixed inset-0 z-40 cursor-default bg-transparent"
+                    aria-label="Fermer le menu du monde"
+                    onClick={() => setWorldMenuOpen(false)}
+                    hidden={!worldMenuOpen}
+                  />
+                  <div className="absolute right-[calc(0.75rem+env(safe-area-inset-right))] top-[calc(0.75rem+env(safe-area-inset-top))] z-40 flex items-start gap-2">
+                    <div className="rounded-2xl border border-white/10 bg-night-950/58 px-3 py-2 text-right backdrop-blur">
+                      <p className="text-[9px] uppercase tracking-[0.22em] text-gold-200/70">
+                        Mode monde
+                      </p>
+                      <p className="font-display text-sm text-gold-100">
+                        {selectedDistrict.name}
+                      </p>
+                      {worldSwitchingTo && (
+                        <p className="mt-1 text-[10px] text-ivory/55">
+                          Changement vers{" "}
+                          {DISTRICTS.find((entry) => entry.id === worldSwitchingTo)?.name ?? "le monde"}...
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setWorldMenuOpen((current) => !current)}
+                      className="inline-flex h-11 min-h-11 w-11 min-w-11 items-center justify-center rounded-full border border-white/15 bg-night-950/76 text-ivory/86 shadow-[0_18px_58px_rgba(0,0,0,0.42)] backdrop-blur-xl transition hover:border-gold-300/45 hover:text-gold-100 active:scale-95"
+                      aria-haspopup="menu"
+                      aria-expanded={worldMenuOpen}
+                      aria-label="Ouvrir le menu du monde"
+                    >
+                      <MoreHorizontal className="h-5 w-5" />
+                    </button>
+                  </div>
                   {worldMenuOpen && (
-                    <>
-                      <button
-                        type="button"
-                        className="fixed inset-0 z-40 cursor-default bg-transparent"
-                        aria-label="Fermer le menu du monde"
-                        onClick={() => setWorldMenuOpen(false)}
-                      />
-                      <div className="absolute bottom-14 right-0 z-50 w-56 overflow-hidden rounded-[24px] border border-white/12 bg-night-950/88 p-2 shadow-[0_24px_80px_rgba(0,0,0,0.48)] backdrop-blur-2xl">
-                        <div className="px-3 pb-2 pt-1">
-                          <p className="text-[10px] uppercase tracking-[0.22em] text-gold-200/68">
-                            Menu du monde
+                    <div className="absolute right-[calc(0.75rem+env(safe-area-inset-right))] top-[calc(4rem+env(safe-area-inset-top))] z-50 w-[min(20rem,calc(100vw-1.25rem))] overflow-hidden rounded-[24px] border border-white/12 bg-night-950/92 p-2 shadow-[0_24px_80px_rgba(0,0,0,0.48)] backdrop-blur-2xl">
+                      <div className="px-3 pb-2 pt-1">
+                        <p className="text-[10px] uppercase tracking-[0.22em] text-gold-200/68">
+                          Menu du monde
+                        </p>
+                        <p className="mt-1 text-sm text-ivory/62">
+                          Micro, changement de monde et chat compact.
+                        </p>
+                      </div>
+                      <div className="space-y-1.5 px-1 pb-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void toggleVoice();
+                            setWorldMenuOpen(false);
+                          }}
+                          className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm text-ivory/88 transition hover:bg-white/8"
+                        >
+                          {micEnabled ? <Mic className="h-4 w-4 text-emerald-300" /> : <MicOff className="h-4 w-4 text-slate-300" />}
+                          {micEnabled ? "Micro activé" : "Activer le micro"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setWorldMenuOpen(false);
+                            const input = document.querySelector<HTMLInputElement>('[data-world-chat-input="true"]');
+                            input?.focus();
+                          }}
+                          className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm text-ivory/88 transition hover:bg-white/8"
+                        >
+                          <MessageCircle className="h-4 w-4 text-sky-300" />
+                          Ouvrir le chat
+                        </button>
+                        <div className="mt-2 rounded-2xl border border-white/8 bg-white/4 p-2">
+                          <p className="px-1 pb-2 text-[10px] uppercase tracking-[0.18em] text-ivory/48">
+                            Changer de monde
                           </p>
-                          <p className="mt-1 text-sm text-ivory/62">
-                            Interface de jeu dédiée
-                          </p>
+                          <div className="grid gap-1">
+                            {DISTRICTS.map((entry) => {
+                              const active = entry.id === district;
+                              const pending = worldSwitchingTo === entry.id;
+                              return (
+                                <button
+                                  key={entry.id}
+                                  type="button"
+                                  disabled={active || pending}
+                                  onClick={() => switchWorld(entry.id)}
+                                  className={`flex items-center justify-between rounded-2xl px-3 py-2.5 text-left text-sm transition ${
+                                    active
+                                      ? "bg-gold-500/14 text-gold-100"
+                                      : "text-ivory/84 hover:bg-white/8"
+                                  } disabled:cursor-default disabled:opacity-70`}
+                                >
+                                  <span>{entry.name}</span>
+                                  <span className="text-[10px] uppercase tracking-[0.16em] text-ivory/48">
+                                    {active ? "Actuel" : pending ? "..." : "Aller"}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
                         <button
                           type="button"
                           onClick={exitWorldGame}
-                          className="flex min-h-12 w-full items-center justify-between rounded-2xl border border-rose-300/25 bg-rose-500/10 px-3 py-2 text-left text-sm font-semibold text-rose-100 transition hover:border-rose-200/60 hover:bg-rose-500/16"
+                          className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm text-rose-100 transition hover:bg-rose-500/12"
                         >
-                          <span>Quitter le monde</span>
                           <X className="h-4 w-4" />
+                          Quitter le monde
                         </button>
                       </div>
-                    </>
+                    </div>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => setWorldMenuOpen((current) => !current)}
-                    className="inline-flex h-12 min-h-12 w-12 min-w-12 items-center justify-center rounded-full border border-white/15 bg-night-950/76 text-ivory/86 shadow-[0_18px_58px_rgba(0,0,0,0.42)] backdrop-blur-xl transition hover:border-gold-300/45 hover:text-gold-100 active:scale-95"
-                    aria-haspopup="menu"
-                    aria-expanded={worldMenuOpen}
-                    aria-label="Ouvrir le menu du monde"
-                  >
-                    <MoreHorizontal className="h-6 w-6" />
-                  </button>
-                </div>
+                </>
               )}
             </div>
           </div>
@@ -2201,13 +2342,19 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
             </div>
           </section>
 
-          <section className="rounded-[26px] border border-royal-500/30 bg-night-900/60 p-5">
+          <section
+            className={`rounded-[26px] border border-royal-500/30 bg-night-900/60 p-5 shadow-[0_20px_50px_rgba(0,0,0,0.18)] ${
+              worldGameActive
+                ? "fixed bottom-[calc(0.9rem+env(safe-area-inset-bottom))] left-[calc(0.9rem+env(safe-area-inset-left))] z-30 w-[min(21rem,calc(100vw-1.7rem))] max-h-[min(26rem,calc(100dvh-8rem))] overflow-hidden backdrop-blur-xl md:w-[min(24rem,calc(100vw-2rem))]"
+                : ""
+            }`}
+          >
             <div className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-gold-300" />
-              <h3 className="font-display text-xl text-gold-200">Chat du monde</h3>
+              <h3 className={`font-display text-xl text-gold-200 ${worldGameActive ? "text-lg" : ""}`}>Chat du monde</h3>
             </div>
-            <div className="mt-4 space-y-3">
-              {chatMessages.slice(0, 6).map((message) => (
+            <div className={`mt-4 space-y-2 overflow-y-auto pr-1 ${worldGameActive ? "max-h-[10.5rem]" : "max-h-none"}`}>
+              {chatMessages.slice(0, worldGameActive ? 4 : 6).map((message) => (
                 <div
                   key={message.id}
                   className={`rounded-2xl border px-3 py-2 ${
@@ -2240,7 +2387,7 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
                 </div>
               ))}
             </div>
-            <div className="mt-4 flex gap-2">
+            <div className={`mt-4 flex gap-2 ${worldGameActive ? "items-end" : ""}`}>
               <input
                 value={chatInput}
                 onChange={(event) => setChatInput(event.target.value)}
@@ -2248,12 +2395,13 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
                   if (event.key === "Enter") sendMessage();
                 }}
                 placeholder="Dire quelque chose dans le hub..."
-                className="glass-input flex-1"
+                data-world-chat-input="true"
+                className={`glass-input flex-1 ${worldGameActive ? "min-h-11 text-sm" : ""}`}
               />
               <button
                 type="button"
                 onClick={sendMessage}
-                className="rounded-full border border-gold-400/35 px-4 py-2 text-sm text-gold-100 transition hover:border-gold-300/70"
+                className={`rounded-full border border-gold-400/35 px-4 py-2 text-sm text-gold-100 transition hover:border-gold-300/70 ${worldGameActive ? "min-h-11" : ""}`}
               >
                 Envoyer
               </button>
@@ -2461,8 +2609,8 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
               </div>
             </div>
           </section>
-        </>
-      )}
+                </>
+              )}
 
       {pendingIncomingVoiceInvite && !selectedMember && (
         <section className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-[24px] border border-cyan-300/25 bg-[linear-gradient(135deg,rgba(15,23,42,0.92),rgba(8,47,73,0.82))] px-4 py-4">
