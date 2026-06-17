@@ -558,58 +558,58 @@ function createAvatar(player: World3DPlayer) {
   shadow.position.y = 0.012;
   group.add(shadow);
 
-  const hips = new THREE.Mesh(new THREE.SphereGeometry(0.34, 22, 16), suit);
-  hips.scale.set(1.18, 0.48, 0.82);
-  hips.position.y = 1.05;
+  const hips = new THREE.Mesh(new THREE.SphereGeometry(0.36, 24, 18), suit);
+  hips.scale.set(1.08, 0.52, 0.86);
+  hips.position.y = 1.08;
   hips.castShadow = true;
   group.add(hips);
 
-  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.34, 0.6, 10, 22), suit);
-  torso.scale.set(0.92, 1.03, 0.72);
-  torso.position.y = 1.58;
+  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.35, 0.64, 10, 24), suit);
+  torso.scale.set(0.9, 1.04, 0.74);
+  torso.position.y = 1.6;
   torso.castShadow = true;
   group.add(torso);
-  const chestPlate = new THREE.Mesh(new THREE.CapsuleGeometry(0.17, 0.34, 6, 16), trim);
-  chestPlate.scale.set(1.35, 0.82, 0.16);
-  chestPlate.position.set(0, 1.72, 0.335);
+  const chestPlate = new THREE.Mesh(new THREE.CapsuleGeometry(0.18, 0.36, 6, 16), trim);
+  chestPlate.scale.set(1.3, 0.8, 0.16);
+  chestPlate.position.set(0, 1.75, 0.34);
   chestPlate.castShadow = true;
   group.add(chestPlate);
 
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.34, 20, 20), skin);
-  head.scale.set(0.9, 1.05, 0.8);
-  head.position.y = 2.26;
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.36, 22, 22), skin);
+  head.scale.set(0.88, 1.07, 0.82);
+  head.position.y = 2.31;
   head.castShadow = true;
   group.add(head);
-  const neck = new THREE.Mesh(new THREE.CapsuleGeometry(0.11, 0.1, 6, 12), skin);
-  neck.position.y = 2.0;
+  const neck = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, 0.12, 6, 12), skin);
+  neck.position.y = 2.02;
   neck.castShadow = true;
   group.add(neck);
   [-0.11, 0.11].forEach((x) => {
     const eye = new THREE.Mesh(
-      new THREE.SphereGeometry(0.032, 8, 8),
+      new THREE.SphereGeometry(0.03, 10, 10),
       new THREE.MeshBasicMaterial({ color: player.isSelf ? 0xfef3c7 : 0xe0f2fe }),
     );
-    eye.position.set(x, 2.3, 0.31);
+    eye.position.set(x, 2.32, 0.32);
     group.add(eye);
   });
   const smile = new THREE.Mesh(
-    new THREE.TorusGeometry(0.075, 0.006, 6, 18, Math.PI),
+    new THREE.TorusGeometry(0.078, 0.0065, 6, 18, Math.PI),
     new THREE.MeshBasicMaterial({ color: 0x7c2d12 }),
   );
-  smile.position.set(0, 2.19, 0.313);
+  smile.position.set(0, 2.205, 0.318);
   smile.rotation.z = Math.PI;
   group.add(smile);
   const nose = new THREE.Mesh(
-    new THREE.ConeGeometry(0.026, 0.07, 8),
+    new THREE.ConeGeometry(0.024, 0.064, 8),
     new THREE.MeshStandardMaterial({ color: 0xe8b48f, roughness: 0.8 }),
   );
-  nose.position.set(0, 2.245, 0.327);
+  nose.position.set(0, 2.25, 0.33);
   nose.rotation.x = Math.PI / 2;
   group.add(nose);
 
-  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.36, 18, 12, 0, Math.PI * 2, 0, Math.PI / 2), dark);
-  hair.scale.set(0.96, 0.82, 0.86);
-  hair.position.y = 2.42;
+  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.38, 18, 12, 0, Math.PI * 2, 0, Math.PI / 2), dark);
+  hair.scale.set(0.98, 0.84, 0.88);
+  hair.position.y = 2.44;
   hair.castShadow = true;
   group.add(hair);
 
@@ -620,26 +620,26 @@ function createAvatar(player: World3DPlayer) {
   rightLeg.position.set(0.22, 0.95, 0);
   group.add(rightLeg);
 
-  const leftArm = makeLimb(skin, 0.72);
-  leftArm.scale.set(0.82, 1, 0.82);
-  leftArm.position.set(-0.48, 1.82, 0.02);
+  const leftArm = makeLimb(skin, 0.76);
+  leftArm.scale.set(0.86, 1, 0.86);
+  leftArm.position.set(-0.5, 1.84, 0.02);
   group.add(leftArm);
-  const rightArm = makeLimb(skin, 0.72);
-  rightArm.scale.set(0.82, 1, 0.82);
-  rightArm.position.set(0.48, 1.82, 0.02);
+  const rightArm = makeLimb(skin, 0.76);
+  rightArm.scale.set(0.86, 1, 0.86);
+  rightArm.position.set(0.5, 1.84, 0.02);
   group.add(rightArm);
-  const leftHand = new THREE.Mesh(new THREE.SphereGeometry(0.09, 12, 10), skin);
-  leftHand.scale.set(0.92, 0.8, 0.78);
-  leftHand.position.set(-0.48, 1.37, 0.04);
+  const leftHand = new THREE.Mesh(new THREE.SphereGeometry(0.095, 12, 10), skin);
+  leftHand.scale.set(0.94, 0.82, 0.8);
+  leftHand.position.set(-0.5, 1.35, 0.04);
   leftHand.castShadow = true;
   group.add(leftHand);
   const rightHand = leftHand.clone();
-  rightHand.position.x = 0.48;
+  rightHand.position.x = 0.5;
   group.add(rightHand);
 
-  const leftFoot = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, 0.18, 6, 12), dark);
-  leftFoot.scale.set(1.2, 0.48, 1.72);
-  leftFoot.position.set(-0.22, 0.05, 0.12);
+  const leftFoot = new THREE.Mesh(new THREE.CapsuleGeometry(0.11, 0.2, 6, 12), dark);
+  leftFoot.scale.set(1.18, 0.5, 1.72);
+  leftFoot.position.set(-0.22, 0.03, 0.12);
   leftFoot.rotation.x = Math.PI / 2;
   leftFoot.castShadow = true;
   group.add(leftFoot);
