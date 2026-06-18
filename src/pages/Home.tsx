@@ -30,6 +30,7 @@ import { formatNumber } from "../lib/helpers";
 import { AvatarImage } from "../components/AvatarImage";
 import { SectionHeading } from "../components/SectionHeading";
 import { RuneDivider } from "../components/RuneDivider";
+import { CommunityContestBanner } from "../components/CommunityContestBanner";
 
 type HomeMember = {
   userId: string;
@@ -251,6 +252,43 @@ function Hero({
             <Link to="/communaute" className="btn-ghost w-full sm:w-auto">
               <Users className="h-4 w-4" /> Le fil de la communauté
             </Link>
+          </div>
+          <div className="mt-6 grid gap-3 sm:grid-cols-3">
+            {[
+              {
+                label: "Accueil rapide",
+                title: "Tes espaces",
+                desc: "Social, Live, Monde et Familiers regroupés au même endroit.",
+              },
+              {
+                label: "Mobile first",
+                title: "Navigation claire",
+                desc: "Des raccourcis pensés pour les doigts, pas pour un bureau.",
+              },
+              {
+                label: "Événement",
+                title: "Concours et lives",
+                desc: "Les temps forts apparaissent avant le reste du fil.",
+              },
+            ].map((item) => (
+              <div
+                key={item.title}
+                className="panel-app-soft min-h-28 p-4"
+              >
+                <p className="font-regal text-[10px] uppercase tracking-[0.22em] text-gold-300/75">
+                  {item.label}
+                </p>
+                <p className="mt-2 font-display text-lg text-gold-100">
+                  {item.title}
+                </p>
+                <p className="mt-2 text-sm leading-6 text-ivory/68">
+                  {item.desc}
+                </p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-6 max-w-3xl">
+            <CommunityContestBanner compact />
           </div>
           <div className="mt-5 grid grid-cols-2 gap-2 sm:hidden">
             {quickLinks.slice(0, 4).map((link) => (

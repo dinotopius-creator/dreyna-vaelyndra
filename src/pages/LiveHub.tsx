@@ -23,6 +23,7 @@ export function LiveHub() {
     [liveRegistry],
   );
   const featured = lives[0] ?? null;
+  const liveCount = lives.length;
   const categoriesWithLives = useMemo(
     () =>
       LIVE_CATEGORIES.map((category) => ({
@@ -45,6 +46,46 @@ export function LiveHub() {
         }
         subtitle="Retrouvez tous les directs en cours, les classements et les streamers qui font vibrer Vaelyndra."
       />
+
+      <div className="mt-6 grid gap-3 sm:grid-cols-3">
+        <div className="panel-app-soft p-4">
+          <p className="font-regal text-[10px] uppercase tracking-[0.22em] text-gold-300/75">
+            En direct
+          </p>
+          <p className="mt-2 font-display text-2xl text-gold-100">{liveCount}</p>
+          <p className="mt-1 text-sm text-ivory/65">salons actifs maintenant</p>
+        </div>
+        <div className="panel-app-soft p-4">
+          <p className="font-regal text-[10px] uppercase tracking-[0.22em] text-gold-300/75">
+            Navigation
+          </p>
+          <p className="mt-2 font-display text-lg text-gold-100">
+            Accès direct aux catégories
+          </p>
+          <p className="mt-1 text-sm text-ivory/65">
+            Catégories lisibles et cartes faciles à ouvrir sur mobile.
+          </p>
+        </div>
+        <Link
+          to={user ? "/live/studio" : "/connexion"}
+          className="panel-app-soft flex items-center justify-between gap-3 p-4 transition hover:-translate-y-0.5 hover:border-gold-300/30"
+        >
+          <div>
+            <p className="font-regal text-[10px] uppercase tracking-[0.22em] text-gold-300/75">
+              Créer
+            </p>
+            <p className="mt-2 font-display text-lg text-gold-100">
+              Lancer un live
+            </p>
+            <p className="mt-1 text-sm text-ivory/65">
+              Ouvre la scène live sans perdre de temps.
+            </p>
+          </div>
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05] text-gold-200">
+            <Radio className="h-5 w-5" />
+          </div>
+        </Link>
+      </div>
 
       <LiveBannerCarousel />
 
