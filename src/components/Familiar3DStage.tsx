@@ -348,15 +348,25 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
     let isWalking = false;
     let moveAngle = 0;
     let moveRadius = 0.95;
+    let leftwardStep = 0;
     let tapCooldown = 0;
 
     function pickDestination() {
-      moveAngle = Math.random() * Math.PI * 2;
-      moveRadius = 0.35 + Math.random() * 0.82;
+      leftwardStep = (leftwardStep + 1) % 4;
+      moveAngle = Math.PI * (0.72 + Math.random() * 0.16);
+      moveRadius = 0.32 + Math.random() * 0.22;
       desired.set(
-        THREE.MathUtils.clamp(Math.cos(moveAngle) * moveRadius, -0.78, 0.78),
+        THREE.MathUtils.clamp(
+          -0.1 - leftwardStep * 0.16 + Math.cos(moveAngle) * moveRadius,
+          -0.78,
+          0.3,
+        ),
         0,
-        THREE.MathUtils.clamp(Math.sin(moveAngle) * moveRadius * 0.64, -0.56, 0.56),
+        THREE.MathUtils.clamp(
+          Math.sin(moveAngle) * moveRadius * 0.42,
+          -0.36,
+          0.36,
+        ),
       );
       pauseTimer = 0;
       isWalking = true;
@@ -404,6 +414,9 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
         const distance = Math.hypot(dx, dz);
         if (distance < 0.04) {
           pauseTimer = 0.8 + Math.random() * 1.4;
+          if (target.x <= root.userData.bounds.minX + 0.16) {
+            target.x = 0.26;
+          }
           pickDestination();
         } else {
           isWalking = true;
