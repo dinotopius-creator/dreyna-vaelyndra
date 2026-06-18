@@ -748,7 +748,7 @@ export function Community() {
   }
 
   return (
-    <div className="fixed inset-0 z-[210] overflow-hidden bg-night-950 text-ivory">
+    <div className="relative min-h-[100dvh] overflow-hidden bg-night-950 text-ivory">
       <div className="absolute inset-x-0 top-0 z-30 border-b border-white/8 bg-night-950/84 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <div className="min-w-0">
