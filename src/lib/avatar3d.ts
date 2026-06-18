@@ -12,9 +12,11 @@ export type Avatar3DHairStyle =
   | "pixie";
 export type Avatar3DBaseModel = "procedural-premium" | "premium-humanoid" | "humanoid-v3" | "humanoid-v4";
 export type Avatar3DExpression = "soft-smile" | "neutral" | "confident";
+export type Avatar3DSystem = "legacy" | "premium-v2";
 
 export interface Avatar3DConfig {
   version: 1 | 2 | 3 | 4;
+  system?: Avatar3DSystem;
   bodyType: Avatar3DBodyType;
   faceShape: Avatar3DFaceShape;
   hairStyle: Avatar3DHairStyle;
@@ -28,6 +30,7 @@ export interface Avatar3DConfig {
 
 export const DEFAULT_AVATAR_3D_CONFIG: Avatar3DConfig = {
   version: 4,
+  system: "premium-v2",
   bodyType: "femme",
   faceShape: "soft",
   hairStyle: "wave",
@@ -84,6 +87,7 @@ export function buildAvatar3DUrl(config: Avatar3DConfig): string {
         JSON.stringify({
           ...config,
           version: 4,
+          system: config.system ?? "premium-v2",
           baseModel: config.baseModel ?? "humanoid-v4",
           expression: config.expression ?? "soft-smile",
           bodyTone: config.bodyTone ?? DEFAULT_AVATAR_3D_CONFIG.bodyTone,
@@ -108,6 +112,7 @@ export function decodeAvatar3DUrl(
       return null;
     return {
       version: parsed.version,
+      system: parsed.system === "legacy" ? "legacy" : "premium-v2",
       bodyType: parsed.bodyType === "homme" ? "homme" : "femme",
       faceShape: parsed.faceShape === "sharp" ? "sharp" : "soft",
       hairStyle:
