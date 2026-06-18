@@ -204,7 +204,7 @@ export function CommunityImmersiveFeed({
   }, [activeTab, filteredPosts, leaderboard, weeklyLabel]);
 
   return (
-    <div className="flex min-h-[calc(100vh-88px)] flex-col overflow-hidden bg-night-950 text-ivory">
+    <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-night-950 text-ivory">
       <div className="sticky top-0 z-30 border-b border-white/8 bg-night-950/88 backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-3 pb-3 pt-3 sm:px-5">
           <div className="flex items-center gap-3">
@@ -260,7 +260,7 @@ export function CommunityImmersiveFeed({
         </div>
       </div>
 
-      <div className="h-full overflow-y-auto overflow-x-hidden scroll-smooth snap-y snap-mandatory">
+      <div className="social-feed-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain scroll-smooth snap-y snap-mandatory">
         {feedEntries.length === 0 && activeTab === "following" ? (
           <div className="mx-auto flex min-h-[calc(100vh-160px)] max-w-3xl items-center px-3 py-8 text-center text-ivory/65">
             <div className="panel-app w-full p-6">
@@ -273,11 +273,8 @@ export function CommunityImmersiveFeed({
         {feedEntries.map((entry) => {
           if (entry.kind === "news") {
             return (
-              <section
-                key={entry.id}
-                className="min-h-[calc(100vh-160px)] snap-start px-3 py-4 sm:px-5"
-              >
-                <div className="mx-auto flex h-full max-w-3xl items-center">
+              <section key={entry.id} className="min-h-[100svh] snap-start px-3 py-4 sm:px-5">
+                <div className="mx-auto flex min-h-[calc(100svh-96px)] max-w-3xl items-center">
                   <div className="panel-app w-full overflow-hidden p-5 sm:p-7">
                     <div className="inline-flex items-center gap-2 rounded-full border border-gold-400/20 bg-gold-500/10 px-3 py-1 text-[11px] uppercase tracking-[0.26em] text-gold-200">
                       <Sparkles className="h-3.5 w-3.5" />
@@ -350,12 +347,12 @@ export function CommunityImmersiveFeed({
 
           if (!isMedia || activeTab === "text") {
             return (
-              <section
+            <section
                 key={post.id}
                 id={`post-${post.id}`}
-                className="snap-start px-3 py-4 sm:px-5"
+                className="min-h-[100svh] snap-start px-3 py-4 sm:px-5"
               >
-                <div className="mx-auto flex min-h-[calc(100vh-160px)] max-w-3xl items-stretch">
+                <div className="mx-auto flex min-h-[calc(100svh-96px)] max-w-3xl items-stretch">
                   <article className="panel-app relative flex w-full overflow-hidden rounded-[28px] border border-white/8 bg-night-950/80 p-4 shadow-[0_30px_60px_rgba(0,0,0,0.38)] sm:p-6">
                     <div className="relative flex w-full flex-col justify-between">
                       <div className="flex items-start justify-between gap-4">
@@ -443,8 +440,8 @@ export function CommunityImmersiveFeed({
           }
 
           return (
-            <section key={post.id} id={`post-${post.id}`} className="snap-start px-0 py-0">
-              <div className="relative h-[calc(100vh-88px)] min-h-[620px] w-full overflow-hidden">
+            <section key={post.id} id={`post-${post.id}`} className="min-h-[100svh] snap-start px-0 py-0">
+              <div className="relative min-h-[calc(100svh-88px)] h-[calc(100svh-88px)] w-full overflow-hidden">
                 <div className="absolute inset-0">
                   {video?.kind ? (
                     <video
