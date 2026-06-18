@@ -122,6 +122,9 @@ export function Navbar() {
     useState<NotificationFilter>("all");
   const navigate = useNavigate();
   const location = useLocation();
+  const isSocialImmersiveRoute =
+    location.pathname.startsWith("/social") ||
+    location.pathname.startsWith("/communaute");
   const canAccessAdmin =
     isQueen ||
     backendMe?.role === "architect" ||
@@ -287,6 +290,10 @@ export function Navbar() {
     }, 0);
     return () => window.clearTimeout(closeMenus);
   }, [location.pathname]);
+
+  if (isSocialImmersiveRoute) {
+    return null;
+  }
 
   return (
     <header className="sticky top-0 z-50">
