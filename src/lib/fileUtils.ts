@@ -12,6 +12,11 @@ export const FILE_CONFIG = {
     'image/png',
     'image/gif',
     'image/webp',
+    // Videos
+    'video/mp4',
+    'video/webm',
+    'video/quicktime',
+    'video/ogg',
     // Documents
     'application/pdf',
     'text/plain',
@@ -24,6 +29,8 @@ export const FILE_CONFIG = {
   ALLOWED_EXTENSIONS: [
     // Images
     'jpg', 'jpeg', 'png', 'gif', 'webp',
+    // Videos
+    'mp4', 'webm', 'mov', 'ogg',
     // Documents
     'pdf', 'txt', 'doc', 'docx',
     // Archives
@@ -127,6 +134,13 @@ export function generateAttachmentId(): string {
  */
 export function isImageFile(mimeType: string): boolean {
   return mimeType.startsWith('image/');
+}
+
+/**
+ * Détecte si un fichier est une vidéo.
+ */
+export function isVideoFile(mimeType: string): boolean {
+  return mimeType.startsWith('video/');
 }
 
 /**

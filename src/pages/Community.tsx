@@ -7,6 +7,7 @@ import {
   Flame,
   Gift,
   Image,
+  Heart,
   Megaphone,
   MessageCircle,
   Pencil,
@@ -59,15 +60,16 @@ import {
   apiGetProfile,
   apiSearchUsers,
   apiUploadCommunityImage,
+  apiUploadCommunityVideo,
   type UserProfileDto,
   type UserSearchHitDto,
   type StreamerGradeDto,
 } from "../lib/api";
-import { isImageFile, validateFile } from "../lib/fileUtils";
+import { isImageFile, isVideoFile, validateFile } from "../lib/fileUtils";
 import type { CommunityPost } from "../types";
 
 
-const QUICK_EMOJIS = ["✨", "👑", "🌿", "⚔️", "🌙", "🔮"];
+const LIKE_EMOJI = "like";
 const COMMUNITY_REWARD_BY_RANK: Record<number, number> = {
   1: 600,
   2: 450,
@@ -88,6 +90,8 @@ export function Community() {
   const [draft, setDraft] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null);
   const [videoUrl, setVideoUrl] = useState("");
   const [tagQuery, setTagQuery] = useState("");
   const [tagResults, setTagResults] = useState<UserSearchHitDto[]>([]);
@@ -209,12 +213,16 @@ export function Community() {
   useEffect(() => {
     const q = tagQuery.trim();
     if (q.length < 1) {
-      setTagResults([]);
-      setTagLoading(false);
-      return;
+      const reset = window.setTimeout(() => {
+        setTagResults([]);
+        setTagLoading(false);
+      }, 0);
+      return () => window.clearTimeout(reset);
     }
     let cancelled = false;
-    setTagLoading(true);
+    const loadingStart = window.setTimeout(() => {
+      setTagLoading(true);
+    }, 0);
     const handle = window.setTimeout(() => {
       apiSearchUsers(q, 6)
         .then((hits) => {
@@ -231,6 +239,7 @@ export function Community() {
     }, 250);
     return () => {
       cancelled = true;
+      window.clearTimeout(loadingStart);
       window.clearTimeout(handle);
     };
   }, [tagQuery, user?.id]);
@@ -348,10 +357,12 @@ export function Community() {
     );
     if (!parentPost) return;
 
-    setOpenComments((current) => ({
-      ...current,
-      [parentPost.id]: true,
-    }));
+    const open = window.setTimeout(() => {
+      setOpenComments((current) => ({
+        ...current,
+        [parentPost.id]: true,
+      }));
+    }, 0);
 
     const scrollToComment = () => {
       const element = document.getElementById(`comment-${commentId}`);
@@ -360,7 +371,9 @@ export function Community() {
       return true;
     };
 
-    if (scrollToComment()) return;
+    if (scrollToComment()) {
+      return () => window.clearTimeout(open);
+    }
 
     const frame = window.requestAnimationFrame(() => {
       window.setTimeout(() => {
@@ -368,7 +381,10 @@ export function Community() {
       }, 80);
     });
 
-    return () => window.cancelAnimationFrame(frame);
+    return () => {
+      window.clearTimeout(open);
+      window.cancelAnimationFrame(frame);
+    };
   }, [location.hash, posts]);
 
   async function publish(e: React.FormEvent) {
@@ -391,9 +407,14 @@ export function Community() {
     }
     try {
       let uploadedImageUrl: string | undefined;
+      let uploadedVideoUrl: string | undefined;
       if (imageFile) {
         const uploaded = await apiUploadCommunityImage(imageFile);
         uploadedImageUrl = uploaded.imageUrl;
+      }
+      if (videoFile) {
+        const uploaded = await apiUploadCommunityVideo(videoFile);
+        uploadedVideoUrl = uploaded.imageUrl;
       }
       const post = await apiCreatePost({
         author: {
@@ -403,13 +424,16 @@ export function Community() {
         },
         content: draft.trim(),
         imageUrl: uploadedImageUrl,
-        videoUrl: cleanedVideo || undefined,
+        videoUrl: uploadedVideoUrl || cleanedVideo || undefined,
       });
       dispatch({ type: "addPost", post });
       setDraft("");
       if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
       setImageFile(null);
       setImagePreviewUrl(null);
+      if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
+      setVideoFile(null);
+      setVideoPreviewUrl(null);
       setVideoUrl("");
       setTagQuery("");
       setTagResults([]);
@@ -539,6 +563,13 @@ export function Community() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
+  function clearSelectedVideo() {
+    if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
+    setVideoFile(null);
+    setVideoPreviewUrl(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
   function appendMention(hit: UserSearchHitDto) {
     const mention = `@${hit.handle || hit.username.replace(/\s+/g, "")}`;
     setDraft((current) => {
@@ -561,12 +592,35 @@ export function Community() {
       if (!isImageFile(file.type)) {
         throw new Error("Choisis une image JPG, PNG, GIF ou WEBP.");
       }
+      clearSelectedVideo();
       if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
       setImageFile(file);
       setImagePreviewUrl(URL.createObjectURL(file));
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Image impossible à utiliser.";
+      notify(message, "error");
+      event.target.value = "";
+    }
+  }
+
+  function onPickVideo(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      if (!isVideoFile(file.type)) {
+        throw new Error("Choisis une vidéo MP4, WEBM, MOV ou OGG.");
+      }
+      if (file.size > 60 * 1024 * 1024) {
+        throw new Error("Vidéo trop lourde. Max 60 Mo.");
+      }
+      clearSelectedImage();
+      if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
+      setVideoFile(file);
+      setVideoPreviewUrl(URL.createObjectURL(file));
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Vidéo impossible à utiliser.";
       notify(message, "error");
       event.target.value = "";
     }
@@ -625,8 +679,16 @@ export function Community() {
                       <input
                         ref={fileInputRef}
                         type="file"
-                        accept="image/jpeg,image/png,image/webp,image/gif"
-                        onChange={onPickImage}
+                        accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime,video/ogg"
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          if (!file) return;
+                          if (isVideoFile(file.type)) {
+                            onPickVideo(event);
+                            return;
+                          }
+                          onPickImage(event);
+                        }}
                         className="hidden"
                       />
                       <button
@@ -635,7 +697,7 @@ export function Community() {
                         className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-royal-500/30 px-4 py-2 text-sm text-ivory/80 transition hover:border-gold-400/60 hover:text-gold-200"
                       >
                         <Image className="h-4 w-4" />
-                        Importer une image
+                        Importer une image ou vidéo
                       </button>
                       <div className="relative min-w-0 flex-1">
                         <Film className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ivory/40" />
@@ -651,7 +713,7 @@ export function Community() {
                       </button>
                     </div>
                     <p className="text-xs text-ivory/45">
-                      Import direct depuis ton téléphone ou ton ordinateur. Le champ URL d'image a été retiré.
+                      Import direct depuis ton téléphone ou ton ordinateur. Tu peux ajouter une image ou une vidéo, ou coller une URL vidéo.
                     </p>
                     <div className="flex flex-wrap gap-2">
                       <button
@@ -675,26 +737,38 @@ export function Community() {
                         Voir le concours
                       </Link>
                     </div>
-                    {imagePreviewUrl && (
+                    {(imagePreviewUrl || videoPreviewUrl) && (
                       <div className="rounded-2xl border border-royal-500/30 bg-night-900/55 p-3">
                         <div className="mb-2 flex items-center justify-between gap-3">
                           <p className="truncate text-xs text-ivory/65">
-                            {imageFile?.name}
+                            {imageFile?.name ?? videoFile?.name}
                           </p>
                           <button
                             type="button"
-                            onClick={clearSelectedImage}
+                            onClick={() => {
+                              clearSelectedImage();
+                              clearSelectedVideo();
+                            }}
                             className="rounded-full p-1 text-ivory/45 transition hover:text-rose-300"
-                            aria-label="Retirer l'image"
+                            aria-label="Retirer le média"
                           >
                             <X className="h-4 w-4" />
                           </button>
                         </div>
-                        <img
-                          src={imagePreviewUrl}
-                          alt="Apercu du post"
-                          className="max-h-56 w-full rounded-xl object-cover"
-                        />
+                        {imagePreviewUrl ? (
+                          <img
+                            src={imagePreviewUrl}
+                            alt="Apercu du post"
+                            className="max-h-56 w-full rounded-xl object-cover"
+                          />
+                        ) : videoPreviewUrl ? (
+                          <video
+                            src={videoPreviewUrl}
+                            controls
+                            playsInline
+                            className="max-h-56 w-full rounded-xl object-cover"
+                          />
+                        ) : null}
                       </div>
                     )}
                   </div>
@@ -1000,27 +1074,37 @@ export function Community() {
                 />
                 {post.videoUrl && <PostVideo url={post.videoUrl} />}
                 <div className="mt-4 flex flex-wrap items-center gap-2">
-                  {QUICK_EMOJIS.map((emoji) => {
-                    const count = post.reactions[emoji]?.length ?? 0;
+                  {(() => {
+                    const likeCount = Object.values(post.reactions ?? {}).reduce(
+                      (sum, usersList) => sum + usersList.length,
+                      0,
+                    );
                     const active = user
-                      ? post.reactions[emoji]?.includes(user.id)
+                      ? Object.values(post.reactions ?? {}).some((usersList) =>
+                          usersList.includes(user.id),
+                        )
                       : false;
                     return (
                       <button
-                        key={emoji}
-                        onClick={() => react(post.id, emoji)}
-                        className={`rounded-full border px-3 py-1 text-sm transition ${
+                        type="button"
+                        onClick={() => react(post.id, LIKE_EMOJI)}
+                        className={`inline-flex min-h-10 items-center gap-1.5 rounded-full border px-4 py-1.5 text-sm transition ${
                           active
                             ? "border-gold-400/70 bg-gold-500/15 text-gold-200"
                             : "border-royal-500/30 text-ivory/70 hover:border-gold-400/40"
                         }`}
                       >
-                        {emoji}
-                        {count > 0 && <span className="ml-1 text-xs">{count}</span>}
+                        <Heart
+                          className="h-4 w-4"
+                          fill={active ? "currentColor" : "none"}
+                        />
+                        Like
+                        {likeCount > 0 && <span className="text-xs">{likeCount}</span>}
                       </button>
                     );
-                  })}
+                  })()}
                   <button
+                    type="button"
                     onClick={() =>
                       setOpenComments((current) => ({
                         ...current,
