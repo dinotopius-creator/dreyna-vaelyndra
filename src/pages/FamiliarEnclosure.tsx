@@ -331,18 +331,18 @@ export function FamiliarEnclosure() {
 
       <div className="relative z-10 flex-1 min-h-0 overflow-y-auto overscroll-contain">
         <div className="grid gap-4 p-3 pb-8 lg:grid-cols-[1.35fr,0.65fr] lg:p-5">
-          <div className="relative min-h-[62dvh] overflow-hidden rounded-[30px] border border-white/10 bg-[radial-gradient(circle_at_50%_28%,rgba(74,222,128,0.16),transparent_28%),linear-gradient(180deg,rgba(16,185,129,0.12),rgba(15,23,42,0.92))] shadow-[0_30px_90px_rgba(0,0,0,0.35)] lg:min-h-[calc(100dvh-8.5rem)]">
+          <div className="relative isolate min-h-[72dvh] overflow-hidden rounded-[30px] border border-white/10 bg-[radial-gradient(circle_at_50%_24%,rgba(74,222,128,0.16),transparent_28%),linear-gradient(180deg,rgba(16,185,129,0.12),rgba(15,23,42,0.92))] shadow-[0_30px_90px_rgba(0,0,0,0.35)] lg:min-h-[calc(100dvh-8.5rem)]">
             <div className="absolute inset-x-0 bottom-0 h-[48%] rounded-t-[50%] bg-[radial-gradient(ellipse_at_center,rgba(34,197,94,0.35),rgba(20,83,45,0.2)_48%,transparent_72%)]" />
             <div className="absolute left-[8%] top-[16%] h-32 w-32 rounded-full bg-gold-200/10 blur-3xl" />
             <div className="absolute right-[10%] top-[10%] h-40 w-40 rounded-full bg-cyan-200/10 blur-3xl" />
 
             <motion.div
-              className="absolute left-[18%] top-[18%] h-24 w-24 rounded-[34px] border border-white/10 bg-white/5"
+              className="absolute left-[18%] top-[14%] h-24 w-24 rounded-[34px] border border-white/10 bg-white/5"
               animate={{ y: [0, -8, 0], rotate: [0, 2, 0] }}
               transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
             />
             <motion.div
-              className="absolute right-[14%] top-[24%] h-16 w-28 rounded-full border border-white/10 bg-emerald-300/10"
+              className="absolute right-[14%] top-[18%] h-16 w-28 rounded-full border border-white/10 bg-emerald-300/10"
               animate={{ y: [0, 7, 0] }}
               transition={{ duration: 4.2, repeat: Infinity, ease: "easeInOut" }}
             />
@@ -354,11 +354,11 @@ export function FamiliarEnclosure() {
               <motion.button
                 type="button"
                 onClick={tapFamiliar}
-                className="absolute z-20 flex flex-col items-center focus:outline-none"
+                className="absolute left-1/2 top-[43%] z-20 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center focus:outline-none"
                 style={{ color: active.color }}
                 animate={{
-                  left: ["18%", "58%", "46%", "25%", "18%"],
-                  top: ["56%", "48%", "68%", "72%", "56%"],
+                  y: [0, -10, 0, 8, 0],
+                  rotate: [0, 1.5, 0, -1.5, 0],
                 }}
                 transition={{ duration: 14, repeat: Infinity, ease: "easeInOut" }}
               >
@@ -366,11 +366,11 @@ export function FamiliarEnclosure() {
                   hearts={affection.affectionHearts}
                   pulseHeart={heartPulse}
                 />
-                <div className="relative h-[620px] w-[340px] -translate-y-24 sm:h-[680px] sm:w-[420px] sm:-translate-y-28">
+                <div className="relative h-[560px] w-[360px] -translate-y-10 sm:h-[620px] sm:w-[440px] sm:-translate-y-12">
                   <Familiar3DStage familiar={active} onTap={tapFamiliar} />
                   <FeedHeartBurst burstId={feedBurstId} />
                 </div>
-                <div className="mt-2 rounded-full border border-white/10 bg-night-950/72 px-3 py-1 text-center text-xs text-ivory/80 backdrop-blur">
+                <div className="mt-1 rounded-full border border-white/10 bg-night-950/72 px-3 py-1 text-center text-xs text-ivory/80 backdrop-blur">
                   {active.nickname || active.name}
                 </div>
               </motion.button>
