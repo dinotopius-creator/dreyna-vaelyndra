@@ -2461,116 +2461,123 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
             </div>
           </section>
 
-          <section
-            className={`rounded-[26px] border border-royal-500/30 bg-night-900/60 p-5 shadow-[0_20px_50px_rgba(0,0,0,0.18)] ${
-              worldGameActive
-                ? `fixed z-[95] w-[min(${worldChatExpanded ? "24rem" : "21rem"},calc(100vw-1.2rem))] overflow-hidden backdrop-blur-xl touch-pan-y overscroll-contain md:w-[min(24rem,calc(100vw-2rem))] ${
-                    worldLandscapeMode
-                      ? `left-[calc(0.75rem+env(safe-area-inset-left))] top-[calc(0.75rem+env(safe-area-inset-top))] max-h-[calc(100dvh-1.5rem)] ${worldChatExpanded ? "ring-1 ring-sky-300/20 shadow-[0_20px_50px_rgba(0,0,0,0.18),0_0_0_1px_rgba(125,211,252,0.08)]" : ""}`
-                      : `left-[calc(0.9rem+env(safe-area-inset-left))] bottom-[calc(0.9rem+env(safe-area-inset-bottom))] ${worldChatExpanded ? "max-h-[min(34rem,calc(100dvh-5.5rem))] ring-1 ring-sky-300/20 shadow-[0_20px_50px_rgba(0,0,0,0.18),0_0_0_1px_rgba(125,211,252,0.08)]" : "max-h-[min(26rem,calc(100dvh-8rem))]"}`
-                  }`
-                : ""
-            }`}
-            onPointerDownCapture={(event) => {
-              if (worldGameActive) event.stopPropagation();
-            }}
-          >
-            <div className={`flex items-center gap-2 ${worldChatAttention > 0 ? "animate-[socialLikeBurst_900ms_ease-out_1]" : ""}`}>
-              <Sparkles className="h-4 w-4 text-gold-300" />
-              <h3 className={`font-display text-xl text-gold-200 ${worldGameActive ? "text-lg" : ""}`}>Chat du monde</h3>
-              {worldChatExpanded && worldGameActive && (
-                <span className="rounded-full border border-gold-400/20 bg-gold-500/10 px-2 py-0.5 text-[9px] uppercase tracking-[0.18em] text-gold-100">
-                  Ouvert
-                </span>
-              )}
-              {worldChatExpanded && worldGameActive && (
+          {worldGameActive && !worldChatExpanded ? (
+            <button
+              type="button"
+              onClick={openWorldChat}
+              className={`fixed z-[96] inline-flex items-center gap-2 rounded-full border border-sky-300/20 bg-night-950/88 px-4 py-2 text-sm text-sky-100 shadow-[0_20px_50px_rgba(0,0,0,0.35)] backdrop-blur-xl transition hover:border-sky-300/40 hover:text-sky-50 active:scale-95 ${
+                worldLandscapeMode
+                  ? "left-[calc(0.75rem+env(safe-area-inset-left))] top-[calc(0.75rem+env(safe-area-inset-top))]"
+                  : "left-[calc(0.9rem+env(safe-area-inset-left))] bottom-[calc(0.9rem+env(safe-area-inset-bottom))]"
+              }`}
+              aria-label="Ouvrir le chat du monde"
+            >
+              <MessageCircle className="h-4 w-4" />
+              Chat
+              <span className="rounded-full bg-sky-400/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.16em] text-sky-200/80">
+                {chatMessages.length}
+              </span>
+            </button>
+          ) : (
+            <section
+              className={`rounded-[26px] border border-royal-500/30 bg-night-900/60 p-4 shadow-[0_20px_50px_rgba(0,0,0,0.18)] ${
+                worldGameActive
+                  ? `fixed z-[95] w-[min(${worldLandscapeMode ? "19rem" : "21rem"},calc(100vw-1rem))] overflow-hidden backdrop-blur-xl touch-pan-y overscroll-contain md:w-[min(22rem,calc(100vw-2rem))] ${
+                      worldLandscapeMode
+                        ? `left-[calc(0.75rem+env(safe-area-inset-left))] top-[calc(0.75rem+env(safe-area-inset-top))] max-h-[calc(100dvh-1.5rem)] ring-1 ring-sky-300/20 shadow-[0_20px_50px_rgba(0,0,0,0.18),0_0_0_1px_rgba(125,211,252,0.08)]`
+                        : `left-[calc(0.9rem+env(safe-area-inset-left))] bottom-[calc(0.9rem+env(safe-area-inset-bottom))] max-h-[min(30rem,calc(100dvh-5rem))] ring-1 ring-sky-300/20 shadow-[0_20px_50px_rgba(0,0,0,0.18),0_0_0_1px_rgba(125,211,252,0.08)]`
+                    }`
+                  : ""
+              }`}
+              onPointerDownCapture={(event) => {
+                if (worldGameActive) event.stopPropagation();
+              }}
+            >
+              <div className={`flex items-center gap-2 ${worldChatAttention > 0 ? "animate-[socialLikeBurst_900ms_ease-out_1]" : ""}`}>
+                <Sparkles className="h-4 w-4 text-gold-300" />
+                <h3 className="font-display text-lg text-gold-200">Chat du monde</h3>
                 <button
                   type="button"
                   onClick={() => setWorldChatExpanded(false)}
                   className="ml-auto rounded-full border border-white/10 px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-ivory/55 transition hover:border-gold-300/35 hover:text-gold-100"
+                  aria-label="Réduire le chat du monde"
                 >
                   Réduire
                 </button>
-              )}
-            </div>
-            <div
-              className={`mt-4 space-y-2 overflow-y-auto pr-1 ${
-                worldGameActive
-                  ? worldLandscapeMode
-                    ? worldChatExpanded
-                      ? "max-h-[min(16rem,calc(100dvh-11rem))]"
-                      : "max-h-[min(10rem,calc(100dvh-10rem))]"
-                    : worldChatExpanded
-                      ? "max-h-[16rem] sm:max-h-[18rem]"
-                      : "max-h-[10.5rem]"
-                  : "max-h-none"
-              }`}
-            >
-              {chatMessages.slice(0, worldGameActive ? 4 : 6).map((message) => (
-                <div
-                  key={message.id}
-                  className={`rounded-2xl border px-3 py-2 ${
-                    message.tone === "system"
-                      ? "border-gold-400/20 bg-gold-500/8"
-                      : "border-royal-500/25 bg-night-950/55"
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <div className="truncate text-sm font-semibold text-ivory/90">
-                          {message.author}
-                        </div>
-                        {message.district && (
-                          <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[9px] uppercase tracking-[0.18em] text-ivory/55">
-                            {labelForDistrict(message.district)}
-                          </span>
-                        )}
-                      </div>
-                      {message.handle && (
-                        <Handle handle={message.handle} className="text-[11px]" />
-                      )}
-                    </div>
-                    <div className="text-[10px] uppercase tracking-[0.16em] text-ivory/40">
-                      {formatRelative(message.createdAt)}
-                    </div>
-                  </div>
-                  <p className="mt-1 text-sm text-ivory/70">{message.content}</p>
-                </div>
-              ))}
-            </div>
-            <div
-              className={`mt-4 flex gap-2 ${
-                worldGameActive ? (worldLandscapeMode ? "flex-col items-stretch" : "items-end") : ""
-              }`}
-            >
-              <input
-                key={`world-chat-${worldChatExpanded ? "open" : "closed"}-${worldChatAttention}`}
-                ref={chatInputRef}
-                value={chatInput}
-                onChange={(event) => setChatInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") sendMessage();
-                }}
-                placeholder="Dire quelque chose dans le hub..."
-                data-world-chat-input="true"
-                inputMode="text"
-                enterKeyHint="send"
-                autoComplete="off"
-                autoFocus={worldChatExpanded}
-                className={`glass-input flex-1 ${worldGameActive ? "min-h-11 text-sm" : ""} ${worldLandscapeMode ? "w-full" : ""}`}
-              />
-              <button
-                type="button"
-                onClick={sendMessage}
-                className={`rounded-full border border-gold-400/35 px-4 py-2 text-sm text-gold-100 transition hover:border-gold-300/70 ${
-                  worldGameActive ? "min-h-11" : ""
-                } ${worldLandscapeMode ? "w-full" : ""}`}
+              </div>
+              <div
+                className={`mt-3 space-y-2 overflow-y-auto pr-1 ${
+                  worldGameActive
+                    ? worldLandscapeMode
+                      ? "max-h-[min(15rem,calc(100dvh-10rem))]"
+                      : "max-h-[min(17rem,calc(100dvh-8rem))]"
+                    : "max-h-none"
+                }`}
               >
-                Envoyer
-              </button>
-            </div>
-          </section>
+                {chatMessages.slice(0, worldGameActive ? 4 : 6).map((message) => (
+                  <div
+                    key={message.id}
+                    className={`rounded-2xl border px-3 py-2 ${
+                      message.tone === "system"
+                        ? "border-gold-400/20 bg-gold-500/8"
+                        : "border-royal-500/25 bg-night-950/55"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <div className="truncate text-sm font-semibold text-ivory/90">
+                            {message.author}
+                          </div>
+                          {message.district && (
+                            <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[9px] uppercase tracking-[0.18em] text-ivory/55">
+                              {labelForDistrict(message.district)}
+                            </span>
+                          )}
+                        </div>
+                        {message.handle && <Handle handle={message.handle} className="text-[11px]" />}
+                      </div>
+                      <div className="text-[10px] uppercase tracking-[0.16em] text-ivory/40">
+                        {formatRelative(message.createdAt)}
+                      </div>
+                    </div>
+                    <p className="mt-1 text-sm text-ivory/70">{message.content}</p>
+                  </div>
+                ))}
+              </div>
+              <div
+                className={`mt-3 flex gap-2 ${
+                  worldGameActive ? (worldLandscapeMode ? "flex-col items-stretch" : "items-end") : ""
+                }`}
+              >
+                <input
+                  key={`world-chat-${worldChatExpanded ? "open" : "closed"}-${worldChatAttention}`}
+                  ref={chatInputRef}
+                  value={chatInput}
+                  onChange={(event) => setChatInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") sendMessage();
+                  }}
+                  placeholder="Dire quelque chose dans le hub..."
+                  data-world-chat-input="true"
+                  inputMode="text"
+                  enterKeyHint="send"
+                  autoComplete="off"
+                  autoFocus={worldChatExpanded}
+                  className={`glass-input flex-1 ${worldGameActive ? "min-h-11 text-sm" : ""} ${worldLandscapeMode ? "w-full" : ""}`}
+                />
+                <button
+                  type="button"
+                  onClick={sendMessage}
+                  className={`rounded-full border border-gold-400/35 px-4 py-2 text-sm text-gold-100 transition hover:border-gold-300/70 ${
+                    worldGameActive ? "min-h-11" : ""
+                  } ${worldLandscapeMode ? "w-full" : ""}`}
+                >
+                  Envoyer
+                </button>
+              </div>
+            </section>
+          )}
         </aside>
       </div>
 
