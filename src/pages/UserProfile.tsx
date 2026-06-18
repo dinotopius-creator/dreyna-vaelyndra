@@ -8,6 +8,7 @@ import {
   Gift,
   Loader2,
   MessageCircle,
+  Trash2,
   Sparkles,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
@@ -26,7 +27,7 @@ import { ReportButton } from "../components/ReportButton";
 import { formatDate, formatRelative } from "../lib/helpers";
 import { roleLabelWithIcon } from "../lib/roleLabel";
 import { formatSylvins } from "../lib/sylvins";
-import { apiGetProfile, type UserProfileDto } from "../lib/api";
+import { apiDeletePost, apiGetProfile, type UserProfileDto } from "../lib/api";
 import {
   fetchUserFamiliars,
   giftFamiliar,
@@ -40,7 +41,7 @@ import type { User } from "../types";
 export function UserProfile() {
   const { userId = "" } = useParams();
   const { users, user: currentUser } = useAuth();
-  const { posts, walletOf } = useStore();
+  const { posts, walletOf, dispatch } = useStore();
   const { notify } = useToast();
 
   const localProfile = useMemo(
@@ -67,6 +68,7 @@ export function UserProfile() {
   );
   const [giftAmount, setGiftAmount] = useState("");
   const [giftSending, setGiftSending] = useState(false);
+  const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!userId) return;
@@ -87,11 +89,14 @@ export function UserProfile() {
 
   useEffect(() => {
     if (!userId) return;
-    // Reset immédiat : sinon l'ancien avatar serveur reste affiché pendant
-    // la latence de fetch quand on passe de /u/alice à /u/bob.
-    setServerProfile(null);
-    setServerState("loading");
     let cancelled = false;
+    const resetTimer = window.setTimeout(() => {
+      if (cancelled) return;
+      // Reset différé d'un tick : évite le setState synchrone dans l'effet
+      // tout en retirant l'ancien avatar serveur avant la réponse réseau.
+      setServerProfile(null);
+      setServerState("loading");
+    }, 0);
     apiGetProfile(userId)
       .then((p) => {
         if (!cancelled) {
@@ -107,6 +112,7 @@ export function UserProfile() {
       });
     return () => {
       cancelled = true;
+      window.clearTimeout(resetTimer);
     };
   }, [userId]);
 
@@ -175,12 +181,35 @@ export function UserProfile() {
   }
 
   const wallet = walletOf(profile.id);
+  const profileId = profile.id;
   const myPosts = posts
-    .filter((p) => p.authorId === profile.id)
+    .filter((p) => p.authorId === profileId)
     .sort(
       (a, b) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
+
+  async function deleteOwnPost(postId: string) {
+    if (!currentUser || currentUser.id !== profileId) return;
+    const confirmed = window.confirm(
+      "Supprimer ce post ? Cette action est définitive.",
+    );
+    if (!confirmed) return;
+
+    setDeletingPostId(postId);
+    try {
+      await apiDeletePost(postId, currentUser.id);
+      dispatch({ type: "deletePost", id: postId });
+      notify("Post supprimé.", "success");
+    } catch (error) {
+      notify(
+        error instanceof Error ? error.message : "Impossible de supprimer le post.",
+        "error",
+      );
+    } finally {
+      setDeletingPostId(null);
+    }
+  }
 
   return (
     <div className="mx-auto max-w-5xl px-3 py-8 sm:px-6 sm:py-14">
@@ -594,19 +623,80 @@ export function UserProfile() {
           eyebrow="Publications"
           title="Ses dernières publications"
         />
-        <ul className="mt-6 space-y-4">
+        <ul className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {myPosts.map((p) => (
-            <li key={p.id} className="card-royal p-5">
-              <p className="font-regal text-[10px] tracking-[0.22em] text-ivory/55">
-                {formatRelative(p.createdAt)}
-              </p>
-              <p className="mt-2 whitespace-pre-wrap text-sm text-ivory/85">
-                {p.content}
-              </p>
+            <li
+              key={p.id}
+              className="overflow-hidden rounded-[26px] border border-white/8 bg-night-950/60 shadow-[0_18px_60px_rgba(0,0,0,0.22)]"
+            >
+              <article className="flex h-full flex-col">
+                <div className="relative aspect-[4/5] overflow-hidden bg-night-900">
+                  {p.imageUrl ? (
+                    <img
+                      src={p.imageUrl}
+                      alt={p.content}
+                      className="h-full w-full object-cover transition duration-500 hover:scale-[1.03]"
+                    />
+                  ) : p.videoUrl ? (
+                    <video
+                      src={p.videoUrl}
+                      className="h-full w-full object-cover"
+                      muted
+                      playsInline
+                      loop
+                      autoPlay
+                      preload="metadata"
+                    />
+                  ) : (
+                    <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(251,191,36,0.16),transparent_35%),linear-gradient(180deg,#18111f,#09060d)] px-4 text-center">
+                      <p className="line-clamp-8 whitespace-pre-wrap text-sm leading-6 text-ivory/88">
+                        {p.content}
+                      </p>
+                    </div>
+                  )}
+
+                  {currentUser?.id === profileId && (
+                    <button
+                      type="button"
+                      onClick={() => void deleteOwnPost(p.id)}
+                      disabled={deletingPostId === p.id}
+                      className="absolute right-3 top-3 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-night-950/65 text-rose-200 backdrop-blur-md transition hover:border-rose-300/50 hover:text-rose-100 disabled:opacity-60"
+                      aria-label="Supprimer mon post"
+                    >
+                      {deletingPostId === p.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                    </button>
+                  )}
+
+                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-night-950 via-night-950/55 to-transparent px-4 pb-4 pt-10">
+                    <p className="text-[10px] uppercase tracking-[0.22em] text-ivory/60">
+                      {formatRelative(p.createdAt)}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-1 flex-col gap-2 p-4">
+                  <p className="line-clamp-3 whitespace-pre-wrap text-sm leading-6 text-ivory/88">
+                    {p.content}
+                  </p>
+                  <div className="mt-auto flex items-center justify-between gap-3 text-xs text-ivory/55">
+                    <span>
+                      {Object.values(p.reactions ?? {}).reduce(
+                        (acc, users) => acc + users.length,
+                        0,
+                      )}{" "}
+                      likes
+                    </span>
+                    <span>{p.comments.length} commentaires</span>
+                  </div>
+                </div>
+              </article>
             </li>
           ))}
           {myPosts.length === 0 && (
-            <li className="text-center text-sm text-ivory/50">
+            <li className="col-span-full text-center text-sm text-ivory/50">
               Ce membre n'a pas encore publié.
             </li>
           )}
