@@ -354,10 +354,10 @@ export function FamiliarEnclosure() {
               <motion.button
                 type="button"
                 onClick={tapFamiliar}
-                className="absolute left-1/2 top-[43%] z-20 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center focus:outline-none"
+                className="absolute left-[28%] top-[30%] z-20 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center focus:outline-none sm:left-[26%] sm:top-[28%]"
                 style={{ color: active.color }}
                 animate={{
-                  y: [0, -10, 0, 8, 0],
+                  y: [0, -8, 0, 6, 0],
                   rotate: [0, 1.5, 0, -1.5, 0],
                 }}
                 transition={{ duration: 14, repeat: Infinity, ease: "easeInOut" }}
@@ -366,7 +366,7 @@ export function FamiliarEnclosure() {
                   hearts={affection.affectionHearts}
                   pulseHeart={heartPulse}
                 />
-                <div className="relative h-[560px] w-[360px] -translate-y-10 sm:h-[620px] sm:w-[440px] sm:-translate-y-12">
+                <div className="relative h-[560px] w-[360px] -translate-y-14 sm:h-[620px] sm:w-[440px] sm:-translate-y-16">
                   <Familiar3DStage familiar={active} onTap={tapFamiliar} />
                   <FeedHeartBurst burstId={feedBurstId} />
                 </div>
