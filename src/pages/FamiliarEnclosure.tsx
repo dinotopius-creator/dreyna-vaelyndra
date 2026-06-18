@@ -366,7 +366,7 @@ export function FamiliarEnclosure() {
                   hearts={affection.affectionHearts}
                   pulseHeart={heartPulse}
                 />
-                <div className="relative h-[520px] w-[340px] -translate-y-14 sm:h-[560px] sm:w-[420px] sm:-translate-y-16">
+                <div className="relative h-[620px] w-[340px] -translate-y-24 sm:h-[680px] sm:w-[420px] sm:-translate-y-28">
                   <Familiar3DStage familiar={active} onTap={tapFamiliar} />
                   <FeedHeartBurst burstId={feedBurstId} />
                 </div>
