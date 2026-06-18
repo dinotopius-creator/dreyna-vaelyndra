@@ -43,7 +43,7 @@ export function NativeAppBootstrap() {
         return;
       }
 
-      if (isPrimaryAppRoute(location.pathname)) {
+      if (isPrimaryAppRoute(location.pathname) || location.pathname === "/familier/enclos") {
         navigate("/", { replace: true });
         return;
       }

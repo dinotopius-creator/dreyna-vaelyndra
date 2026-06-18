@@ -328,6 +328,18 @@ body.vaelyndra-world-game-open {
     transform: translateY(120%) translateZ(0);
   }
 
+  body.vaelyndra-familiar-enclosure-open {
+    overflow: hidden;
+    overscroll-behavior: none;
+    touch-action: none;
+  }
+
+  body.vaelyndra-familiar-enclosure-open .mobile-tabbar {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(120%) translateZ(0);
+  }
+
   .tag {
     @apply inline-flex items-center gap-1.5 rounded-full border border-royal-500/40 bg-royal-600/10 px-3 py-1 text-xs uppercase tracking-[0.22em] text-royal-300;
   }

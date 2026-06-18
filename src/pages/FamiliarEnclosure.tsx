@@ -134,6 +134,13 @@ export function FamiliarEnclosure() {
   }, [profile?.lueurs]);
 
   useEffect(() => {
+    document.body.classList.add("vaelyndra-familiar-enclosure-open");
+    return () => {
+      document.body.classList.remove("vaelyndra-familiar-enclosure-open");
+    };
+  }, []);
+
+  useEffect(() => {
     const timer = window.setInterval(() => {
       setCooldownRemaining((current) => Math.max(0, current - 1));
     }, 1000);
@@ -257,67 +264,74 @@ export function FamiliarEnclosure() {
     setFeedback(null);
   }
 
+  function tapFamiliar() {
+    if (!active) return;
+    setFeedback(`${active.nickname || active.name} vous regarde et sourit.`);
+    setFeedBurstId((current) => current + 1);
+    playFeedSound();
+  }
+
   if (!user?.id) {
     return (
-      <section className="mx-auto max-w-3xl px-4 py-16 text-center text-ivory/70">
-        <p>Connectez-vous pour ouvrir l'enclos de votre familier.</p>
-        <Link to="/connexion" className="btn-gold mt-4 inline-flex">
-          Se connecter
-        </Link>
+      <section className="flex h-[100dvh] items-center justify-center bg-night-950 px-4 text-center text-ivory/70">
+        <div className="max-w-md rounded-[28px] border border-white/10 bg-night-900/75 p-6 backdrop-blur-xl">
+          <p>Connectez-vous pour ouvrir l'enclos de votre familier.</p>
+          <Link to="/connexion" className="btn-gold mt-4 inline-flex">
+            Se connecter
+          </Link>
+        </div>
       </section>
     );
   }
 
   if (loading) {
     return (
-      <section className="mx-auto flex min-h-[60vh] max-w-3xl items-center justify-center px-4 py-16 text-ivory/70">
-        <Loader2 className="h-7 w-7 animate-spin" aria-hidden />
+      <section className="flex h-[100dvh] items-center justify-center bg-night-950 px-4 text-ivory/70">
+        <div className="flex flex-col items-center gap-4 rounded-[28px] border border-white/10 bg-night-900/75 px-6 py-8 text-center backdrop-blur-xl">
+          <Loader2 className="h-7 w-7 animate-spin" aria-hidden />
+          <div>
+            <p className="font-display text-2xl text-gold-100">Ouverture de l'enclos…</p>
+            <p className="mt-2 text-sm text-ivory/60">
+              Préparation de votre familier, de la nourriture et des récompenses.
+            </p>
+          </div>
+        </div>
       </section>
     );
   }
 
   return (
-    <section className="relative mx-auto max-w-6xl px-3 pb-16 pt-5 sm:px-5 sm:pt-8">
-      <div className="mb-4 flex items-center justify-between gap-3">
+    <section className="fixed inset-0 z-40 flex h-[100dvh] w-screen flex-col overflow-hidden bg-[radial-gradient(circle_at_top,rgba(250,204,21,0.12),transparent_30%),linear-gradient(180deg,rgba(5,10,20,0.98),rgba(5,8,16,1))] text-ivory">
+      <div className="pointer-events-none absolute inset-0 opacity-60">
+        <div className="absolute left-[10%] top-[8%] h-56 w-56 rounded-full bg-emerald-300/10 blur-3xl" />
+        <div className="absolute right-[8%] top-[16%] h-64 w-64 rounded-full bg-gold-300/10 blur-3xl" />
+        <div className="absolute bottom-0 left-1/2 h-72 w-[82vw] -translate-x-1/2 rounded-full bg-[radial-gradient(ellipse_at_center,rgba(34,197,94,0.24),rgba(15,23,42,0)_70%)]" />
+      </div>
+
+      <div className="relative z-10 flex items-center justify-between gap-3 border-b border-white/10 bg-night-950/65 px-3 py-3 backdrop-blur-xl sm:px-5">
         <Link
           to="/familier"
-          className="inline-flex min-h-11 items-center gap-2 rounded-full border border-white/10 bg-night-950/55 px-4 py-2 text-sm text-ivory/75 backdrop-blur transition hover:border-gold-300/45 hover:text-gold-100"
+          className="inline-flex min-h-11 items-center gap-2 rounded-full border border-white/10 bg-night-950/80 px-4 py-2 text-sm text-ivory/80 transition hover:border-gold-300/45 hover:text-gold-100"
         >
           <ArrowLeft className="h-4 w-4" />
-          Retour
+          Quitter
         </Link>
+        <div className="min-w-0 text-center">
+          <p className="text-[10px] uppercase tracking-[0.3em] text-gold-200/70">
+            Enclos vivant
+          </p>
+          <h1 className="font-display text-lg text-gold-100 sm:text-2xl">
+            {active?.nickname || active?.name || "Familier actif"}
+          </h1>
+        </div>
         <div className="rounded-full border border-gold-300/25 bg-gold-500/10 px-3 py-2 text-xs uppercase tracking-[0.18em] text-gold-100">
           {displayedLueurs.toLocaleString("fr-FR")} Lueurs
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-[34px] border border-royal-500/30 bg-[radial-gradient(circle_at_50%_0%,rgba(250,204,21,0.18),transparent_34%),linear-gradient(180deg,rgba(14,10,28,0.92),rgba(5,9,18,0.94))] shadow-[0_30px_90px_rgba(0,0,0,0.35)]">
-        <header className="border-b border-white/10 px-5 py-5 sm:px-7">
-          <p className="text-[11px] uppercase tracking-[0.3em] text-gold-200/75">
-            Enclos du familier
-          </p>
-          <div className="mt-2 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-            <div>
-              <h1 className="font-display text-3xl text-gold-100 sm:text-5xl">
-                Affection, repas et petits cœurs
-              </h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-ivory/66">
-                Nettoyez l'enclos pour trouver de la nourriture, nourrissez votre
-                compagnon et faites grandir son affection sur 10 cœurs.
-              </p>
-            </div>
-            <div className="grid grid-cols-2 gap-2 text-xs sm:min-w-72">
-              <StatPill label="Nourriture" value={String(affection.foodStock)} />
-              <StatPill
-                label="Prochain nettoyage"
-                value={onCooldown ? formatRemaining(cooldownRemaining) : "Prêt"}
-              />
-            </div>
-          </div>
-        </header>
-
-        <div className="grid gap-5 p-4 lg:grid-cols-[1.35fr,0.65fr] lg:p-6">
-          <div className="relative min-h-[560px] overflow-hidden rounded-[30px] border border-white/10 bg-[radial-gradient(circle_at_50%_28%,rgba(74,222,128,0.16),transparent_28%),linear-gradient(180deg,rgba(16,185,129,0.12),rgba(15,23,42,0.92))] sm:min-h-[640px]">
+      <div className="relative z-10 flex-1 overflow-hidden">
+        <div className="grid h-full gap-4 p-3 lg:grid-cols-[1.35fr,0.65fr] lg:p-5">
+          <div className="relative min-h-0 overflow-hidden rounded-[30px] border border-white/10 bg-[radial-gradient(circle_at_50%_28%,rgba(74,222,128,0.16),transparent_28%),linear-gradient(180deg,rgba(16,185,129,0.12),rgba(15,23,42,0.92))] shadow-[0_30px_90px_rgba(0,0,0,0.35)]">
             <div className="absolute inset-x-0 bottom-0 h-[48%] rounded-t-[50%] bg-[radial-gradient(ellipse_at_center,rgba(34,197,94,0.35),rgba(20,83,45,0.2)_48%,transparent_72%)]" />
             <div className="absolute left-[8%] top-[16%] h-32 w-32 rounded-full bg-gold-200/10 blur-3xl" />
             <div className="absolute right-[10%] top-[10%] h-40 w-40 rounded-full bg-cyan-200/10 blur-3xl" />
@@ -334,8 +348,10 @@ export function FamiliarEnclosure() {
             />
 
             {active ? (
-              <motion.div
-                className="absolute z-20 flex flex-col items-center"
+              <motion.button
+                type="button"
+                onClick={tapFamiliar}
+                className="absolute z-20 flex flex-col items-center focus:outline-none"
                 style={{ color: active.color }}
                 animate={{
                   left: ["18%", "58%", "46%", "25%", "18%"],
@@ -354,7 +370,7 @@ export function FamiliarEnclosure() {
                 <div className="mt-2 rounded-full border border-white/10 bg-night-950/72 px-3 py-1 text-center text-xs text-ivory/80 backdrop-blur">
                   {active.nickname || active.name}
                 </div>
-              </motion.div>
+              </motion.button>
             ) : (
               <div className="absolute inset-0 z-20 flex items-center justify-center px-5 text-center">
                 <div className="rounded-3xl border border-white/10 bg-night-950/70 p-5 text-ivory/70 backdrop-blur">
@@ -407,7 +423,7 @@ export function FamiliarEnclosure() {
             </div>
           </div>
 
-          <aside className="space-y-4">
+          <aside className="min-h-0 space-y-4 overflow-y-auto pr-1 pb-4">
             <div className="rounded-[26px] border border-rose-300/20 bg-rose-500/10 p-5">
               <div className="flex items-center gap-2 text-rose-100">
                 <Heart className="h-4 w-4" />
@@ -705,17 +721,6 @@ function FamiliarHeartRewardGuide({
           pour le dernier palier.
         </p>
       </div>
-    </div>
-  );
-}
-
-function StatPill({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-night-950/55 px-3 py-2">
-      <div className="text-[10px] uppercase tracking-[0.2em] text-ivory/45">
-        {label}
-      </div>
-      <div className="mt-1 font-display text-lg text-gold-100">{value}</div>
     </div>
   );
 }
