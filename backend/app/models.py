@@ -646,6 +646,24 @@ class WalletLedger(SQLModel, table=True):
     created_at: str = Field(default_factory=_now_iso, index=True)
 
 
+class ContestAwardLedger(SQLModel, table=True):
+    """Journal des récompenses distribuées par un concours officiel.
+
+    La paire `(contest_id, user_id)` doit rester unique pour empêcher une
+    double attribution si le endpoint de clôture est appelé plusieurs fois
+    ou si plusieurs membres déclenchent la synchronisation en même temps.
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    contest_id: str = Field(index=True)
+    user_id: str = Field(index=True)
+    post_id: str = Field(index=True)
+    post_likes: int = Field(default=0)
+    lueurs_rewarded: int = Field(default=0)
+    food_rewarded: int = Field(default=0)
+    awarded_at: str = Field(default_factory=_now_iso, index=True)
+
+
 class ShopOrder(SQLModel, table=True):
     """Commandes boutique payées en Lueurs (ou autre monnaie interne).
 

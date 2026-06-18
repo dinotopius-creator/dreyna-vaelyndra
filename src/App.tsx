@@ -48,6 +48,10 @@ const Community = lazy(async () => {
   const mod = await import("./pages/Community");
   return { default: mod.Community };
 });
+const CommunityHashtag = lazy(async () => {
+  const mod = await import("./pages/CommunityHashtag");
+  return { default: mod.CommunityHashtag };
+});
 const Worlds = lazy(async () => {
   const mod = await import("./pages/Worlds");
   return { default: mod.Worlds };
@@ -182,69 +186,19 @@ function WorldRouteFallback() {
   );
 }
 
-function SocialRouteFallback() {
-  return (
-    <div className="fixed inset-0 flex min-h-[100dvh] items-center justify-center overflow-hidden bg-[#05010c] px-5 text-center">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_18%,rgba(250,204,21,0.16),transparent_34%),radial-gradient(circle_at_20%_82%,rgba(34,211,238,0.14),transparent_34%),linear-gradient(135deg,rgba(15,23,42,0.98),rgba(6,3,16,0.99))]" />
-      <div className="relative w-full max-w-md rounded-[34px] border border-gold-200/20 bg-night-950/72 p-6 shadow-[0_30px_100px_rgba(0,0,0,0.55)] backdrop-blur-xl">
-        <div className="mx-auto h-16 w-16 animate-pulse rounded-[24px] border border-gold-200/25 bg-gold-300/10 shadow-glow-gold" />
-        <p className="mt-5 text-[11px] uppercase tracking-[0.28em] text-gold-200/75">
-          Mode Social Vaelyndra
-        </p>
-        <p className="mt-2 font-display text-3xl text-gold-100">
-          Préparation de votre fil...
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function FamiliarRouteFallback() {
-  return (
-    <div className="fixed inset-0 flex min-h-[100dvh] items-center justify-center overflow-hidden bg-[#05010c] px-5 text-center">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_18%,rgba(250,204,21,0.16),transparent_34%),radial-gradient(circle_at_20%_82%,rgba(34,211,238,0.14),transparent_34%),linear-gradient(135deg,rgba(15,23,42,0.98),rgba(6,3,16,0.99))]" />
-      <div className="relative w-full max-w-md rounded-[34px] border border-gold-200/20 bg-night-950/72 p-6 shadow-[0_30px_100px_rgba(0,0,0,0.55)] backdrop-blur-xl">
-        <div className="mx-auto h-16 w-16 animate-pulse rounded-[24px] border border-gold-200/25 bg-gold-300/10 shadow-glow-gold" />
-        <p className="mt-5 text-[11px] uppercase tracking-[0.28em] text-gold-200/75">
-          Enclos du familier
-        </p>
-        <p className="mt-2 font-display text-3xl text-gold-100">
-          Ouverture de l'enclos...
-        </p>
-      </div>
-    </div>
-  );
-}
-
 function AnimatedRoutes() {
   const location = useLocation();
   const isWorldPlayRoute = location.pathname === "/mondes/play";
-  const isSocialFullscreenRoute =
-    location.pathname === "/social/play" || location.pathname === "/communaute";
-  const isFamiliarEnclosureRoute = location.pathname === "/familier/enclos";
   return (
     <AnimatePresence mode="wait">
       <motion.div
         key={location.pathname}
-        className="h-full"
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -8 }}
         transition={{ duration: 0.35 }}
       >
-          <Suspense
-          fallback={
-            isWorldPlayRoute ? (
-              <WorldRouteFallback />
-            ) : isSocialFullscreenRoute ? (
-              <SocialRouteFallback />
-            ) : isFamiliarEnclosureRoute ? (
-              <FamiliarRouteFallback />
-            ) : (
-              <RouteFallback />
-            )
-          }
-        >
+        <Suspense fallback={isWorldPlayRoute ? <WorldRouteFallback /> : <RouteFallback />}>
           <Routes location={location}>
             <Route path="/" element={<Home />} />
             <Route path="/blog" element={<BlogList />} />
@@ -263,6 +217,8 @@ function AnimatedRoutes() {
             <Route path="/live/:broadcasterId" element={<Live />} />
             <Route path="/communaute" element={<Community />} />
             <Route path="/social/play" element={<Community />} />
+            <Route path="/communaute/hashtag/:tag" element={<CommunityHashtag />} />
+            <Route path="/social/hashtag/:tag" element={<CommunityHashtag />} />
             <Route path="/mondes/play" element={<Worlds dedicatedMode />} />
             <Route path="/mondes" element={<Worlds />} />
             <Route path="/wiki" element={<Wiki />} />
@@ -375,9 +331,6 @@ function AnimatedRoutes() {
 function App() {
   const location = useLocation();
   const isWorldPlayRoute = location.pathname === "/mondes/play";
-  const isSocialFullscreenRoute =
-    location.pathname === "/social/play" || location.pathname === "/communaute";
-  const isFamiliarEnclosureRoute = location.pathname === "/familier/enclos";
 
   if (location.pathname.startsWith("/live/overlay/chat/")) {
     return (
@@ -408,30 +361,22 @@ function App() {
   return (
     <div className="relative flex min-h-screen flex-col">
       <NativeAppBootstrap />
-      {!isWorldPlayRoute && !isSocialFullscreenRoute && !isFamiliarEnclosureRoute && (
-        <MagicBackground />
-      )}
-      {!isWorldPlayRoute && !isSocialFullscreenRoute && !isFamiliarEnclosureRoute && (
-        <EasterEggs />
-      )}
-      {!isWorldPlayRoute && !isSocialFullscreenRoute && !isFamiliarEnclosureRoute && <Navbar />}
-      {!isWorldPlayRoute && !isSocialFullscreenRoute && !isFamiliarEnclosureRoute && (
-        <OfflineBanner />
-      )}
+      {!isWorldPlayRoute && <MagicBackground />}
+      {!isWorldPlayRoute && <EasterEggs />}
+      {!isWorldPlayRoute && <Navbar />}
+      {!isWorldPlayRoute && <OfflineBanner />}
       <main
         className={
-          isWorldPlayRoute || isSocialFullscreenRoute || isFamiliarEnclosureRoute
+          isWorldPlayRoute
             ? "fixed inset-0 h-[100dvh] w-screen overflow-hidden bg-night-950"
             : "flex-1 pb-[calc(4.75rem+env(safe-area-inset-bottom))] lg:pb-0"
         }
       >
         <AnimatedRoutes />
       </main>
-      {!isWorldPlayRoute && !isSocialFullscreenRoute && !isFamiliarEnclosureRoute && <Footer />}
-      {!isWorldPlayRoute && !isSocialFullscreenRoute && !isFamiliarEnclosureRoute && <CookieBanner />}
-      {!isWorldPlayRoute && !isSocialFullscreenRoute && !isFamiliarEnclosureRoute && (
-        <FamiliarOnboardingGate />
-      )}
+      {!isWorldPlayRoute && <Footer />}
+      {!isWorldPlayRoute && <CookieBanner />}
+      {!isWorldPlayRoute && <FamiliarOnboardingGate />}
     </div>
   );
 }
