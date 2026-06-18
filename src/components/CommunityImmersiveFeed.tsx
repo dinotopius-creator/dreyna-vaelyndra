@@ -20,6 +20,7 @@ import { UserBadges } from "./UserBadges";
 import StreamerGradeBadge from "./StreamerGradeBadge";
 import { formatRelative, parsePostImageUrl, parseVideoUrl } from "../lib/helpers";
 import { getOfficial } from "../data/officials";
+import type { StreamerGradeDto } from "../lib/api";
 import type { CommunityPost } from "../types";
 
 export type CommunityTab = "following" | "for-you" | "trending" | "news" | "media" | "text";
@@ -28,7 +29,7 @@ type ProfileSummary = {
   username?: string | null;
   handle?: string | null;
   avatarImageUrl?: string | null;
-  grade?: any;
+  grade?: StreamerGradeDto | null;
   role?: string;
   creature?: { id?: string } | null;
   isFollowing?: boolean;
@@ -61,7 +62,7 @@ interface CommunityImmersiveFeedProps {
     postCount: number;
     commentCount: number;
     reactionCount: number;
-    grade?: any;
+    grade?: StreamerGradeDto | null;
   }>;
   weeklyLabel?: string;
 }
@@ -158,8 +159,8 @@ export function CommunityImmersiveFeed({
     }, 2000);
   }
 
-  function handleMediaTap(postId: string, liked: boolean) {
-    const now = Date.now();
+  function handleMediaTap(postId: string, liked: boolean, timestamp: number) {
+    const now = timestamp;
     const last = lastTapRef.current;
     if (last && last.postId === postId && now - last.time <= 320) {
       lastTapRef.current = null;
@@ -501,7 +502,7 @@ export function CommunityImmersiveFeed({
                   const travel = Math.hypot(event.clientX - down.x, event.clientY - down.y);
                   const heldFor = Date.now() - down.time;
                   if (travel > 14 || heldFor > 650) return;
-                  handleMediaTap(post.id, liked);
+                  handleMediaTap(post.id, liked, event.timeStamp);
                 }}
                 onPointerCancel={() => {
                   tapDownRef.current = null;
