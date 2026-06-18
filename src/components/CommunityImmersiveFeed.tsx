@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from "react";
+import { useMemo, type MouseEvent, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   Bookmark,
@@ -139,6 +139,11 @@ export function CommunityImmersiveFeed({
   const navigate = useNavigate();
   const fullscreenSocialMode =
     location.pathname === "/social/play" || location.pathname === "/communaute";
+  const handleDoubleClick = (postId: string) => (event: MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onLike(postId);
+  };
 
   const filteredPosts = useMemo(() => {
     if (activeTab === "following") {
@@ -356,7 +361,10 @@ export function CommunityImmersiveFeed({
                 className="h-[calc(100dvh-88px)] snap-start px-3 py-4 sm:px-5"
               >
                 <div className="mx-auto flex h-full max-w-3xl items-stretch">
-                  <article className="panel-app relative flex w-full overflow-hidden rounded-[28px] border border-white/8 bg-night-950/80 p-4 shadow-[0_30px_60px_rgba(0,0,0,0.38)] sm:p-6">
+                  <article
+                    className="panel-app relative flex w-full overflow-hidden rounded-[28px] border border-white/8 bg-night-950/80 p-4 shadow-[0_30px_60px_rgba(0,0,0,0.38)] sm:p-6"
+                    onDoubleClick={handleDoubleClick(post.id)}
+                  >
                     <div className="relative flex w-full flex-col justify-between">
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -444,7 +452,10 @@ export function CommunityImmersiveFeed({
 
           return (
             <section key={post.id} id={`post-${post.id}`} className="h-[calc(100dvh-88px)] snap-start px-0 py-0">
-              <div className="relative h-full w-full overflow-hidden">
+              <div
+                className="relative h-full w-full overflow-hidden"
+                onDoubleClick={handleDoubleClick(post.id)}
+              >
                 <div className="absolute inset-0">
                   {video?.kind ? (
                     <video
