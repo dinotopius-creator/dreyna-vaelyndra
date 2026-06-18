@@ -63,12 +63,12 @@ export function CommunityContestBanner({
               <p className="max-w-2xl text-sm leading-6 text-ivory/78">
                 Crée un post avec ton dessin et le hashtag obligatoire{" "}
                 <span className="font-semibold text-gold-100">#concoursdessin</span>.
-                Le post le plus liké à la fin des 24 heures gagne{" "}
+                Le post le plus liké à la fin des 24h00 gagne{" "}
                 <span className="font-semibold text-gold-100">1000 lueurs</span>{" "}
                 et <span className="font-semibold text-gold-100">6 nourritures familier</span>.
               </p>
               <div className="flex flex-wrap gap-2 text-xs text-ivory/70">
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">
                   <Clock3 className="h-3.5 w-3.5 text-gold-200" />
                   {active ? formatContestCountdown(remaining) : "Concours terminé"}
                 </span>

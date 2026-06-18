@@ -747,7 +747,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       kind: "official_event",
       title: "Concours de dessin lancé !",
       body:
-        "Crée un post avec ton dessin et ajoute #concoursdessin pour participer. Le post avec le plus de likes dans 24h gagne 1000 lueurs et 6 nourritures familier.",
+        "Crée un post avec ton dessin et ajoute #concoursdessin pour participer. Le post avec le plus de likes dans 24h00 gagne 1000 lueurs et 6 nourritures familier.",
       url: drawingContestUrl(),
       entityType: "official_event",
       entityId: COMMUNITY_DRAWING_CONTEST.id,
