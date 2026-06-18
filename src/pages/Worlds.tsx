@@ -520,6 +520,7 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
   const [chatMessages, setChatMessages] = useState<WorldChatMessage[]>(BASE_CHAT);
   const [chatInput, setChatInput] = useState("");
   const chatInputRef = useRef<HTMLInputElement | null>(null);
+  const [worldChatExpanded, setWorldChatExpanded] = useState(false);
   const [worldSpeechBubbles, setWorldSpeechBubbles] = useState<WorldSpeechBubble[]>([]);
   const [worldMembers, setWorldMembers] = useState<WorldPresenceDto[]>([]);
   const [selectedMember, setSelectedMember] = useState<SelectedWorldMember | null>(null);
@@ -2080,6 +2081,7 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
                           type="button"
                           onClick={() => {
                             setWorldMenuOpen(false);
+                            setWorldChatExpanded(true);
                             window.setTimeout(() => {
                               chatInputRef.current?.focus({ preventScroll: true });
                             }, 0);
@@ -2347,7 +2349,7 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
           <section
             className={`rounded-[26px] border border-royal-500/30 bg-night-900/60 p-5 shadow-[0_20px_50px_rgba(0,0,0,0.18)] ${
               worldGameActive
-                ? "fixed bottom-[calc(0.9rem+env(safe-area-inset-bottom))] left-[calc(0.9rem+env(safe-area-inset-left))] z-30 w-[min(21rem,calc(100vw-1.7rem))] max-h-[min(26rem,calc(100dvh-8rem))] overflow-hidden backdrop-blur-xl touch-pan-y overscroll-contain md:w-[min(24rem,calc(100vw-2rem))]"
+                ? `fixed bottom-[calc(0.9rem+env(safe-area-inset-bottom))] left-[calc(0.9rem+env(safe-area-inset-left))] z-30 w-[min(${worldChatExpanded ? "24rem" : "21rem"},calc(100vw-1.7rem))] ${worldChatExpanded ? "max-h-[min(34rem,calc(100dvh-5.5rem))]" : "max-h-[min(26rem,calc(100dvh-8rem))]"} overflow-hidden backdrop-blur-xl touch-pan-y overscroll-contain md:w-[min(24rem,calc(100vw-2rem))]`
                 : ""
             }`}
             onPointerDownCapture={(event) => {
@@ -2357,8 +2359,30 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
             <div className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-gold-300" />
               <h3 className={`font-display text-xl text-gold-200 ${worldGameActive ? "text-lg" : ""}`}>Chat du monde</h3>
+              {worldChatExpanded && worldGameActive && (
+                <span className="rounded-full border border-gold-400/20 bg-gold-500/10 px-2 py-0.5 text-[9px] uppercase tracking-[0.18em] text-gold-100">
+                  Ouvert
+                </span>
+              )}
+              {worldChatExpanded && worldGameActive && (
+                <button
+                  type="button"
+                  onClick={() => setWorldChatExpanded(false)}
+                  className="ml-auto rounded-full border border-white/10 px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-ivory/55 transition hover:border-gold-300/35 hover:text-gold-100"
+                >
+                  Réduire
+                </button>
+              )}
             </div>
-            <div className={`mt-4 space-y-2 overflow-y-auto pr-1 ${worldGameActive ? "max-h-[10.5rem]" : "max-h-none"}`}>
+            <div
+              className={`mt-4 space-y-2 overflow-y-auto pr-1 ${
+                worldGameActive
+                  ? worldChatExpanded
+                    ? "max-h-[16rem] sm:max-h-[18rem]"
+                    : "max-h-[10.5rem]"
+                  : "max-h-none"
+              }`}
+            >
               {chatMessages.slice(0, worldGameActive ? 4 : 6).map((message) => (
                 <div
                   key={message.id}
@@ -2538,6 +2562,33 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
               <div className="rounded-[22px] border border-white/10 bg-night-950/55 p-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-[11px] uppercase tracking-[0.22em] text-gold-200/70">
+                    Emotes à deux
+                  </div>
+                  <div className="text-[10px] uppercase tracking-[0.18em] text-ivory/45">
+                    {selectedMember.member.id === user?.id ? "toi" : "cible choisie"}
+                  </div>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  {(Object.entries(WORLD_INTERACTION_META) as Array<
+                    [WorldCuteInteractionKind, (typeof WORLD_INTERACTION_META)[WorldCuteInteractionKind]]
+                  >).map(([kind, meta]) => (
+                    <button
+                      key={kind}
+                      type="button"
+                      disabled={memberActionBusy !== null}
+                      onClick={() => void sendCuteAction(kind)}
+                      className="flex items-center gap-2 rounded-2xl border border-white/10 px-3 py-3 text-left text-sm text-ivory/82 transition hover:border-gold-300/35 hover:text-gold-100 disabled:opacity-50"
+                    >
+                      <span className="text-lg">{meta.emoji}</span>
+                      <span className="leading-5">{meta.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-[22px] border border-white/10 bg-night-950/55 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-[11px] uppercase tracking-[0.22em] text-gold-200/70">
                     Discussion vocale privée
                   </div>
                   <div className="text-[10px] uppercase tracking-[0.18em] text-ivory/45">
@@ -2595,27 +2646,6 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
                 </div>
               </div>
 
-              <div className="rounded-[22px] border border-white/10 bg-night-950/55 p-3">
-                <div className="text-[11px] uppercase tracking-[0.22em] text-gold-200/70">
-                  Interactions mimi
-                </div>
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  {(Object.entries(WORLD_INTERACTION_META) as Array<
-                    [WorldCuteInteractionKind, (typeof WORLD_INTERACTION_META)[WorldCuteInteractionKind]]
-                  >).map(([kind, meta]) => (
-                    <button
-                      key={kind}
-                      type="button"
-                      disabled={memberActionBusy !== null}
-                      onClick={() => void sendCuteAction(kind)}
-                      className="flex items-center gap-2 rounded-2xl border border-white/10 px-3 py-3 text-left text-sm text-ivory/82 transition hover:border-gold-300/35 hover:text-gold-100 disabled:opacity-50"
-                    >
-                      <span className="text-lg">{meta.emoji}</span>
-                      <span className="leading-5">{meta.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
             </div>
           </section>
                 </>
