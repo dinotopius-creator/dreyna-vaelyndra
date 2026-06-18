@@ -10,11 +10,11 @@ export type Avatar3DHairStyle =
   | "ponytail"
   | "afro"
   | "pixie";
-export type Avatar3DBaseModel = "procedural-premium" | "premium-humanoid" | "humanoid-v3";
+export type Avatar3DBaseModel = "procedural-premium" | "premium-humanoid" | "humanoid-v3" | "humanoid-v4";
 export type Avatar3DExpression = "soft-smile" | "neutral" | "confident";
 
 export interface Avatar3DConfig {
-  version: 1 | 2 | 3;
+  version: 1 | 2 | 3 | 4;
   bodyType: Avatar3DBodyType;
   faceShape: Avatar3DFaceShape;
   hairStyle: Avatar3DHairStyle;
@@ -27,14 +27,14 @@ export interface Avatar3DConfig {
 }
 
 export const DEFAULT_AVATAR_3D_CONFIG: Avatar3DConfig = {
-  version: 3,
+  version: 4,
   bodyType: "femme",
   faceShape: "soft",
   hairStyle: "wave",
   skinTone: "#f2d1bf",
   hairColor: "#2d160f",
   eyeColor: "#7fd8ff",
-  baseModel: "humanoid-v3",
+  baseModel: "humanoid-v4",
   expression: "soft-smile",
   bodyTone: "#8b5cf6",
 };
@@ -83,8 +83,8 @@ export function buildAvatar3DUrl(config: Avatar3DConfig): string {
       encodeURIComponent(
         JSON.stringify({
           ...config,
-          version: 3,
-          baseModel: config.baseModel ?? "humanoid-v3",
+          version: 4,
+          baseModel: config.baseModel ?? "humanoid-v4",
           expression: config.expression ?? "soft-smile",
           bodyTone: config.bodyTone ?? DEFAULT_AVATAR_3D_CONFIG.bodyTone,
         }),
@@ -104,7 +104,7 @@ export function decodeAvatar3DUrl(
     const parsed = JSON.parse(
       decodeURIComponent(escape(atob(raw))),
     ) as Partial<Avatar3DConfig>;
-    if (parsed.version !== 1 && parsed.version !== 2 && parsed.version !== 3)
+    if (parsed.version !== 1 && parsed.version !== 2 && parsed.version !== 3 && parsed.version !== 4)
       return null;
     return {
       version: parsed.version,
@@ -127,7 +127,9 @@ export function decodeAvatar3DUrl(
           ? "procedural-premium"
           : parsed.baseModel === "premium-humanoid"
             ? "premium-humanoid"
-            : "humanoid-v3",
+            : parsed.baseModel === "humanoid-v3"
+              ? "humanoid-v3"
+              : "humanoid-v4",
       expression:
         parsed.expression === "neutral" || parsed.expression === "confident"
           ? parsed.expression
