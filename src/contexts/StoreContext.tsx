@@ -724,6 +724,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     });
   }, [
     user?.id,
+    backendMe,
     backendMe?.sylvins_paid,
     backendMe?.sylvins_promo,
     backendMe?.earnings_paid,
