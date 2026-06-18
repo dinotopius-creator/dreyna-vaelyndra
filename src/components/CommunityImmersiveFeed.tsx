@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Bookmark,
   BookmarkCheck,
@@ -136,14 +136,12 @@ export function CommunityImmersiveFeed({
   leaderboard = [],
   weeklyLabel,
 }: CommunityImmersiveFeedProps) {
-  const location = useLocation();
   const navigate = useNavigate();
   const [likeBurst, setLikeBurst] = useState<{ postId: string; token: number } | null>(null);
   const tapDownRef = useRef<{ postId: string; x: number; y: number; time: number } | null>(null);
   const lastTapRef = useRef<{ postId: string | null; time: number } | null>(null);
   const burstTimerRef = useRef<number | null>(null);
-  const fullscreenSocialMode =
-    location.pathname === "/social/play" || location.pathname === "/communaute";
+  const fullscreenSocialMode = false;
   useEffect(() => {
     return () => {
       if (burstTimerRef.current) window.clearTimeout(burstTimerRef.current);
