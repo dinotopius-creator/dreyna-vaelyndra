@@ -668,7 +668,7 @@ export async function apiSendWorldInteraction(
   worldId: string,
   payload: {
     targetUserId: string;
-    kind: "wave" | "heart" | "hug" | "applaud" | "dance" | "lueur";
+    kind: "wave" | "heart" | "hug" | "applaud" | "dance" | "lueur" | "sit" | "swing";
   },
 ): Promise<WorldPresenceDto> {
   return (await sessionRequest<WorldPresenceDto>(

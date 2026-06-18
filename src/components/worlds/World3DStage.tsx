@@ -1710,6 +1710,26 @@ export function World3DStage({
             entity.rightArm.rotation.x = -0.95 - pulse * 0.15;
             entity.leftArm.rotation.z = 0.28 + pulse * 0.2;
             entity.rightArm.rotation.z = -0.28 - pulse * 0.2;
+          } else if (entity.interactionKind === "sit") {
+            entity.torso.rotation.x = -0.2;
+            entity.torso.rotation.y = pulse * 0.03;
+            entity.leftArm.rotation.x = 0.2;
+            entity.rightArm.rotation.x = 0.2;
+            entity.leftArm.rotation.z = 0.06;
+            entity.rightArm.rotation.z = -0.06;
+            entity.leftLeg.rotation.x = 0.62;
+            entity.rightLeg.rotation.x = 0.62;
+            entity.group.position.y = 0.08 + Math.sin(entity.phase * 1.4) * 0.01;
+          } else if (entity.interactionKind === "swing") {
+            entity.torso.rotation.z = pulse * 0.08;
+            entity.torso.rotation.x = -0.08 + pulse * 0.02;
+            entity.leftArm.rotation.x = -0.78 + pulse * 0.18;
+            entity.rightArm.rotation.x = -0.78 - pulse * 0.18;
+            entity.leftArm.rotation.z = 0.12 + pulse * 0.12;
+            entity.rightArm.rotation.z = -0.12 - pulse * 0.12;
+            entity.leftLeg.rotation.x = 0.38 + pulse * 0.06;
+            entity.rightLeg.rotation.x = 0.38 - pulse * 0.06;
+            entity.group.position.y = 0.12 + Math.sin(entity.phase * 3.1) * 0.05;
           } else {
             entity.torso.rotation.y = pulse * 0.04;
             entity.head.rotation.y = pulse * 0.08;
