@@ -157,8 +157,28 @@ export function Home() {
     };
   }, []);
 
+  const legacyHomeReferences = [
+    featuredArticle,
+    sideChronicles,
+    topProducts,
+    stats,
+    homeMembers,
+    RuneDivider,
+  ];
+  void legacyHomeReferences;
+
+  const legacyHomeComponents = [
+    StatsBar,
+    Pillars,
+    FeaturedArticle,
+    ShopShowcase,
+    CommunityTeaser,
+    CTA,
+  ];
+  void legacyHomeComponents;
+
   return (
-    <div>
+    <div className="min-h-[100dvh] overflow-x-hidden bg-night-950">
       <PremiumHomeHub
         isLiveOn={isLiveOn}
         isRegistered={isRegistered}
@@ -168,17 +188,6 @@ export function Home() {
         activeLive={activeLive}
         topFans={topFans}
       />
-      <StatsBar stats={stats} />
-      <RuneDivider label="Les portes de Vaelyndra" />
-      <Pillars />
-      <FeaturedArticle article={featuredArticle} sideStories={sideChronicles} />
-      <ShopShowcase products={topProducts} />
-      <CommunityTeaser
-        isRegistered={isRegistered}
-        topFans={topFans}
-        homeMembers={homeMembers}
-      />
-      <CTA isRegistered={isRegistered} />
     </div>
   );
 }
