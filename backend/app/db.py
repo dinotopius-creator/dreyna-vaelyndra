@@ -162,6 +162,10 @@ def _apply_migrations() -> None:
             "CREATE UNIQUE INDEX IF NOT EXISTS communityreward_week_rank_unique "
             "ON communityactivityreward (week_start_iso, rank)"
         )
+        conn.exec_driver_sql(
+            "CREATE UNIQUE INDEX IF NOT EXISTS contestaward_contest_user_unique "
+            "ON contestawardledger (contest_id, user_id)"
+        )
         # Système de familiers (PR familiers#1).
         # Un seul familier actif par user — index partiel pour bloquer la
         # double activation au niveau SQL (en plus de la garde transaction).

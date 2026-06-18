@@ -128,6 +128,47 @@ class CommunityActivityLeaderboardOut(BaseModel):
     entries: List[CommunityActivityEntryOut] = []
 
 
+class DrawingContestEntryOut(BaseModel):
+    id: str
+    authorId: str
+    authorName: str
+    authorHandle: Optional[str] = None
+    authorGrade: Optional["StreamerGradeOut"] = None
+    authorAvatar: str
+    content: str
+    imageUrl: Optional[str] = None
+    createdAt: str
+    likeCount: int = 0
+    participantRank: int = 0
+    eligible: bool = False
+
+
+class DrawingContestStatusOut(BaseModel):
+    contestId: str
+    hashtag: str
+    startsAt: str
+    endsAt: str
+    active: bool = False
+    now: str
+    timeRemainingMs: int = 0
+    rewardLueurs: int = 0
+    rewardFood: int = 0
+    announcementPostId: str
+    entries: List[DrawingContestEntryOut] = []
+    topEntry: Optional[DrawingContestEntryOut] = None
+    winnerAwarded: bool = False
+
+
+class DrawingContestSettlementOut(BaseModel):
+    contestId: str
+    active: bool
+    alreadyAwarded: bool = False
+    winner: Optional[DrawingContestEntryOut] = None
+    awardedAt: Optional[str] = None
+    rewardLueurs: int = 0
+    rewardFood: int = 0
+
+
 class OraclePlayIn(BaseModel):
     user_id: str = Field(..., min_length=1, max_length=128)
     rune_key: str = Field(..., min_length=1, max_length=32)
