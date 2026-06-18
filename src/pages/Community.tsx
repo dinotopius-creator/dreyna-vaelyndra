@@ -6,6 +6,8 @@ import {
   Film,
   Flame,
   Gift,
+  Bookmark,
+  BookmarkCheck,
   Image,
   Heart,
   Megaphone,
@@ -42,6 +44,7 @@ import { getOfficial } from "../data/officials";
 import {
   COMMUNITY_DRAWING_CONTEST,
   drawingContestUrl,
+  extractHashtags,
   isDrawingContestEntry,
 } from "../data/communityContest";
 import {
@@ -87,7 +90,9 @@ export function Community() {
     [users],
   );
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const draftTextAreaRef = useRef<HTMLTextAreaElement>(null);
   const [draft, setDraft] = useState("");
+  const [draftCursor, setDraftCursor] = useState(0);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [videoFile, setVideoFile] = useState<File | null>(null);
@@ -97,6 +102,19 @@ export function Community() {
   const [tagResults, setTagResults] = useState<UserSearchHitDto[]>([]);
   const [tagLoading, setTagLoading] = useState(false);
   const [openComments, setOpenComments] = useState<Record<string, boolean>>({});
+  const [savedPostIds, setSavedPostIds] = useState<Set<string>>(() => {
+    try {
+      const raw = window.localStorage.getItem("vaelyndra-community-saved-posts");
+      if (!raw) return new Set<string>();
+      const parsed = JSON.parse(raw) as unknown;
+      if (Array.isArray(parsed)) {
+        return new Set(parsed.filter((item): item is string => typeof item === "string"));
+      }
+    } catch {
+      /* ignore persisted save state */
+    }
+    return new Set<string>();
+  });
   const [editingPost, setEditingPost] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const editFileInputRef = useRef<HTMLInputElement>(null);
@@ -123,6 +141,54 @@ export function Community() {
   >([]);
   const [activityWeekStartIso, setActivityWeekStartIso] = useState<string>("");
   const [contestAwardedNotice, setContestAwardedNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        "vaelyndra-community-saved-posts",
+        JSON.stringify(Array.from(savedPostIds)),
+      );
+    } catch {
+      /* ignore persist errors */
+    }
+  }, [savedPostIds]);
+
+  const suggestedHashtags = useMemo(() => {
+    const counts = new Map<string, number>();
+    const bump = (tag: string) => counts.set(tag, (counts.get(tag) ?? 0) + 1);
+
+    bump("concoursdessin");
+    bump("vaelyndra");
+    bump("communauté");
+    bump("social");
+    bump("live");
+    bump("aventure");
+    bump("art");
+    bump("dessin");
+    bump("mignon");
+    bump("creature");
+    bump("familier");
+
+    posts.forEach((post) => {
+      extractHashtags(post.content).forEach(bump);
+    });
+
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([tag]) => tag)
+      .slice(0, 8);
+  }, [posts]);
+
+  const hashtagSuggestionState = useMemo(() => {
+    const beforeCursor = draft.slice(0, draftCursor);
+    const match = beforeCursor.match(/(?:^|\s)#([A-Za-z0-9_À-ÖØ-öø-ÿ-]*)$/u);
+    if (!match) return { active: false, query: "", suggestions: [] as string[] };
+    const query = (match[1] ?? "").toLowerCase();
+    const suggestions = suggestedHashtags.filter((tag) =>
+      tag.toLowerCase().startsWith(query),
+    );
+    return { active: true, query, suggestions: suggestions.slice(0, 6) };
+  }, [draft, draftCursor, suggestedHashtags]);
 
   const displayLeaderboard = useMemo(
     () =>
@@ -563,6 +629,16 @@ export function Community() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
+  function toggleSave(postId: string) {
+    setSavedPostIds((current) => {
+      const next = new Set(current);
+      if (next.has(postId)) next.delete(postId);
+      else next.add(postId);
+      return next;
+    });
+    notify(savedPostIds.has(postId) ? "Post retiré des enregistrés." : "Post enregistré.");
+  }
+
   function clearSelectedVideo() {
     if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
     setVideoFile(null);
@@ -582,6 +658,34 @@ export function Community() {
     });
     setTagQuery("");
     setTagResults([]);
+  }
+
+  function insertSuggestedHashtag(tag: string) {
+    const normalized = tag.startsWith("#") ? tag : `#${tag}`;
+    setDraft((current) => {
+      const beforeCursor = current.slice(0, draftCursor);
+      const afterCursor = current.slice(draftCursor);
+      const match = beforeCursor.match(/(?:^|\s)#([A-Za-z0-9_À-ÖØ-öø-ÿ-]*)$/u);
+      if (!match) {
+        return `${current}${current.endsWith(" ") || current.length === 0 ? "" : " "}${normalized} `;
+      }
+      const start = beforeCursor.length - match[0].length;
+      const next = `${current.slice(0, start)}${normalized} ${afterCursor.replace(/^\s*/, "")}`;
+      return next.replace(/\s{2,}/g, " ");
+    });
+    window.requestAnimationFrame(() => {
+      const textarea = draftTextAreaRef.current;
+      if (!textarea) return;
+      textarea.focus();
+      const pos = Math.min(textarea.value.length, draftCursor + normalized.length + 1);
+      textarea.setSelectionRange(pos, pos);
+    });
+  }
+
+  function syncDraftCursor(event?: { currentTarget: HTMLTextAreaElement }) {
+    const target = event?.currentTarget ?? draftTextAreaRef.current;
+    if (!target) return;
+    setDraftCursor(target.selectionStart ?? target.value.length);
   }
 
   function onPickImage(event: React.ChangeEvent<HTMLInputElement>) {
@@ -663,8 +767,15 @@ export function Community() {
               />
               <div className="flex-1 space-y-3">
                 <textarea
+                  ref={draftTextAreaRef}
                   value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
+                  onChange={(e) => {
+                    setDraft(e.target.value);
+                    setDraftCursor(e.target.selectionStart ?? e.target.value.length);
+                  }}
+                  onSelect={syncDraftCursor}
+                  onClick={syncDraftCursor}
+                  onKeyUp={syncDraftCursor}
                   placeholder={
                     user
                       ? "Partage quelque chose avec la communauté..."
@@ -673,6 +784,31 @@ export function Community() {
                   rows={3}
                   className="glass-input resize-none"
                 />
+                {hashtagSuggestionState.active && hashtagSuggestionState.suggestions.length > 0 && (
+                  <div className="rounded-2xl border border-gold-400/20 bg-night-950/55 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[11px] uppercase tracking-[0.22em] text-gold-200/80">
+                        Hashtags suggérés
+                      </p>
+                      <span className="text-[11px] text-ivory/45">
+                        {hashtagSuggestionState.query ? `#${hashtagSuggestionState.query}` : "#"}
+                      </span>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {hashtagSuggestionState.suggestions.map((tag) => (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => insertSuggestedHashtag(tag)}
+                          className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-ivory/80 transition hover:border-gold-300/55 hover:text-gold-100"
+                        >
+                          <Sparkles className="h-3.5 w-3.5" />
+                          #{tag}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr),220px]">
                   <div className="space-y-3">
                     <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
@@ -1031,6 +1167,22 @@ export function Community() {
                       title="Partager"
                     >
                       <Share2 className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => toggleSave(post.id)}
+                      className={`text-ivory/40 transition ${
+                        savedPostIds.has(post.id)
+                          ? "text-gold-200 hover:text-gold-100"
+                          : "hover:text-gold-200"
+                      }`}
+                      title={savedPostIds.has(post.id) ? "Enregistré" : "Enregistrer"}
+                    >
+                      {savedPostIds.has(post.id) ? (
+                        <BookmarkCheck className="h-4 w-4" />
+                      ) : (
+                        <Bookmark className="h-4 w-4" />
+                      )}
                     </button>
                     {user && user.id !== post.authorId && (
                       <ReportButton
