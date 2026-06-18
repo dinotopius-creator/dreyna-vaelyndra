@@ -47,6 +47,13 @@ const DEFAULT_AFFECTION: FamiliarAffectionState = {
   heartRewards: [50, 75, 100, 150, 200, 275, 350, 450, 600, 800],
 };
 
+const CUTE_MESSAGES = [
+  "Merci de prendre soin de moi",
+  "Je suis content d'être ici",
+  "Tu es gentil avec moi",
+  "J'aime mon enclos tout propre",
+];
+
 function formatRemaining(seconds: number) {
   const totalMinutes = Math.ceil(seconds / 60);
   const hours = Math.floor(totalMinutes / 60);
@@ -128,6 +135,7 @@ export function FamiliarEnclosure() {
   const [heartPulse, setHeartPulse] = useState<number | null>(null);
   const [guideOpen, setGuideOpen] = useState(false);
   const [feedBurstId, setFeedBurstId] = useState(0);
+  const [speechMessage, setSpeechMessage] = useState(CUTE_MESSAGES[0]);
 
   useEffect(() => {
     setDisplayedLueurs(profile?.lueurs ?? 0);
@@ -269,6 +277,11 @@ export function FamiliarEnclosure() {
     setFeedback(`${active.nickname || active.name} vous regarde et sourit.`);
     setFeedBurstId((current) => current + 1);
     playFeedSound();
+    setSpeechMessage((current) => {
+      const index = CUTE_MESSAGES.indexOf(current);
+      const next = CUTE_MESSAGES[(index + 1 + CUTE_MESSAGES.length) % CUTE_MESSAGES.length];
+      return next;
+    });
   }
 
   if (!user?.id) {
@@ -357,16 +370,25 @@ export function FamiliarEnclosure() {
                 className="absolute left-[31%] top-[32%] z-20 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center focus:outline-none sm:left-[29%] sm:top-[30%]"
                 style={{ color: active.color }}
                 animate={{
-                  y: [0, -5, 0, -2, 0],
-                  rotate: [0, 0.8, 0, -0.8, 0],
+                  y: [0, -18, 0, 12, 0],
+                  x: [0, -4, 0, 4, 0],
+                  rotate: [0, 0.9, 0, -0.9, 0],
                 }}
-                transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
+                transition={{ duration: 7.8, repeat: Infinity, ease: "easeInOut" }}
               >
                 <AffectionHearts
                   hearts={affection.affectionHearts}
                   pulseHeart={heartPulse}
                 />
-                <div className="relative flex h-[260px] w-[260px] items-center justify-center overflow-visible sm:h-[310px] sm:w-[310px]">
+                <div className="relative flex h-[290px] w-[290px] items-center justify-center overflow-visible sm:h-[340px] sm:w-[340px]">
+                  <motion.div
+                    className="absolute -top-1 left-1/2 z-30 -translate-x-1/2 rounded-full border border-white/10 bg-night-950/80 px-3 py-1 text-[11px] text-ivory/80 shadow-[0_10px_22px_rgba(0,0,0,0.28)] backdrop-blur"
+                    animate={{ y: [0, -4, 0] }}
+                    transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
+                    aria-label={speechMessage}
+                  >
+                    {speechMessage}
+                  </motion.div>
                   <motion.div
                     className="absolute inset-0 rounded-[40px] border border-white/10 bg-night-950/35 backdrop-blur-[2px]"
                     animate={{ scale: [1, 1.02, 1], opacity: [0.9, 1, 0.9] }}
@@ -375,15 +397,15 @@ export function FamiliarEnclosure() {
                   />
                   <motion.div
                     className="relative z-10"
-                    animate={{ y: [0, -6, 0] }}
-                    transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                    animate={{ y: [0, -16, 0, 14, 0], x: [0, -3, 0, 3, 0] }}
+                    transition={{ duration: 6.8, repeat: Infinity, ease: "easeInOut" }}
                   >
                     <FamiliarPortrait
                       familiar={active}
                       size="lg"
                       animated
                       showFrame
-                      className="scale-[1.1] sm:scale-[1.18]"
+                      className="scale-[1.08] sm:scale-[1.15]"
                     />
                   </motion.div>
                   <FeedHeartBurst burstId={feedBurstId} />
