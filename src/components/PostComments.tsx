@@ -238,8 +238,9 @@ export function PostComments({
     return (
       <li key={comment.id} id={`comment-${comment.id}`} className="space-y-2">
         <div
-          className="flex w-full min-w-0 items-start gap-2.5 rounded-[24px] border border-white/8 bg-night-900/26 px-3 py-2.5 sm:gap-3"
-          style={{ marginLeft: `${Math.min(depth, 4) * 14}px` }}
+          className={`flex w-full min-w-0 items-start gap-2.5 rounded-[24px] border border-white/8 bg-night-900/26 px-3 py-2.5 sm:gap-3 ${
+            depth > 0 ? "ml-3 sm:ml-5" : ""
+          }`}
         >
           <Link to={profileHref(comment.authorId)} className="shrink-0">
             <AvatarImage
@@ -356,7 +357,7 @@ export function PostComments({
           </div>
         </div>
         {comment.replies?.length > 0 && (
-          <ul className="space-y-2">
+          <ul className="space-y-2 border-l border-white/8 pl-3 sm:pl-5">
             {comment.replies.map((reply) => renderThread(reply, depth + 1))}
           </ul>
         )}
