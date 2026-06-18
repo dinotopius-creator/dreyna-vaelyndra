@@ -399,7 +399,7 @@ export function CommunityImmersiveFeed({
                           </div>
                         </div>
 
-                        <div className="flex flex-row gap-3">
+                        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-row sm:gap-3">
                           <FeedAction
                             icon={<Heart className="h-5 w-5" fill={liked ? "currentColor" : "none"} />}
                             label={liked ? "Aimé" : "Like"}
@@ -531,7 +531,7 @@ export function CommunityImmersiveFeed({
                       />
                     </div>
 
-                    <div className="flex flex-col items-end gap-3">
+                    <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-col sm:items-end sm:gap-3">
                       <FeedAction
                         icon={<Heart className="h-5 w-5" fill={liked ? "currentColor" : "none"} />}
                         label={liked ? "Aimé" : "Like"}
@@ -592,7 +592,7 @@ function FeedAction({
       type="button"
       onClick={onClick}
       className={clsx(
-        "inline-flex min-h-11 min-w-11 flex-col items-center justify-center rounded-full border px-3 py-2 text-xs backdrop-blur-sm transition active:scale-[0.98]",
+        "inline-flex min-h-11 w-full min-w-0 flex-col items-center justify-center rounded-full border px-3 py-2 text-xs backdrop-blur-sm transition active:scale-[0.98]",
         active
           ? "border-gold-400/50 bg-gold-500/15 text-gold-200"
           : "border-white/10 bg-night-950/45 text-ivory/75 hover:border-gold-400/35 hover:text-gold-100",
