@@ -580,8 +580,37 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
   const [worldBootStep, setWorldBootStep] = useState(0);
   const [worldMenuOpen, setWorldMenuOpen] = useState(false);
   const [worldSwitchingTo, setWorldSwitchingTo] = useState<DistrictId | null>(null);
+  const [worldViewportLandscape, setWorldViewportLandscape] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.matchMedia("(orientation: landscape)").matches || window.innerWidth > window.innerHeight;
+  });
   const worldSwitchTimerRef = useRef<number | null>(null);
   const worldGameActive = dedicatedMode || isWorldFullscreen;
+  const worldLandscapeMode = worldGameActive && worldViewportLandscape;
+
+  const focusWorldChatInput = useCallback(() => {
+    const input = chatInputRef.current;
+    if (!input) return;
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        input.focus({ preventScroll: true });
+        input.scrollIntoView({ block: "nearest", inline: "nearest" });
+      });
+    });
+  }, []);
+
+  const openWorldChat = useCallback(() => {
+    setWorldMenuOpen(false);
+    setWorldChatExpanded(true);
+    setWorldChatAttention((value) => value + 1);
+    focusWorldChatInput();
+  }, [focusWorldChatInput]);
+
+  const openWorldEmotes = useCallback(() => {
+    setWorldMenuOpen(false);
+    setWorldEmotesOpen(true);
+  }, []);
+
   function handlePointerDown() {
     // Clicking or tapping the map should not teleport the player.
   }
@@ -1256,6 +1285,25 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
       orientation.unlock?.();
       document.body.style.overflow = previousBodyOverflow;
       document.documentElement.style.overflow = previousHtmlOverflow;
+    };
+  }, [worldGameActive]);
+
+  useEffect(() => {
+    if (!worldGameActive || typeof window === "undefined") return undefined;
+    const mediaQuery = window.matchMedia("(orientation: landscape)");
+    const updateViewportMode = () => {
+      setWorldViewportLandscape(mediaQuery.matches || window.innerWidth > window.innerHeight);
+    };
+    updateViewportMode();
+    mediaQuery.addEventListener?.("change", updateViewportMode);
+    window.addEventListener("resize", updateViewportMode);
+    window.addEventListener("orientationchange", updateViewportMode);
+    window.visualViewport?.addEventListener("resize", updateViewportMode);
+    return () => {
+      mediaQuery.removeEventListener?.("change", updateViewportMode);
+      window.removeEventListener("resize", updateViewportMode);
+      window.removeEventListener("orientationchange", updateViewportMode);
+      window.visualViewport?.removeEventListener("resize", updateViewportMode);
     };
   }, [worldGameActive]);
 
@@ -2076,7 +2124,7 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
                   <div className="absolute left-[calc(0.75rem+env(safe-area-inset-left))] top-[calc(0.75rem+env(safe-area-inset-top))] z-40 flex items-start gap-2">
                     <button
                       type="button"
-                      onClick={() => setWorldEmotesOpen((current) => !current)}
+                      onClick={openWorldEmotes}
                       className="inline-flex h-11 min-h-11 items-center gap-2 rounded-full border border-emerald-400/30 bg-night-950/76 px-4 text-sm text-emerald-100 shadow-[0_18px_58px_rgba(0,0,0,0.42)] backdrop-blur-xl transition hover:border-emerald-300/55 hover:text-emerald-50 active:scale-95"
                       aria-haspopup="dialog"
                       aria-expanded={worldEmotesOpen}
@@ -2109,18 +2157,7 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
                         </button>
                         <button
                           type="button"
-                          onClick={() => {
-                            setWorldMenuOpen(false);
-                            setWorldChatExpanded(true);
-                            setWorldChatAttention((value) => value + 1);
-                            const input = chatInputRef.current;
-                            input?.focus();
-                            input?.scrollIntoView({
-                              block: "nearest",
-                              inline: "nearest",
-                              behavior: "smooth",
-                            });
-                          }}
+                          onClick={openWorldChat}
                           className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm text-ivory/88 transition hover:bg-white/8"
                         >
                           <MessageCircle className="h-4 w-4 text-sky-300" />
@@ -2200,13 +2237,7 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
                         ))}
                         <button
                           type="button"
-                          onClick={() => {
-                            setWorldEmotesOpen(false);
-                            setWorldChatExpanded(true);
-                            setWorldChatAttention((value) => value + 1);
-                            const input = chatInputRef.current;
-                            input?.focus();
-                          }}
+                          onClick={openWorldChat}
                           className="sm:col-span-2 flex items-center gap-3 rounded-2xl border border-sky-300/20 bg-sky-500/8 px-3 py-3 text-left text-sm text-sky-100 transition hover:border-sky-300/40 hover:bg-sky-500/12"
                         >
                           <MessageCircle className="h-4 w-4 text-sky-300" />
@@ -2433,7 +2464,11 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
           <section
             className={`rounded-[26px] border border-royal-500/30 bg-night-900/60 p-5 shadow-[0_20px_50px_rgba(0,0,0,0.18)] ${
               worldGameActive
-                ? `fixed bottom-[calc(0.9rem+env(safe-area-inset-bottom))] left-[calc(0.9rem+env(safe-area-inset-left))] z-30 w-[min(${worldChatExpanded ? "24rem" : "21rem"},calc(100vw-1.7rem))] ${worldChatExpanded ? "max-h-[min(34rem,calc(100dvh-5.5rem))] ring-1 ring-sky-300/20 shadow-[0_20px_50px_rgba(0,0,0,0.18),0_0_0_1px_rgba(125,211,252,0.08)]" : "max-h-[min(26rem,calc(100dvh-8rem))]"} overflow-hidden backdrop-blur-xl touch-pan-y overscroll-contain md:w-[min(24rem,calc(100vw-2rem))]`
+                ? `fixed z-[95] w-[min(${worldChatExpanded ? "24rem" : "21rem"},calc(100vw-1.2rem))] overflow-hidden backdrop-blur-xl touch-pan-y overscroll-contain md:w-[min(24rem,calc(100vw-2rem))] ${
+                    worldLandscapeMode
+                      ? `left-[calc(0.75rem+env(safe-area-inset-left))] top-[calc(0.75rem+env(safe-area-inset-top))] max-h-[calc(100dvh-1.5rem)] ${worldChatExpanded ? "ring-1 ring-sky-300/20 shadow-[0_20px_50px_rgba(0,0,0,0.18),0_0_0_1px_rgba(125,211,252,0.08)]" : ""}`
+                      : `left-[calc(0.9rem+env(safe-area-inset-left))] bottom-[calc(0.9rem+env(safe-area-inset-bottom))] ${worldChatExpanded ? "max-h-[min(34rem,calc(100dvh-5.5rem))] ring-1 ring-sky-300/20 shadow-[0_20px_50px_rgba(0,0,0,0.18),0_0_0_1px_rgba(125,211,252,0.08)]" : "max-h-[min(26rem,calc(100dvh-8rem))]"}`
+                  }`
                 : ""
             }`}
             onPointerDownCapture={(event) => {
@@ -2461,9 +2496,13 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
             <div
               className={`mt-4 space-y-2 overflow-y-auto pr-1 ${
                 worldGameActive
-                  ? worldChatExpanded
-                    ? "max-h-[16rem] sm:max-h-[18rem]"
-                    : "max-h-[10.5rem]"
+                  ? worldLandscapeMode
+                    ? worldChatExpanded
+                      ? "max-h-[min(16rem,calc(100dvh-11rem))]"
+                      : "max-h-[min(10rem,calc(100dvh-10rem))]"
+                    : worldChatExpanded
+                      ? "max-h-[16rem] sm:max-h-[18rem]"
+                      : "max-h-[10.5rem]"
                   : "max-h-none"
               }`}
             >
@@ -2500,7 +2539,11 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
                 </div>
               ))}
             </div>
-            <div className={`mt-4 flex gap-2 ${worldGameActive ? "items-end" : ""}`}>
+            <div
+              className={`mt-4 flex gap-2 ${
+                worldGameActive ? (worldLandscapeMode ? "flex-col items-stretch" : "items-end") : ""
+              }`}
+            >
               <input
                 key={`world-chat-${worldChatExpanded ? "open" : "closed"}-${worldChatAttention}`}
                 ref={chatInputRef}
@@ -2515,12 +2558,14 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
                 enterKeyHint="send"
                 autoComplete="off"
                 autoFocus={worldChatExpanded}
-                className={`glass-input flex-1 ${worldGameActive ? "min-h-11 text-sm" : ""}`}
+                className={`glass-input flex-1 ${worldGameActive ? "min-h-11 text-sm" : ""} ${worldLandscapeMode ? "w-full" : ""}`}
               />
               <button
                 type="button"
                 onClick={sendMessage}
-                className={`rounded-full border border-gold-400/35 px-4 py-2 text-sm text-gold-100 transition hover:border-gold-300/70 ${worldGameActive ? "min-h-11" : ""}`}
+                className={`rounded-full border border-gold-400/35 px-4 py-2 text-sm text-gold-100 transition hover:border-gold-300/70 ${
+                  worldGameActive ? "min-h-11" : ""
+                } ${worldLandscapeMode ? "w-full" : ""}`}
               >
                 Envoyer
               </button>
