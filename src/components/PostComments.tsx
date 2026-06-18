@@ -12,7 +12,8 @@ import { getOfficial } from "../data/officials";
 import { Handle } from "./Handle";
 import { ReportButton } from "./ReportButton";
 import { AvatarImage } from "./AvatarImage";
-import { RichSocialText, buildMentionLookup } from "./RichSocialText";
+import { RichSocialText } from "./RichSocialText";
+import { buildMentionLookup } from "./RichMentionText";
 import StreamerGradeBadge from "./StreamerGradeBadge";
 import { UserBadges } from "./UserBadges";
 
