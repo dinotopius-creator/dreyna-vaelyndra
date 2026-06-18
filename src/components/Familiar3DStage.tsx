@@ -348,11 +348,12 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
     let isWalking = false;
     let pathStep = 0;
     const pathTargets = [
-      new THREE.Vector3(0.22, 0, 0.02),
-      new THREE.Vector3(-0.08, 0, -0.01),
-      new THREE.Vector3(-0.34, 0, 0.03),
-      new THREE.Vector3(-0.58, 0, -0.02),
-      new THREE.Vector3(-0.26, 0, 0.01),
+      new THREE.Vector3(0.34, 0, 0.02),
+      new THREE.Vector3(0.1, 0, -0.01),
+      new THREE.Vector3(-0.18, 0, 0.02),
+      new THREE.Vector3(-0.48, 0, -0.02),
+      new THREE.Vector3(-0.68, 0, 0.01),
+      new THREE.Vector3(-0.34, 0, -0.01),
     ];
     let tapCooldown = 0;
 
@@ -405,15 +406,15 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
         const dz = desired.z - target.z;
         const distance = Math.hypot(dx, dz);
         if (distance < 0.04) {
-          pauseTimer = pathStep % 5 === 0 ? 0.7 : 0.35;
-          if (pathStep % 5 === 0) {
-            desired.set(0.22, 0, 0.02);
-          }
-          pickDestination();
+      pauseTimer = pathStep % 6 === 0 ? 0.65 : 0.3;
+      if (pathStep % 6 === 0) {
+        desired.set(0.34, 0, 0.02);
+      }
+      pickDestination();
         } else {
           isWalking = true;
-          target.x += dx * dt * 1.0;
-          target.z += dz * dt * 1.0;
+          target.x += dx * dt * 1.2;
+          target.z += dz * dt * 1.1;
           target.x = THREE.MathUtils.clamp(target.x, root.userData.bounds.minX, root.userData.bounds.maxX);
           target.z = THREE.MathUtils.clamp(target.z, root.userData.bounds.minZ, root.userData.bounds.maxZ);
           const angle = Math.atan2(dx, dz);
@@ -426,12 +427,12 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
       }
 
       root.position.x = THREE.MathUtils.clamp(
-        THREE.MathUtils.lerp(root.position.x, target.x, 0.13),
+        THREE.MathUtils.lerp(root.position.x, target.x, 0.2),
         root.userData.bounds.minX,
         root.userData.bounds.maxX,
       );
       root.position.z = THREE.MathUtils.clamp(
-        THREE.MathUtils.lerp(root.position.z, target.z, 0.11),
+        THREE.MathUtils.lerp(root.position.z, target.z, 0.16),
         root.userData.bounds.minZ,
         root.userData.bounds.maxZ,
       );
