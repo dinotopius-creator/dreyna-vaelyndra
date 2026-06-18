@@ -521,6 +521,8 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
   const [chatInput, setChatInput] = useState("");
   const chatInputRef = useRef<HTMLInputElement | null>(null);
   const [worldChatExpanded, setWorldChatExpanded] = useState(false);
+  const [worldChatAttention, setWorldChatAttention] = useState(0);
+  const [worldEmotesOpen, setWorldEmotesOpen] = useState(false);
   const [worldSpeechBubbles, setWorldSpeechBubbles] = useState<WorldSpeechBubble[]>([]);
   const [worldMembers, setWorldMembers] = useState<WorldPresenceDto[]>([]);
   const [selectedMember, setSelectedMember] = useState<SelectedWorldMember | null>(null);
@@ -2055,6 +2057,18 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
                       <MoreHorizontal className="h-5 w-5" />
                     </button>
                   </div>
+                  <div className="absolute left-[calc(0.75rem+env(safe-area-inset-left))] top-[calc(0.75rem+env(safe-area-inset-top))] z-40 flex items-start gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setWorldEmotesOpen((current) => !current)}
+                      className="inline-flex h-11 min-h-11 items-center gap-2 rounded-full border border-emerald-400/30 bg-night-950/76 px-4 text-sm text-emerald-100 shadow-[0_18px_58px_rgba(0,0,0,0.42)] backdrop-blur-xl transition hover:border-emerald-300/55 hover:text-emerald-50 active:scale-95"
+                      aria-haspopup="dialog"
+                      aria-expanded={worldEmotesOpen}
+                      aria-label="Ouvrir les emotes du monde"
+                    >
+                      ✨ Emotes
+                    </button>
+                  </div>
                   {worldMenuOpen && (
                     <div className="absolute right-[calc(0.75rem+env(safe-area-inset-right))] top-[calc(4rem+env(safe-area-inset-top))] z-50 w-[min(20rem,calc(100vw-1.25rem))] overflow-hidden rounded-[24px] border border-white/12 bg-night-950/92 p-2 shadow-[0_24px_80px_rgba(0,0,0,0.48)] backdrop-blur-2xl">
                       <div className="px-3 pb-2 pt-1">
@@ -2082,9 +2096,15 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
                           onClick={() => {
                             setWorldMenuOpen(false);
                             setWorldChatExpanded(true);
+                            setWorldChatAttention((value) => value + 1);
                             window.setTimeout(() => {
                               chatInputRef.current?.focus({ preventScroll: true });
-                            }, 0);
+                              chatInputRef.current?.scrollIntoView({
+                                block: "nearest",
+                                inline: "nearest",
+                                behavior: "smooth",
+                              });
+                            }, 40);
                           }}
                           className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm text-ivory/88 transition hover:bg-white/8"
                         >
@@ -2127,6 +2147,56 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
                         >
                           <X className="h-4 w-4" />
                           Quitter le monde
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {worldEmotesOpen && (
+                    <div className="absolute left-[calc(0.75rem+env(safe-area-inset-left))] top-[calc(4rem+env(safe-area-inset-top))] z-50 w-[min(22rem,calc(100vw-1.25rem))] overflow-hidden rounded-[24px] border border-emerald-300/18 bg-night-950/92 p-2 shadow-[0_24px_80px_rgba(0,0,0,0.48)] backdrop-blur-2xl">
+                      <div className="px-3 pb-2 pt-1">
+                        <p className="text-[10px] uppercase tracking-[0.22em] text-emerald-200/75">
+                          Emotes et duos
+                        </p>
+                        <p className="mt-1 text-sm text-ivory/62">
+                          Choisis un joueur pour lui envoyer une interaction ou lance une emote rapide.
+                        </p>
+                      </div>
+                      <div className="grid gap-2 px-1 pb-1 sm:grid-cols-2">
+                        {(Object.entries(WORLD_INTERACTION_META) as Array<
+                          [WorldCuteInteractionKind, (typeof WORLD_INTERACTION_META)[WorldCuteInteractionKind]]
+                        >).map(([kind, meta]) => (
+                          <button
+                            key={kind}
+                            type="button"
+                            disabled={memberActionBusy !== null}
+                            onClick={() => {
+                              setWorldEmotesOpen(false);
+                              if (!selectedMember) {
+                                notify("Choisis d'abord un joueur pour cette interaction.", "info");
+                                return;
+                              }
+                              void sendCuteAction(kind);
+                            }}
+                            className="flex items-center gap-3 rounded-2xl border border-white/10 px-3 py-3 text-left text-sm text-ivory/86 transition hover:border-emerald-300/35 hover:text-emerald-50 disabled:opacity-50"
+                          >
+                            <span className="text-lg">{meta.emoji}</span>
+                            <span className="leading-5">{meta.label}</span>
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setWorldEmotesOpen(false);
+                            setWorldChatExpanded(true);
+                            setWorldChatAttention((value) => value + 1);
+                            window.setTimeout(() => {
+                              chatInputRef.current?.focus({ preventScroll: true });
+                            }, 40);
+                          }}
+                          className="sm:col-span-2 flex items-center gap-3 rounded-2xl border border-sky-300/20 bg-sky-500/8 px-3 py-3 text-left text-sm text-sky-100 transition hover:border-sky-300/40 hover:bg-sky-500/12"
+                        >
+                          <MessageCircle className="h-4 w-4 text-sky-300" />
+                          Ouvrir le chat du monde
                         </button>
                       </div>
                     </div>
@@ -2349,14 +2419,14 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
           <section
             className={`rounded-[26px] border border-royal-500/30 bg-night-900/60 p-5 shadow-[0_20px_50px_rgba(0,0,0,0.18)] ${
               worldGameActive
-                ? `fixed bottom-[calc(0.9rem+env(safe-area-inset-bottom))] left-[calc(0.9rem+env(safe-area-inset-left))] z-30 w-[min(${worldChatExpanded ? "24rem" : "21rem"},calc(100vw-1.7rem))] ${worldChatExpanded ? "max-h-[min(34rem,calc(100dvh-5.5rem))]" : "max-h-[min(26rem,calc(100dvh-8rem))]"} overflow-hidden backdrop-blur-xl touch-pan-y overscroll-contain md:w-[min(24rem,calc(100vw-2rem))]`
+                ? `fixed bottom-[calc(0.9rem+env(safe-area-inset-bottom))] left-[calc(0.9rem+env(safe-area-inset-left))] z-30 w-[min(${worldChatExpanded ? "24rem" : "21rem"},calc(100vw-1.7rem))] ${worldChatExpanded ? "max-h-[min(34rem,calc(100dvh-5.5rem))] ring-1 ring-sky-300/20 shadow-[0_20px_50px_rgba(0,0,0,0.18),0_0_0_1px_rgba(125,211,252,0.08)]" : "max-h-[min(26rem,calc(100dvh-8rem))]"} overflow-hidden backdrop-blur-xl touch-pan-y overscroll-contain md:w-[min(24rem,calc(100vw-2rem))]`
                 : ""
             }`}
             onPointerDownCapture={(event) => {
               if (worldGameActive) event.stopPropagation();
             }}
           >
-            <div className="flex items-center gap-2">
+            <div className={`flex items-center gap-2 ${worldChatAttention > 0 ? "animate-[socialLikeBurst_900ms_ease-out_1]" : ""}`}>
               <Sparkles className="h-4 w-4 text-gold-300" />
               <h3 className={`font-display text-xl text-gold-200 ${worldGameActive ? "text-lg" : ""}`}>Chat du monde</h3>
               {worldChatExpanded && worldGameActive && (
