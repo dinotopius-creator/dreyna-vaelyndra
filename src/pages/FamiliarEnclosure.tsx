@@ -12,7 +12,7 @@ import {
   Timer,
   Utensils,
 } from "lucide-react";
-import { Familiar3DStage } from "../components/Familiar3DStage";
+import { FamiliarPortrait } from "../components/FamiliarPortrait";
 import { useAuth } from "../contexts/AuthContext";
 import { useProfile } from "../contexts/ProfileContext";
 import { useToast } from "../contexts/ToastContext";
@@ -354,20 +354,38 @@ export function FamiliarEnclosure() {
               <motion.button
                 type="button"
                 onClick={tapFamiliar}
-                className="absolute left-[28%] top-[30%] z-20 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center focus:outline-none sm:left-[26%] sm:top-[28%]"
+                className="absolute left-[31%] top-[32%] z-20 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center focus:outline-none sm:left-[29%] sm:top-[30%]"
                 style={{ color: active.color }}
                 animate={{
-                  y: [0, -8, 0, 6, 0],
-                  rotate: [0, 1.5, 0, -1.5, 0],
+                  y: [0, -5, 0, -2, 0],
+                  rotate: [0, 0.8, 0, -0.8, 0],
                 }}
-                transition={{ duration: 14, repeat: Infinity, ease: "easeInOut" }}
+                transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
               >
                 <AffectionHearts
                   hearts={affection.affectionHearts}
                   pulseHeart={heartPulse}
                 />
-                <div className="relative h-[560px] w-[360px] -translate-y-14 sm:h-[620px] sm:w-[440px] sm:-translate-y-16">
-                  <Familiar3DStage familiar={active} onTap={tapFamiliar} />
+                <div className="relative flex h-[260px] w-[260px] items-center justify-center overflow-visible sm:h-[310px] sm:w-[310px]">
+                  <motion.div
+                    className="absolute inset-0 rounded-[40px] border border-white/10 bg-night-950/35 backdrop-blur-[2px]"
+                    animate={{ scale: [1, 1.02, 1], opacity: [0.9, 1, 0.9] }}
+                    transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut" }}
+                    aria-hidden
+                  />
+                  <motion.div
+                    className="relative z-10"
+                    animate={{ y: [0, -6, 0] }}
+                    transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                  >
+                    <FamiliarPortrait
+                      familiar={active}
+                      size="lg"
+                      animated
+                      showFrame
+                      className="scale-[1.1] sm:scale-[1.18]"
+                    />
+                  </motion.div>
                   <FeedHeartBurst burstId={feedBurstId} />
                 </div>
                 <div className="mt-1 rounded-full border border-white/10 bg-night-950/72 px-3 py-1 text-center text-xs text-ivory/80 backdrop-blur">
