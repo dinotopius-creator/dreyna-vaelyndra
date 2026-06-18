@@ -523,6 +523,11 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
   const [worldChatExpanded, setWorldChatExpanded] = useState(false);
   const [worldChatAttention, setWorldChatAttention] = useState(0);
   const [worldEmotesOpen, setWorldEmotesOpen] = useState(false);
+  const [worldEmotePulse, setWorldEmotePulse] = useState<{
+    kind: WorldCuteInteractionKind;
+    userIds: string[];
+    expiresAt: number;
+  } | null>(null);
   const [worldSpeechBubbles, setWorldSpeechBubbles] = useState<WorldSpeechBubble[]>([]);
   const [worldMembers, setWorldMembers] = useState<WorldPresenceDto[]>([]);
   const [selectedMember, setSelectedMember] = useState<SelectedWorldMember | null>(null);
@@ -816,6 +821,12 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
   );
 
   const world3DPlayers = useMemo<World3DPlayer[]>(() => {
+    const activePulse =
+      worldEmotePulse && worldEmotePulse.expiresAt > worldClock ? worldEmotePulse : null;
+    const interactionFor = (playerId: string, fallback: string | null) => {
+      if (!activePulse) return fallback;
+      return activePulse.userIds.includes(playerId) ? activePulse.kind : fallback;
+    };
     const selfPlayer: World3DPlayer | null = user
       ? {
           id: user.id,
@@ -825,7 +836,7 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
           isSelf: true,
           voiceEnabled: micEnabled,
           isSpeaking: micEnabled && voiceLevel > 12,
-          interactionKind: myWorldPresence?.interactionKind ?? null,
+          interactionKind: interactionFor(user.id, myWorldPresence?.interactionKind ?? null),
           appearance: {
             avatarUrl: profile?.avatarUrl ?? null,
             outfit3d: profile?.equipped?.outfit3d ?? null,
@@ -847,7 +858,7 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
       y: member.y,
       voiceEnabled: member.voiceEnabled,
       isSpeaking: member.voiceEnabled,
-      interactionKind: member.interactionKind ?? null,
+      interactionKind: interactionFor(member.id, member.interactionKind ?? null),
       appearance: member.appearance ?? null,
       familiarIcon: otherFamiliars[member.id]?.icon ?? null,
       familiarColor: otherFamiliars[member.id]?.color ?? null,
@@ -873,6 +884,8 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
     profile?.equipped?.frame,
     profile?.equipped?.outfit3d,
     stageMembers,
+    worldClock,
+    worldEmotePulse,
     user,
     micEnabled,
     voiceLevel,
@@ -1383,6 +1396,9 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
     const target = selectedMember.profile?.username ?? selectedMember.member.username;
     const actor = user?.username ?? "Visiteur";
     const meta = WORLD_INTERACTION_META[kind];
+    const expiresAt = Date.now() + 5200;
+    const userIds = Array.from(new Set([user?.id, selectedMember.member.id].filter(Boolean))) as string[];
+    setWorldEmotePulse({ kind, userIds, expiresAt });
     setMemberActionBusy(kind);
     try {
       await apiSendWorldInteraction(WORLD_ID, {
@@ -2097,14 +2113,13 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
                             setWorldMenuOpen(false);
                             setWorldChatExpanded(true);
                             setWorldChatAttention((value) => value + 1);
-                            window.setTimeout(() => {
-                              chatInputRef.current?.focus({ preventScroll: true });
-                              chatInputRef.current?.scrollIntoView({
-                                block: "nearest",
-                                inline: "nearest",
-                                behavior: "smooth",
-                              });
-                            }, 40);
+                            const input = chatInputRef.current;
+                            input?.focus();
+                            input?.scrollIntoView({
+                              block: "nearest",
+                              inline: "nearest",
+                              behavior: "smooth",
+                            });
                           }}
                           className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm text-ivory/88 transition hover:bg-white/8"
                         >
@@ -2189,9 +2204,8 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
                             setWorldEmotesOpen(false);
                             setWorldChatExpanded(true);
                             setWorldChatAttention((value) => value + 1);
-                            window.setTimeout(() => {
-                              chatInputRef.current?.focus({ preventScroll: true });
-                            }, 40);
+                            const input = chatInputRef.current;
+                            input?.focus();
                           }}
                           className="sm:col-span-2 flex items-center gap-3 rounded-2xl border border-sky-300/20 bg-sky-500/8 px-3 py-3 text-left text-sm text-sky-100 transition hover:border-sky-300/40 hover:bg-sky-500/12"
                         >
@@ -2488,6 +2502,7 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
             </div>
             <div className={`mt-4 flex gap-2 ${worldGameActive ? "items-end" : ""}`}>
               <input
+                key={`world-chat-${worldChatExpanded ? "open" : "closed"}-${worldChatAttention}`}
                 ref={chatInputRef}
                 value={chatInput}
                 onChange={(event) => setChatInput(event.target.value)}
@@ -2499,6 +2514,7 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
                 inputMode="text"
                 enterKeyHint="send"
                 autoComplete="off"
+                autoFocus={worldChatExpanded}
                 className={`glass-input flex-1 ${worldGameActive ? "min-h-11 text-sm" : ""}`}
               />
               <button
