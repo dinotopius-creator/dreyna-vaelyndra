@@ -12,7 +12,7 @@ import {
   Timer,
   Utensils,
 } from "lucide-react";
-import { FamiliarPortrait } from "../components/FamiliarPortrait";
+import { Familiar3DStage } from "../components/Familiar3DStage";
 import { useAuth } from "../contexts/AuthContext";
 import { useProfile } from "../contexts/ProfileContext";
 import { useToast } from "../contexts/ToastContext";
@@ -366,8 +366,8 @@ export function FamiliarEnclosure() {
                   hearts={affection.affectionHearts}
                   pulseHeart={heartPulse}
                 />
-                <div className="relative">
-                  <FamiliarPortrait familiar={active} size="lg" />
+                <div className="relative h-[340px] w-[340px] sm:h-[420px] sm:w-[420px]">
+                  <Familiar3DStage familiar={active} onTap={tapFamiliar} />
                   <FeedHeartBurst burstId={feedBurstId} />
                 </div>
                 <div className="mt-2 rounded-full border border-white/10 bg-night-950/72 px-3 py-1 text-center text-xs text-ivory/80 backdrop-blur">
