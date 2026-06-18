@@ -53,6 +53,8 @@ body.vaelyndra-world-game-open {
     min-width: 0;
     overflow-x: hidden;
     -webkit-tap-highlight-color: transparent;
+    -webkit-user-select: none;
+    user-select: none;
     overscroll-behavior-y: none;
   }
 
@@ -101,6 +103,12 @@ body.vaelyndra-world-game-open {
   [role='button'],
   a {
     touch-action: manipulation;
+  }
+
+  input,
+  textarea {
+    -webkit-user-select: text;
+    user-select: text;
   }
 
   input,
