@@ -331,6 +331,9 @@ function AnimatedRoutes() {
 function App() {
   const location = useLocation();
   const isWorldPlayRoute = location.pathname === "/mondes/play";
+  const isSocialImmersiveRoute =
+    location.pathname.startsWith("/social") ||
+    location.pathname.startsWith("/communaute");
 
   if (location.pathname.startsWith("/live/overlay/chat/")) {
     return (
@@ -361,22 +364,22 @@ function App() {
   return (
     <div className="relative flex min-h-screen flex-col">
       <NativeAppBootstrap />
-      {!isWorldPlayRoute && <MagicBackground />}
-      {!isWorldPlayRoute && <EasterEggs />}
-      {!isWorldPlayRoute && <Navbar />}
-      {!isWorldPlayRoute && <OfflineBanner />}
+      {!isWorldPlayRoute && !isSocialImmersiveRoute && <MagicBackground />}
+      {!isWorldPlayRoute && !isSocialImmersiveRoute && <EasterEggs />}
+      {!isWorldPlayRoute && !isSocialImmersiveRoute && <Navbar />}
+      {!isWorldPlayRoute && !isSocialImmersiveRoute && <OfflineBanner />}
       <main
         className={
-          isWorldPlayRoute
+          isWorldPlayRoute || isSocialImmersiveRoute
             ? "fixed inset-0 h-[100dvh] w-screen overflow-hidden bg-night-950"
             : "flex-1 pb-[calc(4.75rem+env(safe-area-inset-bottom))] lg:pb-0"
         }
       >
         <AnimatedRoutes />
       </main>
-      {!isWorldPlayRoute && <Footer />}
-      {!isWorldPlayRoute && <CookieBanner />}
-      {!isWorldPlayRoute && <FamiliarOnboardingGate />}
+      {!isWorldPlayRoute && !isSocialImmersiveRoute && <Footer />}
+      {!isWorldPlayRoute && !isSocialImmersiveRoute && <CookieBanner />}
+      {!isWorldPlayRoute && !isSocialImmersiveRoute && <FamiliarOnboardingGate />}
     </div>
   );
 }
