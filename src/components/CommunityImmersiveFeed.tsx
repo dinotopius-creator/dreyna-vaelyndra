@@ -22,7 +22,7 @@ import { formatRelative, parsePostImageUrl, parseVideoUrl } from "../lib/helpers
 import { getOfficial } from "../data/officials";
 import type { CommunityPost } from "../types";
 
-export type CommunityTab = "following" | "for-you" | "trending" | "news";
+export type CommunityTab = "following" | "for-you" | "trending" | "news" | "media" | "text";
 
 type ProfileSummary = {
   username?: string | null;
@@ -71,6 +71,8 @@ const TAB_META: Record<CommunityTab, { label: string; icon: typeof Users }> = {
   "for-you": { label: "Pour toi", icon: Sparkles },
   trending: { label: "Tendance", icon: TrendingUp },
   news: { label: "Actualité", icon: Newspaper },
+  media: { label: "Photos/Vidéos", icon: Sparkles },
+  text: { label: "Posts texte", icon: MessageCircle },
 };
 
 function getPostScore(post: CommunityPost) {
@@ -81,6 +83,26 @@ function getPostScore(post: CommunityPost) {
   return likes + post.comments.length * 2 + (post.videoUrl ? 3 : 0);
 }
 
+function hasMedia(post: CommunityPost) {
+  return Boolean(post.imageUrl || post.videoUrl);
+}
+
+function isTextOnlyPost(post: CommunityPost) {
+  return !hasMedia(post);
+}
+
+function isPhotoPost(post: CommunityPost) {
+  return Boolean(post.imageUrl && !post.videoUrl);
+}
+
+function isVideoPost(post: CommunityPost) {
+  return Boolean(post.videoUrl);
+}
+
+function isMediaPost(post: CommunityPost) {
+  return hasMedia(post);
+}
+
 function isNewsPost(post: CommunityPost) {
   return Boolean(
     post.officialLabel ||
@@ -88,6 +110,12 @@ function isNewsPost(post: CommunityPost) {
         `${post.content} ${post.authorName} ${post.postType ?? ""}`,
       ),
   );
+}
+
+function mediaTitle(post: CommunityPost) {
+  if (isVideoPost(post)) return "Vidéo";
+  if (isPhotoPost(post)) return "Photo";
+  return "Média";
 }
 
 export function CommunityImmersiveFeed({
@@ -112,9 +140,7 @@ export function CommunityImmersiveFeed({
       return posts.filter((post) => {
         const profile = profilesById[post.authorId];
         return Boolean(
-          profile?.isFollowing ||
-            profile?.following ||
-            post.authorId === currentUserId,
+          profile?.isFollowing || profile?.following || post.authorId === currentUserId,
         );
       });
     }
@@ -125,9 +151,9 @@ export function CommunityImmersiveFeed({
         .slice(0, Math.max(8, posts.length));
     }
 
-    if (activeTab === "news") {
-      return posts.filter(isNewsPost);
-    }
+    if (activeTab === "news") return posts.filter(isNewsPost);
+    if (activeTab === "media") return posts.filter(isMediaPost);
+    if (activeTab === "text") return posts.filter(isTextOnlyPost);
 
     return [...posts].sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
@@ -177,10 +203,8 @@ export function CommunityImmersiveFeed({
       <div className="sticky top-0 z-30 border-b border-white/8 bg-night-950/88 backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-3 pb-3 pt-3 sm:px-5">
           <div>
-            <p className="text-[10px] uppercase tracking-[0.32em] text-gold-300/80">
-              Communauté
-            </p>
-            <h1 className="font-display text-2xl text-gold-100">Fil immersif</h1>
+            <p className="text-[10px] uppercase tracking-[0.32em] text-gold-300/80">Communauté</p>
+            <h1 className="font-display text-2xl text-gold-100">Feed immersif</h1>
           </div>
 
           <button
@@ -218,6 +242,15 @@ export function CommunityImmersiveFeed({
       </div>
 
       <div className="h-full overflow-y-auto overflow-x-hidden scroll-smooth snap-y snap-mandatory">
+        {feedEntries.length === 0 && activeTab === "following" ? (
+          <div className="mx-auto flex min-h-[calc(100vh-160px)] max-w-3xl items-center px-3 py-8 text-center text-ivory/65">
+            <div className="panel-app w-full p-6">
+              <p className="font-display text-2xl text-gold-100">Suivez des membres pour voir leurs posts ici.</p>
+              <p className="mt-2 text-sm">Découvrez le feed Pour toi ou les tendances pour remplir votre fil.</p>
+            </div>
+          </div>
+        ) : null}
+
         {feedEntries.map((entry) => {
           if (entry.kind === "news") {
             return (
@@ -231,13 +264,9 @@ export function CommunityImmersiveFeed({
                       <Sparkles className="h-3.5 w-3.5" />
                       Actualité
                     </div>
-                    <h2 className="mt-4 font-display text-3xl text-gold-100">
-                      {entry.title}
-                    </h2>
+                    <h2 className="mt-4 font-display text-3xl text-gold-100">{entry.title}</h2>
                     <p className="mt-2 text-sm text-ivory/65">{entry.subtitle}</p>
-                    <p className="mt-4 max-w-2xl text-base leading-7 text-ivory/82">
-                      {entry.body}
-                    </p>
+                    <p className="mt-4 max-w-2xl text-base leading-7 text-ivory/82">{entry.body}</p>
 
                     {entry.id === "news-top5" && leaderboard.length > 0 && (
                       <div className="mt-5 grid gap-3 sm:grid-cols-2">
@@ -270,8 +299,8 @@ export function CommunityImmersiveFeed({
                     {entry.id === "news-oracle" && (
                       <div className="mt-5 rounded-3xl border border-gold-400/20 bg-gradient-to-br from-gold-500/10 via-night-900/50 to-royal-500/10 p-4">
                         <p className="text-sm text-gold-100">
-                          Oracle des runes prêt à accueillir les annonces, rituels et
-                          révélations de la communauté.
+                          Oracle des runes prêt à accueillir les annonces, rituels et révélations
+                          de la communauté.
                         </p>
                       </div>
                     )}
@@ -298,30 +327,20 @@ export function CommunityImmersiveFeed({
             (sum, users) => sum + users.length,
             0,
           );
+          const isMedia = isMediaPost(post);
 
-          return (
-            <section key={post.id} id={`post-${post.id}`} className="snap-start px-3 py-4 sm:px-5">
-              <div className="mx-auto flex min-h-[calc(100vh-160px)] max-w-3xl items-stretch">
-                <article className="panel-app relative flex w-full overflow-hidden rounded-[32px] border border-white/8 bg-night-950/80 shadow-[0_30px_60px_rgba(0,0,0,0.38)]">
-                  <div className="absolute inset-0">
-                    {media && media.kind === "image" ? (
-                      <img
-                        src={media.src}
-                        alt="Média du post"
-                        className="h-full w-full object-cover opacity-60"
-                      />
-                    ) : video?.kind === "youtube" || video?.kind === "tiktok" ? (
-                      <div className="h-full w-full bg-[radial-gradient(circle_at_top,_rgba(251,191,36,0.2),transparent_40%),linear-gradient(180deg,#020617,#111827)]" />
-                    ) : (
-                      <div className="h-full w-full bg-[radial-gradient(circle_at_top,_rgba(168,85,247,0.16),transparent_38%),linear-gradient(180deg,#020617,#111827)]" />
-                    )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-night-950 via-night-950/30 to-night-950/20" />
-                  </div>
-
-                  <div className="relative flex w-full flex-col justify-between p-4 sm:p-6">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="max-w-[70%]">
-                        <div className="flex flex-wrap items-center gap-2">
+          if (!isMedia || activeTab === "text") {
+            return (
+              <section
+                key={post.id}
+                id={`post-${post.id}`}
+                className="snap-start px-3 py-4 sm:px-5"
+              >
+                <div className="mx-auto flex min-h-[calc(100vh-160px)] max-w-3xl items-stretch">
+                  <article className="panel-app relative flex w-full overflow-hidden rounded-[28px] border border-white/8 bg-night-950/80 p-4 shadow-[0_30px_60px_rgba(0,0,0,0.38)] sm:p-6">
+                    <div className="relative flex w-full flex-col justify-between">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex min-w-0 flex-wrap items-center gap-2">
                           <AvatarImage
                             candidates={[avatar, post.authorAvatar]}
                             fallbackSeed={post.authorId}
@@ -336,89 +355,186 @@ export function CommunityImmersiveFeed({
                               {displayName}
                             </Link>
                             <Handle handle={displayHandle} size="xs" />
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                              {grade && <StreamerGradeBadge grade={grade} size="sm" />}
+                              <UserBadges
+                                role={profile?.role ?? getOfficial(post.authorId)?.role}
+                                creatureId={
+                                  profile?.creature?.id ??
+                                  author?.creatureId ??
+                                  getOfficial(post.authorId)?.creatureId
+                                }
+                              />
+                              <span className="text-[11px] uppercase tracking-[0.22em] text-ivory/45">
+                                {formatRelative(post.createdAt)}
+                              </span>
+                            </div>
                           </div>
                         </div>
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                          {grade && <StreamerGradeBadge grade={grade} size="sm" />}
-                          <UserBadges
-                            role={profile?.role ?? getOfficial(post.authorId)?.role}
-                            creatureId={
-                              profile?.creature?.id ??
-                              author?.creatureId ??
-                              getOfficial(post.authorId)?.creatureId
-                            }
+
+                        <div className="flex flex-row gap-3">
+                          <FeedAction
+                            icon={<Heart className="h-5 w-5" fill={liked ? "currentColor" : "none"} />}
+                            label={liked ? "Aimé" : "Like"}
+                            active={liked}
+                            onClick={() => onLike(post.id)}
+                            count={reactionCount}
                           />
-                          <span className="text-[11px] uppercase tracking-[0.22em] text-ivory/45">
-                            {formatRelative(post.createdAt)}
-                          </span>
+                          <FeedAction
+                            icon={<MessageCircle className="h-5 w-5" />}
+                            label="Com."
+                            onClick={() => onOpenComments(post.id)}
+                            count={post.comments.length}
+                          />
+                          <FeedAction
+                            icon={
+                              saved ? (
+                                <BookmarkCheck className="h-5 w-5" />
+                              ) : (
+                                <Bookmark className="h-5 w-5" />
+                              )
+                            }
+                            label={saved ? "Sauvé" : "Save"}
+                            active={saved}
+                            onClick={() => onSave(post.id)}
+                          />
+                          <FeedAction
+                            icon={<Share2 className="h-5 w-5" />}
+                            label="Partager"
+                            onClick={() => onShare(post)}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="mt-8 flex-1">
+                        <div className="max-w-2xl space-y-3">
+                          <RichMentionText
+                            content={post.content}
+                            mentionsByHandle={mentionTargets}
+                            profileHref={(authorId) => `/u/${authorId}`}
+                            className="text-lg leading-8 text-white sm:text-xl sm:leading-8"
+                          />
                         </div>
                       </div>
                     </div>
+                  </article>
+                </div>
+              </section>
+            );
+          }
 
-                    <div className="mt-auto grid gap-4 lg:grid-cols-[minmax(0,1fr)_92px] lg:items-end">
-                      <div className="max-w-2xl space-y-3">
-                        <RichMentionText
-                          content={post.content}
-                          mentionsByHandle={mentionTargets}
-                          profileHref={(authorId) => `/u/${authorId}`}
-                          className="text-xl leading-8 text-white sm:text-2xl sm:leading-9"
-                        />
+          return (
+            <section key={post.id} id={`post-${post.id}`} className="snap-start px-0 py-0">
+              <div className="relative h-[calc(100vh-88px)] min-h-[620px] w-full overflow-hidden">
+                <div className="absolute inset-0">
+                  {video?.kind ? (
+                    <video
+                      src={post.videoUrl}
+                      className="h-full w-full object-cover"
+                      muted
+                      loop
+                      playsInline
+                      autoPlay
+                      preload="metadata"
+                    />
+                  ) : media?.kind === "image" ? (
+                    <img
+                      src={media.src}
+                      alt="Media du post"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="h-full w-full bg-[radial-gradient(circle_at_top,_rgba(251,191,36,0.16),transparent_40%),linear-gradient(180deg,#020617,#0f172a)]" />
+                  )}
+                </div>
 
-                        <div className="flex flex-wrap gap-2">
-                          {post.officialLabel ? (
-                            <span className="rounded-full border border-gold-400/20 bg-gold-500/10 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-gold-200">
-                              {post.officialLabel}
-                            </span>
-                          ) : null}
-                          {post.postType ? (
-                            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-ivory/65">
-                              {post.postType.replace(/_/g, " ")}
-                            </span>
-                          ) : null}
-                        </div>
+                <div className="absolute inset-0 bg-gradient-to-t from-night-950 via-night-950/20 to-night-950/35" />
 
-                        <div className="flex flex-wrap items-center gap-3 text-sm text-ivory/60">
-                          <span>{reactionCount} réactions</span>
-                          <span>{post.comments.length} commentaires</span>
-                          {post.videoUrl && <span>Vidéo</span>}
-                        </div>
-                      </div>
-
-                      <div className="flex h-full flex-row justify-end gap-3 lg:flex-col lg:gap-4">
-                        <FeedAction
-                          icon={<Heart className="h-5 w-5" fill={liked ? "currentColor" : "none"} />}
-                          label={liked ? "Aimé" : "Like"}
-                          active={liked}
-                          onClick={() => onLike(post.id)}
-                          count={reactionCount}
-                        />
-                        <FeedAction
-                          icon={<MessageCircle className="h-5 w-5" />}
-                          label="Com."
-                          onClick={() => onOpenComments(post.id)}
-                          count={post.comments.length}
-                        />
-                        <FeedAction
-                          icon={
-                            saved ? (
-                              <BookmarkCheck className="h-5 w-5" />
-                            ) : (
-                              <Bookmark className="h-5 w-5" />
-                            )
-                          }
-                          label={saved ? "Sauvé" : "Save"}
-                          active={saved}
-                          onClick={() => onSave(post.id)}
-                        />
-                        <FeedAction
-                          icon={<Share2 className="h-5 w-5" />}
-                          label="Partager"
-                          onClick={() => onShare(post)}
-                        />
-                      </div>
+                <div className="absolute inset-0 flex flex-col justify-between px-3 py-4 sm:px-5 sm:py-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="inline-flex rounded-full border border-white/10 bg-night-950/35 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-ivory/70 backdrop-blur-sm">
+                      {mediaTitle(post)}
+                    </div>
+                    <div className="inline-flex rounded-full border border-white/10 bg-night-950/35 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-ivory/70 backdrop-blur-sm">
+                      Plein écran
                     </div>
                   </div>
-                </article>
+
+                  <div className="mt-auto flex items-end justify-between gap-4">
+                    <div className="max-w-[62%] space-y-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <AvatarImage
+                          candidates={[avatar, post.authorAvatar]}
+                          fallbackSeed={post.authorId}
+                          alt={displayName}
+                          className="h-12 w-12 rounded-full object-cover ring-2 ring-gold-400/35"
+                        />
+                        <div className="min-w-0">
+                          <Link
+                            to={`/u/${post.authorId}`}
+                            className="block truncate font-display text-lg text-gold-100 drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]"
+                          >
+                            {displayName}
+                          </Link>
+                          <Handle handle={displayHandle} size="xs" />
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {grade && <StreamerGradeBadge grade={grade} size="sm" />}
+                        <UserBadges
+                          role={profile?.role ?? getOfficial(post.authorId)?.role}
+                          creatureId={
+                            profile?.creature?.id ??
+                            author?.creatureId ??
+                            getOfficial(post.authorId)?.creatureId
+                          }
+                        />
+                        <span className="text-[11px] uppercase tracking-[0.22em] text-ivory/70">
+                          {formatRelative(post.createdAt)}
+                        </span>
+                      </div>
+                      <RichMentionText
+                        content={post.content}
+                        mentionsByHandle={mentionTargets}
+                        profileHref={(authorId) => `/u/${authorId}`}
+                        className="max-w-xl text-[15px] leading-6 text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.75)] sm:text-lg sm:leading-7"
+                      />
+                    </div>
+
+                    <div className="flex flex-col items-end gap-3">
+                      <FeedAction
+                        icon={<Heart className="h-5 w-5" fill={liked ? "currentColor" : "none"} />}
+                        label={liked ? "Aimé" : "Like"}
+                        active={liked}
+                        onClick={() => onLike(post.id)}
+                        count={reactionCount}
+                      />
+                      <FeedAction
+                        icon={<MessageCircle className="h-5 w-5" />}
+                        label="Com."
+                        onClick={() => onOpenComments(post.id)}
+                        count={post.comments.length}
+                      />
+                      <FeedAction
+                        icon={
+                          saved ? (
+                            <BookmarkCheck className="h-5 w-5" />
+                          ) : (
+                            <Bookmark className="h-5 w-5" />
+                          )
+                        }
+                        label={saved ? "Sauvé" : "Save"}
+                        active={saved}
+                        onClick={() => onSave(post.id)}
+                      />
+                      <FeedAction
+                        icon={<Share2 className="h-5 w-5" />}
+                        label="Partager"
+                        onClick={() => onShare(post)}
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
             </section>
           );
