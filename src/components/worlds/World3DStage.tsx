@@ -989,13 +989,17 @@ function createAvatar(player: World3DPlayer) {
 
 function createGround(district: World3DDistrictId) {
   const group = new THREE.Group();
-  const color = district === "observatory" ? 0x1e1b4b : district === "arcades" ? 0x064e5f : 0x14532d;
+  const color = district === "observatory" ? 0x171433 : district === "arcades" ? 0x053846 : 0x132f1f;
   const groundGeometry = new THREE.PlaneGeometry(WORLD_WIDTH + 8, WORLD_DEPTH + 8, 48, 40);
   const positions = groundGeometry.attributes.position;
   for (let index = 0; index < positions.count; index += 1) {
     const x = positions.getX(index);
     const y = positions.getY(index);
-    positions.setZ(index, terrainHeightAt(x, y, district));
+    const height = terrainHeightAt(x, y, district);
+    const centerPull = Math.max(0, 1 - Math.hypot(x, y) / 13);
+    const pathBand = Math.max(0, 1 - Math.abs(y) / 8.2) * Math.max(0, 1 - Math.abs(x) / 11.5);
+    const swell = Math.sin((x + y) * 0.28) * 0.08 + Math.cos(x * 0.18) * 0.05 + Math.sin(y * 0.21) * 0.06;
+    positions.setZ(index, height + centerPull * 0.75 + pathBand * 0.42 + swell);
   }
   groundGeometry.computeVertexNormals();
   const ground = new THREE.Mesh(
@@ -1011,33 +1015,71 @@ function createGround(district: World3DDistrictId) {
   ground.receiveShadow = true;
   group.add(ground);
 
-  const socialPlate = new THREE.Mesh(
-    new THREE.CircleGeometry(5.15, 72),
+  const moonRoad = new THREE.Mesh(
+    new THREE.RingGeometry(1.4, 7.6, 96, 1),
     new THREE.MeshStandardMaterial({
-      color: district === "observatory" ? 0x312e81 : district === "arcades" ? 0x0e7490 : 0x3f2b16,
-      roughness: 0.64,
-      metalness: 0.04,
+      color: district === "observatory" ? 0x818cf8 : district === "arcades" ? 0x38bdf8 : 0xfbbf24,
+      roughness: 0.58,
+      metalness: 0.08,
       transparent: true,
-      opacity: 0.84,
+      opacity: 0.22,
+    }),
+  );
+  moonRoad.rotation.x = -Math.PI / 2;
+  moonRoad.position.y = 0.042;
+  group.add(moonRoad);
+
+  const socialPlate = new THREE.Mesh(
+    new THREE.CircleGeometry(5.65, 72),
+    new THREE.MeshStandardMaterial({
+      color: district === "observatory" ? 0x312e81 : district === "arcades" ? 0x0f766e : 0x553c18,
+      roughness: 0.58,
+      metalness: 0.08,
+      transparent: true,
+      opacity: 0.9,
     }),
   );
   socialPlate.rotation.x = -Math.PI / 2;
-  socialPlate.position.y = 0.035;
+  socialPlate.position.y = 0.052;
   socialPlate.receiveShadow = true;
   group.add(socialPlate);
 
+  const socialGlow = new THREE.Mesh(
+    new THREE.CircleGeometry(7.9, 72),
+    new THREE.MeshBasicMaterial({
+      color: district === "observatory" ? 0x8b5cf6 : district === "arcades" ? 0x22d3ee : 0xf59e0b,
+      transparent: true,
+      opacity: 0.16,
+    }),
+  );
+  socialGlow.rotation.x = -Math.PI / 2;
+  socialGlow.position.y = 0.036;
+  group.add(socialGlow);
+
   const path = new THREE.Mesh(
-    new THREE.RingGeometry(2.5, 4.7, 88),
+    new THREE.RingGeometry(2.3, 4.95, 88),
     new THREE.MeshStandardMaterial({
       color: district === "observatory" ? 0x7c3aed : district === "arcades" ? 0x0891b2 : 0xb45309,
-      roughness: 0.72,
+      roughness: 0.66,
       transparent: true,
-      opacity: 0.62,
+      opacity: 0.74,
     }),
   );
   path.rotation.x = -Math.PI / 2;
-  path.position.y = 0.018;
+  path.position.y = 0.022;
   group.add(path);
+
+  const pathAccent = new THREE.Mesh(
+    new THREE.RingGeometry(1.45, 8.35, 96, 1),
+    new THREE.MeshBasicMaterial({
+      color: district === "observatory" ? 0xc4b5fd : district === "arcades" ? 0x67e8f9 : 0xfde68a,
+      transparent: true,
+      opacity: 0.08,
+    }),
+  );
+  pathAccent.rotation.x = -Math.PI / 2;
+  pathAccent.position.y = 0.027;
+  group.add(pathAccent);
 
   const ridgeMaterial = new THREE.MeshStandardMaterial({
     color: district === "observatory" ? 0x312e81 : district === "arcades" ? 0x155e75 : 0x365314,
@@ -1057,6 +1099,33 @@ function createGround(district: World3DDistrictId) {
     hill.receiveShadow = true;
     group.add(hill);
   });
+
+  const centerPavilion = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.15, 1.35, 0.28, 12),
+    new THREE.MeshStandardMaterial({
+      color: district === "observatory" ? 0x4338ca : district === "arcades" ? 0x0ea5e9 : 0xeab308,
+      emissive: district === "observatory" ? 0x1d4ed8 : district === "arcades" ? 0x0891b2 : 0x854d0e,
+      emissiveIntensity: 0.12,
+      roughness: 0.48,
+      metalness: 0.06,
+    }),
+  );
+  centerPavilion.position.set(0, 0.18, 0);
+  centerPavilion.castShadow = true;
+  centerPavilion.receiveShadow = true;
+  group.add(centerPavilion);
+
+  const centerLantern = new THREE.Mesh(
+    new THREE.SphereGeometry(0.42, 18, 14),
+    new THREE.MeshStandardMaterial({
+      color: district === "observatory" ? 0xc4b5fd : district === "arcades" ? 0x67e8f9 : 0xfbbf24,
+      emissive: district === "observatory" ? 0x8b5cf6 : district === "arcades" ? 0x06b6d4 : 0xf59e0b,
+      emissiveIntensity: 0.48,
+      roughness: 0.3,
+    }),
+  );
+  centerLantern.position.set(0, 1.1, 0);
+  group.add(centerLantern);
 
   return group;
 }
@@ -1085,6 +1154,33 @@ function createWorldProps(district: World3DDistrictId) {
     pillar.receiveShadow = true;
     group.add(pillar);
   });
+
+  const walkway = new THREE.Mesh(
+    new THREE.BoxGeometry(10.4, 0.08, 1.05),
+    new THREE.MeshStandardMaterial({
+      color: district === "observatory" ? 0x312e81 : district === "arcades" ? 0x155e75 : 0x7c2d12,
+      roughness: 0.7,
+      metalness: 0.04,
+    }),
+  );
+  walkway.position.set(0, 0.025, -1.3);
+  walkway.castShadow = true;
+  walkway.receiveShadow = true;
+  group.add(walkway);
+
+  const sidePad = new THREE.Mesh(
+    new THREE.CircleGeometry(1.6, 36),
+    new THREE.MeshStandardMaterial({
+      color: district === "observatory" ? 0x4338ca : district === "arcades" ? 0x0f766e : 0xa16207,
+      roughness: 0.62,
+      metalness: 0.05,
+      transparent: true,
+      opacity: 0.82,
+    }),
+  );
+  sidePad.rotation.x = -Math.PI / 2;
+  sidePad.position.set(-3.5, 0.04, 3.8);
+  group.add(sidePad);
 
   const rockMaterial = new THREE.MeshStandardMaterial({
     color: district === "observatory" ? 0x64748b : district === "arcades" ? 0x0f766e : 0x57534e,
@@ -1130,6 +1226,36 @@ function createWorldProps(district: World3DDistrictId) {
     bloom.position.set(x, 0.28, z);
     bloom.castShadow = true;
     group.add(bloom);
+  });
+
+  Array.from({ length: 6 }).forEach((_, index) => {
+    const x = -8.2 + index * 2.75;
+    const lantern = new THREE.Group();
+    const pole = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.05, 0.08, 1.48, 8),
+      new THREE.MeshStandardMaterial({
+        color: district === "observatory" ? 0xc4b5fd : district === "arcades" ? 0x67e8f9 : 0xfde68a,
+        roughness: 0.42,
+        metalness: 0.18,
+      }),
+    );
+    pole.position.y = 0.74;
+    pole.castShadow = true;
+    pole.receiveShadow = true;
+    lantern.add(pole);
+    const bulb = new THREE.Mesh(
+      new THREE.SphereGeometry(0.13, 16, 10),
+      new THREE.MeshStandardMaterial({
+        color: district === "observatory" ? 0xe9d5ff : district === "arcades" ? 0xa5f3fc : 0xfde68a,
+        emissive: district === "observatory" ? 0xa855f7 : district === "arcades" ? 0x06b6d4 : 0xfbbf24,
+        emissiveIntensity: 0.34,
+        roughness: 0.24,
+      }),
+    );
+    bulb.position.y = 1.5;
+    lantern.add(bulb);
+    lantern.position.set(x, 0, index % 2 === 0 ? 5.2 : -5.2);
+    group.add(lantern);
   });
 
   const treeTrunk = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.78 });
@@ -1211,6 +1337,18 @@ function createWorldProps(district: World3DDistrictId) {
     );
     dome.position.set(0, 0.7, -4.5);
     group.add(dome);
+    const arch = new THREE.Mesh(
+      new THREE.TorusGeometry(2.3, 0.18, 12, 48, Math.PI),
+      new THREE.MeshStandardMaterial({
+        color: 0x8b5cf6,
+        emissive: 0x6366f1,
+        emissiveIntensity: 0.14,
+        roughness: 0.42,
+      }),
+    );
+    arch.rotation.z = Math.PI / 2;
+    arch.position.set(0, 2.1, -6.1);
+    group.add(arch);
   }
 
   return group;
