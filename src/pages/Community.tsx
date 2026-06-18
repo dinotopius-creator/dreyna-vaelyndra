@@ -767,7 +767,7 @@ export function Community() {
       </div>
 
       <div className="h-full overflow-y-auto overflow-x-hidden pt-[4.75rem]">
-        <div className="mx-auto flex max-w-7xl flex-col gap-5 px-4 pb-8 sm:px-6">
+        <div className="mx-auto flex max-w-7xl flex-col gap-5 px-4 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:px-6 sm:pb-10 lg:pb-8">
           <CommunityContestBanner />
           {contestAwardedNotice && (
             <div className="rounded-2xl border border-emerald-300/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
