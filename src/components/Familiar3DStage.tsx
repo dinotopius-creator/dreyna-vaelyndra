@@ -7,8 +7,50 @@ interface Familiar3DStageProps {
   onTap?: () => void;
 }
 
+type FamiliarSpeciesProfile = {
+  bodyScale: [number, number, number];
+  headScale: [number, number, number];
+  earScale: [number, number, number];
+  earOffsetX: number;
+  earOffsetY: number;
+  tailOffset: [number, number, number];
+  tailLength: number;
+  pawHeight: number;
+  stride: number;
+  bounce: number;
+};
+
+const DEFAULT_SPECIES: FamiliarSpeciesProfile = {
+  bodyScale: [1.1, 0.86, 0.92],
+  headScale: [0.94, 1.02, 0.92],
+  earScale: [0.07, 0.18, 0.07],
+  earOffsetX: 0.14,
+  earOffsetY: 0.56,
+  tailOffset: [-0.17, 0.03, -0.1],
+  tailLength: 0.12,
+  pawHeight: 0.5,
+  stride: 12,
+  bounce: 3.2,
+};
+
+const FAMILIAR_SPECIES: Record<string, FamiliarSpeciesProfile> = {
+  elfe: { ...DEFAULT_SPECIES, bodyScale: [1.08, 0.84, 0.9], headScale: [0.92, 1.04, 0.9], tailLength: 0.08, earOffsetX: 0.16, earOffsetY: 0.58, stride: 11.5, bounce: 3.0 },
+  demon: { ...DEFAULT_SPECIES, bodyScale: [1.14, 0.9, 0.96], headScale: [0.96, 1.0, 0.94], earScale: [0.08, 0.22, 0.08], tailOffset: [-0.21, 0.08, -0.14], tailLength: 0.18, earOffsetX: 0.15, earOffsetY: 0.6, stride: 13.5, bounce: 3.6 },
+  humain: { ...DEFAULT_SPECIES, bodyScale: [1.04, 0.82, 0.88], headScale: [0.98, 1.0, 0.96], earScale: [0.06, 0.14, 0.06], tailLength: 0.05, pawHeight: 0.48, stride: 10.5, bounce: 2.6 },
+  dragon: { ...DEFAULT_SPECIES, bodyScale: [1.18, 0.9, 1.0], headScale: [0.98, 0.98, 0.98], earScale: [0.09, 0.16, 0.09], tailOffset: [-0.25, 0.04, -0.15], tailLength: 0.28, earOffsetX: 0.14, earOffsetY: 0.62, stride: 14.2, bounce: 3.8 },
+  esprit: { ...DEFAULT_SPECIES, bodyScale: [1.0, 0.8, 0.86], headScale: [1.0, 1.08, 0.92], earScale: [0.06, 0.2, 0.06], tailLength: 0.09, stride: 10.8, bounce: 3.1 },
+  gardien: { ...DEFAULT_SPECIES, bodyScale: [1.16, 0.92, 0.98], headScale: [0.96, 1.0, 0.95], earScale: [0.08, 0.16, 0.08], tailOffset: [-0.18, 0.03, -0.08], tailLength: 0.1, pawHeight: 0.53, stride: 11.8, bounce: 3.3 },
+  alien: { ...DEFAULT_SPECIES, bodyScale: [1.1, 0.78, 1.02], headScale: [1.02, 1.08, 0.96], earScale: [0.05, 0.16, 0.05], tailLength: 0.14, stride: 10.2, bounce: 2.8 },
+  fee: { ...DEFAULT_SPECIES, bodyScale: [0.98, 0.76, 0.84], headScale: [1.02, 1.08, 0.94], earScale: [0.06, 0.22, 0.06], tailLength: 0.06, stride: 10.4, bounce: 2.7 },
+  sirene: { ...DEFAULT_SPECIES, bodyScale: [1.08, 0.8, 0.9], headScale: [0.98, 1.04, 0.94], earScale: [0.06, 0.15, 0.06], tailLength: 0.22, tailOffset: [-0.22, 0.0, -0.16], stride: 11.2, bounce: 3.0 },
+};
+
 function colorForFamiliar(familiar: OwnedFamiliar) {
   return new THREE.Color(familiar.color || "#facc15");
+}
+
+function getSpeciesProfile(familiar: OwnedFamiliar): FamiliarSpeciesProfile {
+  return FAMILIAR_SPECIES[familiar.familiarId] ?? DEFAULT_SPECIES;
 }
 
 function createLeg(material: THREE.Material) {
@@ -40,11 +82,72 @@ function createTail(material: THREE.Material) {
   return tail;
 }
 
+function createNameTag(label: string, color: string) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 512;
+  canvas.height = 128;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "rgba(6, 10, 20, 0.72)";
+  roundRect(ctx, 18, 18, 476, 92, 28);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.18)";
+  ctx.lineWidth = 4;
+  roundRect(ctx, 18, 18, 476, 92, 28);
+  ctx.stroke();
+
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 18;
+  ctx.font = "bold 34px Inter, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "#fff7d6";
+  ctx.fillText(label, 256, 64);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.needsUpdate = true;
+  const material = new THREE.SpriteMaterial({
+    map: texture,
+    transparent: true,
+    depthWrite: false,
+    depthTest: false,
+  });
+  const sprite = new THREE.Sprite(material);
+  sprite.scale.set(1.6, 0.4, 1);
+  sprite.position.set(0, 1.02, 0);
+  sprite.userData.dispose = () => {
+    texture.dispose();
+    material.dispose();
+  };
+  return sprite;
+}
+
+function roundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+) {
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.arcTo(x + width, y, x + width, y + height, radius);
+  ctx.arcTo(x + width, y + height, x, y + height, radius);
+  ctx.arcTo(x, y + height, x, y, radius);
+  ctx.arcTo(x, y, x + width, y, radius);
+  ctx.closePath();
+}
+
 export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const [ready, setReady] = useState(false);
 
   const familiarColor = useMemo(() => colorForFamiliar(familiar), [familiar]);
+  const species = useMemo(() => getSpeciesProfile(familiar), [familiar]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -103,6 +206,12 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
 
     const root = new THREE.Group();
     root.position.set(0, -0.1, 0);
+    root.userData.bounds = {
+      minX: -1.3,
+      maxX: 1.3,
+      minZ: -0.95,
+      maxZ: 0.95,
+    };
 
     const shadow = new THREE.Mesh(
       new THREE.CircleGeometry(0.62, 24),
@@ -134,7 +243,7 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
     });
 
     const body = new THREE.Mesh(new THREE.SphereGeometry(0.42, 22, 18), bodyMaterial);
-    body.scale.set(1.1, 0.86, 0.92);
+    body.scale.set(...species.bodyScale);
     body.position.set(0, -0.18, 0);
     body.castShadow = true;
     root.add(body);
@@ -146,7 +255,7 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
     root.add(chest);
 
     const head = new THREE.Mesh(new THREE.SphereGeometry(0.29, 22, 18), bodyMaterial);
-    head.scale.set(0.94, 1.02, 0.92);
+    head.scale.set(...species.headScale);
     head.position.set(0, 0.3, 0.13);
     head.castShadow = true;
     root.add(head);
@@ -156,15 +265,21 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
     muzzle.position.set(0, 0.22, 0.36);
     root.add(muzzle);
 
-    const earLeft = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.18, 8), bodyMaterial);
+    const earLeft = new THREE.Mesh(
+      new THREE.ConeGeometry(species.earScale[0], species.earScale[1], 8),
+      bodyMaterial,
+    );
     earLeft.rotation.z = -0.35;
-    earLeft.position.set(-0.14, 0.56, 0.03);
+    earLeft.position.set(-species.earOffsetX, species.earOffsetY, 0.03);
     earLeft.castShadow = true;
     root.add(earLeft);
 
-    const earRight = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.18, 8), bodyMaterial);
+    const earRight = new THREE.Mesh(
+      new THREE.ConeGeometry(species.earScale[0], species.earScale[1], 8),
+      bodyMaterial,
+    );
     earRight.rotation.z = 0.35;
-    earRight.position.set(0.14, 0.56, 0.03);
+    earRight.position.set(species.earOffsetX, species.earOffsetY, 0.03);
     earRight.castShadow = true;
     root.add(earRight);
 
@@ -200,6 +315,8 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
     root.add(rightLeg);
 
     const tail = createTail(bodyMaterial);
+    tail.position.set(...species.tailOffset);
+    tail.scale.set(1, 1, species.tailLength / 0.12);
     root.add(tail);
 
     const collar = new THREE.Mesh(
@@ -214,6 +331,11 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
     collar.rotation.x = Math.PI / 2;
     collar.position.set(0, 0.03, 0.28);
     root.add(collar);
+
+    const nameTag = createNameTag(familiar.nickname || familiar.name, familiarColor.getStyle());
+    if (nameTag) {
+      root.add(nameTag);
+    }
 
     scene.add(root);
     setReady(true);
@@ -230,11 +352,11 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
 
     function pickDestination() {
       moveAngle = Math.random() * Math.PI * 2;
-      moveRadius = 0.75 + Math.random() * 0.85;
+      moveRadius = 0.35 + Math.random() * 0.82;
       desired.set(
-        Math.cos(moveAngle) * moveRadius,
+        THREE.MathUtils.clamp(Math.cos(moveAngle) * moveRadius, -0.9, 0.9),
         0,
-        Math.sin(moveAngle) * moveRadius * 0.78,
+        THREE.MathUtils.clamp(Math.sin(moveAngle) * moveRadius * 0.72, -0.7, 0.7),
       );
       pauseTimer = 0;
       isWalking = true;
@@ -287,6 +409,8 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
           isWalking = true;
           target.x += dx * dt * 0.55;
           target.z += dz * dt * 0.55;
+          target.x = THREE.MathUtils.clamp(target.x, root.userData.bounds.minX, root.userData.bounds.maxX);
+          target.z = THREE.MathUtils.clamp(target.z, root.userData.bounds.minZ, root.userData.bounds.maxZ);
           const angle = Math.atan2(dx, dz);
           root.rotation.y = THREE.MathUtils.lerp(
             root.rotation.y,
@@ -296,12 +420,20 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
         }
       }
 
-      root.position.x = THREE.MathUtils.lerp(root.position.x, target.x, 0.06);
-      root.position.z = THREE.MathUtils.lerp(root.position.z, target.z, 0.06);
-      root.position.y = Math.sin(roamTimer * 3.2) * 0.035;
+      root.position.x = THREE.MathUtils.clamp(
+        THREE.MathUtils.lerp(root.position.x, target.x, 0.06),
+        root.userData.bounds.minX,
+        root.userData.bounds.maxX,
+      );
+      root.position.z = THREE.MathUtils.clamp(
+        THREE.MathUtils.lerp(root.position.z, target.z, 0.06),
+        root.userData.bounds.minZ,
+        root.userData.bounds.maxZ,
+      );
+      root.position.y = Math.sin(roamTimer * species.bounce) * 0.028;
       root.rotation.z = Math.sin(roamTimer * 1.2) * 0.015;
 
-      const walk = isWalking ? Math.sin(roamTimer * 12) : Math.sin(roamTimer * 4) * 0.12;
+      const walk = isWalking ? Math.sin(roamTimer * species.stride) : Math.sin(roamTimer * 4) * 0.12;
       leftLeg.rotation.x = walk * 0.78;
       rightLeg.rotation.x = -walk * 0.78;
       leftLeg.position.y = -0.5 + Math.abs(walk) * 0.05;
@@ -310,6 +442,9 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
       head.rotation.x = Math.sin(roamTimer * 1.8) * 0.04 + (isWalking ? 0.02 : 0);
       head.rotation.y = Math.sin(roamTimer * 1.6) * 0.05;
       body.rotation.z = Math.sin(roamTimer * 2.4) * 0.012;
+      if (nameTag) {
+        nameTag.position.set(0, 1.02 + Math.sin(roamTimer * 2.2) * 0.04, 0);
+      }
       camera.lookAt(root.position.x, 0.55, root.position.z + 0.1);
 
       renderer.render(scene, camera);
@@ -324,6 +459,9 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
       renderer.domElement.removeEventListener("pointerdown", handlePointerDown);
       renderer.dispose();
       root.traverse((obj) => {
+        if (obj.userData.dispose) {
+          obj.userData.dispose();
+        }
         if (obj instanceof THREE.Mesh) {
           obj.geometry.dispose();
           const material = obj.material;
