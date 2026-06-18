@@ -28,6 +28,8 @@ interface Props {
   profileOverrides?: Record<string, UserProfileDto>;
 }
 
+type ThreadNode = Comment & { replies: ThreadNode[] };
+
 export function PostComments({
   postId,
   comments,
@@ -47,63 +49,61 @@ export function PostComments({
     [users],
   );
 
-  const topLevelComments = useMemo(
-    () => comments.filter((comment) => !comment.parentId),
-    [comments],
-  );
+  const threadedComments = useMemo(() => {
+    const nodes = new Map<string, ThreadNode>();
+    const roots: ThreadNode[] = [];
 
-  const repliesByParent = useMemo(
-    () =>
-      comments.reduce<Record<string, Comment[]>>((acc, comment) => {
-        if (!comment.parentId) return acc;
-        acc[comment.parentId] = [...(acc[comment.parentId] ?? []), comment];
-        return acc;
-      }, {}),
-    [comments],
-  );
+    comments.forEach((comment) => {
+      nodes.set(comment.id, { ...comment, replies: [] });
+    });
 
-  const flatThread = useMemo(() => {
-    const rows: Comment[] = [];
-    const seen = new Set<string>();
+    comments.forEach((comment) => {
+      const node = nodes.get(comment.id);
+      if (!node) return;
+      const parentId = comment.parentId ?? null;
+      const parent = parentId ? nodes.get(parentId) : null;
+      if (parent) parent.replies.push(node);
+      else roots.push(node);
+    });
 
-    const appendWithReplies = (comment: Comment) => {
-      if (seen.has(comment.id)) return;
-      seen.add(comment.id);
-      rows.push(comment);
-      (repliesByParent[comment.id] ?? []).forEach(appendWithReplies);
+    const sortTree = (items: ThreadNode[]) => {
+      items.sort(
+        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+      );
+      items.forEach((item) => sortTree(item.replies));
     };
+    sortTree(roots);
+    return roots;
+  }, [comments]);
 
-    topLevelComments.forEach(appendWithReplies);
-    comments.forEach(appendWithReplies);
-
-    return rows;
-  }, [comments, repliesByParent, topLevelComments]);
-  const mentionTargets = useMemo(() => {
-    return buildMentionLookup([
-      ...users.map((entry) => ({
-        userId: entry.id,
-        handle: entry.handle ?? null,
-        username: entry.username,
-      })),
-      ...Object.entries(profileOverrides).map(([userId, profile]) => ({
-        userId,
-        handle: profile.handle ?? null,
-        username: profile.username ?? null,
-      })),
-      ...comments.flatMap((comment) => [
-        {
-          userId: comment.authorId,
-          handle: comment.authorHandle ?? null,
-          username: comment.authorName,
-        },
-        {
-          userId: comment.replyToAuthorId ?? "",
-          handle: comment.replyToAuthorHandle ?? null,
-          username: comment.replyToAuthorName ?? null,
-        },
+  const mentionTargets = useMemo(
+    () =>
+      buildMentionLookup([
+        ...users.map((entry) => ({
+          userId: entry.id,
+          handle: entry.handle ?? null,
+          username: entry.username,
+        })),
+        ...Object.entries(profileOverrides).map(([userId, profile]) => ({
+          userId,
+          handle: profile.handle ?? null,
+          username: profile.username ?? null,
+        })),
+        ...comments.flatMap((comment) => [
+          {
+            userId: comment.authorId,
+            handle: comment.authorHandle ?? null,
+            username: comment.authorName,
+          },
+          {
+            userId: comment.replyToAuthorId ?? "",
+            handle: comment.replyToAuthorHandle ?? null,
+            username: comment.replyToAuthorName ?? null,
+          },
+        ]),
       ]),
-    ]);
-  }, [comments, profileOverrides, users]);
+    [comments, profileOverrides, users],
+  );
 
   function profileHref(authorId: string) {
     return `/u/${authorId}`;
@@ -220,10 +220,9 @@ export function PostComments({
     }
   }
 
-  function renderComment(comment: Comment) {
+  function renderThread(comment: ThreadNode, depth = 0) {
     const canDelete =
       isQueen || user?.id === comment.authorId || user?.id === postAuthorId;
-    const isReply = Boolean(comment.parentId || comment.replyToAuthorName);
     const profile = profileOverrides[comment.authorId];
     const displayName = profile?.username || comment.authorName;
     const displayHandle = profile?.handle ?? comment.authorHandle ?? null;
@@ -237,137 +236,130 @@ export function PostComments({
       : comment.replyToAuthorName;
 
     return (
-      <li
-        key={comment.id}
-        id={`comment-${comment.id}`}
-        className={`flex w-full min-w-0 items-start gap-2.5 rounded-3xl border border-white/8 px-3 py-2.5 sm:gap-3 ${
-          isReply ? "bg-night-950/18" : "bg-night-900/28"
-        }`}
-      >
-        <Link to={profileHref(comment.authorId)} className="shrink-0">
-          <AvatarImage
-            candidates={[displayAvatar, comment.authorAvatar]}
-            fallbackSeed={comment.authorId || comment.authorName}
-            alt={displayName}
-            className={`rounded-full object-cover ring-2 ring-royal-500/30 transition hover:ring-gold-400/60 ${
-              isReply ? "h-7 w-7 sm:h-8 sm:w-8" : "h-8 w-8 sm:h-9 sm:w-9"
-            }`}
-          />
-        </Link>
-
-        <div className="min-w-0 flex-1">
-          <div className="max-w-full rounded-2xl bg-night-900/45 px-3 py-2 ring-1 ring-white/5">
-            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-              <Link
-                to={profileHref(comment.authorId)}
-                className="min-w-0 max-w-full break-words font-display text-gold-200 transition hover:text-gold-300"
-              >
-                {displayName}
-              </Link>
-              {displayGrade && (
-                <StreamerGradeBadge grade={displayGrade} size="sm" />
-              )}
-              <UserBadges
-                role={profile?.role ?? getOfficial(comment.authorId)?.role}
-                creatureId={
-                  profile?.creature?.id ??
-                  usersById.get(comment.authorId)?.creatureId ??
-                  getOfficial(comment.authorId)?.creatureId
-                }
-              />
-              <Link
-                to={profileHref(comment.authorId)}
-                className="transition hover:opacity-80"
-              >
-                <Handle handle={displayHandle} size="xs" />
-              </Link>
-              <span className="text-[10px] text-ivory/40">
-                {formatRelative(comment.createdAt)}
-              </span>
-            </p>
-
-            {comment.replyToAuthorName && (
-              <p className="mt-1 inline-flex max-w-full items-center gap-1 rounded-full border border-gold-400/15 bg-gold-500/10 px-2 py-0.5 text-[11px] text-gold-300/85">
-                Réponse à{" "}
-                {comment.replyToAuthorId ? (
-                  <Link
-                    to={profileHref(comment.replyToAuthorId)}
-                    className="font-medium transition hover:text-gold-200"
-                  >
-                    {replyLabel}
-                  </Link>
-                ) : (
-                  <span className="font-medium">{replyLabel}</span>
-                )}
-              </p>
-            )}
-
-            <RichMentionText
-              content={comment.content}
-              mentionsByHandle={mentionTargets}
-              profileHref={profileHref}
-              className="mt-1 max-w-full whitespace-pre-wrap break-words text-sm leading-6 text-ivory/85 [overflow-wrap:anywhere]"
+      <li key={comment.id} id={`comment-${comment.id}`} className="space-y-2">
+        <div
+          className="flex w-full min-w-0 items-start gap-2.5 rounded-[24px] border border-white/8 bg-night-900/26 px-3 py-2.5 sm:gap-3"
+          style={{ marginLeft: `${Math.min(depth, 4) * 14}px` }}
+        >
+          <Link to={profileHref(comment.authorId)} className="shrink-0">
+            <AvatarImage
+              candidates={[displayAvatar, comment.authorAvatar]}
+              fallbackSeed={comment.authorId || comment.authorName}
+              alt={displayName}
+              className={`rounded-full object-cover ring-2 ring-royal-500/30 transition hover:ring-gold-400/60 ${
+                depth > 0 ? "h-7 w-7 sm:h-8 sm:w-8" : "h-8 w-8 sm:h-9 sm:w-9"
+              }`}
             />
-          </div>
+          </Link>
 
-          <div className="mt-1.5 flex flex-wrap items-center gap-2 px-1 text-[11px] text-ivory/50">
-            <button
-              type="button"
-              onClick={() => startReply(comment)}
-              className="inline-flex items-center gap-1 transition hover:text-gold-200"
-            >
-              <CornerUpLeft className="h-3.5 w-3.5" />
-              Répondre
-            </button>
-            {user && (
-              <button
-                type="button"
-                onClick={() => toggleLike(comment.id)}
-                className={`inline-flex items-center gap-1 transition ${
-                  comment.likes.includes(user.id)
-                    ? "text-rose-400"
-                    : "hover:text-rose-300"
-                }`}
-              >
-                <Heart
-                  className="h-3.5 w-3.5"
-                  fill={
-                    comment.likes.includes(user.id) ? "currentColor" : "none"
+          <div className="min-w-0 flex-1">
+            <div className="max-w-full rounded-2xl bg-night-900/55 px-3 py-2 ring-1 ring-white/5">
+              <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                <Link
+                  to={profileHref(comment.authorId)}
+                  className="min-w-0 max-w-full break-words font-display text-gold-200 transition hover:text-gold-300"
+                >
+                  {displayName}
+                </Link>
+                {displayGrade && <StreamerGradeBadge grade={displayGrade} size="sm" />}
+                <UserBadges
+                  role={profile?.role ?? getOfficial(comment.authorId)?.role}
+                  creatureId={
+                    profile?.creature?.id ??
+                    usersById.get(comment.authorId)?.creatureId ??
+                    getOfficial(comment.authorId)?.creatureId
                   }
                 />
-                {comment.likes.length > 0 && (
-                  <span>{comment.likes.length}</span>
-                )}
-              </button>
-            )}
-            {!user && comment.likes.length > 0 && (
-              <span className="inline-flex items-center gap-1">
-                <Heart className="h-3.5 w-3.5" />
-                {comment.likes.length}
-              </span>
-            )}
-            {user && user.id !== comment.authorId && (
-              <ReportButton
-                targetType="comment"
-                targetId={comment.id}
-                targetLabel={`Commentaire de ${displayName}`}
-                targetUrl={`/communaute#comment-${comment.id}`}
-                compact
-                className="text-ivory/30 hover:text-rose-300"
+                <Link to={profileHref(comment.authorId)} className="transition hover:opacity-80">
+                  <Handle handle={displayHandle} size="xs" />
+                </Link>
+                <span className="text-[10px] text-ivory/40">
+                  {formatRelative(comment.createdAt)}
+                </span>
+              </p>
+
+              {comment.replyToAuthorName && (
+                <p className="mt-1 inline-flex max-w-full items-center gap-1 rounded-full border border-gold-400/15 bg-gold-500/10 px-2 py-0.5 text-[11px] text-gold-300/85">
+                  Réponse à{" "}
+                  {comment.replyToAuthorId ? (
+                    <Link
+                      to={profileHref(comment.replyToAuthorId)}
+                      className="font-medium transition hover:text-gold-200"
+                    >
+                      {replyLabel}
+                    </Link>
+                  ) : (
+                    <span className="font-medium">{replyLabel}</span>
+                  )}
+                </p>
+              )}
+
+              <RichMentionText
+                content={comment.content}
+                mentionsByHandle={mentionTargets}
+                profileHref={profileHref}
+                className="mt-1 max-w-full whitespace-pre-wrap break-words text-sm leading-6 text-ivory/85 [overflow-wrap:anywhere]"
               />
-            )}
-            {canDelete && (
+            </div>
+
+            <div className="mt-1.5 flex flex-wrap items-center gap-2 px-1 text-[11px] text-ivory/50">
               <button
                 type="button"
-                onClick={() => remove(comment.id)}
-                className="text-ivory/30 transition hover:text-rose-300"
-                title="Supprimer ce commentaire"
+                onClick={() => startReply(comment)}
+                className="inline-flex items-center gap-1 transition hover:text-gold-200"
               >
-                <Trash2 className="h-3.5 w-3.5" />
+                <CornerUpLeft className="h-3.5 w-3.5" />
+                Répondre
               </button>
-            )}
+              {user && (
+                <button
+                  type="button"
+                  onClick={() => toggleLike(comment.id)}
+                  className={`inline-flex items-center gap-1 transition ${
+                    comment.likes.includes(user.id) ? "text-rose-400" : "hover:text-rose-300"
+                  }`}
+                >
+                  <Heart
+                    className="h-3.5 w-3.5"
+                    fill={comment.likes.includes(user.id) ? "currentColor" : "none"}
+                  />
+                  {comment.likes.length > 0 && <span>{comment.likes.length}</span>}
+                </button>
+              )}
+              {!user && comment.likes.length > 0 && (
+                <span className="inline-flex items-center gap-1">
+                  <Heart className="h-3.5 w-3.5" />
+                  {comment.likes.length}
+                </span>
+              )}
+              {user && user.id !== comment.authorId && (
+                <ReportButton
+                  targetType="comment"
+                  targetId={comment.id}
+                  targetLabel={`Commentaire de ${displayName}`}
+                  targetUrl={`/communaute#comment-${comment.id}`}
+                  compact
+                  className="text-ivory/30 hover:text-rose-300"
+                />
+              )}
+              {canDelete && (
+                <button
+                  type="button"
+                  onClick={() => remove(comment.id)}
+                  className="text-ivory/30 transition hover:text-rose-300"
+                  title="Supprimer ce commentaire"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
           </div>
         </div>
+        {comment.replies?.length > 0 && (
+          <ul className="space-y-2">
+            {comment.replies.map((reply) => renderThread(reply, depth + 1))}
+          </ul>
+        )}
       </li>
     );
   }
@@ -386,9 +378,7 @@ export function PostComments({
         </div>
       )}
 
-      <ul className="space-y-3 overflow-x-hidden">
-        {flatThread.map((comment) => renderComment(comment))}
-      </ul>
+      <ul className="space-y-3 overflow-x-hidden">{threadedComments.map((comment) => renderThread(comment))}</ul>
 
       <form
         onSubmit={submit}
@@ -433,11 +423,7 @@ export function PostComments({
               className="glass-input min-h-11 flex-1 resize-none py-2.5 [overflow-wrap:anywhere]"
               disabled={!user}
             />
-            <button
-              type="submit"
-              className="btn-gold min-h-11 px-4"
-              disabled={!user || !draft.trim() || posting}
-            >
+            <button type="submit" className="btn-gold min-h-11 px-4" disabled={!user || !draft.trim() || posting}>
               <Send className="h-3.5 w-3.5" />
             </button>
           </div>
