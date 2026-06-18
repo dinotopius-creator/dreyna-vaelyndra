@@ -3,6 +3,8 @@
 This branch does not import copyrighted avatar assets from third-party games or closed platforms.
 The goal is to keep Vaelyndra legally safe while moving toward a more premium humanoid look.
 
+The current implementation is still procedural, but it now carries an explicit compatibility contract for a future humanoid GLB/VRM base model. That lets us switch the avatar body without deleting purchased items or rewriting the profile/world avatar flow.
+
 ## Verified legal sources
 
 ### Quaternius
@@ -49,6 +51,7 @@ Reference:
 - Use the current procedural humanoid renderer as the primary implementation until a fully licensed premium GLB/VRM pack is approved.
 - Treat third-party assets as per-item legal reviews, not as bulk imports.
 - Avoid importing any protected game character, skin, or copyrighted avatar.
+- Prefer future premium humanoid assets with explicit commercial rights and clear attachment slots for head, face, hair, torso, hands, legs, feet, outfit, accessory, and aura.
 
 ## Asset policy
 
@@ -56,4 +59,11 @@ Reference:
 - No Fortnite, Roblox, ZEPETO, anime, or other protected characters.
 - No asset with unclear commercial rights.
 - No asset without a clear attribution/modification/redistribution answer.
+- No migration that silently replaces purchased cosmetics with incompatible placeholders.
 
+## Current compatibility contract
+
+- `procedural-premium` is the current safe runtime fallback.
+- `premium-humanoid` is the target slot for the future real 3D base model.
+- Existing avatar URLs remain readable during migration.
+- Purchased cosmetics must map into compatibility slots instead of being deleted.
