@@ -368,50 +368,50 @@ export function FamiliarEnclosure() {
               <motion.button
                 type="button"
                 onClick={tapFamiliar}
-                className="absolute left-[33%] top-[31%] z-20 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center focus:outline-none sm:left-[31%] sm:top-[29%]"
+                className="absolute left-[35%] top-[29%] z-20 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center focus:outline-none sm:left-[33%] sm:top-[27%]"
                 style={{ color: active.color }}
                 animate={{
-                  y: [0, -16, 0, 14, 0],
-                  x: [0, -12, 0, 12, 0],
-                  rotate: [0, 1.2, 0, -1.2, 0],
+                  y: [0, -28, 0, 22, 0],
+                  x: [0, -22, 0, 22, 0],
+                  rotate: [0, 1.6, 0, -1.6, 0],
                 }}
-                transition={{ duration: 8.2, repeat: Infinity, ease: "easeInOut" }}
+                transition={{ duration: 9.4, repeat: Infinity, ease: "easeInOut" }}
               >
                 <AffectionHearts
                   hearts={affection.affectionHearts}
                   pulseHeart={heartPulse}
                 />
-                <div className="relative flex h-[300px] w-[300px] items-center justify-center overflow-visible sm:h-[350px] sm:w-[350px]">
+                <div className="relative flex h-[250px] w-[250px] items-center justify-center overflow-visible sm:h-[290px] sm:w-[290px]">
                   <motion.div
-                    className="absolute -top-1 left-1/2 z-30 -translate-x-1/2 rounded-full border border-white/10 bg-night-950/80 px-3 py-1 text-[11px] text-ivory/80 shadow-[0_10px_22px_rgba(0,0,0,0.28)] backdrop-blur"
-                    animate={{ y: [0, -5, 0] }}
-                    transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
+                    className="absolute -top-3 left-1/2 z-30 -translate-x-1/2 rounded-[999px] border border-white/10 bg-night-950/82 px-3 py-1 text-[10px] text-ivory/80 shadow-[0_10px_22px_rgba(0,0,0,0.28)] backdrop-blur"
+                    animate={{ y: [0, -6, 0] }}
+                    transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
                     aria-label={speechMessage}
                   >
                     {speechMessage}
                   </motion.div>
                   <motion.div
-                    className="absolute inset-0 rounded-[40px] border border-white/10 bg-night-950/35 backdrop-blur-[2px]"
+                    className="absolute inset-[12px] rounded-[32px] border border-white/10 bg-night-950/30 backdrop-blur-[2px]"
                     animate={{ scale: [1, 1.02, 1], opacity: [0.9, 1, 0.9] }}
                     transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut" }}
                     aria-hidden
                   />
                   <motion.div
                     className="relative z-10"
-                    animate={{ y: [0, -12, 0, 10, 0], x: [0, -6, 0, 6, 0] }}
-                    transition={{ duration: 6.4, repeat: Infinity, ease: "easeInOut" }}
+                    animate={{ y: [0, -18, 0, 16, 0], x: [0, -8, 0, 8, 0] }}
+                    transition={{ duration: 7.2, repeat: Infinity, ease: "easeInOut" }}
                   >
                     <FamiliarPortrait
                       familiar={active}
                       size="lg"
                       animated
                       showFrame
-                      className="scale-[1.06] sm:scale-[1.12]"
+                      className="scale-[0.98] sm:scale-[1.03]"
                     />
                   </motion.div>
                   <FeedHeartBurst burstId={feedBurstId} />
                 </div>
-                <div className="mt-1 rounded-full border border-white/10 bg-night-950/72 px-3 py-1 text-center text-xs text-ivory/80 backdrop-blur">
+                <div className="mt-1 rounded-full border border-white/10 bg-night-950/72 px-3 py-1 text-center text-[11px] text-ivory/80 backdrop-blur">
                   {active.nickname || active.name}
                 </div>
               </motion.button>
