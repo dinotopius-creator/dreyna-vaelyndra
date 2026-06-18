@@ -296,7 +296,7 @@ export function CommunityImmersiveFeed({
       </div>
 
       <div
-        className="social-feed-scroll h-[calc(100dvh-88px)] min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain scroll-smooth snap-y snap-mandatory touch-pan-y"
+        className="social-feed-scroll h-[calc(100dvh-84px)] min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain scroll-smooth snap-y snap-mandatory touch-pan-y"
         style={{ WebkitOverflowScrolling: "touch" }}
       >
         {feedEntries.length === 0 && activeTab === "following" ? (
@@ -311,9 +311,12 @@ export function CommunityImmersiveFeed({
         {feedEntries.map((entry) => {
           if (entry.kind === "news") {
             return (
-              <section key={entry.id} className="h-[calc(100dvh-88px)] snap-start px-3 py-4 sm:px-5">
-                <div className="mx-auto flex h-full max-w-3xl items-center">
-                  <div className="panel-app w-full overflow-hidden p-5 sm:p-7">
+              <section
+                key={entry.id}
+                className="h-[calc(100dvh-84px)] snap-start px-0 py-0"
+              >
+                <div className="mx-auto flex h-full w-full max-w-7xl items-center px-0 sm:px-3">
+                  <div className="panel-app w-full overflow-hidden p-4 sm:p-7">
                     <div className="inline-flex items-center gap-2 rounded-full border border-gold-400/20 bg-gold-500/10 px-3 py-1 text-[11px] uppercase tracking-[0.26em] text-gold-200">
                       <Sparkles className="h-3.5 w-3.5" />
                       Actualité
@@ -388,10 +391,10 @@ export function CommunityImmersiveFeed({
               <section
                 key={post.id}
                 id={`post-${post.id}`}
-                className="h-[calc(100dvh-88px)] snap-start px-3 py-4 sm:px-5"
+                className="h-[calc(100dvh-84px)] snap-start px-0 py-0"
               >
-                <div className="mx-auto flex h-full max-w-3xl items-stretch">
-                  <article className="panel-app relative flex w-full overflow-hidden rounded-[28px] border border-white/8 bg-night-950/80 p-4 shadow-[0_30px_60px_rgba(0,0,0,0.38)] sm:p-6">
+                <div className="mx-auto flex h-full w-full max-w-7xl items-stretch px-0 sm:px-3">
+                  <article className="panel-app relative flex h-full w-full overflow-hidden rounded-none border-0 bg-night-950/80 p-4 shadow-[0_30px_60px_rgba(0,0,0,0.38)] sm:rounded-[28px] sm:border sm:border-white/8 sm:p-6">
                     <div className="relative flex w-full flex-col justify-between">
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -478,7 +481,11 @@ export function CommunityImmersiveFeed({
           }
 
           return (
-            <section key={post.id} id={`post-${post.id}`} className="h-[calc(100dvh-88px)] snap-start px-0 py-0">
+            <section
+              key={post.id}
+              id={`post-${post.id}`}
+              className="h-[calc(100dvh-84px)] snap-start px-0 py-0"
+            >
               <div
                 className="relative h-full w-full overflow-hidden"
                 onPointerDown={(event) => {
