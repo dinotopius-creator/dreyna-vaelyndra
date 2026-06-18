@@ -158,6 +158,7 @@ interface WorldHotspot {
   reward: number;
   glyph: string;
   resonance: string;
+  kind?: WorldCuteInteractionKind | "inspect";
 }
 
 interface WorldAmbientEvent {
@@ -183,7 +184,9 @@ type WorldCuteInteractionKind =
   | "hug"
   | "applaud"
   | "dance"
-  | "lueur";
+  | "lueur"
+  | "sit"
+  | "swing";
 
 const WORLD_ID = "main";
 const WORLD_LUEUR_DAILY_CAP = 90;
@@ -301,6 +304,21 @@ const DISTRICT_HOTSPOTS: Record<DistrictId, WorldHotspot[]> = {
       reward: 5,
       glyph: "F",
       resonance: "Le cercle d'eau renvoie une benediction chaude sur toute la place.",
+      kind: "inspect",
+    },
+    {
+      id: "place-bench",
+      district: "place",
+      title: "Banc des veilleurs",
+      hint: "La pierre semble inviter au repos.",
+      description: "Un banc discret sous la lumière douce du soir.",
+      x: 58,
+      y: 58,
+      radius: 9,
+      reward: 2,
+      glyph: "B",
+      resonance: "Les gravures du banc réchauffent doucement la place.",
+      kind: "sit",
     },
     {
       id: "place-garden",
@@ -314,6 +332,7 @@ const DISTRICT_HOTSPOTS: Record<DistrictId, WorldHotspot[]> = {
       reward: 4,
       glyph: "R",
       resonance: "Les petales se soulevent puis laissent tomber des poussières d'aube.",
+      kind: "inspect",
     },
   ],
   arcades: [
@@ -329,6 +348,7 @@ const DISTRICT_HOTSPOTS: Record<DistrictId, WorldHotspot[]> = {
       reward: 5,
       glyph: "M",
       resonance: "Les vitrines se synchronisent et allument la galerie pendant quelques secondes.",
+      kind: "inspect",
     },
     {
       id: "arcades-workbench",
@@ -342,6 +362,21 @@ const DISTRICT_HOTSPOTS: Record<DistrictId, WorldHotspot[]> = {
       reward: 4,
       glyph: "A",
       resonance: "Une pulsation cyan traverse les panneaux et réveille des lueurs de vitrine.",
+      kind: "inspect",
+    },
+    {
+      id: "arcades-swing",
+      district: "arcades",
+      title: "Balançoire néon",
+      hint: "Elle bouge si quelqu'un s'y installe.",
+      description: "Une balançoire légère installée près du couloir principal.",
+      x: 70,
+      y: 58,
+      radius: 10,
+      reward: 2,
+      glyph: "S",
+      resonance: "La structure néon se met à osciller doucement.",
+      kind: "swing",
     },
   ],
   observatory: [
@@ -357,6 +392,7 @@ const DISTRICT_HOTSPOTS: Record<DistrictId, WorldHotspot[]> = {
       reward: 6,
       glyph: "L",
       resonance: "Le dôme reflète la lune et fait pleuvoir quelques éclats rares.",
+      kind: "inspect",
     },
     {
       id: "observatory-rail",
@@ -370,6 +406,7 @@ const DISTRICT_HOTSPOTS: Record<DistrictId, WorldHotspot[]> = {
       reward: 4,
       glyph: "C",
       resonance: "Une trame froide traverse le balcon et réveille la bordure du ciel.",
+      kind: "inspect",
     },
   ],
 };
@@ -495,6 +532,18 @@ const WORLD_INTERACTION_META: Record<
     emoji: "🪄",
     toast: "Petite lueur envoyée.",
     copy: (actor, target) => `${actor} envoie une petite lueur scintillante a ${target}.`,
+  },
+  sit: {
+    label: "S'asseoir",
+    emoji: "🪑",
+    toast: "Position assise activée.",
+    copy: (actor, target) => `${actor} s'installe tranquillement avec ${target}.`,
+  },
+  swing: {
+    label: "Se balancer",
+    emoji: "🌙",
+    toast: "Balancement activé.",
+    copy: (actor, target) => `${actor} se balance doucement près de ${target}.`,
   },
 };
 
@@ -1375,6 +1424,13 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
   function triggerWorld3DHotspot(hotspotId: string) {
     const hotspot = districtHotspots.find((entry) => entry.id === hotspotId);
     if (!hotspot) return;
+    if (hotspot.kind && hotspot.kind !== "inspect") {
+      const selfId = user?.id ?? selectedMember?.member.id ?? hotspot.id;
+      const actor = user?.username ?? "Visiteur";
+      void sendWorldInteraction(hotspot.kind, selfId, hotspot.title, { messageTarget: hotspot.title });
+      addWorldMessage("Monde", `${actor} utilise ${hotspot.title.toLowerCase()}.`);
+      return;
+    }
     triggerHotspot(hotspot);
   }
 
@@ -1439,23 +1495,26 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
     }
   }
 
-  async function sendCuteAction(kind: WorldCuteInteractionKind) {
-    if (!selectedMember) return;
-    const target = selectedMember.profile?.username ?? selectedMember.member.username;
+  async function sendWorldInteraction(
+    kind: WorldCuteInteractionKind,
+    targetUserId: string,
+    targetLabel: string,
+    options?: { messageTarget?: string },
+  ) {
     const actor = user?.username ?? "Visiteur";
     const meta = WORLD_INTERACTION_META[kind];
     const expiresAt = Date.now() + 5200;
-    const userIds = Array.from(new Set([user?.id, selectedMember.member.id].filter(Boolean))) as string[];
+    const userIds = Array.from(new Set([user?.id, targetUserId].filter(Boolean))) as string[];
     setWorldEmotePulse({ kind, userIds, expiresAt });
     setMemberActionBusy(kind);
     try {
       await apiSendWorldInteraction(WORLD_ID, {
-        targetUserId: selectedMember.member.id,
+        targetUserId,
         kind,
       });
       await refreshWorldPresence();
-      addWorldMessage("Lien social", meta.copy(actor, target));
-      notify(`${meta.toast} ${target}.`, "success");
+      addWorldMessage("Lien social", meta.copy(actor, options?.messageTarget ?? targetLabel));
+      notify(`${meta.toast} ${targetLabel}.`, "success");
     } catch (err) {
       if (err instanceof ApiError && err.status === 429) {
         notify("Interaction trop rapide. Attends un instant.", "info");
@@ -1465,6 +1524,12 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
     } finally {
       setMemberActionBusy(null);
     }
+  }
+
+  async function sendCuteAction(kind: WorldCuteInteractionKind) {
+    if (!selectedMember) return;
+    const target = selectedMember.profile?.username ?? selectedMember.member.username;
+    await sendWorldInteraction(kind, selectedMember.member.id, target);
   }
 
   async function requestPrivateVoice(targetUserId: string) {
@@ -2245,6 +2310,27 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
                         </button>
                       </div>
                     </div>
+                  )}
+                  {nearbyHotspot && (
+                    <button
+                      type="button"
+                      onClick={() => triggerWorld3DHotspot(nearbyHotspot.id)}
+                      className={`fixed z-[92] inline-flex items-center gap-2 rounded-full border border-white/12 bg-night-950/90 px-4 py-2 text-sm text-ivory/90 shadow-[0_20px_50px_rgba(0,0,0,0.35)] backdrop-blur-xl transition hover:border-gold-300/40 hover:text-gold-100 active:scale-95 ${
+                        worldLandscapeMode
+                          ? "left-[calc(50vw-7rem)] bottom-[calc(0.95rem+env(safe-area-inset-bottom))] max-w-[14rem]"
+                          : "left-[calc(50vw-6.75rem)] bottom-[calc(0.95rem+env(safe-area-inset-bottom))] max-w-[13.5rem]"
+                      }`}
+                      aria-label={nearbyHotspot.kind && nearbyHotspot.kind !== "inspect" ? nearbyHotspot.title : `Interagir avec ${nearbyHotspot.title}`}
+                    >
+                      <Sparkles className="h-4 w-4 text-gold-300" />
+                      <span className="truncate">
+                        {nearbyHotspot.kind === "sit"
+                          ? "S'asseoir"
+                          : nearbyHotspot.kind === "swing"
+                            ? "Se balancer"
+                            : "Interagir"}
+                      </span>
+                    </button>
                   )}
                 </>
               )}
