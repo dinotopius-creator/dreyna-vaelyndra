@@ -467,6 +467,31 @@ body.vaelyndra-world-game-open {
       background-color: transparent;
     }
   }
+
+  @keyframes socialLikeBurst {
+    0% {
+      opacity: 0;
+      transform: scale(0.55);
+      filter: blur(2px);
+    }
+    14% {
+      opacity: 1;
+      transform: scale(1.08);
+      filter: blur(0);
+    }
+    30% {
+      transform: scale(0.98);
+    }
+    55% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    100% {
+      opacity: 0;
+      transform: scale(1.18);
+      filter: blur(1px);
+    }
+  }
 }
 
 @layer utilities {

@@ -1,4 +1,4 @@
-import { useMemo, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   Bookmark,
@@ -137,13 +137,43 @@ export function CommunityImmersiveFeed({
 }: CommunityImmersiveFeedProps) {
   const location = useLocation();
   const navigate = useNavigate();
+  const [likeBurst, setLikeBurst] = useState<{ postId: string; token: number } | null>(null);
+  const tapDownRef = useRef<{ postId: string; x: number; y: number; time: number } | null>(null);
+  const lastTapRef = useRef<{ postId: string | null; time: number } | null>(null);
+  const burstTimerRef = useRef<number | null>(null);
   const fullscreenSocialMode =
     location.pathname === "/social/play" || location.pathname === "/communaute";
-  const handleDoubleClick = (postId: string) => (event: MouseEvent) => {
-    event.preventDefault();
-    event.stopPropagation();
-    onLike(postId);
-  };
+  useEffect(() => {
+    return () => {
+      if (burstTimerRef.current) window.clearTimeout(burstTimerRef.current);
+    };
+  }, []);
+
+  function triggerLikeBurst(postId: string) {
+    setLikeBurst((current) => ({ postId, token: (current?.token ?? 0) + 1 }));
+    if (burstTimerRef.current) window.clearTimeout(burstTimerRef.current);
+    burstTimerRef.current = window.setTimeout(() => {
+      setLikeBurst((current) => (current?.postId === postId ? null : current));
+      burstTimerRef.current = null;
+    }, 2000);
+  }
+
+  function handleMediaTap(postId: string, liked: boolean) {
+    const now = Date.now();
+    const last = lastTapRef.current;
+    if (last && last.postId === postId && now - last.time <= 320) {
+      lastTapRef.current = null;
+      triggerLikeBurst(postId);
+      if (!liked) onLike(postId);
+      return;
+    }
+    lastTapRef.current = { postId, time: now };
+    window.setTimeout(() => {
+      if (lastTapRef.current?.postId === postId && now === lastTapRef.current.time) {
+        lastTapRef.current = null;
+      }
+    }, 340);
+  }
 
   const filteredPosts = useMemo(() => {
     if (activeTab === "following") {
@@ -361,10 +391,7 @@ export function CommunityImmersiveFeed({
                 className="h-[calc(100dvh-88px)] snap-start px-3 py-4 sm:px-5"
               >
                 <div className="mx-auto flex h-full max-w-3xl items-stretch">
-                  <article
-                    className="panel-app relative flex w-full overflow-hidden rounded-[28px] border border-white/8 bg-night-950/80 p-4 shadow-[0_30px_60px_rgba(0,0,0,0.38)] sm:p-6"
-                    onDoubleClick={handleDoubleClick(post.id)}
-                  >
+                  <article className="panel-app relative flex w-full overflow-hidden rounded-[28px] border border-white/8 bg-night-950/80 p-4 shadow-[0_30px_60px_rgba(0,0,0,0.38)] sm:p-6">
                     <div className="relative flex w-full flex-col justify-between">
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -454,7 +481,33 @@ export function CommunityImmersiveFeed({
             <section key={post.id} id={`post-${post.id}`} className="h-[calc(100dvh-88px)] snap-start px-0 py-0">
               <div
                 className="relative h-full w-full overflow-hidden"
-                onDoubleClick={handleDoubleClick(post.id)}
+                onPointerDown={(event) => {
+                  if (event.button !== 0 && event.pointerType === "mouse") return;
+                  tapDownRef.current = {
+                    postId: post.id,
+                    x: event.clientX,
+                    y: event.clientY,
+                    time: Date.now(),
+                  };
+                }}
+                onPointerUp={(event) => {
+                  const down = tapDownRef.current;
+                  if (!down || down.postId !== post.id) return;
+                  tapDownRef.current = null;
+                  const travel = Math.hypot(event.clientX - down.x, event.clientY - down.y);
+                  const heldFor = Date.now() - down.time;
+                  if (travel > 14 || heldFor > 650) return;
+                  handleMediaTap(post.id, liked);
+                }}
+                onPointerCancel={() => {
+                  tapDownRef.current = null;
+                }}
+                onDoubleClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  triggerLikeBurst(post.id);
+                  if (!liked) onLike(post.id);
+                }}
               >
                 <div className="absolute inset-0">
                   {video?.kind ? (
@@ -479,6 +532,18 @@ export function CommunityImmersiveFeed({
                 </div>
 
                 <div className="absolute inset-0 bg-gradient-to-t from-night-950 via-night-950/20 to-night-950/35" />
+
+                {likeBurst?.postId === post.id && (
+                  <div
+                    key={likeBurst.token}
+                    className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center"
+                  >
+                    <div className="flex flex-col items-center gap-2 rounded-full border border-white/10 bg-night-950/35 px-6 py-5 text-center text-white shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-md animate-[socialLikeBurst_2s_ease-out_forwards]">
+                      <Heart className="h-20 w-20 text-rose-400 drop-shadow-[0_0_18px_rgba(244,63,94,0.45)]" fill="currentColor" />
+                      <span className="text-sm font-semibold text-white/92">Tu as aimé le post</span>
+                    </div>
+                  </div>
+                )}
 
                 <div className="absolute inset-0 flex flex-col justify-between px-3 py-4 sm:px-5 sm:py-5">
                   <div className="flex items-start justify-between gap-3">
