@@ -1214,9 +1214,9 @@ function createWorldProps(district: World3DDistrictId) {
     group.add(rock);
   });
 
-  Array.from({ length: 22 }).forEach((_, index) => {
+  Array.from({ length: 12 }).forEach((_, index) => {
     const angle = index * 1.71;
-    const radius = 5.7 + (index % 5) * 0.72;
+    const radius = 5.85 + (index % 4) * 0.68;
     const x = Math.cos(angle) * radius;
     const z = Math.sin(angle) * (radius * 0.68);
     const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.018, 0.24, 5), leafMaterial);
@@ -1228,7 +1228,7 @@ function createWorldProps(district: World3DDistrictId) {
     group.add(bloom);
   });
 
-  Array.from({ length: 6 }).forEach((_, index) => {
+  Array.from({ length: 4 }).forEach((_, index) => {
     const x = -8.2 + index * 2.75;
     const lantern = new THREE.Group();
     const pole = new THREE.Mesh(

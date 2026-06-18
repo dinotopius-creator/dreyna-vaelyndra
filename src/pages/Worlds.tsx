@@ -824,7 +824,7 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
         entry,
         distance: distancePct(position.x, position.y, entry.x, entry.y),
       }))
-      .filter((item) => item.distance <= item.entry.radius + 4)
+      .filter((item) => item.distance <= item.entry.radius + 5.5)
       .sort((a, b) => a.distance - b.distance)[0]?.entry ?? null;
   }, [districtHotspots, position.x, position.y]);
 
@@ -1704,7 +1704,7 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
 
   function triggerHotspot(hotspot: WorldHotspot) {
     const distance = distancePct(position.x, position.y, hotspot.x, hotspot.y);
-    if (distance > hotspot.radius + 4) {
+    if (distance > hotspot.radius + 5.5) {
       notify(`Approche-toi de ${hotspot.title.toLowerCase()} pour l'activer.`, "info");
       return;
     }
