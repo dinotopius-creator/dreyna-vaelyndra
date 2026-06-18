@@ -11,9 +11,12 @@ import {
   Sparkles,
   TrendingUp,
   Users,
+  Search,
+  X,
 } from "lucide-react";
 import clsx from "clsx";
 import { AvatarImage } from "./AvatarImage";
+import { MemberSearch } from "./MemberSearch";
 import { Handle } from "./Handle";
 import { RichMentionText, buildMentionLookup } from "./RichMentionText";
 import { UserBadges } from "./UserBadges";
@@ -139,6 +142,7 @@ export function CommunityImmersiveFeed({
   const location = useLocation();
   const navigate = useNavigate();
   const [likeBurst, setLikeBurst] = useState<{ postId: string; token: number } | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
   const tapDownRef = useRef<{ postId: string; x: number; y: number; time: number } | null>(null);
   const lastTapRef = useRef<{ postId: string | null; time: number } | null>(null);
   const burstTimerRef = useRef<number | null>(null);
@@ -250,38 +254,9 @@ export function CommunityImmersiveFeed({
 
   return (
     <div className="relative h-[100dvh] min-h-0 overflow-hidden bg-night-950 text-ivory">
-      <div className="absolute inset-x-0 top-0 z-30 border-b border-white/8 bg-night-950/72 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-3 pb-2 pt-3 sm:px-5">
-          <div className="flex items-center gap-3">
-            {fullscreenSocialMode && (
-              <button
-                type="button"
-                onClick={() => navigate(-1)}
-                className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-ivory/70 transition hover:border-gold-400/40 hover:text-gold-100"
-                aria-label="Quitter le Social"
-              >
-                ←
-              </button>
-            )}
-            <div>
-              <p className="text-[10px] uppercase tracking-[0.32em] text-gold-300/80">
-                Communauté
-              </p>
-              <h1 className="font-display text-2xl text-gold-100">Feed immersif</h1>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={onOpenComposer}
-            className="inline-flex min-h-11 items-center gap-2 rounded-full bg-gold-shine px-4 py-2.5 text-sm font-semibold text-night-900"
-          >
-            <Plus className="h-4 w-4" />
-            Créer
-          </button>
-        </div>
-
-        <div className="mx-auto flex max-w-7xl gap-2 overflow-x-auto px-3 pb-3 sm:px-5">
+      <div className="absolute inset-x-0 top-0 z-30 border-b border-white/8 bg-night-950/68 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-3 pt-3 sm:px-5">
+          <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto pb-2">
           {(Object.keys(TAB_META) as CommunityTab[]).map((tab) => {
             const Icon = TAB_META[tab].icon;
             const active = tab === activeTab;
@@ -296,12 +271,42 @@ export function CommunityImmersiveFeed({
                     ? "border-gold-400/60 bg-gold-500/15 text-gold-200 shadow-[0_0_0_1px_rgba(250,204,21,0.12)]"
                     : "border-white/10 bg-white/5 text-ivory/70 hover:border-gold-400/30 hover:text-gold-100",
                 )}
-              >
+                >
                 <Icon className="h-4 w-4" />
                 {TAB_META[tab].label}
               </button>
             );
           })}
+          </div>
+
+          <div className="flex items-center gap-2 pb-2">
+            <button
+              type="button"
+              onClick={() => setSearchOpen((value) => !value)}
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-ivory/75 transition hover:border-gold-400/40 hover:text-gold-100"
+              aria-label="Rechercher"
+            >
+              <Search className="h-5 w-5" />
+            </button>
+            {fullscreenSocialMode && (
+              <button
+                type="button"
+                onClick={() => navigate(-1)}
+                className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-ivory/75 transition hover:border-gold-400/40 hover:text-gold-100"
+                aria-label="Quitter le Social"
+              >
+                ←
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onOpenComposer}
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-gold-shine text-night-900 shadow-[0_0_0_1px_rgba(255,255,255,0.08)]"
+              aria-label="Créer"
+            >
+              <Plus className="h-5 w-5" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -309,7 +314,7 @@ export function CommunityImmersiveFeed({
         className="social-feed-scroll h-full min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain scroll-smooth snap-y snap-mandatory touch-pan-y"
         style={{
           WebkitOverflowScrolling: "touch",
-          paddingTop: "5.25rem",
+          paddingTop: "4.55rem",
           paddingBottom: "calc(7.5rem + env(safe-area-inset-bottom))",
           scrollPaddingBottom: "calc(7.5rem + env(safe-area-inset-bottom))",
         }}
@@ -654,6 +659,47 @@ export function CommunityImmersiveFeed({
           );
         })}
       </div>
+
+      {searchOpen && (
+        <div className="absolute inset-0 z-40 bg-night-950/80 backdrop-blur-md">
+          <div className="absolute inset-x-0 top-0 border-b border-white/8 bg-night-950/85 px-4 py-3">
+            <div className="mx-auto flex max-w-2xl items-center justify-between gap-3">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.28em] text-gold-300/80">Recherche sociale</p>
+                <h2 className="font-display text-xl text-gold-100">Trouver un membre ou un post</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSearchOpen(false)}
+                className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-ivory/75"
+                aria-label="Fermer la recherche"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+          <div className="mx-auto mt-20 max-w-2xl px-4">
+            <MemberSearch />
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Link
+                to="/communaute/hashtag/concoursdessin"
+                className="inline-flex min-h-10 items-center gap-2 rounded-full border border-gold-400/25 bg-gold-500/10 px-4 py-2 text-sm text-gold-100"
+              >
+                <Sparkles className="h-4 w-4" />
+                #concoursdessin
+              </Link>
+              <button
+                type="button"
+                onClick={onOpenComposer}
+                className="inline-flex min-h-10 items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-ivory/80"
+              >
+                <Plus className="h-4 w-4" />
+                Nouveau post
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
