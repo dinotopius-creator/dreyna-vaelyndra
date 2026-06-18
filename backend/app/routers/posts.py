@@ -93,7 +93,14 @@ _COMMUNITY_IMAGE_CONTENT_TYPES = {
     "image/webp": ".webp",
     "image/gif": ".gif",
 }
+_COMMUNITY_VIDEO_CONTENT_TYPES = {
+    "video/mp4": ".mp4",
+    "video/webm": ".webm",
+    "video/quicktime": ".mov",
+    "video/ogg": ".ogg",
+}
 _MAX_COMMUNITY_IMAGE_BYTES = 8 * 1024 * 1024
+_MAX_COMMUNITY_VIDEO_BYTES = 60 * 1024 * 1024
 
 
 def _is_queen(user_id: str) -> bool:
@@ -885,6 +892,46 @@ async def upload_post_image(
         raise HTTPException(
             status_code=413,
             detail="Image trop lourde. Limite 8 Mo.",
+        )
+
+    filename = f"{uuid.uuid4().hex}{extension}"
+    destination = COMMUNITY_DIR / filename
+    destination.write_bytes(payload)
+
+    return PostImageUploadOut(
+        imageUrl=_build_uploaded_media_url(request, filename),
+        filename=filename,
+        contentType=content_type,
+        size=size,
+    )
+
+
+@router.post(
+    "/uploads/video",
+    response_model=PostImageUploadOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_post_video(
+    request: Request,
+    video: UploadFile = File(...),
+) -> PostImageUploadOut:
+    content_type = (video.content_type or "").lower().strip()
+    extension = _COMMUNITY_VIDEO_CONTENT_TYPES.get(content_type)
+    if extension is None:
+        raise HTTPException(
+            status_code=415,
+            detail="Format video non supporte. Utilise MP4, WEBM, MOV ou OGG.",
+        )
+
+    payload = await video.read()
+    size = len(payload)
+    await video.close()
+    if size <= 0:
+        raise HTTPException(status_code=400, detail="Video vide.")
+    if size > _MAX_COMMUNITY_VIDEO_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail="Video trop lourde. Limite 60 Mo.",
         )
 
     filename = f"{uuid.uuid4().hex}{extension}"

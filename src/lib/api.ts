@@ -93,6 +93,17 @@ export async function apiUploadCommunityImage(
   })) as CommunityImageUploadDto;
 }
 
+export async function apiUploadCommunityVideo(
+  file: File,
+): Promise<CommunityImageUploadDto> {
+  const body = new FormData();
+  body.append("video", file);
+  return (await request<CommunityImageUploadDto>("/posts/uploads/video", {
+    method: "POST",
+    body,
+  })) as CommunityImageUploadDto;
+}
+
 export async function apiUpdatePost(
   postId: string,
   input: {
