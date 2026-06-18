@@ -7,8 +7,8 @@ import { useLive } from "../contexts/LiveContext";
 import { SectionHeading } from "../components/SectionHeading";
 import { StreamerLeaderboard } from "../components/StreamerLeaderboard";
 import { BFFModule } from "../components/BFFModule";
+import { LiveBannerCarousel } from "../components/LiveBannerCarousel";
 import { LIVE_CATEGORIES, getLiveCategory } from "../data/liveCategories";
-import { CommunityContestBanner } from "../components/CommunityContestBanner";
 import { formatRelative } from "../lib/helpers";
 
 export function LiveHub() {
@@ -46,9 +46,7 @@ export function LiveHub() {
         subtitle="Retrouvez tous les directs en cours, les classements et les streamers qui font vibrer Vaelyndra."
       />
 
-      <div className="mt-8">
-        <CommunityContestBanner compact showWhenInactive={false} />
-      </div>
+      <LiveBannerCarousel />
 
       <div className="mt-10 grid gap-6 lg:grid-cols-[1.35fr,0.65fr]">
         <section className="overflow-hidden rounded-2xl border border-royal-500/30 bg-night-900/55">

@@ -4,6 +4,7 @@ import { ArrowRight, Flame, Heart, Play, Sparkles, Trophy, Wand2, Globe2 } from 
 import clsx from "clsx";
 import { AvatarImage } from "./AvatarImage";
 import { apiGetCommunityActivityLeaderboard, type CommunityActivityEntryDto } from "../lib/api";
+import { COMMUNITY_DRAWING_CONTEST, drawingContestEndsIn } from "../data/communityContest";
 
 type BannerTone = "gold" | "rose" | "emerald" | "cyan" | "violet";
 
@@ -27,6 +28,25 @@ const TONE_STYLES: Record<BannerTone, string> = {
   cyan: "from-cyan-500/28 via-sky-500/18 to-night-950/90 border-cyan-300/25",
   violet: "from-violet-500/30 via-indigo-500/18 to-night-950/90 border-violet-300/25",
 };
+
+function contestToBanner(): LiveBanner {
+  const remaining = drawingContestEndsIn();
+  const active = remaining > 0;
+  return {
+    id: "drawing-contest",
+    title: "Concours de dessin",
+    description: active
+      ? "Ajoute #concoursdessin à ton post pour participer et tenter de gagner 1000 lueurs + 6 nourritures familier."
+      : "Le concours est terminé. Les participations restent visibles dans la communauté.",
+    ctaLabel: active ? "Participer" : "Voir l'annonce",
+    href: "/communaute/hashtag/concoursdessin",
+    tone: "gold",
+    badge: "Annonce officielle",
+    icon: Trophy,
+    image: COMMUNITY_DRAWING_CONTEST.bannerImage,
+    dynamic: active,
+  };
+}
 
 function top1ToBanner(entry: CommunityActivityEntryDto | null | undefined): LiveBanner | null {
   if (!entry) return null;
@@ -55,7 +75,6 @@ export function LiveBannerCarousel() {
 
   useEffect(() => {
     let cancelled = false;
-    setLoadingTop1(true);
     apiGetCommunityActivityLeaderboard(1)
       .then((result) => {
         if (cancelled) return;
@@ -97,6 +116,7 @@ export function LiveBannerCarousel() {
         badge: "Classement",
         icon: Trophy,
       },
+      contestToBanner(),
       {
         id: "familiar",
         title: "Nourris ton familier",
