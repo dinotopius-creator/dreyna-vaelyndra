@@ -235,6 +235,7 @@ function AnimatedRoutes() {
             <Route path="/quests" element={<Quests />} />
             <Route path="/missions" element={<Quests />} />
             <Route path="/clubs" element={<ClubHub />} />
+            <Route path="/clubs/:clubId" element={<ClubHub />} />
             <Route path="/oracle" element={<Oracle />} />
             <Route path="/u/:userId" element={<UserProfile />} />
             <Route path="/connexion" element={<Login />} />
