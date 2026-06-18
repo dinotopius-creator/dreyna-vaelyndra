@@ -28,6 +28,7 @@ import { AvatarImage } from "../components/AvatarImage";
 import type { World3DPlayer } from "../components/worlds/World3DStage";
 import { FollowButton } from "../components/FollowButton";
 import { Handle } from "../components/Handle";
+import { WorldGameShell } from "../components/worlds/WorldGameShell";
 import { useAuth } from "../contexts/AuthContext";
 import { useLive } from "../contexts/LiveContext";
 import { useProfile } from "../contexts/ProfileContext";
@@ -1741,6 +1742,53 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
         "success",
       );
     }
+  }
+
+  if (worldBooting || worldGameActive) {
+    return (
+      <WorldGameShell
+        district={district}
+        selectedDistrict={selectedDistrict}
+        worldBooting={worldBooting}
+        worldBootStep={worldBootStep}
+        worldGameActive={worldGameActive}
+        worldLandscapeMode={worldLandscapeMode}
+        worldMenuOpen={worldMenuOpen}
+        worldSwitchingTo={worldSwitchingTo}
+        worldChatExpanded={worldChatExpanded}
+        worldChatAttention={worldChatAttention}
+        chatMessages={chatMessages}
+        chatInput={chatInput}
+        chatInputRef={chatInputRef}
+        voiceEnabled={voiceEnabled}
+        micEnabled={micEnabled}
+        voiceLoading={voiceLoading}
+        worldVoiceConnections={worldVoiceConnections}
+        currentChannelId={currentChannelId}
+        privateVoicePartnerId={privateVoicePartnerId}
+        ambientEvent={ambientEvent}
+        nearbyHotspot={nearbyHotspot}
+        lueurBursts={lueurBursts}
+        world3DPlayers={world3DPlayers}
+        visibleLueurs={visibleLueurs}
+        districtHotspots={districtHotspots}
+        worldSpeechBubbles={worldSpeechBubbles}
+        onMove={moveTo}
+        onSelectPlayer={selectWorld3DPlayer}
+        onCollectLueur={collectWorld3DLueur}
+        onTriggerHotspot={triggerWorld3DHotspot}
+        onToggleVoice={toggleVoice}
+        onOpenChat={openWorldChat}
+        onCloseChat={() => setWorldChatExpanded(false)}
+        onOpenEmotes={openWorldEmotes}
+        onToggleMenu={() => setWorldMenuOpen((current) => !current)}
+        onCloseMenu={() => setWorldMenuOpen(false)}
+        onSwitchWorld={switchWorld}
+        onExitWorld={exitWorldGame}
+        onSendMessage={sendMessage}
+        onChatInputChange={setChatInput}
+      />
+    );
   }
 
   return (
