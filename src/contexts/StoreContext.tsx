@@ -5,6 +5,7 @@ import {
   useEffect,
   useMemo,
   useReducer,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -391,6 +392,15 @@ function reducer(state: StoreState, action: Action): StoreState {
   }
 }
 
+function mergeCommunityPosts(base: CommunityPost[], incoming: CommunityPost[]) {
+  const merged = new Map<string, CommunityPost>();
+  for (const post of base) merged.set(post.id, post);
+  for (const post of incoming) merged.set(post.id, post);
+  return Array.from(merged.values()).sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
+}
+
 const INITIAL: StoreState = {
   articles: INITIAL_ARTICLES,
   products: INITIAL_PRODUCTS,
@@ -611,6 +621,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return init;
     }
   });
+  const postsRef = useRef(state.posts);
+
+  useEffect(() => {
+    postsRef.current = state.posts;
+  }, [state.posts]);
 
   const [isLiveOn, setLiveOn] = useState<boolean>(() => {
     try {
@@ -640,7 +655,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const refresh = async () => {
       try {
         const posts = await apiListPosts();
-        if (!cancelled) dispatch({ type: "setPosts", posts });
+        if (cancelled) return;
+        if (posts.length === 0) {
+          console.warn(
+            "Le backend a renvoyé un fil vide; on conserve les posts locaux existants.",
+          );
+          return;
+        }
+        const nextPosts = mergeCommunityPosts(postsRef.current, posts);
+        dispatch({ type: "setPosts", posts: nextPosts });
       } catch (err) {
         if (!cancelled) console.warn("Impossible de rafraîchir le fil :", err);
       }
