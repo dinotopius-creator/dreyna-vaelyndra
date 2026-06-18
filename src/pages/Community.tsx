@@ -37,7 +37,6 @@ import { MemberSearch } from "../components/MemberSearch";
 import { AvatarImage } from "../components/AvatarImage";
 import { RichSocialText } from "../components/RichSocialText";
 import { buildMentionLookup } from "../components/RichMentionText";
-import { CommunityContestBanner } from "../components/CommunityContestBanner";
 import { CommunityImmersiveFeed, type CommunityTab } from "../components/CommunityImmersiveFeed";
 import StreamerGradeBadge from "../components/StreamerGradeBadge";
 import { WeeklyRankingCountdown } from "../components/WeeklyRankingCountdown";
@@ -92,7 +91,7 @@ export function Community() {
   );
   const fileInputRef = useRef<HTMLInputElement>(null);
   const draftTextAreaRef = useRef<HTMLTextAreaElement>(null);
-  const composerRef = useRef<HTMLDivElement>(null);
+  const [composerOpen, setComposerOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [draftCursor, setDraftCursor] = useState(0);
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -648,7 +647,11 @@ export function Community() {
   }
 
   function openComposer() {
-    composerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setComposerOpen(true);
+  }
+
+  function closeComposer() {
+    setComposerOpen(false);
   }
 
   const selectedCommentPost = useMemo(
@@ -748,173 +751,169 @@ export function Community() {
   }
 
   return (
-    <div className="relative min-h-[100dvh] overflow-hidden bg-night-950 text-ivory">
-      <div className="absolute inset-x-0 top-0 z-30 border-b border-white/8 bg-night-950/84 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
-          <div className="min-w-0">
-            <p className="text-[10px] uppercase tracking-[0.32em] text-gold-300/80">Social premium</p>
-            <h1 className="truncate font-display text-2xl text-gold-100">Interface communautaire</h1>
-          </div>
-          <button
-            type="button"
-            onClick={openComposer}
-            className="inline-flex min-h-11 items-center gap-2 rounded-full bg-gold-shine px-4 py-2.5 text-sm font-semibold text-night-900"
-          >
-            <Send className="h-4 w-4" />
-            Créer
-          </button>
-        </div>
-      </div>
+    <div className="relative h-[100dvh] overflow-hidden bg-night-950 text-ivory">
+      <CommunityImmersiveFeed
+        posts={feedPosts}
+        usersById={usersById}
+        profilesById={profilesById}
+        currentUserId={user?.id}
+        mentionTargets={mentionTargets}
+        onLike={(postId) => react(postId, LIKE_EMOJI)}
+        onShare={(post) => {
+          const url = `${window.location.origin}/communaute#post-${post.id}`;
+          if (navigator.share) {
+            navigator.share({ title: `Post de ${post.authorName}`, url }).catch(() => {});
+          } else {
+            navigator.clipboard.writeText(url).then(
+              () => notify("Lien copié !", "success"),
+              () => notify("Impossible de copier le lien.", "error"),
+            );
+          }
+        }}
+        onSave={(postId) => toggleSave(postId)}
+        onOpenComposer={openComposer}
+        onOpenComments={openCommentSheet}
+        savedPostIds={savedPostIds}
+        activeTab={activeTab}
+        onChangeTab={setActiveTab}
+        leaderboard={displayLeaderboard}
+        weeklyLabel={activityWeekStartIso ? `Semaine du ${formatRelative(activityWeekStartIso)}` : undefined}
+      />
 
-      <div className="h-full overflow-y-auto overflow-x-hidden pt-[4.75rem]">
-        <div className="mx-auto flex max-w-7xl flex-col gap-5 px-4 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:px-6 sm:pb-10 lg:pb-8">
-          <CommunityContestBanner />
-          {contestAwardedNotice && (
-            <div className="rounded-2xl border border-emerald-300/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
-              {contestAwardedNotice}
+      {contestAwardedNotice && (
+        <div className="pointer-events-none absolute left-3 right-3 top-[5.25rem] z-40 rounded-2xl border border-emerald-300/20 bg-emerald-500/12 px-4 py-3 text-sm text-emerald-100 backdrop-blur-md">
+          {contestAwardedNotice}
+        </div>
+      )}
+
+      {composerOpen && (
+        <div className="fixed inset-0 z-[70] bg-night-950/82 backdrop-blur-md">
+          <div className="absolute inset-x-0 bottom-0 max-h-[92dvh] overflow-hidden rounded-t-[32px] border border-white/8 bg-night-950 shadow-[0_-20px_60px_rgba(0,0,0,0.45)]">
+            <div className="mx-auto mb-3 h-1.5 w-16 rounded-full bg-white/20" />
+            <div className="flex items-center justify-between px-4 pt-1">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.28em] text-gold-300/80">Composer</p>
+                <h2 className="font-display text-xl text-gold-100">Créer un post</h2>
+              </div>
+              <button
+                type="button"
+                onClick={closeComposer}
+                className="rounded-full border border-white/10 px-3 py-1.5 text-sm text-ivory/70"
+              >
+                Fermer
+              </button>
             </div>
-          )}
-          <div
-            ref={composerRef}
-            className="rounded-[28px] border border-white/8 bg-night-900/72 p-4 shadow-[0_18px_60px_rgba(0,0,0,0.28)]"
-          >
-            <div className="flex items-start gap-3">
-              <AvatarImage
-                candidates={[user?.avatar]}
-                fallbackSeed={user?.id ?? "anon"}
-                alt="Vous"
-                className="h-11 w-11 rounded-full object-cover ring-2 ring-royal-500/40"
-              />
-              <div className="min-w-0 flex-1 space-y-3">
-                <textarea
-                  ref={draftTextAreaRef}
-                  value={draft}
-                  onChange={(e) => {
-                    setDraft(e.target.value);
-                    setDraftCursor(e.target.selectionStart ?? e.target.value.length);
-                  }}
-                  onSelect={syncDraftCursor}
-                  onClick={syncDraftCursor}
-                  onKeyUp={syncDraftCursor}
-                  placeholder={user ? "Partage quelque chose avec la communauté..." : "Connecte-toi pour poster..."}
-                  rows={3}
-                  className="glass-input resize-none"
-                />
-                {hashtagSuggestionState.active && hashtagSuggestionState.suggestions.length > 0 && (
-                  <div className="rounded-2xl border border-gold-400/20 bg-night-950/55 p-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-[11px] uppercase tracking-[0.22em] text-gold-200/80">Hashtags suggérés</p>
-                      <span className="text-[11px] text-ivory/45">{hashtagSuggestionState.query ? `#${hashtagSuggestionState.query}` : "#"}</span>
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {hashtagSuggestionState.suggestions.map((tag) => (
-                        <button
-                          key={tag}
-                          type="button"
-                          onClick={() => insertSuggestedHashtag(tag)}
-                          className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-ivory/80 transition hover:border-gold-300/55 hover:text-gold-100"
-                        >
-                          <Sparkles className="h-3.5 w-3.5" />
-                          #{tag}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime,video/ogg"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      if (!file) return;
-                      if (isVideoFile(file.type)) {
-                        onPickVideo(event);
-                        return;
-                      }
-                      onPickImage(event);
-                    }}
-                    className="hidden"
+            <div className="max-h-[82dvh] overflow-y-auto px-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-3">
+              <div className="rounded-[28px] border border-white/8 bg-night-900/72 p-4 shadow-[0_18px_60px_rgba(0,0,0,0.28)]">
+                <div className="flex items-start gap-3">
+                  <AvatarImage
+                    candidates={[user?.avatar]}
+                    fallbackSeed={user?.id ?? "anon"}
+                    alt="Vous"
+                    className="h-11 w-11 rounded-full object-cover ring-2 ring-royal-500/40"
                   />
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-royal-500/30 px-4 py-2 text-sm text-ivory/80 transition hover:border-gold-400/60 hover:text-gold-200"
-                  >
-                    <Image className="h-4 w-4" />
-                    Importer une image ou vidéo
-                  </button>
-                  <div className="relative min-w-0 flex-1">
-                    <Film className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ivory/40" />
-                    <input
-                      value={videoUrl}
-                      onChange={(e) => setVideoUrl(e.target.value)}
-                      placeholder="URL video YouTube / TikTok / MP4 (optionnel)"
-                      className="glass-input pl-9"
+                  <div className="min-w-0 flex-1 space-y-3">
+                    <textarea
+                      ref={draftTextAreaRef}
+                      value={draft}
+                      onChange={(e) => {
+                        setDraft(e.target.value);
+                        setDraftCursor(e.target.selectionStart ?? e.target.value.length);
+                      }}
+                      onSelect={syncDraftCursor}
+                      onClick={syncDraftCursor}
+                      onKeyUp={syncDraftCursor}
+                      placeholder={user ? "Partage quelque chose avec la communauté..." : "Connecte-toi pour poster..."}
+                      rows={3}
+                      className="glass-input resize-none"
                     />
+                    {hashtagSuggestionState.active && hashtagSuggestionState.suggestions.length > 0 && (
+                      <div className="rounded-2xl border border-gold-400/20 bg-night-950/55 p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-[11px] uppercase tracking-[0.22em] text-gold-200/80">Hashtags suggérés</p>
+                          <span className="text-[11px] text-ivory/45">{hashtagSuggestionState.query ? `#${hashtagSuggestionState.query}` : "#"}</span>
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {hashtagSuggestionState.suggestions.map((tag) => (
+                            <button
+                              key={tag}
+                              type="button"
+                              onClick={() => insertSuggestedHashtag(tag)}
+                              className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-ivory/80 transition hover:border-gold-300/55 hover:text-gold-100"
+                            >
+                              <Sparkles className="h-3.5 w-3.5" />
+                              #{tag}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime,video/ogg"
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          if (!file) return;
+                          if (isVideoFile(file.type)) {
+                            onPickVideo(event);
+                            return;
+                          }
+                          onPickImage(event);
+                        }}
+                        className="hidden"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-royal-500/30 px-4 py-2 text-sm text-ivory/80 transition hover:border-gold-400/60 hover:text-gold-200"
+                      >
+                        <Image className="h-4 w-4" />
+                        Importer une image ou vidéo
+                      </button>
+                      <div className="relative min-w-0 flex-1">
+                        <Film className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ivory/40" />
+                        <input
+                          value={videoUrl}
+                          onChange={(e) => setVideoUrl(e.target.value)}
+                          placeholder="URL video YouTube / TikTok / MP4 (optionnel)"
+                          className="glass-input pl-9"
+                        />
+                      </div>
+                      <button type="submit" onClick={publish} className="btn-gold w-full justify-center sm:w-auto">
+                        <Send className="h-4 w-4" /> Publier
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setDraft((current) =>
+                            current.includes("#concoursdessin")
+                              ? current
+                              : `${current}${current.trim() ? " " : ""}#concoursdessin`,
+                          )
+                        }
+                        className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-gold-300/25 bg-gold-500/10 px-3 py-1.5 text-xs text-gold-100 transition hover:border-gold-300/55 hover:bg-gold-500/15"
+                      >
+                        <Sparkles className="h-3.5 w-3.5" />
+                        Ajouter #concoursdessin
+                      </button>
+                      <Link
+                        to={drawingContestUrl()}
+                        className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-ivory/70 transition hover:border-gold-300/45 hover:text-gold-100"
+                      >
+                        Voir le concours
+                      </Link>
+                    </div>
                   </div>
-                  <button type="submit" onClick={publish} className="btn-gold w-full justify-center sm:w-auto">
-                    <Send className="h-4 w-4" /> Publier
-                  </button>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setDraft((current) =>
-                        current.includes("#concoursdessin")
-                          ? current
-                          : `${current}${current.trim() ? " " : ""}#concoursdessin`,
-                      )
-                    }
-                    className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-gold-300/25 bg-gold-500/10 px-3 py-1.5 text-xs text-gold-100 transition hover:border-gold-300/55 hover:bg-gold-500/15"
-                  >
-                    <Sparkles className="h-3.5 w-3.5" />
-                    Ajouter #concoursdessin
-                  </button>
-                  <Link
-                    to={drawingContestUrl()}
-                    className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-ivory/70 transition hover:border-gold-300/45 hover:text-gold-100"
-                  >
-                    Voir le concours
-                  </Link>
                 </div>
               </div>
             </div>
           </div>
-
-          <div className="relative min-h-[70dvh] overflow-hidden rounded-[32px] border border-white/8 bg-night-950/90 shadow-[0_30px_90px_rgba(0,0,0,0.35)]">
-            <CommunityImmersiveFeed
-              posts={feedPosts}
-              usersById={usersById}
-              profilesById={profilesById}
-              currentUserId={user?.id}
-              mentionTargets={mentionTargets}
-              onLike={(postId) => react(postId, LIKE_EMOJI)}
-              onShare={(post) => {
-                const url = `${window.location.origin}/communaute#post-${post.id}`;
-                if (navigator.share) {
-                  navigator.share({ title: `Post de ${post.authorName}`, url }).catch(() => {});
-                } else {
-                  navigator.clipboard.writeText(url).then(
-                    () => notify("Lien copié !", "success"),
-                    () => notify("Impossible de copier le lien.", "error"),
-                  );
-                }
-              }}
-              onSave={(postId) => toggleSave(postId)}
-              onOpenComposer={openComposer}
-              onOpenComments={openCommentSheet}
-              savedPostIds={savedPostIds}
-              activeTab={activeTab}
-              onChangeTab={setActiveTab}
-              leaderboard={displayLeaderboard}
-              weeklyLabel={activityWeekStartIso ? `Semaine du ${formatRelative(activityWeekStartIso)}` : undefined}
-            />
-          </div>
         </div>
-      </div>
+      )}
 
       {selectedCommentPost && (
         <div className="fixed inset-0 z-[60] bg-night-950/82 backdrop-blur-md">
