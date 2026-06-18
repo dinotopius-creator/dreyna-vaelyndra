@@ -136,6 +136,7 @@ export function FamiliarEnclosure() {
   const [guideOpen, setGuideOpen] = useState(false);
   const [feedBurstId, setFeedBurstId] = useState(0);
   const [speechMessage, setSpeechMessage] = useState(CUTE_MESSAGES[0]);
+  const [speechTick, setSpeechTick] = useState(0);
 
   useEffect(() => {
     setDisplayedLueurs(profile?.lueurs ?? 0);
@@ -277,12 +278,12 @@ export function FamiliarEnclosure() {
     setFeedback(`${active.nickname || active.name} vous regarde et sourit.`);
     setFeedBurstId((current) => current + 1);
     playFeedSound();
-    setSpeechMessage((current) => {
-      const index = CUTE_MESSAGES.indexOf(current);
-      const next = CUTE_MESSAGES[(index + 1 + CUTE_MESSAGES.length) % CUTE_MESSAGES.length];
-      return next;
-    });
+    setSpeechTick((current) => current + 1);
   }
+
+  useEffect(() => {
+    setSpeechMessage(CUTE_MESSAGES[speechTick % CUTE_MESSAGES.length]);
+  }, [speechTick]);
 
   if (!user?.id) {
     return (
@@ -367,23 +368,23 @@ export function FamiliarEnclosure() {
               <motion.button
                 type="button"
                 onClick={tapFamiliar}
-                className="absolute left-[31%] top-[32%] z-20 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center focus:outline-none sm:left-[29%] sm:top-[30%]"
+                className="absolute left-[33%] top-[31%] z-20 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center focus:outline-none sm:left-[31%] sm:top-[29%]"
                 style={{ color: active.color }}
                 animate={{
-                  y: [0, -18, 0, 12, 0],
-                  x: [0, -4, 0, 4, 0],
-                  rotate: [0, 0.9, 0, -0.9, 0],
+                  y: [0, -16, 0, 14, 0],
+                  x: [0, -12, 0, 12, 0],
+                  rotate: [0, 1.2, 0, -1.2, 0],
                 }}
-                transition={{ duration: 7.8, repeat: Infinity, ease: "easeInOut" }}
+                transition={{ duration: 8.2, repeat: Infinity, ease: "easeInOut" }}
               >
                 <AffectionHearts
                   hearts={affection.affectionHearts}
                   pulseHeart={heartPulse}
                 />
-                <div className="relative flex h-[290px] w-[290px] items-center justify-center overflow-visible sm:h-[340px] sm:w-[340px]">
+                <div className="relative flex h-[300px] w-[300px] items-center justify-center overflow-visible sm:h-[350px] sm:w-[350px]">
                   <motion.div
                     className="absolute -top-1 left-1/2 z-30 -translate-x-1/2 rounded-full border border-white/10 bg-night-950/80 px-3 py-1 text-[11px] text-ivory/80 shadow-[0_10px_22px_rgba(0,0,0,0.28)] backdrop-blur"
-                    animate={{ y: [0, -4, 0] }}
+                    animate={{ y: [0, -5, 0] }}
                     transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
                     aria-label={speechMessage}
                   >
@@ -397,15 +398,15 @@ export function FamiliarEnclosure() {
                   />
                   <motion.div
                     className="relative z-10"
-                    animate={{ y: [0, -16, 0, 14, 0], x: [0, -3, 0, 3, 0] }}
-                    transition={{ duration: 6.8, repeat: Infinity, ease: "easeInOut" }}
+                    animate={{ y: [0, -12, 0, 10, 0], x: [0, -6, 0, 6, 0] }}
+                    transition={{ duration: 6.4, repeat: Infinity, ease: "easeInOut" }}
                   >
                     <FamiliarPortrait
                       familiar={active}
                       size="lg"
                       animated
                       showFrame
-                      className="scale-[1.08] sm:scale-[1.15]"
+                      className="scale-[1.06] sm:scale-[1.12]"
                     />
                   </motion.div>
                   <FeedHeartBurst burstId={feedBurstId} />
