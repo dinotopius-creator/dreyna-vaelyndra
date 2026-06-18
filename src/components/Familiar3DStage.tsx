@@ -205,7 +205,7 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
     scene.add(path);
 
     const root = new THREE.Group();
-    root.position.set(0, 0.18, 0);
+    root.position.set(0, 0.42, 0);
     root.userData.bounds = {
       minX: -1.3,
       maxX: 1.3,
@@ -430,7 +430,7 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
         root.userData.bounds.minZ,
         root.userData.bounds.maxZ,
       );
-      root.position.y = 0.2 + Math.sin(roamTimer * species.bounce) * 0.022;
+      root.position.y = 0.42 + Math.sin(roamTimer * species.bounce) * 0.018;
       root.rotation.z = Math.sin(roamTimer * 1.2) * 0.015;
 
       const walk = isWalking ? Math.sin(roamTimer * species.stride) : Math.sin(roamTimer * 4) * 0.12;
