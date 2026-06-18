@@ -91,6 +91,7 @@ interface AvatarEntity {
   familiarKey: string;
   labelKey: string;
   bubbleKey: string;
+  interactionKind: string | null;
   jumpVelocity: number;
   jumpHeight: number;
   phase: number;
@@ -973,6 +974,7 @@ function createAvatar(player: World3DPlayer) {
     familiarKey: "",
     labelKey: "",
     bubbleKey: "",
+    interactionKind: player.interactionKind ?? null,
     jumpVelocity: 0,
     jumpHeight: 0,
     phase: 0,
@@ -1611,6 +1613,11 @@ export function World3DStage({
             entity.bubbleRoot.visible = false;
           }
         }
+
+        const nextInteractionKind = player.interactionKind ?? null;
+        if (entity.interactionKind !== nextInteractionKind) {
+          entity.interactionKind = nextInteractionKind;
+        }
       });
 
       const currentSelf = self;
@@ -1682,6 +1689,35 @@ export function World3DStage({
         entity.rightArm.rotation.x = walk * 0.35;
         entity.torso.rotation.z = entity.moving ? Math.sin(entity.phase * 0.5) * 0.035 : 0;
         entity.head.position.y = 2.26 + Math.sin(entity.phase * 0.7) * 0.02;
+        if (entity.interactionKind) {
+          const pulse = Math.sin(entity.phase * 6.5);
+          if (entity.interactionKind === "dance") {
+            entity.torso.rotation.y = pulse * 0.2;
+            entity.leftArm.rotation.x = -0.55 + pulse * 0.28;
+            entity.rightArm.rotation.x = -0.55 - pulse * 0.28;
+            entity.leftArm.rotation.z = 0.18 + pulse * 0.22;
+            entity.rightArm.rotation.z = -0.18 - pulse * 0.22;
+            entity.head.rotation.z = pulse * 0.08;
+          } else if (entity.interactionKind === "hug") {
+            entity.torso.rotation.y = pulse * 0.08;
+            entity.leftArm.rotation.x = -1.08 + pulse * 0.08;
+            entity.rightArm.rotation.x = -1.08 - pulse * 0.08;
+            entity.leftArm.rotation.z = 0.38;
+            entity.rightArm.rotation.z = -0.38;
+          } else if (entity.interactionKind === "applaud") {
+            entity.torso.rotation.z = pulse * 0.04;
+            entity.leftArm.rotation.x = -0.95 + pulse * 0.15;
+            entity.rightArm.rotation.x = -0.95 - pulse * 0.15;
+            entity.leftArm.rotation.z = 0.28 + pulse * 0.2;
+            entity.rightArm.rotation.z = -0.28 - pulse * 0.2;
+          } else {
+            entity.torso.rotation.y = pulse * 0.04;
+            entity.head.rotation.y = pulse * 0.08;
+          }
+          entity.group.scale.setScalar(1 + Math.max(0, pulse) * 0.03);
+        } else {
+          entity.group.scale.setScalar(1);
+        }
         if (entity.familiarRoot) {
           const side = entity.userId === currentSelf?.id ? 1 : -1;
           entity.familiarRoot.position.x = THREE.MathUtils.lerp(entity.familiarRoot.position.x, side * 0.72, 0.08);
