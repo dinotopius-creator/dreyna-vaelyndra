@@ -239,9 +239,9 @@ export function CommunityImmersiveFeed({
   }, [activeTab, filteredPosts, leaderboard, weeklyLabel]);
 
   return (
-    <div className="relative flex h-[100dvh] min-h-0 flex-col overflow-hidden bg-night-950 text-ivory">
-      <div className="sticky top-0 z-30 border-b border-white/8 bg-night-950/88 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-3 pb-3 pt-3 sm:px-5">
+    <div className="relative h-[100dvh] min-h-0 overflow-hidden bg-night-950 text-ivory">
+      <div className="absolute inset-x-0 top-0 z-30 border-b border-white/8 bg-night-950/72 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-3 pb-2 pt-3 sm:px-5">
           <div className="flex items-center gap-3">
             {fullscreenSocialMode && (
               <button
@@ -271,7 +271,7 @@ export function CommunityImmersiveFeed({
           </button>
         </div>
 
-        <div className="mx-auto flex max-w-6xl gap-2 overflow-x-auto px-3 pb-3 sm:px-5">
+        <div className="mx-auto flex max-w-7xl gap-2 overflow-x-auto px-3 pb-3 sm:px-5">
           {(Object.keys(TAB_META) as CommunityTab[]).map((tab) => {
             const Icon = TAB_META[tab].icon;
             const active = tab === activeTab;
@@ -296,8 +296,8 @@ export function CommunityImmersiveFeed({
       </div>
 
       <div
-        className="social-feed-scroll h-[calc(100dvh-84px)] min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain scroll-smooth snap-y snap-mandatory touch-pan-y"
-        style={{ WebkitOverflowScrolling: "touch" }}
+        className="social-feed-scroll h-full min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain scroll-smooth snap-y snap-mandatory touch-pan-y"
+        style={{ WebkitOverflowScrolling: "touch", paddingTop: "5.25rem" }}
       >
         {feedEntries.length === 0 && activeTab === "following" ? (
           <div className="mx-auto flex min-h-[calc(100vh-160px)] max-w-3xl items-center px-3 py-8 text-center text-ivory/65">
@@ -311,12 +311,9 @@ export function CommunityImmersiveFeed({
         {feedEntries.map((entry) => {
           if (entry.kind === "news") {
             return (
-              <section
-                key={entry.id}
-                className="h-[calc(100dvh-84px)] snap-start px-0 py-0"
-              >
-                <div className="mx-auto flex h-full w-full max-w-7xl items-center px-0 sm:px-3">
-                  <div className="panel-app w-full overflow-hidden p-4 sm:p-7">
+              <section key={entry.id} className="h-[calc(100dvh-5.25rem)] snap-start px-0 py-0">
+                <div className="mx-auto flex h-full w-full max-w-none items-center px-0">
+                  <div className="panel-app w-full overflow-hidden rounded-none border-0 p-4 sm:p-7">
                     <div className="inline-flex items-center gap-2 rounded-full border border-gold-400/20 bg-gold-500/10 px-3 py-1 text-[11px] uppercase tracking-[0.26em] text-gold-200">
                       <Sparkles className="h-3.5 w-3.5" />
                       Actualité
@@ -391,9 +388,9 @@ export function CommunityImmersiveFeed({
               <section
                 key={post.id}
                 id={`post-${post.id}`}
-                className="h-[calc(100dvh-84px)] snap-start px-0 py-0"
+                className="h-[calc(100dvh-5.25rem)] snap-start px-0 py-0"
               >
-                <div className="mx-auto flex h-full w-full max-w-7xl items-stretch px-0 sm:px-3">
+                <div className="mx-auto flex h-full w-full max-w-none items-stretch px-0">
                   <article className="panel-app relative flex h-full w-full overflow-hidden rounded-none border-0 bg-night-950/80 p-4 shadow-[0_30px_60px_rgba(0,0,0,0.38)] sm:rounded-[28px] sm:border sm:border-white/8 sm:p-6">
                     <div className="relative flex w-full flex-col justify-between">
                       <div className="flex items-start justify-between gap-4">
@@ -484,7 +481,7 @@ export function CommunityImmersiveFeed({
             <section
               key={post.id}
               id={`post-${post.id}`}
-              className="h-[calc(100dvh-84px)] snap-start px-0 py-0"
+              className="h-[calc(100dvh-5.25rem)] snap-start px-0 py-0"
             >
               <div
                 className="relative h-full w-full overflow-hidden"
