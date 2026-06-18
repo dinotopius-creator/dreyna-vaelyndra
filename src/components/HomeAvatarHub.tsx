@@ -1,9 +1,13 @@
-import { Link } from "react-router-dom";
-import { Bell, BookOpen, Coins, Gem, Heart, Menu, MessageCircleHeart, Radio, Search, ShoppingBag, Sparkles, Users } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { Bell, BookOpen, ChevronRight, Crown, Gem, Heart, Menu, MessageCircleHeart, Radio, Search, ShoppingBag, Sparkles, Users, X } from "lucide-react";
 import { AvatarImage } from "./AvatarImage";
 import { AvatarViewer } from "./AvatarViewer";
 import { formatNumber } from "../lib/helpers";
 import type { CommunityTopFanDto } from "../lib/api";
+import { useNotifications } from "../contexts/NotificationsContext";
+import { formatRelative } from "../lib/helpers";
+import { resolveNotificationUrl } from "../lib/notificationRoutes";
 
 type LiveEntry = {
   title?: string | null;
@@ -37,12 +41,19 @@ export function HomeAvatarHub({
   activeLive,
   topFans,
 }: HomeAvatarHubProps) {
+  const navigate = useNavigate();
+  const { notifications, markRead } = useNotifications();
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const currencyPaid =
     (backendMe?.sylvins_paid ?? 0) + (backendMe?.sylvins_promo ?? 0);
   const currencyFree = backendMe?.lueurs ?? 0;
   const avatarLink = isRegistered ? "/avatar" : "/connexion";
   const familiarLink = isRegistered ? "/familier" : "/connexion";
   const liveLink = activeLive ? `/live/${encodeURIComponent(activeLive.userId)}` : "/live";
+  const visibleNotifications = useMemo(
+    () => notifications.slice(0, 5),
+    [notifications],
+  );
   const liveRail = activeLive
     ? [
         { title: activeLive.title || activeLive.username || "Live du moment", subtitle: "En direct maintenant", to: liveLink },
@@ -57,10 +68,10 @@ export function HomeAvatarHub({
 
   const actionCards = [
     { title: "Avatar", subtitle: "Atelier 360°", to: avatarLink, icon: Gem },
-    { title: "Quêtes", subtitle: "Mon compte", to: "/compte", icon: BookOpen },
+    { title: "Quêtes", subtitle: "Missions", to: "/quetes", icon: BookOpen },
     { title: "Avantages", subtitle: "Boutique", to: "/boutique", icon: ShoppingBag },
     { title: "Style", subtitle: "Look & tenues", to: avatarLink, icon: Sparkles },
-    { title: "Clubs", subtitle: "Communauté", to: "/communaute", icon: Users },
+    { title: "Clubs", subtitle: "Créer / rejoindre", to: "/clubs", icon: Users },
   ] as const;
 
   return (
@@ -70,10 +81,10 @@ export function HomeAvatarHub({
       <div className="absolute left-1/2 top-28 h-80 w-80 -translate-x-1/2 rounded-full bg-fuchsia-500/20 blur-[150px]" />
       <div className="relative mx-auto flex min-h-[100dvh] max-w-[1700px] flex-col px-3 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-[calc(0.85rem+env(safe-area-inset-top))] sm:px-5">
         <div className="relative z-20 flex items-start justify-between gap-3">
-          <Link to="/compte" className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/95 px-3 py-2 text-[13px] font-semibold text-night-900 shadow-[0_12px_30px_rgba(0,0,0,0.28)] backdrop-blur-md">
-            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-fuchsia-500/10 text-fuchsia-600"><Gem className="h-3.5 w-3.5" /></span>
+          <Link to="/boutique" className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/95 px-3 py-2 text-[13px] font-semibold text-night-900 shadow-[0_12px_30px_rgba(0,0,0,0.28)] backdrop-blur-md">
+            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-fuchsia-500/10 text-fuchsia-600"><Sparkles className="h-3.5 w-3.5" /></span>
             <span className="tabular-nums">{formatNumber(currencyPaid)}</span>
-            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-amber-500/10 text-amber-500"><Coins className="h-3.5 w-3.5" /></span>
+            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-amber-500/10 text-amber-500"><Crown className="h-3.5 w-3.5" /></span>
             <span className="tabular-nums">{formatNumber(currencyFree)}</span>
           </Link>
 
@@ -81,10 +92,17 @@ export function HomeAvatarHub({
             <Link to="/communaute" className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/7 text-white shadow-[0_10px_26px_rgba(0,0,0,0.22)] backdrop-blur-md transition hover:border-fuchsia-200/40 hover:bg-white/12" aria-label="Rechercher" title="Rechercher">
               <Search className="h-5 w-5" />
             </Link>
-            <Link to="/compte" className="relative flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/7 text-white shadow-[0_10px_26px_rgba(0,0,0,0.22)] backdrop-blur-md transition hover:border-fuchsia-200/40 hover:bg-white/12" aria-label="Notifications" title="Notifications">
+            <button
+              type="button"
+              onClick={() => setNotificationsOpen((current) => !current)}
+              className="relative flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/7 text-white shadow-[0_10px_26px_rgba(0,0,0,0.22)] backdrop-blur-md transition hover:border-fuchsia-200/40 hover:bg-white/12"
+              aria-label="Notifications"
+              title="Notifications"
+              aria-expanded={notificationsOpen}
+            >
               <Bell className="h-5 w-5" />
               {unreadNotifications > 0 && <span className="absolute -right-1 -top-1 inline-flex min-w-5 items-center justify-center rounded-full bg-fuchsia-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{unreadNotifications > 99 ? "99+" : unreadNotifications}</span>}
-            </Link>
+            </button>
             <Link to="/messages" className="relative flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/7 text-white shadow-[0_10px_26px_rgba(0,0,0,0.22)] backdrop-blur-md transition hover:border-fuchsia-200/40 hover:bg-white/12" aria-label="Messages" title="Messages">
               <MessageCircleHeart className="h-5 w-5" />
               {unreadMessages > 0 && <span className="absolute -right-1 -top-1 inline-flex min-w-5 items-center justify-center rounded-full bg-emerald-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{unreadMessages > 99 ? "99+" : unreadMessages}</span>}
@@ -94,6 +112,66 @@ export function HomeAvatarHub({
             </Link>
           </div>
         </div>
+
+        {notificationsOpen && (
+          <div className="relative z-30 mt-3 self-end">
+            <div className="w-[min(100vw-1.5rem,22rem)] rounded-[1.6rem] border border-white/10 bg-night-950/95 p-3 shadow-[0_20px_60px_rgba(0,0,0,0.42)] backdrop-blur-xl">
+              <div className="flex items-center justify-between gap-3 px-1 pb-3">
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.28em] text-white/45">Notifications</p>
+                  <p className="font-semibold text-white">Dernières alertes</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setNotificationsOpen(false)}
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/8 text-white/80"
+                  aria-label="Fermer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="space-y-2">
+                {visibleNotifications.length === 0 ? (
+                  <p className="rounded-2xl border border-white/8 bg-white/5 px-3 py-4 text-sm text-white/60">
+                    Aucune notification pour le moment.
+                  </p>
+                ) : (
+                  visibleNotifications.map((notification) => {
+                    const target = resolveNotificationUrl(notification);
+                    return (
+                      <button
+                        key={notification.id}
+                        type="button"
+                        onClick={() => {
+                          markRead(notification.id);
+                          setNotificationsOpen(false);
+                          navigate(target);
+                        }}
+                        className="flex w-full items-start gap-3 rounded-2xl border border-white/8 bg-white/5 px-3 py-3 text-left transition hover:border-fuchsia-200/30 hover:bg-white/8"
+                      >
+                        <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-fuchsia-500/15 text-fuchsia-100">
+                          <Bell className="h-4 w-4" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-semibold text-white">
+                            {notification.title}
+                          </span>
+                          <span className="mt-0.5 block text-xs leading-5 text-white/60">
+                            {notification.body}
+                          </span>
+                          <span className="mt-1 block text-[11px] text-white/40">
+                            {formatRelative(notification.createdAt)}
+                          </span>
+                        </span>
+                        <ChevronRight className="mt-1 h-4 w-4 text-white/35" />
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="relative z-10 mt-3 grid flex-1 gap-4 pb-4 lg:grid-cols-[220px_minmax(0,1fr)_220px] lg:items-center lg:gap-6">
           <aside className="order-2 flex gap-3 overflow-x-auto pb-1 lg:order-1 lg:flex-col lg:overflow-visible lg:pb-0">
