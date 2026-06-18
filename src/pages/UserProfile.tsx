@@ -8,6 +8,7 @@ import {
   Gift,
   Loader2,
   MessageCircle,
+  Play,
   Trash2,
   Sparkles,
 } from "lucide-react";
@@ -638,15 +639,31 @@ export function UserProfile() {
                       className="h-full w-full object-cover transition duration-500 hover:scale-[1.03]"
                     />
                   ) : p.videoUrl ? (
-                    <video
-                      src={p.videoUrl}
-                      className="h-full w-full object-cover"
-                      muted
-                      playsInline
-                      loop
-                      autoPlay
-                      preload="metadata"
-                    />
+                    <>
+                      {p.videoThumbnailUrl ? (
+                        <img
+                          src={p.videoThumbnailUrl}
+                          alt={p.content}
+                          className="h-full w-full object-cover transition duration-500 hover:scale-[1.03]"
+                        />
+                      ) : (
+                        <video
+                          src={p.videoUrl}
+                          className="h-full w-full object-cover"
+                          muted
+                          playsInline
+                          loop
+                          autoPlay
+                          preload="metadata"
+                        />
+                      )}
+                      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.05),rgba(7,5,11,0.35))]" />
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full border border-white/15 bg-night-950/55 text-white/90 backdrop-blur-md">
+                          <Play className="h-5 w-5 fill-current" />
+                        </div>
+                      </div>
+                    </>
                   ) : (
                     <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(251,191,36,0.16),transparent_35%),linear-gradient(180deg,#18111f,#09060d)] px-4 text-center">
                       <p className="line-clamp-8 whitespace-pre-wrap text-sm leading-6 text-ivory/88">

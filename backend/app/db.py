@@ -102,6 +102,7 @@ def _apply_migrations() -> None:
         "post": [
             ("post_type", "TEXT NOT NULL DEFAULT 'standard'"),
             ("official_label", "TEXT"),
+            ("video_thumbnail_url", "TEXT"),
         ],
         "catalogproduct": [
             ("lueurs", "INTEGER"),

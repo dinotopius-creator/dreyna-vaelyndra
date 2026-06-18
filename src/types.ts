@@ -138,6 +138,7 @@ export interface CommunityPost {
   content: string;
   imageUrl?: string;
   videoUrl?: string;
+  videoThumbnailUrl?: string;
   postType?: "standard" | "official_event" | string;
   officialLabel?: string | null;
   createdAt: string;

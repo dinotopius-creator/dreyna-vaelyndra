@@ -62,12 +62,14 @@ export async function apiCreatePost(input: {
   content: string;
   imageUrl?: string;
   videoUrl?: string;
+  videoThumbnailUrl?: string;
 }): Promise<CommunityPost> {
   const body = {
     ...input.author,
     content: input.content,
     image_url: input.imageUrl,
     video_url: input.videoUrl,
+    video_thumbnail_url: input.videoThumbnailUrl,
   };
   return (await request<CommunityPost>("/posts", {
     method: "POST",
@@ -111,12 +113,15 @@ export async function apiUpdatePost(
     content?: string;
     imageUrl?: string;
     videoUrl?: string;
+    videoThumbnailUrl?: string;
   },
 ): Promise<CommunityPost> {
   const body: Record<string, string> = { user_id: input.userId };
   if (input.content !== undefined) body.content = input.content;
   if (input.imageUrl !== undefined) body.image_url = input.imageUrl;
   if (input.videoUrl !== undefined) body.video_url = input.videoUrl;
+  if (input.videoThumbnailUrl !== undefined)
+    body.video_thumbnail_url = input.videoThumbnailUrl;
   return (await request<CommunityPost>(
     `/posts/${encodeURIComponent(postId)}`,
     { method: "PATCH", body: JSON.stringify(body) },
