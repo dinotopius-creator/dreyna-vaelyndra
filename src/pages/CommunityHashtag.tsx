@@ -88,7 +88,7 @@ export function CommunityHashtag() {
       <SectionHeading
         eyebrow="#concoursdessin"
         title="Concours de dessin"
-        subtitle="Tous les posts participants sont regroupés ici. Le concours dure 24h et se clôture automatiquement."
+        subtitle="Tous les posts participants sont regroupés ici. Le concours dure 24h00 et se clôture automatiquement."
       />
 
       <div className="mt-8 space-y-6">

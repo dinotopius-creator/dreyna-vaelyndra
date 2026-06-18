@@ -182,7 +182,7 @@ export function Community() {
       authorGrade: null,
       authorAvatar: "/favicon.svg",
       content:
-        "Concours de dessin lancé ! Poste ton dessin avec #concoursdessin pour participer pendant 24h. Le post avec le plus de likes gagne 1000 lueurs et 6 nourritures familier.",
+        "Concours de dessin lancé ! Poste ton dessin avec #concoursdessin pour participer pendant 24h00. Le post avec le plus de likes gagne 1000 lueurs et 6 nourritures familier.",
       imageUrl: COMMUNITY_DRAWING_CONTEST.bannerImage,
       videoUrl: undefined,
       postType: "official_event",

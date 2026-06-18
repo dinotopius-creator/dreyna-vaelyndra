@@ -13,7 +13,7 @@ export const COMMUNITY_DRAWING_CONTEST = {
   announcementPostId: "official-event:drawing-contest-post",
   bannerImage: "/contest/drawing-contest-banner.svg",
   rules: [
-    "Le concours dure 24 heures.",
+    "Le concours dure 24h00.",
     "Participe avec une image de dessin.",
     "Ajoute exactement #concoursdessin.",
     "Le post avec le plus de likes gagne.",
