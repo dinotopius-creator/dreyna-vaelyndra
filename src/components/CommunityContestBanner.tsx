@@ -17,6 +17,7 @@ export function CommunityContestBanner({
   showWhenInactive?: boolean;
 }) {
   const [now, setNow] = useState(() => Date.now());
+
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(id);
@@ -35,10 +36,7 @@ export function CommunityContestBanner({
       animate={{ opacity: 1, y: 0 }}
       className="overflow-hidden rounded-[30px] border border-gold-300/25 bg-night-950/80 shadow-[0_20px_70px_rgba(0,0,0,0.35)]"
     >
-      <Link
-        to="/communaute/hashtag/concoursdessin"
-        className="relative block"
-      >
+      <Link to="/communaute/hashtag/concoursdessin" className="relative block">
         <div
           className="absolute inset-0 bg-cover bg-center opacity-45"
           style={{ backgroundImage: `url(${COMMUNITY_DRAWING_CONTEST.bannerImage})` }}
