@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, CalendarClock, ImageIcon, Plus, Trophy } from "lucide-react";
 import { useStore } from "../contexts/StoreContext";
@@ -14,6 +14,7 @@ import {
   COMMUNITY_DRAWING_CONTEST,
   drawingContestEndsIn,
   extractHashtags,
+  formatContestCountdown,
   isDrawingContestEntry,
 } from "../data/communityContest";
 import { formatRelative, parsePostImageUrl, parseVideoUrl } from "../lib/helpers";
@@ -30,6 +31,12 @@ function reactionCount(post: { reactions: Record<string, string[]> }) {
 export function CommunityHashtag() {
   const { posts } = useStore();
   const { users } = useAuth();
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
   const usersById = useMemo(
     () => new Map(users.map((entry) => [entry.id, entry])),
     [users],
@@ -56,7 +63,7 @@ export function CommunityHashtag() {
       });
   }, [posts]);
 
-  const countdown = drawingContestEndsIn();
+  const countdown = drawingContestEndsIn(now);
   const active = countdown > 0;
 
   useEffect(() => {
@@ -133,7 +140,7 @@ export function CommunityHashtag() {
             </p>
             <p className="mt-2 text-sm text-ivory/70">
               {active
-                ? `Il reste ${Math.max(0, Math.floor(countdown / 1000))} secondes avant la clôture.`
+                ? `Il reste ${formatContestCountdown(countdown)} avant la clôture.`
                 : "Le concours est clos. Les participations restent visibles."}
             </p>
           </aside>

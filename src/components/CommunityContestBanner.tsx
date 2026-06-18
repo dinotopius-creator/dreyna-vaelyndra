@@ -2,18 +2,12 @@ import { useEffect, useState } from "react";
 import { Clock3, Gift, Megaphone, Trophy, Hash, ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { COMMUNITY_DRAWING_CONTEST, drawingContestEndsIn } from "../data/communityContest";
+import {
+  COMMUNITY_DRAWING_CONTEST,
+  drawingContestEndsIn,
+  formatContestCountdown,
+} from "../data/communityContest";
 import { formatRelative } from "../lib/helpers";
-
-function formatCountdown(ms: number) {
-  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  return `${hours.toString().padStart(2, "0")}h ${minutes
-    .toString()
-    .padStart(2, "0")}m ${seconds.toString().padStart(2, "0")}s`;
-}
 
 export function CommunityContestBanner({
   compact = false,
@@ -74,9 +68,9 @@ export function CommunityContestBanner({
                 et <span className="font-semibold text-gold-100">6 nourritures familier</span>.
               </p>
               <div className="flex flex-wrap gap-2 text-xs text-ivory/70">
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">
                   <Clock3 className="h-3.5 w-3.5 text-gold-200" />
-                  {active ? formatCountdown(remaining) : "Concours terminé"}
+                  {active ? formatContestCountdown(remaining) : "Concours terminé"}
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">
                   <Trophy className="h-3.5 w-3.5 text-gold-200" />
@@ -93,7 +87,7 @@ export function CommunityContestBanner({
                 {active ? "Temps restant" : "État"}
               </p>
               <p className="mt-2 font-display text-2xl text-gold-100">
-                {active ? formatCountdown(remaining) : "Clôturé"}
+                {active ? formatContestCountdown(remaining) : "Clôturé"}
               </p>
               <p className="mt-2 text-sm text-ivory/70">
                 {active
