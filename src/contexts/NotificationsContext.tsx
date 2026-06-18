@@ -15,6 +15,7 @@ import type { CommunityPost, User } from "../types";
 import { apiGetProfile, type UserProfileDto } from "../lib/api";
 import { fetchReceivedFamiliarGifts } from "../lib/familiarsApi";
 import { resolveNotificationUrl } from "../lib/notificationRoutes";
+import { COMMUNITY_DRAWING_CONTEST, drawingContestUrl } from "../data/communityContest";
 
 export type NotificationKind =
   | "community_like"
@@ -733,6 +734,33 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       pushNotification(event);
     });
   }, [posts, profilesById, pushNotification, user, users]);
+
+  useEffect(() => {
+    if (!user) return;
+    const endsAt = new Date(COMMUNITY_DRAWING_CONTEST.endsAt).getTime();
+    if (Date.now() >= endsAt) return;
+    const id = COMMUNITY_DRAWING_CONTEST.notificationId;
+    if (seenEventIdsRef.current.has(id)) return;
+    seenEventIdsRef.current.add(id);
+    pushNotification({
+      id,
+      kind: "official_event",
+      title: "Concours de dessin lancé !",
+      body:
+        "Crée un post avec ton dessin et ajoute #concoursdessin pour participer. Le post avec le plus de likes dans 24h00 gagne 1000 lueurs et 6 nourritures familier.",
+      url: drawingContestUrl(),
+      entityType: "official_event",
+      entityId: COMMUNITY_DRAWING_CONTEST.id,
+      postId: COMMUNITY_DRAWING_CONTEST.announcementPostId,
+      postTitle: COMMUNITY_DRAWING_CONTEST.title,
+      communityId: "vaelyndra",
+      communityName: "Communauté Vaelyndra",
+      locationLabel: "Annonce officielle",
+      priority: "important",
+      actionLabel: "Voir le concours",
+      actionUrl: drawingContestUrl(),
+    });
+  }, [pushNotification, user]);
 
   // Offrandes Sylvins reçues sur le familier : pas dérivables des posts,
   // on poll un endpoint dédié. La dédup passe par `seenEventIdsRef`

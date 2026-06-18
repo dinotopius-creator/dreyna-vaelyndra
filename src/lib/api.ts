@@ -235,6 +235,57 @@ export async function apiSyncCommunityActivityRewards(): Promise<CommunityActivi
   )) as CommunityActivityRewardSyncDto;
 }
 
+export interface DrawingContestEntryDto {
+  id: string;
+  authorId: string;
+  authorName: string;
+  authorHandle: string | null;
+  authorGrade: StreamerGradeDto | null;
+  authorAvatar: string;
+  content: string;
+  imageUrl: string | null;
+  createdAt: string;
+  likeCount: number;
+  participantRank: number;
+  eligible: boolean;
+}
+
+export interface DrawingContestStatusDto {
+  contestId: string;
+  hashtag: string;
+  startsAt: string;
+  endsAt: string;
+  active: boolean;
+  now: string;
+  timeRemainingMs: number;
+  rewardLueurs: number;
+  rewardFood: number;
+  announcementPostId: string;
+  entries: DrawingContestEntryDto[];
+  topEntry: DrawingContestEntryDto | null;
+  winnerAwarded: boolean;
+}
+
+export interface DrawingContestSettlementDto {
+  contestId: string;
+  active: boolean;
+  alreadyAwarded: boolean;
+  winner: DrawingContestEntryDto | null;
+  awardedAt: string | null;
+  rewardLueurs: number;
+  rewardFood: number;
+}
+
+export async function apiGetDrawingContestStatus(): Promise<DrawingContestStatusDto> {
+  return (await request<DrawingContestStatusDto>("/posts/contests/drawing")) as DrawingContestStatusDto;
+}
+
+export async function apiSettleDrawingContest(): Promise<DrawingContestSettlementDto> {
+  return (await request<DrawingContestSettlementDto>("/posts/contests/drawing/settle", {
+    method: "POST",
+  })) as DrawingContestSettlementDto;
+}
+
 export interface OracleRewardDto {
   currency: "lueurs" | "sylvins" | "none";
   amount: number;

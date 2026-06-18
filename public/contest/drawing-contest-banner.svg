@@ -1,0 +1,46 @@
+<svg width="1600" height="900" viewBox="0 0 1600 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="200" y1="80" x2="1320" y2="820" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1B102F"/>
+      <stop offset="0.48" stop-color="#0F172A"/>
+      <stop offset="1" stop-color="#050816"/>
+    </linearGradient>
+    <radialGradient id="glow1" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(420 240) rotate(90) scale(260 260)">
+      <stop stop-color="#FACC15" stop-opacity="0.38"/>
+      <stop offset="1" stop-color="#FACC15" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glow2" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1150 260) rotate(90) scale(300 300)">
+      <stop stop-color="#38BDF8" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#38BDF8" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="blur" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="12"/>
+    </filter>
+  </defs>
+  <rect width="1600" height="900" fill="url(#bg)"/>
+  <circle cx="420" cy="250" r="260" fill="url(#glow1)"/>
+  <circle cx="1160" cy="240" r="300" fill="url(#glow2)"/>
+  <circle cx="200" cy="730" r="180" fill="#22C55E" fill-opacity="0.10" filter="url(#blur)"/>
+  <circle cx="1380" cy="700" r="210" fill="#F472B6" fill-opacity="0.10" filter="url(#blur)"/>
+  <path d="M140 690C350 520 510 512 720 610C930 708 1120 758 1460 620" stroke="#FACC15" stroke-opacity="0.35" stroke-width="24" stroke-linecap="round"/>
+  <path d="M140 710C360 560 520 554 740 644C960 734 1140 780 1470 660" stroke="#60A5FA" stroke-opacity="0.22" stroke-width="12" stroke-linecap="round"/>
+  <g opacity="0.92">
+    <path d="M760 190L800 120L840 190L910 200L850 250L865 322L800 285L735 322L750 250L690 200L760 190Z" fill="#FACC15"/>
+    <path d="M520 340L544 290L570 340L625 348L584 386L594 440L544 414L494 440L505 386L464 348L520 340Z" fill="#FDBA74"/>
+    <path d="M1080 350L1110 298L1140 350L1196 360L1155 398L1164 450L1110 424L1056 450L1065 398L1024 360L1080 350Z" fill="#93C5FD"/>
+  </g>
+  <rect x="150" y="110" width="1300" height="680" rx="52" fill="white" fill-opacity="0.04" stroke="white" stroke-opacity="0.10"/>
+  <text x="240" y="250" fill="#FDE68A" font-family="Georgia, serif" font-size="86" letter-spacing="6">CONCOURS DE DESSIN</text>
+  <text x="240" y="332" fill="#FFFFFF" fill-opacity="0.92" font-family="Inter, Arial, sans-serif" font-size="48" font-weight="700">24 heures pour briller</text>
+  <text x="240" y="405" fill="#E5E7EB" fill-opacity="0.85" font-family="Inter, Arial, sans-serif" font-size="34">#concoursdessin</text>
+  <text x="240" y="480" fill="#E5E7EB" fill-opacity="0.82" font-family="Inter, Arial, sans-serif" font-size="30">Le post le plus liké gagne 1000 lueurs + 6 nourritures familier.</text>
+  <g transform="translate(1020 220)">
+    <rect x="0" y="0" width="360" height="360" rx="52" fill="#0B1224" fill-opacity="0.88" stroke="#FACC15" stroke-opacity="0.22"/>
+    <path d="M180 80C136 80 104 112 104 156C104 223 180 286 180 286C180 286 256 223 256 156C256 112 224 80 180 80Z" fill="#FACC15" fill-opacity="0.92"/>
+    <path d="M145 160C145 146 156 135 170 135C178 135 185 139 190 146C195 139 202 135 210 135C224 135 235 146 235 160C235 192 180 220 180 220C180 220 145 192 145 160Z" fill="#F8FAFC"/>
+    <circle cx="135" cy="112" r="10" fill="#FDE68A"/>
+    <circle cx="245" cy="112" r="10" fill="#93C5FD"/>
+    <circle cx="180" cy="48" r="12" fill="#FACC15"/>
+    <path d="M80 270H280" stroke="#E5E7EB" stroke-opacity="0.14" stroke-width="14" stroke-linecap="round"/>
+  </g>
+</svg>
