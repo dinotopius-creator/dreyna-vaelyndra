@@ -205,12 +205,12 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
     scene.add(path);
 
     const root = new THREE.Group();
-    root.position.set(0, 0.86, 0);
+    root.position.set(0, 1.04, 0);
     root.userData.bounds = {
-      minX: -1.3,
-      maxX: 1.3,
-      minZ: -0.95,
-      maxZ: 0.95,
+      minX: -1.1,
+      maxX: 1.1,
+      minZ: -0.72,
+      maxZ: 0.72,
     };
 
     const shadow = new THREE.Mesh(
@@ -354,9 +354,9 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
       moveAngle = Math.random() * Math.PI * 2;
       moveRadius = 0.35 + Math.random() * 0.82;
       desired.set(
-        THREE.MathUtils.clamp(Math.cos(moveAngle) * moveRadius, -0.9, 0.9),
+        THREE.MathUtils.clamp(Math.cos(moveAngle) * moveRadius, -0.78, 0.78),
         0,
-        THREE.MathUtils.clamp(Math.sin(moveAngle) * moveRadius * 0.72, -0.7, 0.7),
+        THREE.MathUtils.clamp(Math.sin(moveAngle) * moveRadius * 0.64, -0.56, 0.56),
       );
       pauseTimer = 0;
       isWalking = true;
@@ -430,7 +430,7 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
         root.userData.bounds.minZ,
         root.userData.bounds.maxZ,
       );
-      root.position.y = 0.86 + Math.sin(roamTimer * species.bounce) * 0.016;
+      root.position.y = 1.04 + Math.sin(roamTimer * species.bounce) * 0.014;
       root.rotation.z = Math.sin(roamTimer * 1.2) * 0.015;
 
       const walk = isWalking ? Math.sin(roamTimer * species.stride) : Math.sin(roamTimer * 4) * 0.12;
@@ -445,7 +445,7 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
       if (nameTag) {
         nameTag.position.set(0, 1.02 + Math.sin(roamTimer * 2.2) * 0.04, 0);
       }
-      camera.lookAt(root.position.x, 0.55, root.position.z + 0.1);
+      camera.lookAt(root.position.x, 0.72, root.position.z + 0.1);
 
       renderer.render(scene, camera);
       animationFrame = requestAnimationFrame(animate);
