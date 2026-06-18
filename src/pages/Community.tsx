@@ -125,6 +125,11 @@ export function Community() {
   const [editImagePreviewUrl, setEditImagePreviewUrl] = useState<string | null>(null);
   const [editImageRemoved, setEditImageRemoved] = useState(false);
   const [editOriginalImageUrl, setEditOriginalImageUrl] = useState<string | undefined>(undefined);
+  const editThumbnailFileInputRef = useRef<HTMLInputElement>(null);
+  const [editVideoThumbnailFile, setEditVideoThumbnailFile] = useState<File | null>(null);
+  const [editVideoThumbnailPreviewUrl, setEditVideoThumbnailPreviewUrl] = useState<string | null>(null);
+  const [editVideoThumbnailRemoved, setEditVideoThumbnailRemoved] = useState(false);
+  const [editOriginalVideoThumbnailUrl, setEditOriginalVideoThumbnailUrl] = useState<string | undefined>(undefined);
   const [brokenImages, setBrokenImages] = useState<Record<string, boolean>>({});
   const [profilesById, setProfilesById] = useState<Record<string, UserProfileDto>>(
     {},
@@ -547,7 +552,13 @@ export function Community() {
     }
   }
 
-  function startEditPost(post: { id: string; content: string; imageUrl?: string }) {
+  function startEditPost(post: {
+    id: string;
+    content: string;
+    imageUrl?: string;
+    videoUrl?: string;
+    videoThumbnailUrl?: string;
+  }) {
     setEditingPost(post.id);
     setEditDraft(post.content);
     setEditImageFile(null);
@@ -555,6 +566,11 @@ export function Community() {
     setEditImagePreviewUrl(null);
     setEditImageRemoved(false);
     setEditOriginalImageUrl(post.imageUrl);
+    setEditVideoThumbnailFile(null);
+    if (editVideoThumbnailPreviewUrl) URL.revokeObjectURL(editVideoThumbnailPreviewUrl);
+    setEditVideoThumbnailPreviewUrl(null);
+    setEditVideoThumbnailRemoved(false);
+    setEditOriginalVideoThumbnailUrl(post.videoThumbnailUrl);
   }
 
   async function saveEditPost(postId: string) {
@@ -563,16 +579,24 @@ export function Community() {
     if (!trimmed) return;
     try {
       let newImageUrl: string | undefined;
+      let newVideoThumbnailUrl: string | undefined;
       if (editImageFile) {
         const uploaded = await apiUploadCommunityImage(editImageFile);
         newImageUrl = uploaded.imageUrl;
       } else if (editImageRemoved) {
         newImageUrl = "";
       }
+      if (editVideoThumbnailFile) {
+        const uploaded = await apiUploadCommunityImage(editVideoThumbnailFile);
+        newVideoThumbnailUrl = uploaded.imageUrl;
+      } else if (editVideoThumbnailRemoved) {
+        newVideoThumbnailUrl = "";
+      }
       const updated = await apiUpdatePost(postId, {
         userId: user.id,
         content: trimmed,
         imageUrl: newImageUrl,
+        videoThumbnailUrl: newVideoThumbnailUrl,
       });
       dispatch({ type: "replacePost", post: updated });
       setEditingPost(null);
@@ -582,6 +606,12 @@ export function Community() {
       setEditImagePreviewUrl(null);
       setEditImageRemoved(false);
       setEditOriginalImageUrl(undefined);
+      if (editThumbnailFileInputRef.current) editThumbnailFileInputRef.current.value = "";
+      if (editVideoThumbnailPreviewUrl) URL.revokeObjectURL(editVideoThumbnailPreviewUrl);
+      setEditVideoThumbnailFile(null);
+      setEditVideoThumbnailPreviewUrl(null);
+      setEditVideoThumbnailRemoved(false);
+      setEditOriginalVideoThumbnailUrl(undefined);
       notify("Post modifié.", "success");
     } catch (err) {
       console.warn(err);
@@ -615,6 +645,38 @@ export function Community() {
     setEditImagePreviewUrl(null);
     setEditImageRemoved(true);
     if (editFileInputRef.current) editFileInputRef.current.value = "";
+  }
+
+  function onPickEditVideoThumbnail(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      validateFile(file);
+      if (!isImageFile(file.type)) {
+        throw new Error("Choisis une image JPG, PNG, GIF ou WEBP.");
+      }
+      if (editVideoThumbnailPreviewUrl) {
+        URL.revokeObjectURL(editVideoThumbnailPreviewUrl);
+      }
+      setEditVideoThumbnailFile(file);
+      setEditVideoThumbnailPreviewUrl(URL.createObjectURL(file));
+      setEditVideoThumbnailRemoved(false);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Miniature impossible à utiliser.";
+      notify(message, "error");
+      event.target.value = "";
+    }
+  }
+
+  function clearEditVideoThumbnail() {
+    if (editVideoThumbnailPreviewUrl) {
+      URL.revokeObjectURL(editVideoThumbnailPreviewUrl);
+    }
+    setEditVideoThumbnailFile(null);
+    setEditVideoThumbnailPreviewUrl(null);
+    setEditVideoThumbnailRemoved(true);
+    if (editThumbnailFileInputRef.current) editThumbnailFileInputRef.current.value = "";
   }
 
   function profileHref(authorId: string) {
@@ -1310,6 +1372,59 @@ export function Community() {
                             />
                           </div>
                         ) : null}
+                        {post.videoUrl && (
+                          <div className="mt-2 rounded-xl border border-royal-500/30 bg-night-900/55 p-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-xs text-ivory/65">Miniature vidéo</p>
+                              {editOriginalVideoThumbnailUrl || editVideoThumbnailPreviewUrl ? (
+                                <button
+                                  type="button"
+                                  onClick={clearEditVideoThumbnail}
+                                  className="rounded-full p-1 text-ivory/45 transition hover:text-rose-300"
+                                  aria-label="Retirer la miniature"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              ) : null}
+                            </div>
+                            {editVideoThumbnailPreviewUrl ? (
+                              <img
+                                src={editVideoThumbnailPreviewUrl}
+                                alt="Nouvelle miniature vidéo"
+                                className="mt-2 max-h-40 w-full rounded-lg object-cover"
+                              />
+                            ) : !editVideoThumbnailRemoved && editOriginalVideoThumbnailUrl ? (
+                              <img
+                                src={editOriginalVideoThumbnailUrl}
+                                alt="Miniature vidéo actuelle"
+                                className="mt-2 max-h-40 w-full rounded-lg object-cover"
+                              />
+                            ) : (
+                              <div className="mt-2 flex min-h-24 items-center justify-center rounded-lg border border-dashed border-white/10 bg-night-950/35 px-3 text-center text-xs text-ivory/45">
+                                Aucune miniature personnalisée pour cette vidéo
+                              </div>
+                            )}
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              <input
+                                ref={editThumbnailFileInputRef}
+                                type="file"
+                                accept="image/jpeg,image/png,image/webp,image/gif"
+                                onChange={onPickEditVideoThumbnail}
+                                className="hidden"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => editThumbnailFileInputRef.current?.click()}
+                                className="inline-flex items-center gap-1.5 rounded-full border border-royal-500/30 px-3 py-1.5 text-xs text-ivory/60 transition hover:border-gold-400/60 hover:text-gold-200"
+                              >
+                                <Image className="h-3.5 w-3.5" />
+                                {editOriginalVideoThumbnailUrl && !editVideoThumbnailFile && !editVideoThumbnailRemoved
+                                  ? "Changer la miniature"
+                                  : "Ajouter une miniature"}
+                              </button>
+                            </div>
+                          </div>
+                        )}
                         <div className="mt-2 flex items-center gap-2">
                           <button
                             type="button"
@@ -1322,13 +1437,15 @@ export function Community() {
                               : "Ajouter une image"}
                           </button>
                           <button
-                            onClick={() => saveEditPost(post.id)}
+                            type="button"
+                            onClick={() => void saveEditPost(post.id)}
                             className="inline-flex items-center gap-1.5 rounded-full bg-gold-500/20 px-3 py-1.5 text-xs font-semibold text-gold-200 transition hover:bg-gold-500/30"
                           >
                             <Check className="h-3.5 w-3.5" />
                             Enregistrer
                           </button>
                           <button
+                            type="button"
                             onClick={() => {
                               setEditingPost(null);
                               setEditDraft("");
@@ -1337,6 +1454,17 @@ export function Community() {
                               setEditImagePreviewUrl(null);
                               setEditImageRemoved(false);
                               setEditOriginalImageUrl(undefined);
+                              if (editFileInputRef.current) editFileInputRef.current.value = "";
+                              if (editThumbnailFileInputRef.current) {
+                                editThumbnailFileInputRef.current.value = "";
+                              }
+                              if (editVideoThumbnailPreviewUrl) {
+                                URL.revokeObjectURL(editVideoThumbnailPreviewUrl);
+                              }
+                              setEditVideoThumbnailFile(null);
+                              setEditVideoThumbnailPreviewUrl(null);
+                              setEditVideoThumbnailRemoved(false);
+                              setEditOriginalVideoThumbnailUrl(undefined);
                             }}
                             className="inline-flex items-center gap-1.5 rounded-full border border-royal-500/30 px-3 py-1.5 text-xs text-ivory/60 transition hover:text-ivory/90"
                           >
@@ -1431,7 +1559,9 @@ export function Community() {
                     }))
                   }
                 />
-                {post.videoUrl && <PostVideo url={post.videoUrl} />}
+                {post.videoUrl && (
+                  <PostVideo url={post.videoUrl} thumbnailUrl={post.videoThumbnailUrl} />
+                )}
                 <div className="mt-4 flex flex-wrap items-center gap-2">
                   {(() => {
                     const likeCount = Object.values(post.reactions ?? {}).reduce(
@@ -1705,7 +1835,13 @@ function PostImageAttachment({
   );
 }
 
-function PostVideo({ url }: { url: string }) {
+function PostVideo({
+  url,
+  thumbnailUrl,
+}: {
+  url: string;
+  thumbnailUrl?: string;
+}) {
   const parsed = parseVideoUrl(url);
   if (!parsed) return null;
 
@@ -1730,6 +1866,7 @@ function PostVideo({ url }: { url: string }) {
       <video
         controls
         preload="metadata"
+        poster={thumbnailUrl ?? undefined}
         className="mt-4 max-h-[500px] w-full rounded-xl border border-royal-500/30 bg-night-800"
       >
         <source src={parsed.src} />

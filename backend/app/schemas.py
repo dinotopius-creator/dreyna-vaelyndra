@@ -29,6 +29,7 @@ class PostCreate(AuthorIn):
     content: str = Field(..., min_length=1, max_length=2000)
     image_url: Optional[str] = Field(default=None, max_length=1024)
     video_url: Optional[str] = Field(default=None, max_length=1024)
+    video_thumbnail_url: Optional[str] = Field(default=None, max_length=1024)
 
 
 class PostUpdate(BaseModel):
@@ -36,6 +37,7 @@ class PostUpdate(BaseModel):
     content: Optional[str] = Field(default=None, min_length=1, max_length=2000)
     image_url: Optional[str] = Field(default=None, max_length=1024)
     video_url: Optional[str] = Field(default=None, max_length=1024)
+    video_thumbnail_url: Optional[str] = Field(default=None, max_length=1024)
 
 
 class CommentCreate(AuthorIn):
@@ -82,6 +84,7 @@ class PostOut(BaseModel):
     content: str
     imageUrl: Optional[str] = None
     videoUrl: Optional[str] = None
+    videoThumbnailUrl: Optional[str] = None
     postType: str = "standard"
     officialLabel: Optional[str] = None
     createdAt: str

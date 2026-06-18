@@ -24,6 +24,7 @@ class Post(SQLModel, table=True):
     content: str
     image_url: Optional[str] = None
     video_url: Optional[str] = None
+    video_thumbnail_url: Optional[str] = None
     post_type: str = Field(default="standard", index=True, max_length=32)
     official_label: Optional[str] = Field(default=None, max_length=64)
     created_at: str = Field(default_factory=_now_iso, index=True)

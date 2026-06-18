@@ -715,6 +715,7 @@ def _serialize_post(
         content=post.content,
         imageUrl=post.image_url,
         videoUrl=post.video_url,
+        videoThumbnailUrl=post.video_thumbnail_url,
         postType=post.post_type or "standard",
         officialLabel=post.official_label,
         createdAt=post.created_at,
@@ -846,6 +847,7 @@ def create_post(
         content=payload.content,
         image_url=_sanitize_post_image_url(payload.image_url),
         video_url=payload.video_url,
+        video_thumbnail_url=_sanitize_post_image_url(payload.video_thumbnail_url),
     )
     session.add(post)
     # PR M — crédit XP à l'auteur. On fait un `get` sur la clé primaire
@@ -963,6 +965,8 @@ def update_post(
         post.image_url = _sanitize_post_image_url(payload.image_url)
     if payload.video_url is not None:
         post.video_url = payload.video_url
+    if payload.video_thumbnail_url is not None:
+        post.video_thumbnail_url = _sanitize_post_image_url(payload.video_thumbnail_url)
     session.commit()
     session.refresh(post)
 
