@@ -959,15 +959,6 @@ export function Community() {
         subtitle="Poste tes créations, pensées et annonces. Tous les membres se croisent ici."
       />
 
-      <div className="mx-auto mt-8 max-w-5xl">
-        <CommunityContestBanner />
-      </div>
-      {contestAwardedNotice && (
-        <div className="mx-auto mt-4 max-w-5xl rounded-2xl border border-emerald-300/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
-          {contestAwardedNotice}
-        </div>
-      )}
-
       <div className="mx-auto mt-8 max-w-2xl">
         <MemberSearch />
       </div>
