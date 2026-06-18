@@ -346,28 +346,20 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
     let roamTimer = 0;
     let pauseTimer = 0;
     let isWalking = false;
-    let moveAngle = 0;
-    let moveRadius = 0.95;
-    let leftwardStep = 0;
+    let pathStep = 0;
+    const pathTargets = [
+      new THREE.Vector3(0.22, 0, 0.02),
+      new THREE.Vector3(-0.08, 0, -0.01),
+      new THREE.Vector3(-0.34, 0, 0.03),
+      new THREE.Vector3(-0.58, 0, -0.02),
+      new THREE.Vector3(-0.26, 0, 0.01),
+    ];
     let tapCooldown = 0;
 
     function pickDestination() {
-      leftwardStep = (leftwardStep + 1) % 4;
-      moveAngle = Math.PI * (0.72 + Math.random() * 0.16);
-      moveRadius = 0.32 + Math.random() * 0.22;
-      desired.set(
-        THREE.MathUtils.clamp(
-          -0.1 - leftwardStep * 0.16 + Math.cos(moveAngle) * moveRadius,
-          -0.78,
-          0.3,
-        ),
-        0,
-        THREE.MathUtils.clamp(
-          Math.sin(moveAngle) * moveRadius * 0.42,
-          -0.36,
-          0.36,
-        ),
-      );
+      const nextTarget = pathTargets[pathStep % pathTargets.length];
+      desired.copy(nextTarget);
+      pathStep += 1;
       pauseTimer = 0;
       isWalking = true;
     }
@@ -413,15 +405,15 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
         const dz = desired.z - target.z;
         const distance = Math.hypot(dx, dz);
         if (distance < 0.04) {
-          pauseTimer = 0.8 + Math.random() * 1.4;
-          if (target.x <= root.userData.bounds.minX + 0.16) {
-            target.x = 0.26;
+          pauseTimer = pathStep % 5 === 0 ? 0.7 : 0.35;
+          if (pathStep % 5 === 0) {
+            desired.set(0.22, 0, 0.02);
           }
           pickDestination();
         } else {
           isWalking = true;
-          target.x += dx * dt * 0.55;
-          target.z += dz * dt * 0.55;
+          target.x += dx * dt * 1.0;
+          target.z += dz * dt * 1.0;
           target.x = THREE.MathUtils.clamp(target.x, root.userData.bounds.minX, root.userData.bounds.maxX);
           target.z = THREE.MathUtils.clamp(target.z, root.userData.bounds.minZ, root.userData.bounds.maxZ);
           const angle = Math.atan2(dx, dz);
@@ -434,12 +426,12 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
       }
 
       root.position.x = THREE.MathUtils.clamp(
-        THREE.MathUtils.lerp(root.position.x, target.x, 0.06),
+        THREE.MathUtils.lerp(root.position.x, target.x, 0.13),
         root.userData.bounds.minX,
         root.userData.bounds.maxX,
       );
       root.position.z = THREE.MathUtils.clamp(
-        THREE.MathUtils.lerp(root.position.z, target.z, 0.06),
+        THREE.MathUtils.lerp(root.position.z, target.z, 0.11),
         root.userData.bounds.minZ,
         root.userData.bounds.maxZ,
       );
