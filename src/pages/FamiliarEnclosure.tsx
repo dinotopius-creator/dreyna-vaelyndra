@@ -47,6 +47,13 @@ const DEFAULT_AFFECTION: FamiliarAffectionState = {
   heartRewards: [50, 75, 100, 150, 200, 275, 350, 450, 600, 800],
 };
 
+const CUTE_MESSAGES = [
+  "Merci de prendre soin de moi",
+  "Je suis content d'être ici",
+  "Tu es gentil avec moi",
+  "J'aime mon enclos tout propre",
+];
+
 function formatRemaining(seconds: number) {
   const totalMinutes = Math.ceil(seconds / 60);
   const hours = Math.floor(totalMinutes / 60);
@@ -128,10 +135,19 @@ export function FamiliarEnclosure() {
   const [heartPulse, setHeartPulse] = useState<number | null>(null);
   const [guideOpen, setGuideOpen] = useState(false);
   const [feedBurstId, setFeedBurstId] = useState(0);
+  const [speechMessage, setSpeechMessage] = useState(CUTE_MESSAGES[0]);
+  const [speechTick, setSpeechTick] = useState(0);
 
   useEffect(() => {
     setDisplayedLueurs(profile?.lueurs ?? 0);
   }, [profile?.lueurs]);
+
+  useEffect(() => {
+    document.body.classList.add("vaelyndra-familiar-enclosure-open");
+    return () => {
+      document.body.classList.remove("vaelyndra-familiar-enclosure-open");
+    };
+  }, []);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -257,104 +273,148 @@ export function FamiliarEnclosure() {
     setFeedback(null);
   }
 
+  function tapFamiliar() {
+    if (!active) return;
+    setFeedback(`${active.nickname || active.name} vous regarde et sourit.`);
+    setFeedBurstId((current) => current + 1);
+    playFeedSound();
+    setSpeechTick((current) => current + 1);
+  }
+
+  useEffect(() => {
+    setSpeechMessage(CUTE_MESSAGES[speechTick % CUTE_MESSAGES.length]);
+  }, [speechTick]);
+
   if (!user?.id) {
     return (
-      <section className="mx-auto max-w-3xl px-4 py-16 text-center text-ivory/70">
-        <p>Connectez-vous pour ouvrir l'enclos de votre familier.</p>
-        <Link to="/connexion" className="btn-gold mt-4 inline-flex">
-          Se connecter
-        </Link>
+      <section className="flex h-[100dvh] items-center justify-center bg-night-950 px-4 text-center text-ivory/70">
+        <div className="max-w-md rounded-[28px] border border-white/10 bg-night-900/75 p-6 backdrop-blur-xl">
+          <p>Connectez-vous pour ouvrir l'enclos de votre familier.</p>
+          <Link to="/connexion" className="btn-gold mt-4 inline-flex">
+            Se connecter
+          </Link>
+        </div>
       </section>
     );
   }
 
   if (loading) {
     return (
-      <section className="mx-auto flex min-h-[60vh] max-w-3xl items-center justify-center px-4 py-16 text-ivory/70">
-        <Loader2 className="h-7 w-7 animate-spin" aria-hidden />
+      <section className="flex h-[100dvh] items-center justify-center bg-night-950 px-4 text-ivory/70">
+        <div className="flex flex-col items-center gap-4 rounded-[28px] border border-white/10 bg-night-900/75 px-6 py-8 text-center backdrop-blur-xl">
+          <Loader2 className="h-7 w-7 animate-spin" aria-hidden />
+          <div>
+            <p className="font-display text-2xl text-gold-100">Ouverture de l'enclos…</p>
+            <p className="mt-2 text-sm text-ivory/60">
+              Préparation de votre familier, de la nourriture et des récompenses.
+            </p>
+          </div>
+        </div>
       </section>
     );
   }
 
   return (
-    <section className="relative mx-auto max-w-6xl px-3 pb-16 pt-5 sm:px-5 sm:pt-8">
-      <div className="mb-4 flex items-center justify-between gap-3">
+    <section className="fixed inset-0 z-40 flex h-[100dvh] w-screen flex-col overflow-hidden bg-[radial-gradient(circle_at_top,rgba(250,204,21,0.12),transparent_30%),linear-gradient(180deg,rgba(5,10,20,0.98),rgba(5,8,16,1))] text-ivory">
+      <div className="pointer-events-none absolute inset-0 opacity-60">
+        <div className="absolute left-[10%] top-[8%] h-56 w-56 rounded-full bg-emerald-300/10 blur-3xl" />
+        <div className="absolute right-[8%] top-[16%] h-64 w-64 rounded-full bg-gold-300/10 blur-3xl" />
+        <div className="absolute bottom-0 left-1/2 h-72 w-[82vw] -translate-x-1/2 rounded-full bg-[radial-gradient(ellipse_at_center,rgba(34,197,94,0.24),rgba(15,23,42,0)_70%)]" />
+      </div>
+
+      <div className="relative z-10 flex items-center justify-between gap-3 border-b border-white/10 bg-night-950/65 px-3 py-3 backdrop-blur-xl sm:px-5">
         <Link
           to="/familier"
-          className="inline-flex min-h-11 items-center gap-2 rounded-full border border-white/10 bg-night-950/55 px-4 py-2 text-sm text-ivory/75 backdrop-blur transition hover:border-gold-300/45 hover:text-gold-100"
+          className="inline-flex min-h-11 items-center gap-2 rounded-full border border-white/10 bg-night-950/80 px-4 py-2 text-sm text-ivory/80 transition hover:border-gold-300/45 hover:text-gold-100"
         >
           <ArrowLeft className="h-4 w-4" />
-          Retour
+          Quitter
         </Link>
+        <div className="min-w-0 text-center">
+          <p className="text-[10px] uppercase tracking-[0.3em] text-gold-200/70">
+            Enclos vivant
+          </p>
+          <h1 className="font-display text-lg text-gold-100 sm:text-2xl">
+            {active?.nickname || active?.name || "Familier actif"}
+          </h1>
+        </div>
         <div className="rounded-full border border-gold-300/25 bg-gold-500/10 px-3 py-2 text-xs uppercase tracking-[0.18em] text-gold-100">
           {displayedLueurs.toLocaleString("fr-FR")} Lueurs
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-[34px] border border-royal-500/30 bg-[radial-gradient(circle_at_50%_0%,rgba(250,204,21,0.18),transparent_34%),linear-gradient(180deg,rgba(14,10,28,0.92),rgba(5,9,18,0.94))] shadow-[0_30px_90px_rgba(0,0,0,0.35)]">
-        <header className="border-b border-white/10 px-5 py-5 sm:px-7">
-          <p className="text-[11px] uppercase tracking-[0.3em] text-gold-200/75">
-            Enclos du familier
-          </p>
-          <div className="mt-2 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-            <div>
-              <h1 className="font-display text-3xl text-gold-100 sm:text-5xl">
-                Affection, repas et petits cœurs
-              </h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-ivory/66">
-                Nettoyez l'enclos pour trouver de la nourriture, nourrissez votre
-                compagnon et faites grandir son affection sur 10 cœurs.
-              </p>
-            </div>
-            <div className="grid grid-cols-2 gap-2 text-xs sm:min-w-72">
-              <StatPill label="Nourriture" value={String(affection.foodStock)} />
-              <StatPill
-                label="Prochain nettoyage"
-                value={onCooldown ? formatRemaining(cooldownRemaining) : "Prêt"}
-              />
-            </div>
-          </div>
-        </header>
-
-        <div className="grid gap-5 p-4 lg:grid-cols-[1.35fr,0.65fr] lg:p-6">
-          <div className="relative min-h-[560px] overflow-hidden rounded-[30px] border border-white/10 bg-[radial-gradient(circle_at_50%_28%,rgba(74,222,128,0.16),transparent_28%),linear-gradient(180deg,rgba(16,185,129,0.12),rgba(15,23,42,0.92))] sm:min-h-[640px]">
+      <div className="relative z-10 flex-1 min-h-0 overflow-y-auto overscroll-contain">
+        <div className="grid gap-4 p-3 pb-8 lg:grid-cols-[1.35fr,0.65fr] lg:p-5">
+          <div className="relative isolate min-h-[72dvh] overflow-hidden rounded-[30px] border border-white/10 bg-[radial-gradient(circle_at_50%_24%,rgba(74,222,128,0.16),transparent_28%),linear-gradient(180deg,rgba(16,185,129,0.12),rgba(15,23,42,0.92))] shadow-[0_30px_90px_rgba(0,0,0,0.35)] lg:min-h-[calc(100dvh-8.5rem)]">
             <div className="absolute inset-x-0 bottom-0 h-[48%] rounded-t-[50%] bg-[radial-gradient(ellipse_at_center,rgba(34,197,94,0.35),rgba(20,83,45,0.2)_48%,transparent_72%)]" />
             <div className="absolute left-[8%] top-[16%] h-32 w-32 rounded-full bg-gold-200/10 blur-3xl" />
             <div className="absolute right-[10%] top-[10%] h-40 w-40 rounded-full bg-cyan-200/10 blur-3xl" />
 
             <motion.div
-              className="absolute left-[18%] top-[18%] h-24 w-24 rounded-[34px] border border-white/10 bg-white/5"
+              className="absolute left-[18%] top-[14%] h-24 w-24 rounded-[34px] border border-white/10 bg-white/5"
               animate={{ y: [0, -8, 0], rotate: [0, 2, 0] }}
               transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
             />
             <motion.div
-              className="absolute right-[14%] top-[24%] h-16 w-28 rounded-full border border-white/10 bg-emerald-300/10"
+              className="absolute right-[14%] top-[18%] h-16 w-28 rounded-full border border-white/10 bg-emerald-300/10"
               animate={{ y: [0, 7, 0] }}
               transition={{ duration: 4.2, repeat: Infinity, ease: "easeInOut" }}
             />
+            <div className="absolute left-4 top-4 z-10 rounded-full border border-white/10 bg-night-950/70 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-ivory/70 backdrop-blur">
+              Touchez le familier
+            </div>
 
             {active ? (
-              <motion.div
-                className="absolute z-20 flex flex-col items-center"
+              <motion.button
+                type="button"
+                onClick={tapFamiliar}
+                className="absolute left-[35%] top-[29%] z-20 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center focus:outline-none sm:left-[33%] sm:top-[27%]"
                 style={{ color: active.color }}
                 animate={{
-                  left: ["18%", "58%", "46%", "25%", "18%"],
-                  top: ["52%", "45%", "66%", "70%", "52%"],
+                  y: [0, -28, 0, 22, 0],
+                  x: [0, -22, 0, 22, 0],
+                  rotate: [0, 1.6, 0, -1.6, 0],
                 }}
-                transition={{ duration: 14, repeat: Infinity, ease: "easeInOut" }}
+                transition={{ duration: 9.4, repeat: Infinity, ease: "easeInOut" }}
               >
                 <AffectionHearts
                   hearts={affection.affectionHearts}
                   pulseHeart={heartPulse}
                 />
-                <div className="relative">
-                  <FamiliarPortrait familiar={active} size="lg" />
+                <div className="relative flex h-[250px] w-[250px] items-center justify-center overflow-visible sm:h-[290px] sm:w-[290px]">
+                  <motion.div
+                    className="absolute -top-3 left-1/2 z-30 -translate-x-1/2 rounded-[999px] border border-white/10 bg-night-950/82 px-3 py-1 text-[10px] text-ivory/80 shadow-[0_10px_22px_rgba(0,0,0,0.28)] backdrop-blur"
+                    animate={{ y: [0, -6, 0] }}
+                    transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+                    aria-label={speechMessage}
+                  >
+                    {speechMessage}
+                  </motion.div>
+                  <motion.div
+                    className="absolute inset-[12px] rounded-[32px] border border-white/10 bg-night-950/30 backdrop-blur-[2px]"
+                    animate={{ scale: [1, 1.02, 1], opacity: [0.9, 1, 0.9] }}
+                    transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut" }}
+                    aria-hidden
+                  />
+                  <motion.div
+                    className="relative z-10"
+                    animate={{ y: [0, -18, 0, 16, 0], x: [0, -8, 0, 8, 0] }}
+                    transition={{ duration: 7.2, repeat: Infinity, ease: "easeInOut" }}
+                  >
+                    <FamiliarPortrait
+                      familiar={active}
+                      size="lg"
+                      animated
+                      showFrame
+                      className="scale-[0.98] sm:scale-[1.03]"
+                    />
+                  </motion.div>
                   <FeedHeartBurst burstId={feedBurstId} />
                 </div>
-                <div className="mt-2 rounded-full border border-white/10 bg-night-950/72 px-3 py-1 text-center text-xs text-ivory/80 backdrop-blur">
+                <div className="mt-1 rounded-full border border-white/10 bg-night-950/72 px-3 py-1 text-center text-[11px] text-ivory/80 backdrop-blur">
                   {active.nickname || active.name}
                 </div>
-              </motion.div>
+              </motion.button>
             ) : (
               <div className="absolute inset-0 z-20 flex items-center justify-center px-5 text-center">
                 <div className="rounded-3xl border border-white/10 bg-night-950/70 p-5 text-ivory/70 backdrop-blur">
@@ -407,7 +467,7 @@ export function FamiliarEnclosure() {
             </div>
           </div>
 
-          <aside className="space-y-4">
+          <aside className="min-h-0 space-y-4 overflow-y-visible pr-1 pb-4 lg:overflow-y-auto">
             <div className="rounded-[26px] border border-rose-300/20 bg-rose-500/10 p-5">
               <div className="flex items-center gap-2 text-rose-100">
                 <Heart className="h-4 w-4" />
@@ -705,17 +765,6 @@ function FamiliarHeartRewardGuide({
           pour le dernier palier.
         </p>
       </div>
-    </div>
-  );
-}
-
-function StatPill({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-night-950/55 px-3 py-2">
-      <div className="text-[10px] uppercase tracking-[0.2em] text-ivory/45">
-        {label}
-      </div>
-      <div className="mt-1 font-display text-lg text-gold-100">{value}</div>
     </div>
   );
 }
