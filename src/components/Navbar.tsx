@@ -881,7 +881,7 @@ export function Navbar() {
           )}
       </div>
       <nav
-        className="mobile-tabbar fixed inset-x-3 bottom-[calc(0.55rem+env(safe-area-inset-bottom))] z-50 grid grid-cols-5 rounded-[1.55rem] border border-white/10 bg-night-950/88 p-1.5 shadow-[0_20px_70px_rgba(0,0,0,0.5)] backdrop-blur-2xl lg:hidden"
+        className="mobile-tabbar fixed inset-x-3 bottom-0 z-50 grid grid-cols-5 rounded-t-[1.55rem] rounded-b-none border border-white/10 border-b-0 bg-night-950/92 px-1.5 pt-1.5 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-16px_48px_rgba(0,0,0,0.42)] backdrop-blur-2xl lg:hidden"
         aria-label="Navigation mobile principale"
       >
         {MOBILE_TABS.map((tab) => {
