@@ -10,25 +10,28 @@ export type Avatar3DHairStyle =
   | "ponytail"
   | "afro"
   | "pixie";
+export type Avatar3DBaseModel = "procedural-premium" | "premium-humanoid";
 
 export interface Avatar3DConfig {
-  version: 1;
+  version: 1 | 2;
   bodyType: Avatar3DBodyType;
   faceShape: Avatar3DFaceShape;
   hairStyle: Avatar3DHairStyle;
   skinTone: string;
   hairColor: string;
   eyeColor: string;
+  baseModel?: Avatar3DBaseModel;
 }
 
 export const DEFAULT_AVATAR_3D_CONFIG: Avatar3DConfig = {
-  version: 1,
+  version: 2,
   bodyType: "femme",
   faceShape: "soft",
   hairStyle: "wave",
   skinTone: "#f2d1bf",
   hairColor: "#2d160f",
   eyeColor: "#7fd8ff",
+  baseModel: "premium-humanoid",
 };
 
 export const AVATAR_3D_SKIN_TONES = [
@@ -71,7 +74,15 @@ export function isAvatar3DUrl(input: string | null | undefined): boolean {
 
 export function buildAvatar3DUrl(config: Avatar3DConfig): string {
   const payload = btoa(
-    unescape(encodeURIComponent(JSON.stringify({ ...config, version: 1 }))),
+    unescape(
+      encodeURIComponent(
+        JSON.stringify({
+          ...config,
+          version: 2,
+          baseModel: config.baseModel ?? "premium-humanoid",
+        }),
+      ),
+    ),
   );
   return `${AVATAR_3D_PREFIX}${payload}`;
 }
@@ -86,9 +97,9 @@ export function decodeAvatar3DUrl(
     const parsed = JSON.parse(
       decodeURIComponent(escape(atob(raw))),
     ) as Partial<Avatar3DConfig>;
-    if (parsed.version !== 1) return null;
+    if (parsed.version !== 1 && parsed.version !== 2) return null;
     return {
-      version: 1,
+      version: parsed.version,
       bodyType: parsed.bodyType === "homme" ? "homme" : "femme",
       faceShape: parsed.faceShape === "sharp" ? "sharp" : "soft",
       hairStyle:
@@ -103,6 +114,10 @@ export function decodeAvatar3DUrl(
       skinTone: typeof parsed.skinTone === "string" ? parsed.skinTone : DEFAULT_AVATAR_3D_CONFIG.skinTone,
       hairColor: typeof parsed.hairColor === "string" ? parsed.hairColor : DEFAULT_AVATAR_3D_CONFIG.hairColor,
       eyeColor: typeof parsed.eyeColor === "string" ? parsed.eyeColor : DEFAULT_AVATAR_3D_CONFIG.eyeColor,
+      baseModel:
+        parsed.baseModel === "procedural-premium"
+          ? "procedural-premium"
+          : "premium-humanoid",
     };
   } catch {
     return null;
