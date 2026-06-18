@@ -12,7 +12,7 @@ import { getOfficial } from "../data/officials";
 import { Handle } from "./Handle";
 import { ReportButton } from "./ReportButton";
 import { AvatarImage } from "./AvatarImage";
-import { RichMentionText, buildMentionLookup } from "./RichMentionText";
+import { RichSocialText, buildMentionLookup } from "./RichSocialText";
 import StreamerGradeBadge from "./StreamerGradeBadge";
 import { UserBadges } from "./UserBadges";
 
@@ -292,7 +292,7 @@ export function PostComments({
               </p>
             )}
 
-            <RichMentionText
+            <RichSocialText
               content={comment.content}
               mentionsByHandle={mentionTargets}
               profileHref={profileHref}

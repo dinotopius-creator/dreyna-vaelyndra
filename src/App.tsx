@@ -48,6 +48,10 @@ const Community = lazy(async () => {
   const mod = await import("./pages/Community");
   return { default: mod.Community };
 });
+const CommunityHashtag = lazy(async () => {
+  const mod = await import("./pages/CommunityHashtag");
+  return { default: mod.CommunityHashtag };
+});
 const Worlds = lazy(async () => {
   const mod = await import("./pages/Worlds");
   return { default: mod.Worlds };
@@ -212,6 +216,8 @@ function AnimatedRoutes() {
             />
             <Route path="/live/:broadcasterId" element={<Live />} />
             <Route path="/communaute" element={<Community />} />
+            <Route path="/communaute/hashtag/:tag" element={<CommunityHashtag />} />
+            <Route path="/social/hashtag/:tag" element={<CommunityHashtag />} />
             <Route path="/mondes/play" element={<Worlds dedicatedMode />} />
             <Route path="/mondes" element={<Worlds />} />
             <Route path="/wiki" element={<Wiki />} />

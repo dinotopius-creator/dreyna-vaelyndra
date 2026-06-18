@@ -32,10 +32,17 @@ import { UserBadges } from "../components/UserBadges";
 import { Handle } from "../components/Handle";
 import { MemberSearch } from "../components/MemberSearch";
 import { AvatarImage } from "../components/AvatarImage";
-import { RichMentionText, buildMentionLookup } from "../components/RichMentionText";
+import { RichSocialText } from "../components/RichSocialText";
+import { buildMentionLookup } from "../components/RichMentionText";
+import { CommunityContestBanner } from "../components/CommunityContestBanner";
 import StreamerGradeBadge from "../components/StreamerGradeBadge";
 import { WeeklyRankingCountdown } from "../components/WeeklyRankingCountdown";
 import { getOfficial } from "../data/officials";
+import {
+  COMMUNITY_DRAWING_CONTEST,
+  drawingContestUrl,
+  isDrawingContestEntry,
+} from "../data/communityContest";
 import {
   formatRelative,
   parsePostImageUrl,
@@ -47,6 +54,7 @@ import {
   apiUpdatePost,
   apiGetCommunityActivityLeaderboard,
   apiSyncCommunityActivityRewards,
+  apiSettleDrawingContest,
   apiToggleReaction,
   apiGetProfile,
   apiSearchUsers,
@@ -56,6 +64,7 @@ import {
   type StreamerGradeDto,
 } from "../lib/api";
 import { isImageFile, validateFile } from "../lib/fileUtils";
+import type { CommunityPost } from "../types";
 
 
 const QUICK_EMOJIS = ["✨", "👑", "🌿", "⚔️", "🌙", "🔮"];
@@ -109,6 +118,7 @@ export function Community() {
     }>
   >([]);
   const [activityWeekStartIso, setActivityWeekStartIso] = useState<string>("");
+  const [contestAwardedNotice, setContestAwardedNotice] = useState<string | null>(null);
 
   const displayLeaderboard = useMemo(
     () =>
@@ -162,6 +172,32 @@ export function Community() {
       ),
     [posts],
   );
+
+  const contestAnnouncementPost = useMemo<CommunityPost>(
+    () => ({
+      id: COMMUNITY_DRAWING_CONTEST.announcementPostId,
+      authorId: "user-dreyna",
+      authorName: "Dreyna",
+      authorHandle: "dreyna",
+      authorGrade: null,
+      authorAvatar: "/favicon.svg",
+      content:
+        "Concours de dessin lancé ! Poste ton dessin avec #concoursdessin pour participer pendant 24h. Le post avec le plus de likes gagne 1000 lueurs et 6 nourritures familier.",
+      imageUrl: COMMUNITY_DRAWING_CONTEST.bannerImage,
+      videoUrl: undefined,
+      postType: "official_event",
+      officialLabel: "Annonce officielle",
+      createdAt: COMMUNITY_DRAWING_CONTEST.startsAt,
+      reactions: {} as Record<string, string[]>,
+      comments: [] as CommunityPost["comments"],
+    }),
+    [],
+  );
+
+  const feedPosts = useMemo(() => {
+    const hasAnnouncement = sorted.some((post) => post.id === contestAnnouncementPost.id);
+    return hasAnnouncement ? sorted : [contestAnnouncementPost, ...sorted];
+  }, [contestAnnouncementPost, sorted]);
 
   useEffect(() => {
     if (!imagePreviewUrl) return;
@@ -278,6 +314,29 @@ export function Community() {
       cancelled = true;
     };
   }, [notify, refreshProfile, user]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const now = Date.now();
+    const contestEndsAt = new Date(COMMUNITY_DRAWING_CONTEST.endsAt).getTime();
+    if (now < contestEndsAt) return;
+    void apiSettleDrawingContest()
+      .then((result) => {
+        if (cancelled || !result.winner) return;
+        setContestAwardedNotice(
+          `${result.winner.authorName} gagne le concours #concoursdessin : +${result.rewardLueurs} lueurs et +${result.rewardFood} nourritures familier.`,
+        );
+        if (user?.id === result.winner.authorId) {
+          void refreshProfile();
+        }
+      })
+      .catch(() => {
+        /* best effort */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshProfile, user?.id]);
 
   useEffect(() => {
     const hash = location.hash.replace(/^#/, "").trim();
@@ -525,6 +584,15 @@ export function Community() {
         subtitle="Poste tes créations, pensées et annonces. Tous les membres se croisent ici."
       />
 
+      <div className="mx-auto mt-8 max-w-5xl">
+        <CommunityContestBanner />
+      </div>
+      {contestAwardedNotice && (
+        <div className="mx-auto mt-4 max-w-5xl rounded-2xl border border-emerald-300/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+          {contestAwardedNotice}
+        </div>
+      )}
+
       <div className="mx-auto mt-8 max-w-2xl">
         <MemberSearch />
       </div>
@@ -585,6 +653,28 @@ export function Community() {
                     <p className="text-xs text-ivory/45">
                       Import direct depuis ton téléphone ou ton ordinateur. Le champ URL d'image a été retiré.
                     </p>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setDraft((current) =>
+                            current.includes("#concoursdessin")
+                              ? current
+                              : `${current}${current.trim() ? " " : ""}#concoursdessin`,
+                          )
+                        }
+                        className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-gold-300/25 bg-gold-500/10 px-3 py-1.5 text-xs text-gold-100 transition hover:border-gold-300/55 hover:bg-gold-500/15"
+                      >
+                        <Sparkles className="h-3.5 w-3.5" />
+                        Ajouter #concoursdessin
+                      </button>
+                      <Link
+                        to={drawingContestUrl()}
+                        className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-ivory/70 transition hover:border-gold-300/45 hover:text-gold-100"
+                      >
+                        Voir le concours
+                      </Link>
+                    </div>
                     {imagePreviewUrl && (
                       <div className="rounded-2xl border border-royal-500/30 bg-night-900/55 p-3">
                         <div className="mb-2 flex items-center justify-between gap-3">
@@ -659,7 +749,7 @@ export function Community() {
           </form>
 
           <ul className="mt-6 space-y-4">
-            {sorted.map((post, index) => {
+            {feedPosts.map((post, index) => {
               const profile = resolvedProfile(post.authorId);
               const displayName = profile?.username || post.authorName;
               const displayHandle = profile?.handle ?? post.authorHandle ?? null;
@@ -737,6 +827,12 @@ export function Community() {
                       <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-gold-300/50 bg-gold-500/15 px-3 py-1 font-regal text-[10px] font-semibold uppercase tracking-[0.22em] text-gold-100">
                         <Megaphone className="h-3.5 w-3.5" />
                         {post.officialLabel ?? "Annonce officielle"}
+                      </div>
+                    )}
+                    {isDrawingContestEntry(post) && (
+                      <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-emerald-300/40 bg-emerald-500/12 px-3 py-1 font-regal text-[10px] font-semibold uppercase tracking-[0.22em] text-emerald-100">
+                        <Trophy className="h-3.5 w-3.5" />
+                        Participation concours
                       </div>
                     )}
                     {editingPost === post.id ? (
@@ -833,7 +929,7 @@ export function Community() {
                         </div>
                       </div>
                     ) : (
-                      <RichMentionText
+                      <RichSocialText
                         content={post.content}
                         mentionsByHandle={mentionTargets}
                         profileHref={profileHref}
