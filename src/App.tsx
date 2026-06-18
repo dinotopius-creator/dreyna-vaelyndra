@@ -60,6 +60,14 @@ const Wiki = lazy(async () => {
   const mod = await import("./pages/Wiki");
   return { default: mod.Wiki };
 });
+const Quests = lazy(async () => {
+  const mod = await import("./pages/Quests");
+  return { default: mod.Quests };
+});
+const ClubHub = lazy(async () => {
+  const mod = await import("./pages/ClubHub");
+  return { default: mod.ClubHub };
+});
 const Oracle = lazy(async () => {
   const mod = await import("./pages/Oracle");
   return { default: mod.Oracle };
@@ -223,6 +231,10 @@ function AnimatedRoutes() {
             <Route path="/mondes" element={<Worlds />} />
             <Route path="/wiki" element={<Wiki />} />
             <Route path="/wiki/:slug" element={<Wiki />} />
+            <Route path="/quetes" element={<Quests />} />
+            <Route path="/quests" element={<Quests />} />
+            <Route path="/missions" element={<Quests />} />
+            <Route path="/clubs" element={<ClubHub />} />
             <Route path="/oracle" element={<Oracle />} />
             <Route path="/u/:userId" element={<UserProfile />} />
             <Route path="/connexion" element={<Login />} />
