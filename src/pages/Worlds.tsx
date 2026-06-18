@@ -519,6 +519,7 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
   const familiarsLoadingRef = useRef<Record<string, boolean>>({});
   const [chatMessages, setChatMessages] = useState<WorldChatMessage[]>(BASE_CHAT);
   const [chatInput, setChatInput] = useState("");
+  const chatInputRef = useRef<HTMLInputElement | null>(null);
   const [worldSpeechBubbles, setWorldSpeechBubbles] = useState<WorldSpeechBubble[]>([]);
   const [worldMembers, setWorldMembers] = useState<WorldPresenceDto[]>([]);
   const [selectedMember, setSelectedMember] = useState<SelectedWorldMember | null>(null);
@@ -2079,8 +2080,9 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
                           type="button"
                           onClick={() => {
                             setWorldMenuOpen(false);
-                            const input = document.querySelector<HTMLInputElement>('[data-world-chat-input="true"]');
-                            input?.focus();
+                            window.setTimeout(() => {
+                              chatInputRef.current?.focus({ preventScroll: true });
+                            }, 0);
                           }}
                           className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm text-ivory/88 transition hover:bg-white/8"
                         >
@@ -2345,9 +2347,12 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
           <section
             className={`rounded-[26px] border border-royal-500/30 bg-night-900/60 p-5 shadow-[0_20px_50px_rgba(0,0,0,0.18)] ${
               worldGameActive
-                ? "fixed bottom-[calc(0.9rem+env(safe-area-inset-bottom))] left-[calc(0.9rem+env(safe-area-inset-left))] z-30 w-[min(21rem,calc(100vw-1.7rem))] max-h-[min(26rem,calc(100dvh-8rem))] overflow-hidden backdrop-blur-xl md:w-[min(24rem,calc(100vw-2rem))]"
+                ? "fixed bottom-[calc(0.9rem+env(safe-area-inset-bottom))] left-[calc(0.9rem+env(safe-area-inset-left))] z-30 w-[min(21rem,calc(100vw-1.7rem))] max-h-[min(26rem,calc(100dvh-8rem))] overflow-hidden backdrop-blur-xl touch-pan-y overscroll-contain md:w-[min(24rem,calc(100vw-2rem))]"
                 : ""
             }`}
+            onPointerDownCapture={(event) => {
+              if (worldGameActive) event.stopPropagation();
+            }}
           >
             <div className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-gold-300" />
@@ -2389,6 +2394,7 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
             </div>
             <div className={`mt-4 flex gap-2 ${worldGameActive ? "items-end" : ""}`}>
               <input
+                ref={chatInputRef}
                 value={chatInput}
                 onChange={(event) => setChatInput(event.target.value)}
                 onKeyDown={(event) => {
@@ -2396,6 +2402,9 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
                 }}
                 placeholder="Dire quelque chose dans le hub..."
                 data-world-chat-input="true"
+                inputMode="text"
+                enterKeyHint="send"
+                autoComplete="off"
                 className={`glass-input flex-1 ${worldGameActive ? "min-h-11 text-sm" : ""}`}
               />
               <button
