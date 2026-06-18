@@ -298,7 +298,12 @@ export function CommunityImmersiveFeed({
 
       <div
         className="social-feed-scroll h-full min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain scroll-smooth snap-y snap-mandatory touch-pan-y"
-        style={{ WebkitOverflowScrolling: "touch", paddingTop: "5.25rem" }}
+        style={{
+          WebkitOverflowScrolling: "touch",
+          paddingTop: "5.25rem",
+          paddingBottom: "calc(7.5rem + env(safe-area-inset-bottom))",
+          scrollPaddingBottom: "calc(7.5rem + env(safe-area-inset-bottom))",
+        }}
       >
         {feedEntries.length === 0 && activeTab === "following" ? (
           <div className="mx-auto flex min-h-[calc(100vh-160px)] max-w-3xl items-center px-3 py-8 text-center text-ivory/65">
