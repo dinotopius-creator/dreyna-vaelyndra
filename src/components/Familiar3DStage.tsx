@@ -40,6 +40,66 @@ function createTail(material: THREE.Material) {
   return tail;
 }
 
+function createNameTag(label: string, color: string) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 512;
+  canvas.height = 128;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "rgba(6, 10, 20, 0.72)";
+  roundRect(ctx, 18, 18, 476, 92, 28);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.18)";
+  ctx.lineWidth = 4;
+  roundRect(ctx, 18, 18, 476, 92, 28);
+  ctx.stroke();
+
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 18;
+  ctx.font = "bold 34px Inter, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "#fff7d6";
+  ctx.fillText(label, 256, 64);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.needsUpdate = true;
+  const material = new THREE.SpriteMaterial({
+    map: texture,
+    transparent: true,
+    depthWrite: false,
+    depthTest: false,
+  });
+  const sprite = new THREE.Sprite(material);
+  sprite.scale.set(1.6, 0.4, 1);
+  sprite.position.set(0, 1.02, 0);
+  sprite.userData.dispose = () => {
+    texture.dispose();
+    material.dispose();
+  };
+  return sprite;
+}
+
+function roundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+) {
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.arcTo(x + width, y, x + width, y + height, radius);
+  ctx.arcTo(x + width, y + height, x, y + height, radius);
+  ctx.arcTo(x, y + height, x, y, radius);
+  ctx.arcTo(x, y, x + width, y, radius);
+  ctx.closePath();
+}
+
 export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const [ready, setReady] = useState(false);
@@ -103,6 +163,12 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
 
     const root = new THREE.Group();
     root.position.set(0, -0.1, 0);
+    root.userData.bounds = {
+      minX: -1.3,
+      maxX: 1.3,
+      minZ: -0.95,
+      maxZ: 0.95,
+    };
 
     const shadow = new THREE.Mesh(
       new THREE.CircleGeometry(0.62, 24),
@@ -215,6 +281,11 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
     collar.position.set(0, 0.03, 0.28);
     root.add(collar);
 
+    const nameTag = createNameTag(familiar.nickname || familiar.name, familiarColor.getStyle());
+    if (nameTag) {
+      root.add(nameTag);
+    }
+
     scene.add(root);
     setReady(true);
 
@@ -230,11 +301,11 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
 
     function pickDestination() {
       moveAngle = Math.random() * Math.PI * 2;
-      moveRadius = 0.75 + Math.random() * 0.85;
+      moveRadius = 0.4 + Math.random() * 0.92;
       desired.set(
-        Math.cos(moveAngle) * moveRadius,
+        THREE.MathUtils.clamp(Math.cos(moveAngle) * moveRadius, -1.05, 1.05),
         0,
-        Math.sin(moveAngle) * moveRadius * 0.78,
+        THREE.MathUtils.clamp(Math.sin(moveAngle) * moveRadius * 0.78, -0.8, 0.8),
       );
       pauseTimer = 0;
       isWalking = true;
@@ -287,6 +358,8 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
           isWalking = true;
           target.x += dx * dt * 0.55;
           target.z += dz * dt * 0.55;
+          target.x = THREE.MathUtils.clamp(target.x, root.userData.bounds.minX, root.userData.bounds.maxX);
+          target.z = THREE.MathUtils.clamp(target.z, root.userData.bounds.minZ, root.userData.bounds.maxZ);
           const angle = Math.atan2(dx, dz);
           root.rotation.y = THREE.MathUtils.lerp(
             root.rotation.y,
@@ -296,8 +369,16 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
         }
       }
 
-      root.position.x = THREE.MathUtils.lerp(root.position.x, target.x, 0.06);
-      root.position.z = THREE.MathUtils.lerp(root.position.z, target.z, 0.06);
+      root.position.x = THREE.MathUtils.clamp(
+        THREE.MathUtils.lerp(root.position.x, target.x, 0.06),
+        root.userData.bounds.minX,
+        root.userData.bounds.maxX,
+      );
+      root.position.z = THREE.MathUtils.clamp(
+        THREE.MathUtils.lerp(root.position.z, target.z, 0.06),
+        root.userData.bounds.minZ,
+        root.userData.bounds.maxZ,
+      );
       root.position.y = Math.sin(roamTimer * 3.2) * 0.035;
       root.rotation.z = Math.sin(roamTimer * 1.2) * 0.015;
 
@@ -324,6 +405,9 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
       renderer.domElement.removeEventListener("pointerdown", handlePointerDown);
       renderer.dispose();
       root.traverse((obj) => {
+        if (obj.userData.dispose) {
+          obj.userData.dispose();
+        }
         if (obj instanceof THREE.Mesh) {
           obj.geometry.dispose();
           const material = obj.material;
