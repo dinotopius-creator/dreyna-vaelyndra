@@ -331,6 +331,9 @@ function AnimatedRoutes() {
 function App() {
   const location = useLocation();
   const isWorldPlayRoute = location.pathname === "/mondes/play";
+  const isSocialRoute =
+    location.pathname.startsWith("/social") ||
+    location.pathname.startsWith("/communaute");
 
   if (location.pathname.startsWith("/live/overlay/chat/")) {
     return (
@@ -363,20 +366,20 @@ function App() {
       <NativeAppBootstrap />
       {!isWorldPlayRoute && <MagicBackground />}
       {!isWorldPlayRoute && <EasterEggs />}
-      {!isWorldPlayRoute && <Navbar />}
-      {!isWorldPlayRoute && <OfflineBanner />}
+      {!isWorldPlayRoute && !isSocialRoute && <Navbar />}
+      {!isWorldPlayRoute && !isSocialRoute && <OfflineBanner />}
       <main
         className={
-          isWorldPlayRoute
+          isWorldPlayRoute || isSocialRoute
             ? "fixed inset-0 z-[200] h-[100dvh] w-screen overflow-hidden bg-night-950"
             : "flex-1 pb-[calc(4.75rem+env(safe-area-inset-bottom))] lg:pb-0"
         }
       >
         <AnimatedRoutes />
       </main>
-      {!isWorldPlayRoute && <Footer />}
-      {!isWorldPlayRoute && <CookieBanner />}
-      {!isWorldPlayRoute && <FamiliarOnboardingGate />}
+      {!isWorldPlayRoute && !isSocialRoute && <Footer />}
+      {!isWorldPlayRoute && !isSocialRoute && <CookieBanner />}
+      {!isWorldPlayRoute && !isSocialRoute && <FamiliarOnboardingGate />}
     </div>
   );
 }
