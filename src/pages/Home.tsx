@@ -83,7 +83,7 @@ export function Home() {
       const postsResult = results[3];
 
       setStats(
-        statsResult.status === "fulfilled" ? statsResult.value ?? null : null,
+        statsResult.status === "fulfilled" ? (statsResult.value ?? null) : null,
       );
 
       const resolvedFans =
@@ -206,7 +206,7 @@ function Hero({
   ];
 
   return (
-    <section className="relative overflow-hidden pb-20 pt-10 sm:pb-24 sm:pt-14 md:pt-20">
+    <section className="relative overflow-hidden pb-16 pt-8 sm:pb-24 sm:pt-14 md:pt-20">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(167,114,255,0.2),transparent_38%),radial-gradient(circle_at_80%_18%,rgba(255,205,112,0.12),transparent_24%),linear-gradient(180deg,rgba(9,6,18,0.36),transparent_44%)]" />
       <div className="absolute left-1/2 top-20 h-80 w-80 -translate-x-1/2 rounded-full bg-royal-500/15 blur-[140px]" />
       <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 sm:px-6 lg:grid-cols-[1.1fr_0.9fr]">
@@ -226,7 +226,9 @@ function Hero({
           </h1>
           <p className="mt-5 max-w-xl text-base leading-7 text-ivory/80 sm:text-lg md:text-xl">
             Une app sociale fantasy centrée sur les{" "}
-            <span className="text-mystic font-semibold">lives, les avatars</span>{" "}
+            <span className="text-mystic font-semibold">
+              lives, les avatars
+            </span>{" "}
             et les interactions. Entre en scène, retrouve ton familier, façonne
             ton identité et fais vivre ton royaume depuis mobile ou desktop.
           </p>
@@ -249,6 +251,27 @@ function Hero({
             <Link to="/communaute" className="btn-ghost w-full sm:w-auto">
               <Users className="h-4 w-4" /> Le fil de la communauté
             </Link>
+          </div>
+          <div className="mt-5 grid grid-cols-2 gap-2 sm:hidden">
+            {quickLinks.slice(0, 4).map((link) => (
+              <Link
+                key={link.title}
+                to={link.to}
+                className="panel-app-soft flex min-h-24 flex-col justify-between p-3"
+              >
+                <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05] text-gold-200">
+                  {link.icon}
+                </span>
+                <div className="mt-3">
+                  <p className="font-display text-sm text-gold-100">
+                    {link.title}
+                  </p>
+                  <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-ivory/58">
+                    {link.desc}
+                  </p>
+                </div>
+              </Link>
+            ))}
           </div>
           <div className="mt-10 grid max-w-xl grid-cols-1 gap-3 sm:grid-cols-3">
             <Link
@@ -295,8 +318,8 @@ function Hero({
               </div>
             )}
             <p>
-              Des profils, des scènes live et des liens sociaux pensés comme
-              une vraie app.
+              Des profils, des scènes live et des liens sociaux pensés comme une
+              vraie app.
             </p>
           </div>
           {featuredProfiles.length > 0 && (

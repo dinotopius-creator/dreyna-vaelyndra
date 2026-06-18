@@ -239,6 +239,256 @@ function HumanoidPart({
   );
 }
 
+function CircleGem({
+  size,
+  color,
+  transform,
+  glow,
+}: {
+  size: number;
+  color: string;
+  transform: string;
+  glow?: string;
+}) {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: "50%",
+        top: "50%",
+        width: size,
+        height: size,
+        marginLeft: -size / 2,
+        marginTop: -size / 2,
+        transform,
+        borderRadius: "999px",
+        background: `radial-gradient(circle at 30% 30%, rgba(255,255,255,0.95) 0 12%, ${color} 24%, ${shade(color, 0.7)} 100%)`,
+        boxShadow: glow ?? "0 10px 22px rgba(0,0,0,0.22), inset 0 -6px 10px rgba(0,0,0,0.18)",
+        border: "1px solid rgba(255,255,255,0.18)",
+      }}
+    />
+  );
+}
+
+function PremiumAccessory({
+  kind,
+  skinTone,
+}: {
+  kind: AccessoryTheme;
+  skinTone: string;
+}) {
+  if (!kind) return null;
+  switch (kind) {
+    case "crown":
+      return (
+        <>
+          <CircleGem size={42} color="#d4af37" transform="translate3d(-22px,-124px,8px) rotateZ(-8deg)" />
+          <CircleGem size={36} color="#f4cf74" transform="translate3d(0px,-138px,12px)" />
+          <CircleGem size={42} color="#d4af37" transform="translate3d(22px,-124px,8px) rotateZ(8deg)" />
+        </>
+      );
+    case "halo":
+      return (
+        <div
+          style={{
+            position: "absolute",
+            width: 100,
+            height: 22,
+            left: -50,
+            top: -142,
+            borderRadius: "999px",
+            border: "4px solid rgba(251,238,203,0.95)",
+            boxShadow: "0 0 24px rgba(251,238,203,0.56)",
+            transform: "rotateX(72deg) translateZ(8px)",
+          }}
+        />
+      );
+    case "horns":
+    case "onyx-horns":
+      return (
+        <>
+          <HumanoidPart width={14} height={42} color={kind === "onyx-horns" ? "#111827" : "#d4a94a"} transform="translate3d(-28px,-132px,-4px) rotateZ(-20deg)" />
+          <HumanoidPart width={14} height={42} color={kind === "onyx-horns" ? "#111827" : "#d4a94a"} transform="translate3d(28px,-132px,-4px) rotateZ(20deg)" />
+        </>
+      );
+    case "elf-ears":
+    case "fae-ears":
+      return (
+        <>
+          <HumanoidPart width={10} height={28} color={skinTone} transform="translate3d(-38px,-62px,2px) rotateZ(-26deg)" />
+          <HumanoidPart width={10} height={28} color={skinTone} transform="translate3d(38px,-62px,2px) rotateZ(26deg)" />
+        </>
+      );
+    case "antlers":
+      return (
+        <>
+          <HumanoidPart width={12} height={46} color="#8b5e34" transform="translate3d(-28px,-142px,-2px) rotateZ(-14deg)" />
+          <HumanoidPart width={12} height={46} color="#8b5e34" transform="translate3d(28px,-142px,-2px) rotateZ(14deg)" />
+          <HumanoidPart width={18} height={10} color="#9a6a3d" transform="translate3d(-40px,-154px,0) rotateZ(-28deg)" />
+          <HumanoidPart width={18} height={10} color="#9a6a3d" transform="translate3d(40px,-154px,0) rotateZ(28deg)" />
+        </>
+      );
+    case "circlet":
+    case "rose-circlet":
+    case "moon-crown":
+    case "star-tiara":
+      return (
+        <>
+          <HumanoidPart width={66} height={12} color="#f4cf74" transform="translate3d(0,-106px,10px)" />
+          <CircleGem size={10} color={kind === "moon-crown" ? "#ddd6fe" : "#fef3c7"} transform="translate3d(0px,-120px,18px)" />
+          <CircleGem size={8} color="#f9a8d4" transform="translate3d(-18px,-114px,16px)" />
+          <CircleGem size={8} color="#f9a8d4" transform="translate3d(18px,-114px,16px)" />
+        </>
+      );
+    case "gem":
+      return (
+        <>
+          <HumanoidPart width={10} height={18} color="#f4cf74" transform="translate3d(0,-94px,18px)" />
+          <CircleGem size={18} color="#60a5fa" transform="translate3d(0px,-80px,24px) rotateZ(45deg)" />
+        </>
+      );
+    case "laurel":
+      return (
+        <>
+          <HumanoidPart width={18} height={10} color="#86efac" transform="translate3d(-24px,-118px,14px) rotateZ(-18deg)" />
+          <HumanoidPart width={18} height={10} color="#86efac" transform="translate3d(24px,-118px,14px) rotateZ(18deg)" />
+          <HumanoidPart width={14} height={8} color="#4ade80" transform="translate3d(-6px,-122px,12px) rotateZ(-8deg)" />
+          <HumanoidPart width={14} height={8} color="#4ade80" transform="translate3d(6px,-122px,12px) rotateZ(8deg)" />
+        </>
+      );
+    case "butterfly":
+      return (
+        <>
+          <CircleGem size={20} color="#f9a8d4" transform="translate3d(-22px,-92px,-22px) rotateZ(-16deg)" />
+          <CircleGem size={20} color="#f9a8d4" transform="translate3d(22px,-92px,-22px) rotateZ(16deg)" />
+          <CircleGem size={12} color="#fbcfe8" transform="translate3d(0px,-104px,-24px)" />
+        </>
+      );
+    case "visor":
+      return (
+        <HumanoidPart
+          width={62}
+          height={16}
+          color="#67e8f9"
+          transform="translate3d(0,-54px,24px)"
+          borderRadius="999px"
+          opacity={0.92}
+        />
+      );
+    case "crystal-mask":
+      return (
+        <>
+          <HumanoidPart width={60} height={16} color="#67e8f9" transform="translate3d(0,-54px,24px)" borderRadius="999px" opacity={0.92} />
+          <CircleGem size={14} color="#bae6fd" transform="translate3d(-18px,-52px,28px) rotateZ(-8deg)" />
+          <CircleGem size={14} color="#bae6fd" transform="translate3d(18px,-52px,28px) rotateZ(8deg)" />
+        </>
+      );
+    case "ribbon":
+      return (
+        <>
+          <HumanoidPart width={28} height={16} color="#f9a8d4" transform="translate3d(-18px,-102px,16px) rotateZ(-18deg)" />
+          <HumanoidPart width={28} height={16} color="#f9a8d4" transform="translate3d(18px,-102px,16px) rotateZ(18deg)" />
+          <HumanoidPart width={12} height={14} color="#f472b6" transform="translate3d(0,-102px,18px)" />
+        </>
+      );
+    default:
+      return null;
+  }
+}
+
+function PremiumOutfit({
+  theme,
+  palette,
+}: {
+  theme: OutfitTheme;
+  palette: { top: string; bottom: string; accent: string };
+}) {
+  switch (theme) {
+    case "mystic":
+      return (
+        <>
+          <HumanoidPart width={100} height={116} color="#8b5cf6" transform="translate3d(0,30px,-18px)" borderRadius="40% 40% 30% 30% / 16% 16% 74% 74%" />
+          <HumanoidPart width={26} height={82} color="#7c3aed" transform="translate3d(0,44px,12px)" borderRadius="999px" />
+        </>
+      );
+    case "battle":
+      return (
+        <>
+          <HumanoidPart width={92} height={100} color="#334155" transform="translate3d(0,24px,-16px)" borderRadius="38% 38% 28% 28% / 16% 16% 72% 72%" />
+          <HumanoidPart width={20} height={20} color="#e6c274" transform="translate3d(-24px,8px,16px)" />
+          <HumanoidPart width={20} height={20} color="#e6c274" transform="translate3d(24px,8px,16px)" />
+        </>
+      );
+    case "celestial":
+      return (
+        <>
+          <HumanoidPart width={94} height={104} color="#93c5fd" transform="translate3d(0,22px,-14px)" borderRadius="40% 40% 30% 30% / 18% 18% 72% 72%" />
+          <CircleGem size={26} color="#e0f2fe" transform="translate3d(0px,56px,20px)" />
+        </>
+      );
+    case "verdant":
+      return <HumanoidPart width={94} height={106} color="#4ade80" transform="translate3d(0,28px,-16px)" borderRadius="40% 40% 30% 30% / 18% 18% 72% 72%" />;
+    case "ember":
+      return (
+        <>
+          <HumanoidPart width={90} height={102} color="#fb923c" transform="translate3d(0,26px,-14px)" borderRadius="40% 40% 30% 30% / 18% 18% 72% 72%" />
+          <HumanoidPart width={48} height={14} color="#ffedd5" transform="translate3d(0,0px,18px)" borderRadius="999px" />
+        </>
+      );
+    case "frost":
+      return (
+        <>
+          <HumanoidPart width={94} height={100} color="#e0f2fe" transform="translate3d(0,24px,-14px)" borderRadius="40% 40% 30% 30% / 18% 18% 72% 72%" />
+          <HumanoidPart width={72} height={12} color="#7dd3fc" transform="translate3d(0,0px,18px)" borderRadius="999px" />
+        </>
+      );
+    case "rose":
+      return (
+        <>
+          <HumanoidPart width={96} height={106} color="#fda4af" transform="translate3d(0,28px,-16px)" borderRadius="40% 40% 30% 30% / 18% 18% 72% 72%" />
+          <CircleGem size={18} color="#ffe4e6" transform="translate3d(-24px,2px,18px)" />
+          <CircleGem size={18} color="#ffe4e6" transform="translate3d(24px,2px,18px)" />
+        </>
+      );
+    case "oracle":
+      return (
+        <>
+          <HumanoidPart width={100} height={116} color="#7e22ce" transform="translate3d(0,30px,-18px)" borderRadius="40% 40% 30% 30% / 18% 18% 72% 72%" />
+          <HumanoidPart width={20} height={48} color="#fde68a" transform="translate3d(0,32px,18px)" borderRadius="999px" />
+        </>
+      );
+    case "street":
+      return (
+        <>
+          <HumanoidPart width={98} height={62} color="#374151" transform="translate3d(0,12px,-14px)" borderRadius="38% 38% 28% 28% / 18% 18% 72% 72%" />
+          <HumanoidPart width={70} height={14} color="#facc15" transform="translate3d(0,44px,18px)" borderRadius="999px" />
+        </>
+      );
+    case "ceremony":
+      return (
+        <>
+          <HumanoidPart width={102} height={114} color="#fef3c7" transform="translate3d(0,34px,-18px)" borderRadius="40% 40% 30% 30% / 18% 18% 72% 72%" />
+          <HumanoidPart width={78} height={14} color="#d4a94a" transform="translate3d(0,0px,18px)" borderRadius="999px" />
+        </>
+      );
+    case "neon":
+      return (
+        <>
+          <HumanoidPart width={84} height={94} color="#164e63" transform="translate3d(0,22px,-14px)" borderRadius="40% 40% 30% 30% / 18% 18% 72% 72%" />
+          <HumanoidPart width={12} height={78} color="#22d3ee" transform="translate3d(-18px,20px,18px)" borderRadius="999px" />
+          <HumanoidPart width={12} height={78} color="#f472b6" transform="translate3d(18px,20px,18px)" borderRadius="999px" />
+        </>
+      );
+    default:
+      return (
+        <>
+          <HumanoidPart width={96} height={104} color={palette.top} transform="translate3d(0,24px,-16px)" borderRadius="40% 40% 30% 30% / 18% 18% 72% 72%" />
+          <HumanoidPart width={70} height={14} color={palette.accent} transform="translate3d(0,48px,18px)" borderRadius="999px" />
+        </>
+      );
+  }
+}
+
 function outfitPalette(theme: OutfitTheme) {
   switch (theme) {
     case "base":
@@ -270,6 +520,203 @@ function outfitPalette(theme: OutfitTheme) {
     default:
       return { top: "#9d174d", bottom: "#5b1648", accent: "#fbeecb" };
   }
+}
+
+function PremiumAvatarStage({
+  config,
+  palette,
+  body,
+  faceScale,
+  outfit,
+  accessory,
+  layoutTop,
+}: {
+  config: Avatar3DConfig;
+  palette: { top: string; bottom: string; accent: string };
+  body: { shoulders: number; waist: number; torsoH: number; armW: number; legW: number; footW: number };
+  faceScale: number;
+  outfit: OutfitTheme;
+  accessory: AccessoryTheme;
+  layoutTop: string;
+}) {
+  const headTone = shade(config.skinTone, 0.99);
+  const cheekTone = shade(config.skinTone, 0.9);
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: "50%",
+        top: layoutTop,
+        width: 0,
+        height: 0,
+        transformStyle: "preserve-3d",
+        transform: "translate3d(0,0,0) scale(0.98) rotateX(-7deg)",
+      }}
+    >
+      <HumanoidPart width={body.shoulders + 22} height={16} color={shade(palette.top, 0.8)} transform="translate3d(0,12px,2px)" borderRadius="999px" opacity={0.8} />
+      <HumanoidPart width={body.shoulders + 18} height={20} color={shade(config.skinTone, 1.02)} transform="translate3d(0,-6px,8px)" borderRadius="44% 44% 52% 52% / 34% 34% 66% 66%" opacity={0.98} />
+      <HumanoidPart width={62 * faceScale} height={78} color={headTone} transform="translate3d(0,-62px,20px)" borderRadius="46% 46% 54% 54% / 42% 42% 58% 58%" />
+      <HumanoidPart width={72 * faceScale} height={54} color={config.hairColor} transform="translate3d(0,-94px,24px)" borderRadius="54% 54% 28% 28% / 74% 74% 26% 26%" />
+      <HumanoidPart width={64 * faceScale} height={50} color={shade(config.hairColor, 0.9)} transform="translate3d(0,-70px,-8px)" borderRadius="50% 50% 62% 62%" />
+      <HumanoidPart width={18} height={10} color={cheekTone} transform="translate3d(-18px,-10px,30px)" borderRadius="999px" opacity={0.46} />
+      <HumanoidPart width={18} height={10} color={cheekTone} transform="translate3d(18px,-10px,30px)" borderRadius="999px" opacity={0.46} />
+      <HumanoidPart width={12} height={8} color="#fffaf5" transform="translate3d(-13px,-20px,30px)" borderRadius="50%" opacity={0.96} />
+      <HumanoidPart width={12} height={8} color="#fffaf5" transform="translate3d(13px,-20px,30px)" borderRadius="50%" opacity={0.96} />
+      <HumanoidPart width={5} height={5} color={config.eyeColor} transform="translate3d(-13px,-20px,31px)" borderRadius="50%" opacity={0.98} />
+      <HumanoidPart width={5} height={5} color={config.eyeColor} transform="translate3d(13px,-20px,31px)" borderRadius="50%" opacity={0.98} />
+      <HumanoidPart width={46} height={8} color="#9f4f38" transform="translate3d(0,18px,31px)" borderRadius="999px" opacity={0.9} />
+      <HumanoidPart width={8} height={4} color="#8b5e4a" transform="translate3d(0,-12px,31px)" borderRadius="999px" opacity={0.7} />
+      <HumanoidPart width={body.shoulders + 6} height={body.torsoH + 4} color={palette.top} transform="translate3d(0,26px,4px)" borderRadius="42% 42% 28% 28% / 16% 16% 74% 74%" />
+      <HumanoidPart width={body.shoulders - 8} height={body.torsoH - 12} color={shade(palette.top, 0.88)} transform="translate3d(0,30px,10px)" borderRadius="38% 38% 26% 26% / 16% 16% 74% 74%" />
+      <HumanoidPart width={body.waist + 18} height={28} color={palette.accent} transform="translate3d(0,82px,8px)" borderRadius="48% 48% 58% 58%" />
+      <HumanoidPart width={body.armW + 8} height={90} color={palette.top} transform={`translate3d(-${body.shoulders / 2 + 14}px,34px,4px) rotateZ(4deg)`} borderRadius="999px" />
+      <HumanoidPart width={body.armW + 8} height={90} color={palette.top} transform={`translate3d(${body.shoulders / 2 + 14}px,34px,4px) rotateZ(-4deg)`} borderRadius="999px" />
+      <HumanoidPart width={body.armW + 2} height={58} color={config.skinTone} transform={`translate3d(-${body.shoulders / 2 + 18}px,92px,8px) rotateZ(8deg)`} borderRadius="999px" />
+      <HumanoidPart width={body.armW + 2} height={58} color={config.skinTone} transform={`translate3d(${body.shoulders / 2 + 18}px,92px,8px) rotateZ(-8deg)`} borderRadius="999px" />
+      <HumanoidPart width={18} height={24} color={shade(config.skinTone, 0.98)} transform={`translate3d(-${body.shoulders / 2 + 20}px,146px,12px) rotateZ(6deg)`} borderRadius="50% 50% 44% 44%" />
+      <HumanoidPart width={18} height={24} color={shade(config.skinTone, 0.98)} transform={`translate3d(${body.shoulders / 2 + 20}px,146px,12px) rotateZ(-6deg)`} borderRadius="50% 50% 44% 44%" />
+      <HumanoidPart width={body.legW + 12} height={96} color={palette.bottom} transform={`translate3d(-${body.legW / 1.1}px,136px,6px) rotateZ(1deg)`} borderRadius="42% 42% 40% 40% / 18% 18% 82% 82%" />
+      <HumanoidPart width={body.legW + 12} height={96} color={palette.bottom} transform={`translate3d(${body.legW / 1.1}px,136px,6px) rotateZ(-1deg)`} borderRadius="42% 42% 40% 40% / 18% 18% 82% 82%" />
+      <HumanoidPart width={body.footW + 8} height={18} color={shade(palette.bottom, 0.76)} transform={`translate3d(-${body.legW / 1.05}px,186px,12px) rotateZ(2deg)`} borderRadius="52% 52% 46% 46%" />
+      <HumanoidPart width={body.footW + 8} height={18} color={shade(palette.bottom, 0.76)} transform={`translate3d(${body.legW / 1.05}px,186px,12px) rotateZ(-2deg)`} borderRadius="52% 52% 46% 46%" />
+      <PremiumOutfit theme={outfit} palette={palette} />
+      <PremiumAccessory kind={accessory} skinTone={config.skinTone} />
+    </div>
+  );
+}
+
+function HumanoidV3Stage({
+  config,
+  palette,
+  body,
+  faceScale,
+  outfit,
+  accessory,
+  layoutTop,
+}: {
+  config: Avatar3DConfig;
+  palette: { top: string; bottom: string; accent: string };
+  body: { shoulders: number; waist: number; torsoH: number; armW: number; legW: number; footW: number };
+  faceScale: number;
+  outfit: OutfitTheme;
+  accessory: AccessoryTheme;
+  layoutTop: string;
+}) {
+  const skinDeep = shade(config.skinTone, 0.94);
+  const skinLight = shade(config.skinTone, 1.04);
+  const blush = shade(config.skinTone, 0.82);
+  const mouthColor = config.expression === "confident" ? "#7c2d12" : "#9f4f38";
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: "50%",
+        top: layoutTop,
+        width: 0,
+        height: 0,
+        transformStyle: "preserve-3d",
+        transform: "translate3d(0,0,0) scale(1.02) rotateX(-10deg)",
+      }}
+    >
+      <HumanoidPart width={body.shoulders + 34} height={14} color={shade(palette.top, 0.76)} transform="translate3d(0,10px,2px)" borderRadius="999px" opacity={0.86} />
+      <HumanoidPart width={body.shoulders + 24} height={20} color={skinDeep} transform="translate3d(0,-8px,10px)" borderRadius="44% 44% 54% 54% / 34% 34% 66% 66%" opacity={0.98} />
+      <HumanoidPart width={66 * faceScale} height={82} color={skinLight} transform="translate3d(0,-64px,22px)" borderRadius="47% 47% 56% 56% / 42% 42% 58% 58%" />
+      <HumanoidPart width={76 * faceScale} height={56} color={config.hairColor} transform="translate3d(0,-96px,24px)" borderRadius="56% 56% 28% 28% / 74% 74% 26% 26%" />
+      <HumanoidPart width={68 * faceScale} height={50} color={shade(config.hairColor, 0.86)} transform="translate3d(0,-70px,-10px)" borderRadius="48% 48% 60% 60%" />
+      <HumanoidPart width={16} height={10} color={blush} transform="translate3d(-20px,-8px,30px)" borderRadius="999px" opacity={0.42} />
+      <HumanoidPart width={16} height={10} color={blush} transform="translate3d(20px,-8px,30px)" borderRadius="999px" opacity={0.42} />
+      <HumanoidPart width={12} height={8} color="#fffaf5" transform="translate3d(-14px,-22px,30px)" borderRadius="50%" opacity={0.96} />
+      <HumanoidPart width={12} height={8} color="#fffaf5" transform="translate3d(14px,-22px,30px)" borderRadius="50%" opacity={0.96} />
+      <HumanoidPart width={5} height={5} color={config.eyeColor} transform="translate3d(-14px,-22px,31px)" borderRadius="50%" opacity={0.98} />
+      <HumanoidPart width={5} height={5} color={config.eyeColor} transform="translate3d(14px,-22px,31px)" borderRadius="50%" opacity={0.98} />
+      <HumanoidPart width={44} height={8} color={mouthColor} transform="translate3d(0,20px,31px)" borderRadius="999px" opacity={config.expression === "neutral" ? 0.7 : 0.92} />
+      <HumanoidPart width={body.shoulders + 10} height={body.torsoH + 10} color={palette.top} transform="translate3d(0,28px,4px)" borderRadius="42% 42% 26% 26% / 18% 18% 76% 76%" />
+      <HumanoidPart width={body.shoulders - 12} height={body.torsoH - 18} color={shade(palette.top, 0.9)} transform="translate3d(0,34px,10px)" borderRadius="38% 38% 24% 24% / 18% 18% 76% 76%" />
+      <HumanoidPart width={body.waist + 22} height={30} color={palette.accent} transform="translate3d(0,84px,8px)" borderRadius="48% 48% 58% 58%" />
+      <HumanoidPart width={body.armW + 8} height={94} color={palette.top} transform={`translate3d(-${body.shoulders / 2 + 16}px,36px,4px) rotateZ(3deg)`} borderRadius="999px" />
+      <HumanoidPart width={body.armW + 8} height={94} color={palette.top} transform={`translate3d(${body.shoulders / 2 + 16}px,36px,4px) rotateZ(-3deg)`} borderRadius="999px" />
+      <HumanoidPart width={body.armW + 2} height={62} color={skinLight} transform={`translate3d(-${body.shoulders / 2 + 20}px,98px,8px) rotateZ(7deg)`} borderRadius="999px" />
+      <HumanoidPart width={body.armW + 2} height={62} color={skinLight} transform={`translate3d(${body.shoulders / 2 + 20}px,98px,8px) rotateZ(-7deg)`} borderRadius="999px" />
+      <HumanoidPart width={18} height={24} color={shade(config.skinTone, 1.02)} transform={`translate3d(-${body.shoulders / 2 + 22}px,152px,12px) rotateZ(5deg)`} borderRadius="50% 50% 44% 44%" />
+      <HumanoidPart width={18} height={24} color={shade(config.skinTone, 1.02)} transform={`translate3d(${body.shoulders / 2 + 22}px,152px,12px) rotateZ(-5deg)`} borderRadius="50% 50% 44% 44%" />
+      <HumanoidPart width={body.legW + 14} height={100} color={palette.bottom} transform={`translate3d(-${body.legW / 1.05}px,140px,6px) rotateZ(1deg)`} borderRadius="42% 42% 38% 38% / 18% 18% 82% 82%" />
+      <HumanoidPart width={body.legW + 14} height={100} color={palette.bottom} transform={`translate3d(${body.legW / 1.05}px,140px,6px) rotateZ(-1deg)`} borderRadius="42% 42% 38% 38% / 18% 18% 82% 82%" />
+      <HumanoidPart width={body.footW + 10} height={20} color={shade(palette.bottom, 0.74)} transform={`translate3d(-${body.legW / 1.02}px,190px,12px) rotateZ(2deg)`} borderRadius="52% 52% 46% 46%" />
+      <HumanoidPart width={body.footW + 10} height={20} color={shade(palette.bottom, 0.74)} transform={`translate3d(${body.legW / 1.02}px,190px,12px) rotateZ(-2deg)`} borderRadius="52% 52% 46% 46%" />
+      <PremiumOutfit theme={outfit} palette={palette} />
+      <PremiumAccessory kind={accessory} skinTone={config.skinTone} />
+    </div>
+  );
+}
+
+function HumanoidV4Stage({
+  config,
+  palette,
+  body,
+  faceScale,
+  outfit,
+  accessory,
+  layoutTop,
+}: {
+  config: Avatar3DConfig;
+  palette: { top: string; bottom: string; accent: string };
+  body: { shoulders: number; waist: number; torsoH: number; armW: number; legW: number; footW: number };
+  faceScale: number;
+  outfit: OutfitTheme;
+  accessory: AccessoryTheme;
+  layoutTop: string;
+}) {
+  const skinCore = shade(config.skinTone, 0.98);
+  const skinSoft = shade(config.skinTone, 1.08);
+  const lipColor = config.expression === "confident" ? "#8b3a2b" : "#a24d3c";
+  const eyeOffset = config.faceShape === "sharp" ? 15 : 14;
+  const browHeight = config.faceShape === "sharp" ? -32 : -28;
+  const smileWidth = config.expression === "neutral" ? 28 : 34;
+  const smileHeight = config.expression === "neutral" ? 6 : 8;
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: "50%",
+        top: layoutTop,
+        width: 0,
+        height: 0,
+        transformStyle: "preserve-3d",
+        transform: "translate3d(0,0,0) scale(1.05) rotateX(-12deg)",
+      }}
+    >
+      <HumanoidPart width={body.shoulders + 30} height={14} color={shade(palette.top, 0.76)} transform="translate3d(0,14px,2px)" borderRadius="999px" opacity={0.82} />
+      <HumanoidPart width={body.shoulders + 22} height={18} color={skinCore} transform="translate3d(0,-6px,10px)" borderRadius="44% 44% 54% 54% / 34% 34% 66% 66%" />
+      <HumanoidPart width={72 * faceScale} height={86} color={skinSoft} transform="translate3d(0,-64px,22px)" borderRadius="46% 46% 56% 56% / 42% 42% 58% 58%" />
+      <HumanoidPart width={80 * faceScale} height={56} color={config.hairColor} transform="translate3d(0,-98px,24px)" borderRadius="56% 56% 28% 28% / 74% 74% 26% 26%" />
+      <HumanoidPart width={70 * faceScale} height={50} color={shade(config.hairColor, 0.88)} transform="translate3d(0,-72px,-10px)" borderRadius="48% 48% 60% 60%" />
+      <HumanoidPart width={18} height={10} color={shade(config.skinTone, 0.84)} transform={`translate3d(-20px,-10px,30px)`} borderRadius="999px" opacity={0.36} />
+      <HumanoidPart width={18} height={10} color={shade(config.skinTone, 0.84)} transform={`translate3d(20px,-10px,30px)`} borderRadius="999px" opacity={0.36} />
+      <HumanoidPart width={13} height={9} color="#fffaf5" transform={`translate3d(-${eyeOffset}px,-22px,30px)`} borderRadius="50%" opacity={0.96} />
+      <HumanoidPart width={13} height={9} color="#fffaf5" transform={`translate3d(${eyeOffset}px,-22px,30px)`} borderRadius="50%" opacity={0.96} />
+      <HumanoidPart width={5} height={5} color={config.eyeColor} transform={`translate3d(-${eyeOffset}px,-22px,31px)`} borderRadius="50%" opacity={0.99} />
+      <HumanoidPart width={5} height={5} color={config.eyeColor} transform={`translate3d(${eyeOffset}px,-22px,31px)`} borderRadius="50%" opacity={0.99} />
+      <HumanoidPart width={24} height={4} color={shade(config.hairColor, 0.6)} transform={`translate3d(-${eyeOffset}px,${browHeight}px,31px) rotateZ(-10deg)`} borderRadius="999px" opacity={0.92} />
+      <HumanoidPart width={24} height={4} color={shade(config.hairColor, 0.6)} transform={`translate3d(${eyeOffset}px,${browHeight}px,31px) rotateZ(10deg)`} borderRadius="999px" opacity={0.92} />
+      <HumanoidPart width={8} height={10} color="#8b5e4a" transform="translate3d(0,-10px,31px)" borderRadius="999px" opacity={0.74} />
+      <HumanoidPart width={smileWidth} height={smileHeight} color={lipColor} transform="translate3d(0,20px,31px)" borderRadius="999px" opacity={0.95} />
+      <HumanoidPart width={body.shoulders + 4} height={body.torsoH + 6} color={palette.top} transform="translate3d(0,30px,4px)" borderRadius="42% 42% 26% 26% / 18% 18% 76% 76%" />
+      <HumanoidPart width={body.shoulders - 16} height={body.torsoH - 16} color={shade(palette.top, 0.9)} transform="translate3d(0,36px,10px)" borderRadius="38% 38% 24% 24% / 18% 18% 76% 76%" />
+      <HumanoidPart width={body.waist + 20} height={28} color={palette.accent} transform="translate3d(0,84px,8px)" borderRadius="48% 48% 58% 58%" />
+      <HumanoidPart width={body.armW + 8} height={96} color={palette.top} transform={`translate3d(-${body.shoulders / 2 + 15}px,38px,4px) rotateZ(2deg)`} borderRadius="999px" />
+      <HumanoidPart width={body.armW + 8} height={96} color={palette.top} transform={`translate3d(${body.shoulders / 2 + 15}px,38px,4px) rotateZ(-2deg)`} borderRadius="999px" />
+      <HumanoidPart width={body.armW + 2} height={64} color={skinSoft} transform={`translate3d(-${body.shoulders / 2 + 19}px,100px,8px) rotateZ(6deg)`} borderRadius="999px" />
+      <HumanoidPart width={body.armW + 2} height={64} color={skinSoft} transform={`translate3d(${body.shoulders / 2 + 19}px,100px,8px) rotateZ(-6deg)`} borderRadius="999px" />
+      <HumanoidPart width={18} height={24} color={shade(config.skinTone, 1.02)} transform={`translate3d(-${body.shoulders / 2 + 21}px,154px,12px) rotateZ(5deg)`} borderRadius="50% 50% 44% 44%" />
+      <HumanoidPart width={18} height={24} color={shade(config.skinTone, 1.02)} transform={`translate3d(${body.shoulders / 2 + 21}px,154px,12px) rotateZ(-5deg)`} borderRadius="50% 50% 44% 44%" />
+      <HumanoidPart width={body.legW + 14} height={102} color={palette.bottom} transform={`translate3d(-${body.legW / 1.05}px,142px,6px) rotateZ(1deg)`} borderRadius="42% 42% 38% 38% / 18% 18% 82% 82%" />
+      <HumanoidPart width={body.legW + 14} height={102} color={palette.bottom} transform={`translate3d(${body.legW / 1.05}px,142px,6px) rotateZ(-1deg)`} borderRadius="42% 42% 38% 38% / 18% 18% 82% 82%" />
+      <HumanoidPart width={body.footW + 10} height={20} color={shade(palette.bottom, 0.74)} transform={`translate3d(-${body.legW / 1.02}px,194px,12px) rotateZ(2deg)`} borderRadius="52% 52% 46% 46%" />
+      <HumanoidPart width={body.footW + 10} height={20} color={shade(palette.bottom, 0.74)} transform={`translate3d(${body.legW / 1.02}px,194px,12px) rotateZ(-2deg)`} borderRadius="52% 52% 46% 46%" />
+      <PremiumOutfit theme={outfit} palette={palette} />
+      <PremiumAccessory kind={accessory} skinTone={config.skinTone} />
+    </div>
+  );
 }
 
 export function Avatar3DModel({
@@ -306,8 +753,8 @@ export function Avatar3DModel({
 
   const palette = useMemo(() => outfitPalette(outfit), [outfit]);
   const body = config.bodyType === "homme"
-    ? { shoulders: 76, waist: 38, torsoH: 88, armW: 14, legW: 16, hip: 46 }
-    : { shoulders: 66, waist: 34, torsoH: 84, armW: 13, legW: 15, hip: 42 };
+    ? { shoulders: 82, waist: 34, torsoH: 92, armW: 13, legW: 14, hip: 48, footW: 24 }
+    : { shoulders: 72, waist: 30, torsoH: 88, armW: 12, legW: 13, hip: 44, footW: 22 };
   const faceScale = config.faceShape === "sharp" ? 0.94 : 1.02;
   const aspectClass =
     size === "square"
@@ -350,6 +797,10 @@ export function Avatar3DModel({
     event.currentTarget.releasePointerCapture(event.pointerId);
   }
 
+  const premiumModel = config.baseModel !== "procedural-premium";
+  const v3Model = config.baseModel === "humanoid-v3";
+  const v4Model = config.baseModel === "humanoid-v4";
+
   return (
     <div
       className={`relative ${aspectClass} overflow-hidden rounded-2xl border border-gold-400/30 bg-[radial-gradient(circle_at_50%_12%,rgba(255,255,255,0.12),transparent_28%),linear-gradient(180deg,#12081f_0%,#0a0614_100%)] ${className}`}
@@ -371,57 +822,186 @@ export function Avatar3DModel({
           top: layout.top,
           width: 0,
           height: 0,
-          transformStyle: "preserve-3d",
-          transform: `translate3d(0,0,0) scale(${layout.scale}) rotateX(${pitch}deg) rotateY(${yaw}deg)`,
-        }}
+        transformStyle: "preserve-3d",
+        transform: `translate3d(0,0,0) scale(${layout.scale}) rotateX(${pitch}deg) rotateY(${yaw}deg)`,
+      }}
       >
+        {premiumModel ? (
+          v4Model ? (
+            <HumanoidV4Stage
+              config={config}
+              palette={palette}
+              body={body}
+              faceScale={faceScale}
+              outfit={outfit}
+              accessory={accessory}
+              layoutTop={layout.top}
+            />
+          ) : v3Model ? (
+            <HumanoidV3Stage
+              config={config}
+              palette={palette}
+              body={body}
+              faceScale={faceScale}
+              outfit={outfit}
+              accessory={accessory}
+              layoutTop={layout.top}
+            />
+          ) : (
+          <PremiumAvatarStage
+            config={config}
+            palette={palette}
+            body={body}
+            faceScale={faceScale}
+            outfit={outfit}
+            accessory={accessory}
+            layoutTop={layout.top}
+            />
+          )
+        ) : (
+          <>
         <HumanoidPart
-          width={24}
-          height={22}
-          color={shade(config.skinTone, 0.96)}
-          transform="translate3d(0,-18px,8px)"
-          borderRadius="42% 42% 46% 46%"
+          width={body.shoulders + 14}
+          height={18}
+          color={shade(palette.top, 0.84)}
+          transform="translate3d(0,2px,0)"
+          borderRadius="999px"
+          opacity={0.9}
         />
         <HumanoidPart
-          width={58 * faceScale}
-          height={70}
+          width={body.shoulders + 20}
+          height={22}
+          color={shade(config.skinTone, 0.98)}
+          transform="translate3d(0,-2px,4px)"
+          borderRadius="45% 45% 52% 52% / 38% 38% 62% 62%"
+          opacity={0.98}
+        />
+        <HumanoidPart
+          width={body.shoulders + 12}
+          height={16}
+          color={shade(palette.top, 1.1)}
+          transform="translate3d(0,8px,8px)"
+          borderRadius="999px"
+          opacity={0.9}
+        />
+        <HumanoidPart
+          width={34}
+          height={28}
+          color={shade(config.skinTone, 0.96)}
+          transform="translate3d(0,-16px,8px)"
+          borderRadius="44% 44% 48% 48%"
+        />
+        <HumanoidPart
+          width={62 * faceScale}
+          height={76}
           color={config.skinTone}
           transform="translate3d(0,-58px,22px)"
-          borderRadius="46% 46% 52% 52% / 42% 42% 58% 58%"
+          borderRadius="46% 46% 54% 54% / 40% 40% 60% 60%"
         />
         <HumanoidPart
-          width={64 * faceScale}
-          height={42}
+          width={70 * faceScale}
+          height={48}
           color={config.hairColor}
           transform="translate3d(0,-90px,24px)"
           borderRadius="52% 52% 24% 24% / 72% 72% 28% 28%"
         />
         <HumanoidPart
-          width={54 * faceScale}
-          height={48}
+          width={60 * faceScale}
+          height={54}
           color={shade(config.hairColor, 0.86)}
           transform="translate3d(0,-68px,-8px)"
-          borderRadius="44% 44% 58% 58%"
+          borderRadius="44% 44% 60% 60%"
+        />
+        <HumanoidPart
+          width={18}
+          height={10}
+          color={shade(config.skinTone, 0.88)}
+          transform="translate3d(0,-20px,28px)"
+          borderRadius="999px"
+        />
+        <HumanoidPart
+          width={8}
+          height={4}
+          color="#7c2d12"
+          transform="translate3d(-8px,6px,30px)"
+          borderRadius="999px"
+          opacity={0.88}
+        />
+        <HumanoidPart
+          width={8}
+          height={4}
+          color="#7c2d12"
+          transform="translate3d(8px,6px,30px)"
+          borderRadius="999px"
+          opacity={0.88}
+        />
+        <HumanoidPart
+          width={44}
+          height={8}
+          color="#9f4f38"
+          transform="translate3d(0,18px,31px)"
+          borderRadius="999px"
+          opacity={0.92}
+        />
+        <HumanoidPart
+          width={10}
+          height={10}
+          color="#ffffff"
+          transform="translate3d(-13px,-22px,30px)"
+          borderRadius="50%"
+          opacity={0.95}
+        />
+        <HumanoidPart
+          width={10}
+          height={10}
+          color="#ffffff"
+          transform="translate3d(13px,-22px,30px)"
+          borderRadius="50%"
+          opacity={0.95}
+        />
+        <HumanoidPart
+          width={5}
+          height={5}
+          color={config.eyeColor}
+          transform="translate3d(-13px,-22px,31px)"
+          borderRadius="50%"
+          opacity={0.95}
+        />
+        <HumanoidPart
+          width={5}
+          height={5}
+          color={config.eyeColor}
+          transform="translate3d(13px,-22px,31px)"
+          borderRadius="50%"
+          opacity={0.95}
+        />
+        <HumanoidPart
+          width={2}
+          height={10}
+          color="#8b5e4a"
+          transform="translate3d(0,-12px,31px)"
+          borderRadius="999px"
+          opacity={0.55}
         />
         {config.hairStyle === "wave" && (
           <>
             <HumanoidPart
-              width={18}
-              height={48}
+              width={20}
+              height={54}
               color={config.hairColor}
-              transform="translate3d(-30px,-42px,10px) rotateZ(8deg)"
+              transform="translate3d(-32px,-40px,10px) rotateZ(8deg)"
             />
             <HumanoidPart
-              width={18}
-              height={48}
+              width={20}
+              height={54}
               color={config.hairColor}
-              transform="translate3d(30px,-42px,10px) rotateZ(-8deg)"
+              transform="translate3d(32px,-40px,10px) rotateZ(-8deg)"
             />
             <HumanoidPart
-              width={52}
-              height={58}
+              width={58}
+              height={64}
               color={config.hairColor}
-              transform="translate3d(0,-36px,-12px)"
+              transform="translate3d(0,-34px,-12px)"
               borderRadius="45% 45% 64% 64%"
             />
           </>
@@ -429,20 +1009,20 @@ export function Avatar3DModel({
         {config.hairStyle === "bob" && (
           <>
             <HumanoidPart
-              width={22}
-              height={38}
+              width={24}
+              height={42}
               color={config.hairColor}
-              transform="translate3d(-30px,-48px,12px)"
+              transform="translate3d(-32px,-48px,12px)"
             />
             <HumanoidPart
-              width={22}
-              height={38}
+              width={24}
+              height={42}
               color={config.hairColor}
-              transform="translate3d(30px,-48px,12px)"
+              transform="translate3d(32px,-48px,12px)"
             />
             <HumanoidPart
-              width={56}
-              height={34}
+              width={60}
+              height={36}
               color={config.hairColor}
               transform="translate3d(0,-42px,-12px)"
               borderRadius="45% 45% 58% 58%"
@@ -452,15 +1032,15 @@ export function Avatar3DModel({
         {config.hairStyle === "fade" && (
           <>
             <HumanoidPart
-              width={52}
-              height={22}
+              width={56}
+              height={24}
               color={config.hairColor}
               transform="translate3d(0,-90px,10px)"
               borderRadius="62% 62% 38% 38%"
             />
             <HumanoidPart
-              width={48}
-              height={22}
+              width={52}
+              height={24}
               color={shade(config.hairColor, 0.92)}
               transform="translate3d(0,-62px,-10px)"
               borderRadius="44% 44% 56% 56%"
@@ -470,20 +1050,20 @@ export function Avatar3DModel({
         {config.hairStyle === "braids" && (
           <>
             <HumanoidPart
-              width={12}
-              height={64}
+              width={14}
+              height={70}
               color={config.hairColor}
-              transform="translate3d(-32px,-22px,18px)"
+              transform="translate3d(-34px,-20px,18px)"
             />
             <HumanoidPart
-              width={12}
-              height={64}
+              width={14}
+              height={70}
               color={config.hairColor}
-              transform="translate3d(32px,-22px,18px)"
+              transform="translate3d(34px,-20px,18px)"
             />
             <HumanoidPart
-              width={54}
-              height={48}
+              width={60}
+              height={52}
               color={config.hairColor}
               transform="translate3d(0,-52px,-12px)"
               borderRadius="50% 50% 58% 58%"
@@ -493,15 +1073,15 @@ export function Avatar3DModel({
         {config.hairStyle === "ponytail" && (
           <>
             <HumanoidPart
-              width={54}
-              height={34}
+              width={58}
+              height={36}
               color={config.hairColor}
               transform="translate3d(0,-72px,2px)"
               borderRadius="52% 52% 38% 38%"
             />
             <HumanoidPart
-              width={18}
-              height={64}
+              width={20}
+              height={70}
               color={config.hairColor}
               transform="translate3d(0,-24px,-22px)"
             />
@@ -510,15 +1090,15 @@ export function Avatar3DModel({
         {config.hairStyle === "afro" && (
           <>
             <HumanoidPart
-              width={76}
-              height={74}
+              width={82}
+              height={80}
               color={config.hairColor}
               transform="translate3d(0,-80px,4px)"
               borderRadius="50%"
             />
             <HumanoidPart
-              width={56}
-              height={34}
+              width={60}
+              height={36}
               color={shade(config.hairColor, 0.92)}
               transform="translate3d(0,-52px,-12px)"
               borderRadius="48% 48% 58% 58%"
@@ -528,15 +1108,15 @@ export function Avatar3DModel({
         {config.hairStyle === "pixie" && (
           <>
             <HumanoidPart
-              width={60}
-              height={26}
+              width={64}
+              height={28}
               color={config.hairColor}
               transform="translate3d(0,-86px,12px)"
               borderRadius="60% 60% 34% 34%"
             />
             <HumanoidPart
-              width={44}
-              height={20}
+              width={48}
+              height={22}
               color={shade(config.hairColor, 0.9)}
               transform="translate3d(6px,-62px,10px) rotateZ(-8deg)"
               borderRadius="62% 36% 56% 44%"
@@ -547,83 +1127,99 @@ export function Avatar3DModel({
           width={body.shoulders}
           height={body.torsoH}
           color={palette.top}
-          transform="translate3d(0,20px,4px)"
-          borderRadius="42% 42% 34% 34% / 20% 20% 72% 72%"
-          clipPath="polygon(16% 0, 84% 0, 72% 100%, 28% 100%)"
+          transform="translate3d(0,22px,4px)"
+          borderRadius="44% 44% 32% 32% / 18% 18% 72% 72%"
+          clipPath="polygon(14% 0, 86% 0, 76% 100%, 24% 100%)"
         />
         <HumanoidPart
-          width={body.waist + 22}
-          height={34}
+          width={body.waist + 28}
+          height={36}
           color={palette.accent}
-          transform="translate3d(0,70px,6px)"
-          borderRadius="46% 46% 56% 56%"
+          transform="translate3d(0,74px,6px)"
+          borderRadius="48% 48% 58% 58%"
         />
         <HumanoidPart
           width={body.legW + 8}
-          height={76}
+          height={84}
           color={palette.bottom}
-          transform={`translate3d(-${body.legW / 1.1}px,122px,4px) rotateZ(2deg)`}
+          transform={`translate3d(-${body.legW / 1.05}px,124px,4px) rotateZ(1deg)`}
           borderRadius="48% 48% 42% 42% / 20% 20% 80% 80%"
         />
         <HumanoidPart
           width={body.legW + 8}
-          height={76}
+          height={84}
           color={palette.bottom}
-          transform={`translate3d(${body.legW / 1.1}px,122px,4px) rotateZ(-2deg)`}
+          transform={`translate3d(${body.legW / 1.05}px,124px,4px) rotateZ(-1deg)`}
           borderRadius="48% 48% 42% 42% / 20% 20% 80% 80%"
-        />
-        <HumanoidPart
-          width={body.armW + 6}
-          height={74}
-          color={palette.top}
-          transform={`translate3d(-${body.shoulders / 2 + 9}px,24px,4px) rotateZ(9deg)`}
-          borderRadius="999px"
-        />
-        <HumanoidPart
-          width={body.armW + 6}
-          height={74}
-          color={palette.top}
-          transform={`translate3d(${body.shoulders / 2 + 9}px,24px,4px) rotateZ(-9deg)`}
-          borderRadius="999px"
-        />
-        <HumanoidPart
-          width={body.armW + 1}
-          height={46}
-          color={config.skinTone}
-          transform={`translate3d(-${body.shoulders / 2 + 15}px,80px,8px) rotateZ(6deg)`}
-        />
-        <HumanoidPart
-          width={body.armW + 1}
-          height={46}
-          color={config.skinTone}
-          transform={`translate3d(${body.shoulders / 2 + 15}px,80px,8px) rotateZ(-6deg)`}
         />
         <HumanoidPart
           width={body.armW + 8}
-          height={18}
+          height={78}
+          color={palette.top}
+          transform={`translate3d(-${body.shoulders / 2 + 10}px,26px,4px) rotateZ(8deg)`}
+          borderRadius="999px"
+        />
+        <HumanoidPart
+          width={body.armW + 8}
+          height={78}
+          color={palette.top}
+          transform={`translate3d(${body.shoulders / 2 + 10}px,26px,4px) rotateZ(-8deg)`}
+          borderRadius="999px"
+        />
+        <HumanoidPart
+          width={body.armW + 4}
+          height={50}
+          color={config.skinTone}
+          transform={`translate3d(-${body.shoulders / 2 + 16}px,84px,8px) rotateZ(5deg)`}
+          borderRadius="999px"
+        />
+        <HumanoidPart
+          width={body.armW + 4}
+          height={50}
+          color={config.skinTone}
+          transform={`translate3d(${body.shoulders / 2 + 16}px,84px,8px) rotateZ(-5deg)`}
+          borderRadius="999px"
+        />
+        <HumanoidPart
+          width={16}
+          height={20}
           color={shade(config.skinTone, 0.98)}
-          transform={`translate3d(-${body.shoulders / 2 + 20}px,112px,10px) rotateZ(8deg)`}
+          transform={`translate3d(-${body.shoulders / 2 + 20}px,120px,10px) rotateZ(8deg)`}
           borderRadius="52% 48% 46% 54%"
         />
         <HumanoidPart
-          width={body.armW + 8}
-          height={18}
+          width={16}
+          height={20}
           color={shade(config.skinTone, 0.98)}
-          transform={`translate3d(${body.shoulders / 2 + 20}px,112px,10px) rotateZ(-8deg)`}
+          transform={`translate3d(${body.shoulders / 2 + 20}px,120px,10px) rotateZ(-8deg)`}
           borderRadius="48% 52% 54% 46%"
         />
         <HumanoidPart
+          width={body.footW}
+          height={16}
+          color={shade(palette.bottom, 0.78)}
+          transform={`translate3d(-${body.legW / 1.02}px,168px,12px) rotateZ(2deg)`}
+          borderRadius="54% 54% 46% 46%"
+        />
+        <HumanoidPart
+          width={body.footW}
+          height={16}
+          color={shade(palette.bottom, 0.78)}
+          transform={`translate3d(${body.legW / 1.02}px,168px,12px) rotateZ(-2deg)`}
+          borderRadius="54% 54% 46% 46%"
+        />
+        <HumanoidPart
           width={body.legW + 18}
-          height={14}
+          height={12}
           color={shade(palette.bottom, 0.72)}
-          transform={`translate3d(-${body.legW / 1.1}px,160px,14px)`}
+          transform={`translate3d(-${body.legW / 1.05}px,170px,14px)`}
           borderRadius="52% 52% 48% 48%"
         />
         <HumanoidPart
           width={body.legW + 18}
-          height={14}
+          height={12}
           color={shade(palette.bottom, 0.72)}
-          transform={`translate3d(${body.legW / 1.1}px,160px,14px)`}
+          transform={`translate3d(${body.legW / 1.05}px,170px,14px)`}
           borderRadius="52% 52% 48% 48%"
         />
         {outfit === "mystic" && (
@@ -1030,6 +1626,8 @@ export function Avatar3DModel({
             boxShadow: "0 5px 8px rgba(0,0,0,0.08)",
           }}
         />
+          </>
+        )}
       </div>
       <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-ivory/10 bg-night-900/70 px-3 py-1 text-[10px] uppercase tracking-[0.22em] text-ivory/60">
         360°

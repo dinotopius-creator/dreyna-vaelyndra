@@ -1,7 +1,15 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { Link, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Banknote, Coins, ArrowLeft, Gift, Loader2, MessageCircle, Sparkles } from "lucide-react";
+import {
+  Banknote,
+  Coins,
+  ArrowLeft,
+  Gift,
+  Loader2,
+  MessageCircle,
+  Sparkles,
+} from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useStore } from "../contexts/StoreContext";
 import { SectionHeading } from "../components/SectionHeading";
@@ -54,7 +62,9 @@ export function UserProfile() {
   const [bondsTab, setBondsTab] = useState<"followers" | "following" | null>(
     null,
   );
-  const [activeFamiliar, setActiveFamiliar] = useState<OwnedFamiliar | null>(null);
+  const [activeFamiliar, setActiveFamiliar] = useState<OwnedFamiliar | null>(
+    null,
+  );
   const [giftAmount, setGiftAmount] = useState("");
   const [giftSending, setGiftSending] = useState(false);
 
@@ -70,7 +80,9 @@ export function UserProfile() {
       .catch(() => {
         if (!cancelled) setActiveFamiliar(null);
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [userId]);
 
   useEffect(() => {
@@ -151,10 +163,7 @@ export function UserProfile() {
     }
     return (
       <div className="mx-auto max-w-3xl px-6 py-16 text-center">
-        <SectionHeading
-          eyebrow="Page manquante"
-          title="Ce profil a disparu"
-        />
+        <SectionHeading eyebrow="Page manquante" title="Ce profil a disparu" />
         <p className="mt-6 text-sm text-ivory/60">
           Le profil demandé n'existe pas (ou plus) sur Vaelyndra.
         </p>
@@ -174,7 +183,7 @@ export function UserProfile() {
     );
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 sm:py-14">
+    <div className="mx-auto max-w-5xl px-3 py-8 sm:px-6 sm:py-14">
       <SoulBondsModal
         userId={profile.id}
         username={profile.username}
@@ -185,11 +194,11 @@ export function UserProfile() {
       <motion.header
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        className="card-royal relative overflow-hidden p-6 sm:p-8 md:p-10"
+        className="card-royal relative overflow-hidden p-4 sm:p-8 md:p-10"
       >
-        <div className="flex flex-col items-start gap-6 sm:flex-row sm:flex-wrap sm:items-center">
+        <div className="flex flex-col items-start gap-5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-6">
           {serverProfile?.avatarUrl ? (
-            <div className="w-28 sm:w-32 md:w-40">
+            <div className="w-24 sm:w-32 md:w-40">
               <AvatarViewer
                 src={serverProfile.avatarUrl}
                 fallbackImage={serverProfile.avatarImageUrl || profile.avatar}
@@ -208,14 +217,14 @@ export function UserProfile() {
             <img
               src={profile.avatar}
               alt={profile.username}
-              className="h-24 w-24 rounded-full object-cover ring-4 ring-gold-400/50"
+              className="h-24 w-24 rounded-full object-cover ring-4 ring-gold-400/50 sm:h-28 sm:w-28"
             />
           )}
           <div className="w-full flex-1">
             <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
               {roleLabelWithIcon(serverProfile?.role ?? profile.role)}
             </p>
-            <h1 className="mt-1 font-display text-3xl text-gold-200 md:text-4xl">
+            <h1 className="mt-1 font-display text-2xl text-gold-200 sm:text-3xl md:text-4xl">
               {profile.username}
             </h1>
             {/* PR S — `@handle` public juste sous le pseudo. */}
@@ -233,6 +242,36 @@ export function UserProfile() {
             <p className="mt-2 text-sm text-ivory/60">
               Inscrit·e le {formatDate(profile.joinedAt)}
             </p>
+            <div className="mt-4 grid grid-cols-2 gap-2 sm:hidden">
+              <Link
+                to="/avatar"
+                className="panel-app-soft flex items-center justify-between p-3 text-left"
+              >
+                <span>
+                  <span className="block text-[10px] uppercase tracking-[0.2em] text-ivory/45">
+                    Avatar
+                  </span>
+                  <span className="mt-1 block font-display text-sm text-gold-100">
+                    Ouvrir le studio
+                  </span>
+                </span>
+                <Sparkles className="h-4 w-4 text-gold-200" />
+              </Link>
+              <Link
+                to="/familier"
+                className="panel-app-soft flex items-center justify-between p-3 text-left"
+              >
+                <span>
+                  <span className="block text-[10px] uppercase tracking-[0.2em] text-ivory/45">
+                    Familier
+                  </span>
+                  <span className="mt-1 block font-display text-sm text-gold-100">
+                    Gérer
+                  </span>
+                </span>
+                <Gift className="h-4 w-4 text-gold-200" />
+              </Link>
+            </div>
             <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-ivory/70">
               <button
                 type="button"
@@ -262,7 +301,6 @@ export function UserProfile() {
             )}
           </div>
           <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end">
-
             <FollowButton
               targetId={profile.id}
               targetUsername={profile.username}
@@ -319,9 +357,7 @@ export function UserProfile() {
             </p>
           </div>
           <p className="mt-3 font-display text-2xl text-gold-200">
-            {serverProfile
-              ? serverProfile.lueurs.toLocaleString("fr-FR")
-              : "—"}
+            {serverProfile ? serverProfile.lueurs.toLocaleString("fr-FR") : "—"}
           </p>
         </div>
         <div className="card-royal p-5">
@@ -386,28 +422,49 @@ export function UserProfile() {
                   {activeFamiliar.nickname || activeFamiliar.name}
                 </h3>
                 <p className="mt-0.5 text-xs text-ivory/55">
-                  {activeFamiliar.name} — {RARITY_LABELS[activeFamiliar.rarity] ?? activeFamiliar.rarity}
+                  {activeFamiliar.name} —{" "}
+                  {RARITY_LABELS[activeFamiliar.rarity] ??
+                    activeFamiliar.rarity}
                 </p>
                 <div className="mt-2 flex flex-wrap items-center gap-3">
                   <span className="inline-flex items-center gap-1 rounded-full border border-gold-400/40 bg-gold-500/10 px-3 py-1 text-xs font-semibold text-gold-200">
                     Niveau {activeFamiliar.level}
                   </span>
                   <span className="inline-flex items-center gap-1 rounded-full border border-ivory/15 bg-night-700/60 px-3 py-1 text-xs text-ivory/70">
-                    {(EVOLUTION_TIERS[activeFamiliar.evolution.id] ?? { emoji: "✨", label: activeFamiliar.evolution.name }).emoji}{" "}
-                    {(EVOLUTION_TIERS[activeFamiliar.evolution.id] ?? { label: activeFamiliar.evolution.name }).label}
+                    {
+                      (
+                        EVOLUTION_TIERS[activeFamiliar.evolution.id] ?? {
+                          emoji: "✨",
+                          label: activeFamiliar.evolution.name,
+                        }
+                      ).emoji
+                    }{" "}
+                    {
+                      (
+                        EVOLUTION_TIERS[activeFamiliar.evolution.id] ?? {
+                          label: activeFamiliar.evolution.name,
+                        }
+                      ).label
+                    }
                   </span>
                 </div>
                 <div className="mt-3">
                   <div className="flex items-center justify-between text-[11px] text-ivory/50">
                     <span>Progression</span>
                     <span>
-                      {activeFamiliar.xpIntoLevel} / {activeFamiliar.xpToNextLevel > 0 ? activeFamiliar.xpToNextLevel : "MAX"} XP
+                      {activeFamiliar.xpIntoLevel} /{" "}
+                      {activeFamiliar.xpToNextLevel > 0
+                        ? activeFamiliar.xpToNextLevel
+                        : "MAX"}{" "}
+                      XP
                     </span>
                   </div>
                   <div className="mt-1 h-2 overflow-hidden rounded-full bg-night-700">
                     <motion.div
                       className="h-full rounded-full"
-                      style={{ background: `linear-gradient(90deg, ${activeFamiliar.color}, ${activeFamiliar.color}cc)` }}
+                      style={{
+                        background: `linear-gradient(90deg, ${activeFamiliar.color}, ${activeFamiliar.color}cc)`,
+                      }}
                       initial={{ width: 0 }}
                       animate={{
                         width: `${activeFamiliar.xpToNextLevel <= 0 ? 100 : Math.min(100, Math.round((activeFamiliar.xpIntoLevel / activeFamiliar.xpToNextLevel) * 100))}%`,
@@ -451,13 +508,19 @@ export function UserProfile() {
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        disabled={giftSending || !giftAmount || Number(giftAmount) < 1}
+                        disabled={
+                          giftSending || !giftAmount || Number(giftAmount) < 1
+                        }
                         onClick={async () => {
                           const amt = Number(giftAmount);
                           if (!currentUser || amt < 1) return;
                           setGiftSending(true);
                           try {
-                            const result = await giftFamiliar(userId, currentUser.id, amt);
+                            const result = await giftFamiliar(
+                              userId,
+                              currentUser.id,
+                              amt,
+                            );
                             notify(
                               `${result.familiarIcon} +${result.xpGranted} XP pour ${result.familiarName} ! (Niveau ${result.newLevel})`,
                               "success",
@@ -465,14 +528,25 @@ export function UserProfile() {
                             setGiftAmount("");
                             setActiveFamiliar((prev) =>
                               prev
-                                ? { ...prev, xp: result.newXp, level: result.newLevel }
+                                ? {
+                                    ...prev,
+                                    xp: result.newXp,
+                                    level: result.newLevel,
+                                  }
                                 : prev,
                             );
-                            fetchUserFamiliars(userId).then((col) => {
-                              setActiveFamiliar(col.owned.find((f) => f.isActive) ?? null);
-                            }).catch(() => {});
+                            fetchUserFamiliars(userId)
+                              .then((col) => {
+                                setActiveFamiliar(
+                                  col.owned.find((f) => f.isActive) ?? null,
+                                );
+                              })
+                              .catch(() => {});
                           } catch (e: unknown) {
-                            const msg = e instanceof Error && e.message ? e.message : "Échec de l'offrande.";
+                            const msg =
+                              e instanceof Error && e.message
+                                ? e.message
+                                : "Échec de l'offrande.";
                             notify(msg, "error");
                           } finally {
                             setGiftSending(false);
@@ -485,11 +559,13 @@ export function UserProfile() {
                         ) : (
                           <Gift className="h-3.5 w-3.5" />
                         )}
-                        Offrir {giftAmount ? `${giftAmount} Sylvins` : "au familier"}
+                        Offrir{" "}
+                        {giftAmount ? `${giftAmount} Sylvins` : "au familier"}
                       </button>
                     </div>
                     <p className="text-[11px] text-ivory/40">
-                      1 Sylvin = 1 XP pour le familier. Ton familier gagne aussi 1 XP tous les 3 Sylvins offerts.
+                      1 Sylvin = 1 XP pour le familier. Ton familier gagne aussi
+                      1 XP tous les 3 Sylvins offerts.
                     </p>
                   </div>
                 )}

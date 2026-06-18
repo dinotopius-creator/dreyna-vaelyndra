@@ -130,14 +130,15 @@ export function AvatarEditor({
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
-            ✦ Studio avatar 3D
+            ✦ Studio avatar humanoïde
           </p>
           <h3 className="mt-1 font-display text-2xl text-gold-200">
-            Sculptez votre présence
+            Sculptez votre présence premium
           </h3>
           <p className="mt-1 max-w-2xl text-sm text-ivory/60">
             Avatar debout, rotation à 360°, rendu live et profil unifié. Les
-            tenues et accessoires 3D de la boutique se greffent ensuite dessus.
+            tenues et accessoires 3D de la boutique se greffent ensuite sur une
+            base humanoïde plus expressive et mieux proportionnée.
           </p>
         </div>
         {onClose && (
