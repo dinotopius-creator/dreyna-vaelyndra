@@ -2,7 +2,11 @@ import { useEffect, useState } from "react";
 import { Clock3, Gift, Megaphone, Trophy, Hash, ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { COMMUNITY_DRAWING_CONTEST, drawingContestEndsIn } from "../data/communityContest";
+import {
+  COMMUNITY_DRAWING_CONTEST,
+  drawingContestEndsIn,
+  formatContestCountdown,
+} from "../data/communityContest";
 import { formatRelative } from "../lib/helpers";
 
 export function CommunityContestBanner({
@@ -66,7 +70,7 @@ export function CommunityContestBanner({
               <div className="flex flex-wrap gap-2 text-xs text-ivory/70">
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">
                   <Clock3 className="h-3.5 w-3.5 text-gold-200" />
-                  {active ? "24h00" : "Concours terminé"}
+                  {active ? formatContestCountdown(remaining) : "Concours terminé"}
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">
                   <Trophy className="h-3.5 w-3.5 text-gold-200" />
@@ -83,7 +87,7 @@ export function CommunityContestBanner({
                 {active ? "Temps restant" : "État"}
               </p>
               <p className="mt-2 font-display text-2xl text-gold-100">
-                {active ? "24h00" : "Clôturé"}
+                {active ? formatContestCountdown(remaining) : "Clôturé"}
               </p>
               <p className="mt-2 text-sm text-ivory/70">
                 {active
