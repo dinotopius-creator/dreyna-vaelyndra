@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Clock3, Gift, Megaphone, Trophy, Hash, ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -21,7 +22,13 @@ export function CommunityContestBanner({
   compact?: boolean;
   showWhenInactive?: boolean;
 }) {
-  const remaining = drawingContestEndsIn();
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const remaining = drawingContestEndsIn(now);
   const active = remaining > 0;
 
   if (!active && !showWhenInactive) {
