@@ -201,6 +201,15 @@ export function CommunityImmersiveFeed({
     );
   }, [activeTab, currentUserId, posts, profilesById]);
 
+  const visiblePosts = useMemo(() => {
+    if (filteredPosts.length > 0) return filteredPosts;
+    if (posts.length === 0) return filteredPosts;
+    if (activeTab === "news") return filteredPosts;
+    return [...posts].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+  }, [activeTab, filteredPosts, posts]);
+
   const feedEntries = useMemo<
     Array<
       | {
@@ -236,8 +245,8 @@ export function CommunityImmersiveFeed({
       ];
     }
 
-    return filteredPosts.map((post) => ({ kind: "post" as const, id: post.id, post }));
-  }, [activeTab, filteredPosts, leaderboard, weeklyLabel]);
+    return visiblePosts.map((post) => ({ kind: "post" as const, id: post.id, post }));
+  }, [activeTab, leaderboard, weeklyLabel, visiblePosts]);
 
   return (
     <div className="relative h-[100dvh] min-h-0 overflow-hidden bg-night-950 text-ivory">

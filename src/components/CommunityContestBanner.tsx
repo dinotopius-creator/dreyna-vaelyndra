@@ -1,13 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Clock3, Gift, Megaphone, Trophy, Hash, ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   COMMUNITY_DRAWING_CONTEST,
-  drawingContestEndsIn,
   formatContestCountdown,
 } from "../data/communityContest";
 import { formatRelative } from "../lib/helpers";
+import { apiGetDrawingContestStatus } from "../lib/api";
 
 export function CommunityContestBanner({
   compact = false,
@@ -17,13 +17,38 @@ export function CommunityContestBanner({
   showWhenInactive?: boolean;
 }) {
   const [now, setNow] = useState(() => Date.now());
+  const [timeRemainingMs, setTimeRemainingMs] = useState<number | null>(null);
+  const [contestEndsAt, setContestEndsAt] = useState<string>(
+    COMMUNITY_DRAWING_CONTEST.endsAt,
+  );
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(id);
   }, []);
 
-  const remaining = drawingContestEndsIn(now);
+  useEffect(() => {
+    let cancelled = false;
+    void apiGetDrawingContestStatus()
+      .then((status) => {
+        if (cancelled) return;
+        setTimeRemainingMs(status.timeRemainingMs);
+        setContestEndsAt(status.endsAt);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setTimeRemainingMs(null);
+        setContestEndsAt(COMMUNITY_DRAWING_CONTEST.endsAt);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const remaining = useMemo(() => {
+    if (timeRemainingMs !== null) return Math.max(0, timeRemainingMs);
+    return Math.max(0, new Date(contestEndsAt).getTime() - now);
+  }, [contestEndsAt, now, timeRemainingMs]);
   const active = remaining > 0;
 
   if (!active && !showWhenInactive) {
@@ -90,7 +115,7 @@ export function CommunityContestBanner({
               <p className="mt-2 text-sm text-ivory/70">
                 {active
                   ? "Le concours est en cours. Participe maintenant."
-                  : `L'annonce est conservée en archive pendant ${formatRelative(COMMUNITY_DRAWING_CONTEST.endsAt)}.`}
+                  : `L'annonce est conservée en archive pendant ${formatRelative(contestEndsAt)}.`}
               </p>
               {!compact && (
                 <div className="mt-4 rounded-2xl border border-gold-300/20 bg-gold-500/10 p-3 text-xs text-ivory/78">

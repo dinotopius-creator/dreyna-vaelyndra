@@ -20,7 +20,7 @@ import {
 import { formatRelative, parsePostImageUrl, parseVideoUrl } from "../lib/helpers";
 import { UserBadges } from "../components/UserBadges";
 import StreamerGradeBadge from "../components/StreamerGradeBadge";
-import { apiSettleDrawingContest } from "../lib/api";
+import { apiGetDrawingContestStatus, apiSettleDrawingContest } from "../lib/api";
 
 function reactionCount(post: { reactions: Record<string, string[]> }) {
   const unique = new Set<string>();
@@ -32,10 +32,33 @@ export function CommunityHashtag() {
   const { posts } = useStore();
   const { users } = useAuth();
   const [now, setNow] = useState(() => Date.now());
+  const [contestState, setContestState] = useState<{
+    active: boolean;
+    timeRemainingMs: number;
+  } | null>(null);
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void apiGetDrawingContestStatus()
+      .then((status) => {
+        if (cancelled) return;
+        setContestState({
+          active: status.active,
+          timeRemainingMs: status.timeRemainingMs,
+        });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setContestState(null);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
   const usersById = useMemo(
     () => new Map(users.map((entry) => [entry.id, entry])),
@@ -63,8 +86,8 @@ export function CommunityHashtag() {
       });
   }, [posts]);
 
-  const countdown = drawingContestEndsIn(now);
-  const active = countdown > 0;
+  const countdown = contestState?.timeRemainingMs ?? drawingContestEndsIn(now);
+  const active = contestState?.active ?? countdown > 0;
 
   useEffect(() => {
     if (active) return;
