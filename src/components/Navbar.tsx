@@ -40,7 +40,7 @@ const NAV = [
   { to: "/live", label: "Live" },
   { to: "/mondes", label: "Mondes" },
   { to: "/wiki", label: "Wiki" },
-  { to: "/communaute", label: "Communauté" },
+  { to: "/social/play", label: "Social" },
 ];
 
 const MOBILE_TABS = [
@@ -63,10 +63,11 @@ const MOBILE_TABS = [
     match: (path: string) => path.startsWith("/live"),
   },
   {
-    to: "/communaute",
+    to: "/social/play",
     label: "Social",
     icon: Users,
-    match: (path: string) => path.startsWith("/communaute"),
+    match: (path: string) =>
+      path.startsWith("/social") || path.startsWith("/communaute"),
   },
   {
     to: "/moi",
@@ -130,7 +131,7 @@ export function Navbar() {
   const mobileMainLinks: MobileMenuLink[] = [
     { to: "/", label: "Accueil", icon: House, end: true },
     { to: "/blog", label: "Chroniques", icon: Crown },
-    { to: "/communaute", label: "Communauté", icon: Users },
+    { to: "/social/play", label: "Social", icon: Users },
     { to: "/mondes", label: "Monde", icon: Gamepad2 },
     { to: "/live", label: "Lives", icon: Radio, end: true },
     { to: "/boutique", label: "Boutique", icon: ShoppingBag },

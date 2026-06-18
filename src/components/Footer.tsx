@@ -60,8 +60,8 @@ export function Footer() {
           <p className="font-regal text-[11px] text-gold-300">La Cour</p>
           <ul className="mt-3 space-y-2 text-sm text-ivory/75">
             <li>
-              <Link to="/communaute" className="hover:text-gold-200">
-                Communauté
+              <Link to="/social/play" className="hover:text-gold-200">
+                Social
               </Link>
             </li>
             <li>

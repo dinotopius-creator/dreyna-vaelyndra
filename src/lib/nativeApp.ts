@@ -30,6 +30,7 @@ export function isPrimaryAppRoute(pathname: string): boolean {
     pathname === "/" ||
     pathname === "/live" ||
     pathname === "/communaute" ||
+    pathname === "/social/play" ||
     pathname === "/mondes" ||
     pathname === "/moi" ||
     pathname === "/compte"
