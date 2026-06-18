@@ -371,7 +371,7 @@ function App() {
       <main
         className={
           isWorldPlayRoute || isSocialImmersiveRoute
-            ? "fixed inset-0 h-[100dvh] w-screen overflow-hidden bg-night-950"
+            ? "fixed inset-0 z-[200] h-[100dvh] w-screen overflow-hidden bg-night-950"
             : "flex-1 pb-[calc(4.75rem+env(safe-area-inset-bottom))] lg:pb-0"
         }
       >
