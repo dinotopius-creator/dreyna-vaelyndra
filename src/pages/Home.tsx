@@ -40,6 +40,7 @@ import { AvatarViewer } from "../components/AvatarViewer";
 import { SectionHeading } from "../components/SectionHeading";
 import { RuneDivider } from "../components/RuneDivider";
 import { CommunityContestBanner } from "../components/CommunityContestBanner";
+import { HomeAvatarHub } from "../components/HomeAvatarHub";
 
 type HomeMember = {
   userId: string;
@@ -179,12 +180,13 @@ export function Home() {
 
   return (
     <div className="min-h-[100dvh] overflow-x-hidden bg-night-950">
-      <PremiumHomeHub
+      <HomeAvatarHub
         isLiveOn={isLiveOn}
         isRegistered={isRegistered}
         unreadMessages={unreadMessages}
         unreadNotifications={unreadNotifications}
         backendMe={backendMe}
+        userAvatar={user?.avatar ?? null}
         activeLive={activeLive}
         topFans={topFans}
       />
@@ -652,7 +654,7 @@ function LegacyHero({
 
 export const Hero = LegacyHero;
 
-function PremiumHomeHub({
+export function PremiumHomeHub({
   isLiveOn,
   isRegistered,
   unreadMessages,
