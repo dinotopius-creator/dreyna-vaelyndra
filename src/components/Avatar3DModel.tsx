@@ -585,6 +585,70 @@ function PremiumAvatarStage({
   );
 }
 
+function HumanoidV3Stage({
+  config,
+  palette,
+  body,
+  faceScale,
+  outfit,
+  accessory,
+  layoutTop,
+}: {
+  config: Avatar3DConfig;
+  palette: { top: string; bottom: string; accent: string };
+  body: { shoulders: number; waist: number; torsoH: number; armW: number; legW: number; footW: number };
+  faceScale: number;
+  outfit: OutfitTheme;
+  accessory: AccessoryTheme;
+  layoutTop: string;
+}) {
+  const skinDeep = shade(config.skinTone, 0.94);
+  const skinLight = shade(config.skinTone, 1.04);
+  const blush = shade(config.skinTone, 0.82);
+  const mouthColor = config.expression === "confident" ? "#7c2d12" : "#9f4f38";
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: "50%",
+        top: layoutTop,
+        width: 0,
+        height: 0,
+        transformStyle: "preserve-3d",
+        transform: "translate3d(0,0,0) scale(1.02) rotateX(-10deg)",
+      }}
+    >
+      <HumanoidPart width={body.shoulders + 34} height={14} color={shade(palette.top, 0.76)} transform="translate3d(0,10px,2px)" borderRadius="999px" opacity={0.86} />
+      <HumanoidPart width={body.shoulders + 24} height={20} color={skinDeep} transform="translate3d(0,-8px,10px)" borderRadius="44% 44% 54% 54% / 34% 34% 66% 66%" opacity={0.98} />
+      <HumanoidPart width={66 * faceScale} height={82} color={skinLight} transform="translate3d(0,-64px,22px)" borderRadius="47% 47% 56% 56% / 42% 42% 58% 58%" />
+      <HumanoidPart width={76 * faceScale} height={56} color={config.hairColor} transform="translate3d(0,-96px,24px)" borderRadius="56% 56% 28% 28% / 74% 74% 26% 26%" />
+      <HumanoidPart width={68 * faceScale} height={50} color={shade(config.hairColor, 0.86)} transform="translate3d(0,-70px,-10px)" borderRadius="48% 48% 60% 60%" />
+      <HumanoidPart width={16} height={10} color={blush} transform="translate3d(-20px,-8px,30px)" borderRadius="999px" opacity={0.42} />
+      <HumanoidPart width={16} height={10} color={blush} transform="translate3d(20px,-8px,30px)" borderRadius="999px" opacity={0.42} />
+      <HumanoidPart width={12} height={8} color="#fffaf5" transform="translate3d(-14px,-22px,30px)" borderRadius="50%" opacity={0.96} />
+      <HumanoidPart width={12} height={8} color="#fffaf5" transform="translate3d(14px,-22px,30px)" borderRadius="50%" opacity={0.96} />
+      <HumanoidPart width={5} height={5} color={config.eyeColor} transform="translate3d(-14px,-22px,31px)" borderRadius="50%" opacity={0.98} />
+      <HumanoidPart width={5} height={5} color={config.eyeColor} transform="translate3d(14px,-22px,31px)" borderRadius="50%" opacity={0.98} />
+      <HumanoidPart width={44} height={8} color={mouthColor} transform="translate3d(0,20px,31px)" borderRadius="999px" opacity={config.expression === "neutral" ? 0.7 : 0.92} />
+      <HumanoidPart width={body.shoulders + 10} height={body.torsoH + 10} color={palette.top} transform="translate3d(0,28px,4px)" borderRadius="42% 42% 26% 26% / 18% 18% 76% 76%" />
+      <HumanoidPart width={body.shoulders - 12} height={body.torsoH - 18} color={shade(palette.top, 0.9)} transform="translate3d(0,34px,10px)" borderRadius="38% 38% 24% 24% / 18% 18% 76% 76%" />
+      <HumanoidPart width={body.waist + 22} height={30} color={palette.accent} transform="translate3d(0,84px,8px)" borderRadius="48% 48% 58% 58%" />
+      <HumanoidPart width={body.armW + 8} height={94} color={palette.top} transform={`translate3d(-${body.shoulders / 2 + 16}px,36px,4px) rotateZ(3deg)`} borderRadius="999px" />
+      <HumanoidPart width={body.armW + 8} height={94} color={palette.top} transform={`translate3d(${body.shoulders / 2 + 16}px,36px,4px) rotateZ(-3deg)`} borderRadius="999px" />
+      <HumanoidPart width={body.armW + 2} height={62} color={skinLight} transform={`translate3d(-${body.shoulders / 2 + 20}px,98px,8px) rotateZ(7deg)`} borderRadius="999px" />
+      <HumanoidPart width={body.armW + 2} height={62} color={skinLight} transform={`translate3d(${body.shoulders / 2 + 20}px,98px,8px) rotateZ(-7deg)`} borderRadius="999px" />
+      <HumanoidPart width={18} height={24} color={shade(config.skinTone, 1.02)} transform={`translate3d(-${body.shoulders / 2 + 22}px,152px,12px) rotateZ(5deg)`} borderRadius="50% 50% 44% 44%" />
+      <HumanoidPart width={18} height={24} color={shade(config.skinTone, 1.02)} transform={`translate3d(${body.shoulders / 2 + 22}px,152px,12px) rotateZ(-5deg)`} borderRadius="50% 50% 44% 44%" />
+      <HumanoidPart width={body.legW + 14} height={100} color={palette.bottom} transform={`translate3d(-${body.legW / 1.05}px,140px,6px) rotateZ(1deg)`} borderRadius="42% 42% 38% 38% / 18% 18% 82% 82%" />
+      <HumanoidPart width={body.legW + 14} height={100} color={palette.bottom} transform={`translate3d(${body.legW / 1.05}px,140px,6px) rotateZ(-1deg)`} borderRadius="42% 42% 38% 38% / 18% 18% 82% 82%" />
+      <HumanoidPart width={body.footW + 10} height={20} color={shade(palette.bottom, 0.74)} transform={`translate3d(-${body.legW / 1.02}px,190px,12px) rotateZ(2deg)`} borderRadius="52% 52% 46% 46%" />
+      <HumanoidPart width={body.footW + 10} height={20} color={shade(palette.bottom, 0.74)} transform={`translate3d(${body.legW / 1.02}px,190px,12px) rotateZ(-2deg)`} borderRadius="52% 52% 46% 46%" />
+      <PremiumOutfit theme={outfit} palette={palette} />
+      <PremiumAccessory kind={accessory} skinTone={config.skinTone} />
+    </div>
+  );
+}
+
 export function Avatar3DModel({
   config,
   size = "portrait",
@@ -664,6 +728,7 @@ export function Avatar3DModel({
   }
 
   const premiumModel = config.baseModel !== "procedural-premium";
+  const v3Model = config.baseModel === "humanoid-v3";
 
   return (
     <div
@@ -691,6 +756,17 @@ export function Avatar3DModel({
       }}
       >
         {premiumModel ? (
+          v3Model ? (
+            <HumanoidV3Stage
+              config={config}
+              palette={palette}
+              body={body}
+              faceScale={faceScale}
+              outfit={outfit}
+              accessory={accessory}
+              layoutTop={layout.top}
+            />
+          ) : (
           <PremiumAvatarStage
             config={config}
             palette={palette}
@@ -699,7 +775,8 @@ export function Avatar3DModel({
             outfit={outfit}
             accessory={accessory}
             layoutTop={layout.top}
-          />
+            />
+          )
         ) : (
           <>
         <HumanoidPart
