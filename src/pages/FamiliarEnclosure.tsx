@@ -329,9 +329,9 @@ export function FamiliarEnclosure() {
         </div>
       </div>
 
-      <div className="relative z-10 flex-1 overflow-hidden">
-        <div className="grid h-full gap-4 p-3 lg:grid-cols-[1.35fr,0.65fr] lg:p-5">
-          <div className="relative min-h-0 overflow-hidden rounded-[30px] border border-white/10 bg-[radial-gradient(circle_at_50%_28%,rgba(74,222,128,0.16),transparent_28%),linear-gradient(180deg,rgba(16,185,129,0.12),rgba(15,23,42,0.92))] shadow-[0_30px_90px_rgba(0,0,0,0.35)]">
+      <div className="relative z-10 flex-1 min-h-0 overflow-y-auto overscroll-contain">
+        <div className="grid gap-4 p-3 pb-8 lg:grid-cols-[1.35fr,0.65fr] lg:p-5">
+          <div className="relative min-h-[62dvh] overflow-hidden rounded-[30px] border border-white/10 bg-[radial-gradient(circle_at_50%_28%,rgba(74,222,128,0.16),transparent_28%),linear-gradient(180deg,rgba(16,185,129,0.12),rgba(15,23,42,0.92))] shadow-[0_30px_90px_rgba(0,0,0,0.35)] lg:min-h-[calc(100dvh-8.5rem)]">
             <div className="absolute inset-x-0 bottom-0 h-[48%] rounded-t-[50%] bg-[radial-gradient(ellipse_at_center,rgba(34,197,94,0.35),rgba(20,83,45,0.2)_48%,transparent_72%)]" />
             <div className="absolute left-[8%] top-[16%] h-32 w-32 rounded-full bg-gold-200/10 blur-3xl" />
             <div className="absolute right-[10%] top-[10%] h-40 w-40 rounded-full bg-cyan-200/10 blur-3xl" />
@@ -346,6 +346,9 @@ export function FamiliarEnclosure() {
               animate={{ y: [0, 7, 0] }}
               transition={{ duration: 4.2, repeat: Infinity, ease: "easeInOut" }}
             />
+            <div className="absolute left-4 top-4 z-10 rounded-full border border-white/10 bg-night-950/70 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-ivory/70 backdrop-blur">
+              Touchez le familier
+            </div>
 
             {active ? (
               <motion.button
@@ -355,7 +358,7 @@ export function FamiliarEnclosure() {
                 style={{ color: active.color }}
                 animate={{
                   left: ["18%", "58%", "46%", "25%", "18%"],
-                  top: ["52%", "45%", "66%", "70%", "52%"],
+                  top: ["56%", "48%", "68%", "72%", "56%"],
                 }}
                 transition={{ duration: 14, repeat: Infinity, ease: "easeInOut" }}
               >
@@ -423,7 +426,7 @@ export function FamiliarEnclosure() {
             </div>
           </div>
 
-          <aside className="min-h-0 space-y-4 overflow-y-auto pr-1 pb-4">
+          <aside className="min-h-0 space-y-4 overflow-y-visible pr-1 pb-4 lg:overflow-y-auto">
             <div className="rounded-[26px] border border-rose-300/20 bg-rose-500/10 p-5">
               <div className="flex items-center gap-2 text-rose-100">
                 <Heart className="h-4 w-4" />
