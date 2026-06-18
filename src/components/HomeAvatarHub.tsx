@@ -67,6 +67,7 @@ export function HomeAvatarHub({
       ];
 
   const actionCards = [
+    { title: "Chronique", subtitle: "Lire le grimoire", to: "/blog", icon: BookOpen },
     { title: "Avatar", subtitle: "Atelier 360°", to: avatarLink, icon: Gem },
     { title: "Quêtes", subtitle: "Missions", to: "/quetes", icon: BookOpen },
     { title: "Avantages", subtitle: "Boutique", to: "/boutique", icon: ShoppingBag },
@@ -87,30 +88,6 @@ export function HomeAvatarHub({
             <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-amber-500/10 text-amber-500"><Crown className="h-3.5 w-3.5" /></span>
             <span className="tabular-nums">{formatNumber(currencyFree)}</span>
           </Link>
-
-          <div className="flex items-center gap-2 sm:gap-2.5">
-            <Link to="/communaute" className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/7 text-white shadow-[0_10px_26px_rgba(0,0,0,0.22)] backdrop-blur-md transition hover:border-fuchsia-200/40 hover:bg-white/12" aria-label="Rechercher" title="Rechercher">
-              <Search className="h-5 w-5" />
-            </Link>
-            <button
-              type="button"
-              onClick={() => setNotificationsOpen((current) => !current)}
-              className="relative flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/7 text-white shadow-[0_10px_26px_rgba(0,0,0,0.22)] backdrop-blur-md transition hover:border-fuchsia-200/40 hover:bg-white/12"
-              aria-label="Notifications"
-              title="Notifications"
-              aria-expanded={notificationsOpen}
-            >
-              <Bell className="h-5 w-5" />
-              {unreadNotifications > 0 && <span className="absolute -right-1 -top-1 inline-flex min-w-5 items-center justify-center rounded-full bg-fuchsia-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{unreadNotifications > 99 ? "99+" : unreadNotifications}</span>}
-            </button>
-            <Link to="/messages" className="relative flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/7 text-white shadow-[0_10px_26px_rgba(0,0,0,0.22)] backdrop-blur-md transition hover:border-fuchsia-200/40 hover:bg-white/12" aria-label="Messages" title="Messages">
-              <MessageCircleHeart className="h-5 w-5" />
-              {unreadMessages > 0 && <span className="absolute -right-1 -top-1 inline-flex min-w-5 items-center justify-center rounded-full bg-emerald-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{unreadMessages > 99 ? "99+" : unreadMessages}</span>}
-            </Link>
-            <Link to="/compte" className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/7 text-white shadow-[0_10px_26px_rgba(0,0,0,0.22)] backdrop-blur-md transition hover:border-fuchsia-200/40 hover:bg-white/12" aria-label="Menu" title="Menu">
-              <Menu className="h-5 w-5" />
-            </Link>
-          </div>
         </div>
 
         {notificationsOpen && (
@@ -241,6 +218,70 @@ export function HomeAvatarHub({
               );
             })}
           </aside>
+        </div>
+
+        <div className="relative z-20 mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <Link
+            to="/communaute"
+            className="flex items-center justify-between rounded-[1.35rem] border border-white/10 bg-white/8 px-4 py-3 text-left backdrop-blur-md transition hover:border-fuchsia-200/35 hover:bg-white/12"
+          >
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-[0.24em] text-white/45">
+                Rechercher
+              </p>
+              <p className="font-semibold text-white">Social</p>
+            </div>
+            <Search className="h-5 w-5 text-white/85" />
+          </Link>
+          <button
+            type="button"
+            onClick={() => setNotificationsOpen((current) => !current)}
+            className="relative flex items-center justify-between rounded-[1.35rem] border border-white/10 bg-white/8 px-4 py-3 text-left backdrop-blur-md transition hover:border-fuchsia-200/35 hover:bg-white/12"
+            aria-label="Notifications"
+            aria-expanded={notificationsOpen}
+          >
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-[0.24em] text-white/45">
+                Notifications
+              </p>
+              <p className="font-semibold text-white">Alertes</p>
+            </div>
+            <Bell className="h-5 w-5 text-white/85" />
+            {unreadNotifications > 0 && (
+              <span className="absolute -right-1 -top-1 inline-flex min-w-5 items-center justify-center rounded-full bg-fuchsia-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                {unreadNotifications > 99 ? "99+" : unreadNotifications}
+              </span>
+            )}
+          </button>
+          <Link
+            to="/messages"
+            className="relative flex items-center justify-between rounded-[1.35rem] border border-white/10 bg-white/8 px-4 py-3 text-left backdrop-blur-md transition hover:border-fuchsia-200/35 hover:bg-white/12"
+          >
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-[0.24em] text-white/45">
+                Messages
+              </p>
+              <p className="font-semibold text-white">Boite</p>
+            </div>
+            <MessageCircleHeart className="h-5 w-5 text-white/85" />
+            {unreadMessages > 0 && (
+              <span className="absolute -right-1 -top-1 inline-flex min-w-5 items-center justify-center rounded-full bg-emerald-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                {unreadMessages > 99 ? "99+" : unreadMessages}
+              </span>
+            )}
+          </Link>
+          <Link
+            to="/compte"
+            className="flex items-center justify-between rounded-[1.35rem] border border-white/10 bg-white/8 px-4 py-3 text-left backdrop-blur-md transition hover:border-fuchsia-200/35 hover:bg-white/12"
+          >
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-[0.24em] text-white/45">
+                Menu
+              </p>
+              <p className="font-semibold text-white">Compte</p>
+            </div>
+            <Menu className="h-5 w-5 text-white/85" />
+          </Link>
         </div>
 
         <div className="relative z-10 mt-1 flex flex-col gap-3 lg:mt-0 lg:flex-row lg:items-end lg:justify-between">
