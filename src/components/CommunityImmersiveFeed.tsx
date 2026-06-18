@@ -1,5 +1,5 @@
 import { useMemo, type ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   Bookmark,
   BookmarkCheck,
@@ -135,6 +135,11 @@ export function CommunityImmersiveFeed({
   leaderboard = [],
   weeklyLabel,
 }: CommunityImmersiveFeedProps) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const fullscreenSocialMode =
+    location.pathname === "/social/play" || location.pathname === "/communaute";
+
   const filteredPosts = useMemo(() => {
     if (activeTab === "following") {
       return posts.filter((post) => {
@@ -202,9 +207,23 @@ export function CommunityImmersiveFeed({
     <div className="flex min-h-[calc(100vh-88px)] flex-col overflow-hidden bg-night-950 text-ivory">
       <div className="sticky top-0 z-30 border-b border-white/8 bg-night-950/88 backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-3 pb-3 pt-3 sm:px-5">
-          <div>
-            <p className="text-[10px] uppercase tracking-[0.32em] text-gold-300/80">Communauté</p>
-            <h1 className="font-display text-2xl text-gold-100">Feed immersif</h1>
+          <div className="flex items-center gap-3">
+            {fullscreenSocialMode && (
+              <button
+                type="button"
+                onClick={() => navigate(-1)}
+                className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-ivory/70 transition hover:border-gold-400/40 hover:text-gold-100"
+                aria-label="Quitter le Social"
+              >
+                ←
+              </button>
+            )}
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.32em] text-gold-300/80">
+                Communauté
+              </p>
+              <h1 className="font-display text-2xl text-gold-100">Feed immersif</h1>
+            </div>
           </div>
 
           <button
