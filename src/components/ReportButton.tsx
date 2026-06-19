@@ -58,11 +58,23 @@ export function ReportButton({
   const [reason, setReason] = useState<ReportReason>("spam");
   const [description, setDescription] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [portalReady, setPortalReady] = useState(false);
+  const portalReady = typeof document !== "undefined";
 
   useEffect(() => {
-    setPortalReady(true);
-  }, []);
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !submitting) {
+        setOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open, submitting]);
 
   // Pas de bouton pour les non-connectés — on évite de proposer une action
   // qui échouerait immédiatement avec un 401.
@@ -113,11 +125,13 @@ export function ReportButton({
       {open && portalReady
         ? createPortal(
         <div
-          className="fixed inset-0 z-[160] flex items-center justify-center bg-midnight/80 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[260] flex items-end justify-center bg-midnight/88 p-4 backdrop-blur-md sm:items-center"
           onClick={() => !submitting && setOpen(false)}
+          role="dialog"
+          aria-modal="true"
         >
           <div
-            className="relative z-[161] w-full max-w-md rounded-2xl border border-gold-400/30 bg-royal-900/95 p-6 shadow-2xl"
+            className="relative z-[261] w-full max-w-md rounded-[28px] border border-gold-400/30 bg-royal-900/98 p-5 shadow-[0_30px_90px_rgba(0,0,0,0.55)] sm:p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between">
@@ -143,7 +157,7 @@ export function ReportButton({
             <form onSubmit={submit} className="mt-5 space-y-4">
               <div>
                 <label className="block font-regal text-[10px] tracking-[0.22em] text-gold-300">
-                  Motif
+                  Pourquoi veux-tu signaler ce contenu ?
                 </label>
                 <select
                   className="glass-input mt-2 w-full"
@@ -178,7 +192,7 @@ export function ReportButton({
                   {description.length} / 2000
                 </p>
               </div>
-              <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col items-stretch gap-3 border-t border-white/8 pt-4 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-[10px] text-ivory/50">
                   Ton signalement est anonyme vis-à-vis de la personne
                   signalée — seul·e un·e admin le verra.

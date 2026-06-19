@@ -107,6 +107,7 @@ export function Community() {
   const [openComments, setOpenComments] = useState<Record<string, boolean>>({});
   const [selectedCommentPostId, setSelectedCommentPostId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<CommunityTab>("for-you");
+  const [pendingDeletePostId, setPendingDeletePostId] = useState<string | null>(null);
   const [savedPostIds, setSavedPostIds] = useState<Set<string>>(() => {
     try {
       const raw = window.localStorage.getItem("vaelyndra-community-saved-posts");
@@ -285,6 +286,20 @@ export function Community() {
       URL.revokeObjectURL(imagePreviewUrl);
     };
   }, [imagePreviewUrl]);
+
+  useEffect(() => {
+    if (!pendingDeletePostId) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPendingDeletePostId(null);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [pendingDeletePostId]);
 
   useEffect(() => {
     const q = tagQuery.trim();
@@ -548,6 +563,7 @@ export function Community() {
     try {
       await apiDeletePost(postId, user.id);
       dispatch({ type: "deletePost", id: postId });
+      setPendingDeletePostId((current) => (current === postId ? null : current));
     } catch (err) {
       console.warn(err);
       notify("Suppression refusée.", "error");
@@ -1005,6 +1021,45 @@ export function Community() {
                 postAuthorId={selectedCommentPost.authorId}
                 profileOverrides={profilesById}
               />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pendingDeletePostId && (
+        <div className="fixed inset-0 z-[80] bg-night-950/88 backdrop-blur-md">
+          <div className="flex h-full w-full items-end justify-center p-4 sm:items-center">
+            <div className="w-full max-w-md rounded-[28px] border border-white/10 bg-night-950 p-5 shadow-[0_30px_90px_rgba(0,0,0,0.5)]">
+              <p className="text-[10px] uppercase tracking-[0.28em] text-gold-300/80">
+                Suppression du post
+              </p>
+              <h2 className="mt-2 font-display text-2xl text-gold-100">
+                Supprimer définitivement ce post ?
+              </h2>
+              <p className="mt-3 text-sm leading-6 text-ivory/75">
+                Cette action retire le post du feed, du profil et des pages liées.
+                Elle est irréversible.
+              </p>
+              <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setPendingDeletePostId(null)}
+                  className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/10 px-4 py-2 text-sm text-ivory/75 transition hover:border-white/20 hover:text-ivory"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const targetId = pendingDeletePostId;
+                    setPendingDeletePostId(null);
+                    if (targetId) void removePost(targetId);
+                  }}
+                  className="inline-flex min-h-11 items-center justify-center rounded-full bg-rose-500/20 px-4 py-2 text-sm font-semibold text-rose-100 transition hover:bg-rose-500/30"
+                >
+                  Supprimer
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1543,7 +1598,7 @@ export function Community() {
                     )}
                     {(user?.id === post.authorId || isQueen) && (
                       <button
-                        onClick={() => removePost(post.id)}
+                        onClick={() => setPendingDeletePostId(post.id)}
                         className="text-ivory/40 hover:text-rose-300"
                         title="Supprimer"
                       >
