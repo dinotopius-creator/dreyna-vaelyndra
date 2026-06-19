@@ -14,16 +14,13 @@ import {
   Trophy,
   Users,
   Search,
-  Maximize2,
-  Minimize,
   Wand2,
   Trash2,
-  Volume2,
-  VolumeX,
   X,
 } from "lucide-react";
 import clsx from "clsx";
 import { AvatarImage } from "./AvatarImage";
+import { SocialVideoPlayer } from "./SocialVideoPlayer";
 import { MemberSearch } from "./MemberSearch";
 import { Handle } from "./Handle";
 import { RichMentionText, buildMentionLookup } from "./RichMentionText";
@@ -164,9 +161,8 @@ export function CommunityImmersiveFeed({
   const [now, setNow] = useState(() => Date.now());
   const [likeBurst, setLikeBurst] = useState<{ postId: string; token: number } | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [audibleVideoPostId, setAudibleVideoPostId] = useState<string | null>(null);
   const [pendingDeletePostId, setPendingDeletePostId] = useState<string | null>(null);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [activeAudioVideoId, setActiveAudioVideoId] = useState<string | null>(null);
   const tapDownRef = useRef<{ postId: string; x: number; y: number; time: number } | null>(null);
   const feedRootRef = useRef<HTMLDivElement | null>(null);
   const lastTapRef = useRef<{ postId: string | null; time: number } | null>(null);
@@ -184,18 +180,6 @@ export function CommunityImmersiveFeed({
   }, []);
 
   useEffect(() => {
-    const syncFullscreen = () => {
-      setIsFullscreen(
-        document.fullscreenElement === feedRootRef.current ||
-          document.fullscreenElement === document.documentElement,
-      );
-    };
-    document.addEventListener("fullscreenchange", syncFullscreen);
-    syncFullscreen();
-    return () => document.removeEventListener("fullscreenchange", syncFullscreen);
-  }, []);
-
-  useEffect(() => {
     if (!pendingDeletePostId) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -210,16 +194,6 @@ export function CommunityImmersiveFeed({
       document.body.style.overflow = previousOverflow;
     };
   }, [pendingDeletePostId]);
-
-  async function toggleFullscreenMode() {
-    const node = feedRootRef.current;
-    if (!node) return;
-    if (document.fullscreenElement) {
-      await document.exitFullscreen?.().catch(() => undefined);
-      return;
-    }
-    await node.requestFullscreen?.().catch(() => undefined);
-  }
 
   function triggerLikeBurst(postId: string) {
     setLikeBurst((current) => ({ postId, token: (current?.token ?? 0) + 1 }));
@@ -338,7 +312,6 @@ export function CommunityImmersiveFeed({
       ref={feedRootRef}
       className={clsx(
         "relative h-[100dvh] min-h-0 overflow-hidden bg-night-950 text-ivory",
-        isFullscreen && "bg-black",
       )}
     >
       <div className="absolute inset-x-0 top-0 z-30 border-b border-white/8 bg-night-950/68 backdrop-blur-xl">
@@ -821,38 +794,16 @@ export function CommunityImmersiveFeed({
                 <div className="absolute inset-0">
                   {video?.kind ? (
                     <div className="relative h-full w-full">
-                      <video
-                        src={post.videoUrl}
-                        className="h-full w-full object-cover"
-                        muted={audibleVideoPostId !== post.id}
-                        loop
-                        playsInline
-                        autoPlay
-                        preload="metadata"
-                        controls
-                      />
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setAudibleVideoPostId((current) =>
-                            current === post.id ? null : post.id,
-                          );
+                      <SocialVideoPlayer
+                        src={post.videoUrl!}
+                        poster={post.videoThumbnailUrl ?? undefined}
+                        className="h-full w-full rounded-none border-0"
+                        videoClassName="h-full w-full object-cover"
+                        muted={activeAudioVideoId !== post.id}
+                        onMutedChange={(nextMuted) => {
+                          setActiveAudioVideoId(nextMuted ? null : post.id);
                         }}
-                        className="absolute right-3 top-3 inline-flex min-h-10 items-center gap-2 rounded-full border border-white/12 bg-night-950/70 px-3 py-2 text-xs text-ivory/90 backdrop-blur-md transition hover:border-gold-400/45 hover:text-gold-100"
-                      >
-                        {audibleVideoPostId === post.id ? (
-                          <>
-                            <Volume2 className="h-4 w-4" />
-                            Son
-                          </>
-                        ) : (
-                          <>
-                            <VolumeX className="h-4 w-4" />
-                            Muet
-                          </>
-                        )}
-                      </button>
+                      />
                     </div>
                   ) : media?.kind === "image" ? (
                     <img
@@ -884,23 +835,6 @@ export function CommunityImmersiveFeed({
                     <div className="inline-flex rounded-full border border-white/10 bg-night-950/35 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-ivory/70 backdrop-blur-sm">
                       {mediaTitle(post)}
                     </div>
-                    <button
-                      type="button"
-                      onClick={toggleFullscreenMode}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-night-950/35 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-ivory/70 backdrop-blur-sm transition hover:border-gold-400/35 hover:text-gold-100"
-                    >
-                      {isFullscreen ? (
-                        <>
-                          <Minimize className="h-3.5 w-3.5" />
-                          Quitter
-                        </>
-                      ) : (
-                        <>
-                          <Maximize2 className="h-3.5 w-3.5" />
-                          Plein écran
-                        </>
-                      )}
-                    </button>
                   </div>
 
                   <div className="mt-auto flex items-end justify-between gap-4">

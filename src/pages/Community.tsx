@@ -20,8 +20,6 @@ import {
   Trash2,
   Trophy,
   Wand2,
-  Volume2,
-  VolumeX,
   X,
 } from "lucide-react";
 import { Link, useLocation, useParams, useSearchParams } from "react-router-dom";
@@ -37,6 +35,7 @@ import { UserBadges } from "../components/UserBadges";
 import { Handle } from "../components/Handle";
 import { MemberSearch } from "../components/MemberSearch";
 import { AvatarImage } from "../components/AvatarImage";
+import { SocialVideoPlayer } from "../components/SocialVideoPlayer";
 import { RichSocialText } from "../components/RichSocialText";
 import { buildMentionLookup } from "../components/RichMentionText";
 import { CommunityImmersiveFeed, type CommunityTab } from "../components/CommunityImmersiveFeed";
@@ -1941,7 +1940,6 @@ function PostVideo({
   url: string;
   thumbnailUrl?: string;
 }) {
-  const [audioEnabled, setAudioEnabled] = useState(false);
   const parsed = parseVideoUrl(url);
   if (!parsed) return null;
 
@@ -1963,36 +1961,11 @@ function PostVideo({
 
   if (parsed.kind === "file") {
     return (
-      <div className="relative mt-4 overflow-hidden rounded-xl border border-royal-500/30 bg-night-800">
-        <video
-          controls
-          preload="metadata"
-          poster={thumbnailUrl ?? undefined}
-          className="max-h-[500px] w-full bg-night-800"
-          muted={!audioEnabled}
-          playsInline
-        >
-          <source src={parsed.src} />
-          Votre navigateur ne supporte pas la lecture video.
-        </video>
-        <button
-          type="button"
-          onClick={() => setAudioEnabled((current) => !current)}
-          className="absolute right-3 top-3 inline-flex min-h-10 items-center gap-2 rounded-full border border-white/12 bg-night-950/75 px-3 py-2 text-xs text-ivory/90 backdrop-blur-md transition hover:border-gold-400/45 hover:text-gold-100"
-        >
-          {audioEnabled ? (
-            <>
-              <Volume2 className="h-4 w-4" />
-              Son
-            </>
-          ) : (
-            <>
-              <VolumeX className="h-4 w-4" />
-              Muet
-            </>
-          )}
-        </button>
-      </div>
+      <SocialVideoPlayer
+        src={parsed.src}
+        poster={thumbnailUrl}
+        className="mt-4 max-h-[500px]"
+      />
     );
   }
 
