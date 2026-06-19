@@ -28,6 +28,7 @@ import StreamerGradeBadge from "../components/StreamerGradeBadge";
 import { WishlistSection } from "../components/WishlistSection";
 import { AdminUserPanel } from "../components/AdminUserPanel";
 import { ReportButton } from "../components/ReportButton";
+import { AvatarProfileBanner } from "../components/AvatarProfileBanner";
 import { formatDate, formatRelative } from "../lib/helpers";
 import { roleLabelWithIcon } from "../lib/roleLabel";
 import { formatSylvins } from "../lib/sylvins";
@@ -283,9 +284,14 @@ export function UserProfile() {
         animate={{ opacity: 1, y: 0 }}
         className="card-royal relative overflow-hidden p-4 sm:p-8 md:p-10"
       >
-        <div className="flex flex-col items-start gap-5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-6">
+        <AvatarProfileBanner
+          title={profile.username}
+          subtitle="Les avatars complets vivent désormais dans un studio dédié. Le profil se contente d'une bannière élégante qui ouvre l'espace Avatar 3D."
+          cta="Entrer dans l'atelier Avatar"
+        />
+        <div className="mt-5 flex flex-col items-start gap-5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-6">
           {serverProfile?.avatarUrl ? (
-            <div className="w-24 sm:w-32 md:w-40">
+            <div className="hidden w-24 sm:w-32 md:w-40">
               <AvatarViewer
                 src={serverProfile.avatarUrl}
                 fallbackImage={serverProfile.avatarImageUrl || profile.avatar}
