@@ -200,6 +200,9 @@ export function UserProfile() {
   const wallet = walletOf(profile.id);
   const profileId = profile.id;
   const isOwnProfile = currentUser?.id === profile.id;
+  const familiarLink = isOwnProfile
+    ? "/familier"
+    : `/u/${encodeURIComponent(profile.id)}/familier`;
   const myPosts = posts
     .filter((p) => p.authorId === profileId)
     .sort(
@@ -521,10 +524,13 @@ export function UserProfile() {
                       </p>
                     </div>
 
-                    <p className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-ivory/70">
+                    <Link
+                      to={familiarLink}
+                      className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-ivory/70 transition hover:border-gold-300/35 hover:text-gold-100"
+                    >
                       <Gift className="h-3.5 w-3.5" />
                       Gérer le familier
-                    </p>
+                    </Link>
                   </div>
                 </div>
               </motion.div>
@@ -547,7 +553,7 @@ export function UserProfile() {
       ) : (
         <section className="mt-10">
           <Link
-            to="/familier"
+            to={`/u/${encodeURIComponent(profile.id)}/familier`}
             className="card-royal flex items-center justify-between gap-3 p-4"
           >
             <div>
