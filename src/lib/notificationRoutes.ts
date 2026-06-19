@@ -9,15 +9,15 @@ export function resolveNotificationUrl(notification: AppNotification) {
   ) {
     return `/communaute/hashtag/${COMMUNITY_DRAWING_CONTEST.slug}`;
   }
+  if (notification.postId) {
+    const target = `/communaute/post/${notification.postId}`;
+    if (notification.commentId) {
+      return `${target}?commentId=${encodeURIComponent(notification.commentId)}`;
+    }
+    return target;
+  }
   if (notification.entityType === "community_comment" && notification.commentId) {
     return `/communaute#comment-${notification.commentId}`;
-  }
-  if (
-    (notification.entityType === "community_post" ||
-      notification.entityType === "official_event") &&
-    notification.postId
-  ) {
-    return `/communaute#post-${notification.postId}`;
   }
   if (notification.entityType === "live" && notification.liveId) {
     return `/live/${notification.liveId}`;
