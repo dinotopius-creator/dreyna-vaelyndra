@@ -98,20 +98,22 @@ export function Oracle() {
   );
 
   useEffect(() => {
-    if (!user) {
-      setStatus(null);
-      setLastReward(null);
-      setStatusError(null);
-      return;
-    }
+    if (!user) return;
     let cancelled = false;
-    void fetchStatus(user.id).then(() => {
-      if (cancelled) return;
-    });
+    const id = window.setTimeout(() => {
+      void fetchStatus(user.id).then(() => {
+        if (cancelled) return;
+      });
+    }, 0);
     return () => {
       cancelled = true;
+      window.clearTimeout(id);
     };
   }, [fetchStatus, user]);
+
+  const displayStatus = user ? status : null;
+  const displayLastReward = user ? lastReward : null;
+  const displayStatusError = user ? statusError : null;
 
   // Refetch quand l'onglet redevient visible (l'utilisateur revient sur la
   // page après plusieurs minutes/heures → on récupère un éventuel nouveau
@@ -132,11 +134,11 @@ export function Oracle() {
   }, [fetchStatus, user]);
 
   const rewardSummary = useMemo(() => {
-    if (!lastReward) return null;
-    if (lastReward.currency === "none") return "Le voile n’a rien livré cette fois.";
-    if (lastReward.currency === "sylvins") return "Le jackpot rare est tombé.";
-    return `Gain crédité : ${lastReward.amount} lueurs.`;
-  }, [lastReward]);
+    if (!displayLastReward) return null;
+    if (displayLastReward.currency === "none") return "Le voile n’a rien livré cette fois.";
+    if (displayLastReward.currency === "sylvins") return "Le jackpot rare est tombé.";
+    return `Gain crédité : ${displayLastReward.amount} lueurs.`;
+  }, [displayLastReward]);
 
   // Calcule un fallback côté client : minuit UTC du lendemain. Sert quand
   // le backend n'a pas (encore) renvoyé `nextResetAt`, pour qu'on ait
@@ -158,10 +160,10 @@ export function Oracle() {
   // Si le serveur n'a pas renvoyé `nextResetAt` (status null, erreur…),
   // on tombe sur le calcul local pour que l'utilisateur voie quand même
   // l'horloge tourner et ne reste pas avec un écran muet.
-  const resetCountdown = useMemo(() => {
+  const resetCountdown = (() => {
     let resetMs: number | null = null;
-    if (status?.nextResetAt) {
-      const parsed = Date.parse(status.nextResetAt);
+    if (displayStatus?.nextResetAt) {
+      const parsed = Date.parse(displayStatus.nextResetAt);
       if (!Number.isNaN(parsed)) resetMs = parsed;
     }
     if (resetMs === null) resetMs = fallbackNextResetMs;
@@ -181,7 +183,7 @@ export function Oracle() {
         minute: "2-digit",
       }),
     };
-  }, [status?.nextResetAt, now, fallbackNextResetMs]);
+  })();
 
   // Quand le compte-à-rebours tombe à zéro et que l'user n'a plus de
   // tentatives, on resync UNE FOIS le statut serveur pour récupérer les 3
@@ -191,18 +193,18 @@ export function Oracle() {
   useEffect(() => {
     if (!user) return;
     if (resetCountdown.remaining > 0) return;
-    if ((status?.playsLeftToday ?? 0) > 0) return;
+    if ((displayStatus?.playsLeftToday ?? 0) > 0) return;
     if (now - lastResetFetchRef.current < 30_000) return;
     lastResetFetchRef.current = now;
     void fetchStatus(user.id, { silent: true });
-  }, [resetCountdown.remaining, status?.playsLeftToday, user, fetchStatus, now]);
+  }, [resetCountdown.remaining, displayStatus?.playsLeftToday, user, fetchStatus, now]);
 
   async function play(runeKey: string) {
     if (!user) {
       notify("Connecte-toi pour tenter le rituel.", "info");
       return;
     }
-    if (!status?.canPlay) {
+    if (!displayStatus?.canPlay) {
       notify("Tes tentatives du jour sont déjà épuisées.", "info");
       return;
     }
@@ -273,7 +275,7 @@ export function Oracle() {
                   Tentatives
                 </p>
                 <p className="mt-1 font-display text-2xl text-gold-100">
-                  {user ? status?.playsLeftToday ?? "..." : "3"} / 3
+                  {user ? displayStatus?.playsLeftToday ?? "..." : "3"} / 3
                 </p>
                 {resetCountdown && (
                   <p className="mt-1 text-[10px] uppercase tracking-[0.18em] text-gold-300/70">
@@ -286,7 +288,7 @@ export function Oracle() {
             <div className="relative mt-8 grid gap-4 md:grid-cols-3">
               {RUNES.map((rune, index) => {
                 const Icon = rune.icon;
-                const disabled = !user || !status?.canPlay || !!playingKey;
+                const disabled = !user || !displayStatus?.canPlay || !!playingKey;
                 const active = playingKey === rune.key;
                 return (
                   <motion.button
@@ -372,11 +374,11 @@ export function Oracle() {
               </div>
               <div
                 className={`mt-4 rounded-2xl border px-4 py-4 text-sm ${
-                  lastReward ? TONE_STYLES[lastReward.tone] : TONE_STYLES.void
+                  displayLastReward ? TONE_STYLES[displayLastReward.tone] : TONE_STYLES.void
                 }`}
               >
                 <p className="font-medium">
-                  {lastReward?.label ?? "Aucun rituel lance pour le moment."}
+                  {displayLastReward?.label ?? "Aucun rituel lance pour le moment."}
                 </p>
                 <p className="mt-2 text-xs opacity-85">
                   {rewardSummary ??
@@ -417,9 +419,9 @@ export function Oracle() {
                 </p>
                 {loading && !status ? (
                   <p className="mt-2 font-display text-2xl text-gold-100">…</p>
-                ) : statusError && !status ? (
+                ) : displayStatusError && !displayStatus ? (
                   <>
-                    <p className="mt-2 text-sm text-rose-200/90">{statusError}</p>
+                    <p className="mt-2 text-sm text-rose-200/90">{displayStatusError}</p>
                     <button
                       type="button"
                       onClick={() => void fetchStatus(user.id)}
@@ -431,21 +433,21 @@ export function Oracle() {
                 ) : (
                   <>
                     <p className="mt-2 font-display text-2xl text-gold-100">
-                      {status?.playsLeftToday ?? 0} / {status?.maxDailyPlays ?? 3}
+                      {displayStatus?.playsLeftToday ?? 0} / {displayStatus?.maxDailyPlays ?? 3}
                       <span className="ml-2 text-sm font-normal text-ivory/65">
                         tentative
-                        {(status?.playsLeftToday ?? 0) > 1 ? "s" : ""} restante
-                        {(status?.playsLeftToday ?? 0) > 1 ? "s" : ""}
+                        {(displayStatus?.playsLeftToday ?? 0) > 1 ? "s" : ""} restante
+                        {(displayStatus?.playsLeftToday ?? 0) > 1 ? "s" : ""}
                       </span>
                     </p>
                     <p className="mt-2 text-sm text-ivory/70">
-                      {status?.canPlay
+                      {displayStatus?.canPlay
                         ? "Le portail est encore ouvert pour toi aujourd'hui."
                         : "Tes 3 runes du jour sont déjà utilisées. Elles se rechargent automatiquement à minuit UTC."}
                     </p>
                     <div className="mt-3 rounded-xl border border-gold-400/25 bg-night-950/60 px-3 py-2">
                       <p className="text-[10px] uppercase tracking-[0.22em] text-gold-300/85">
-                        {status?.canPlay
+                        {displayStatus?.canPlay
                           ? "Prochain reset complet dans"
                           : "Prochain rituel dans"}
                       </p>
@@ -468,10 +470,10 @@ export function Oracle() {
               Historique recent
             </h3>
             <ul className="mt-4 space-y-3">
-              {(status?.recentHistory ?? []).map((entry) => (
+              {(displayStatus?.recentHistory ?? []).map((entry) => (
                 <HistoryRow key={entry.id} entry={entry} />
               ))}
-              {(status?.recentHistory ?? []).length === 0 && (
+              {(displayStatus?.recentHistory ?? []).length === 0 && (
                 <li className="rounded-2xl border border-dashed border-royal-500/25 px-4 py-5 text-sm text-ivory/55">
                   Aucun tirage enregistre pour ce membre.
                 </li>
