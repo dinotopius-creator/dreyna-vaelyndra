@@ -16,6 +16,8 @@ import {
   Search,
   Wand2,
   Trash2,
+  Volume2,
+  VolumeX,
   X,
 } from "lucide-react";
 import clsx from "clsx";
@@ -159,6 +161,8 @@ export function CommunityImmersiveFeed({
   const [now, setNow] = useState(() => Date.now());
   const [likeBurst, setLikeBurst] = useState<{ postId: string; token: number } | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [audibleVideoPostId, setAudibleVideoPostId] = useState<string | null>(null);
+  const [pendingDeletePostId, setPendingDeletePostId] = useState<string | null>(null);
   const tapDownRef = useRef<{ postId: string; x: number; y: number; time: number } | null>(null);
   const lastTapRef = useRef<{ postId: string | null; time: number } | null>(null);
   const burstTimerRef = useRef<number | null>(null);
@@ -749,15 +753,40 @@ export function CommunityImmersiveFeed({
               >
                 <div className="absolute inset-0">
                   {video?.kind ? (
-                    <video
-                      src={post.videoUrl}
-                      className="h-full w-full object-cover"
-                      muted
-                      loop
-                      playsInline
-                      autoPlay
-                      preload="metadata"
-                    />
+                    <div className="relative h-full w-full">
+                      <video
+                        src={post.videoUrl}
+                        className="h-full w-full object-cover"
+                        muted={audibleVideoPostId !== post.id}
+                        loop
+                        playsInline
+                        autoPlay
+                        preload="metadata"
+                        controls
+                      />
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setAudibleVideoPostId((current) =>
+                            current === post.id ? null : post.id,
+                          );
+                        }}
+                        className="absolute right-3 top-3 inline-flex min-h-10 items-center gap-2 rounded-full border border-white/12 bg-night-950/70 px-3 py-2 text-xs text-ivory/90 backdrop-blur-md transition hover:border-gold-400/45 hover:text-gold-100"
+                      >
+                        {audibleVideoPostId === post.id ? (
+                          <>
+                            <Volume2 className="h-4 w-4" />
+                            Son
+                          </>
+                        ) : (
+                          <>
+                            <VolumeX className="h-4 w-4" />
+                            Muet
+                          </>
+                        )}
+                      </button>
+                    </div>
                   ) : media?.kind === "image" ? (
                     <img
                       src={media.src}
@@ -868,13 +897,7 @@ export function CommunityImmersiveFeed({
                       {currentUserId && currentUserId === post.authorId ? (
                         <button
                           type="button"
-                          onClick={() => {
-                            const confirmDelete = window.confirm(
-                              "Supprimer ton post ? Cette action est définitive.",
-                            );
-                            if (!confirmDelete) return;
-                            onDeletePost?.(post.id);
-                          }}
+                          onClick={() => setPendingDeletePostId(post.id)}
                           className="inline-flex min-h-11 w-full min-w-0 flex-col items-center justify-center rounded-full border border-white/10 bg-night-950/45 px-3 py-2 text-xs text-rose-200 backdrop-blur-sm transition hover:border-rose-300/40 hover:text-rose-100"
                           aria-label="Supprimer mon post"
                         >
@@ -887,7 +910,6 @@ export function CommunityImmersiveFeed({
                           targetId={post.id}
                           targetLabel={`Post de ${displayName}`}
                           targetUrl={`/communaute#post-${post.id}`}
-                          compact
                         />
                       )}
                     </div>
@@ -935,6 +957,45 @@ export function CommunityImmersiveFeed({
                 <Plus className="h-4 w-4" />
                 Nouveau post
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pendingDeletePostId && (
+        <div className="absolute inset-0 z-50 bg-night-950/82 backdrop-blur-md">
+          <div className="flex h-full w-full items-end justify-center p-4 sm:items-center">
+            <div className="w-full max-w-md rounded-[28px] border border-white/10 bg-night-950 p-5 shadow-[0_30px_90px_rgba(0,0,0,0.5)]">
+              <p className="text-[10px] uppercase tracking-[0.28em] text-gold-300/80">
+                Suppression du post
+              </p>
+              <h2 className="mt-2 font-display text-2xl text-gold-100">
+                Supprimer définitivement ce post ?
+              </h2>
+              <p className="mt-3 text-sm leading-6 text-ivory/75">
+                Cette action retire le post du feed, du profil et des pages liées.
+                Elle est irréversible.
+              </p>
+              <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setPendingDeletePostId(null)}
+                  className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/10 px-4 py-2 text-sm text-ivory/75 transition hover:border-white/20 hover:text-ivory"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const targetId = pendingDeletePostId;
+                    setPendingDeletePostId(null);
+                    if (targetId) onDeletePost?.(targetId);
+                  }}
+                  className="inline-flex min-h-11 items-center justify-center rounded-full bg-rose-500/20 px-4 py-2 text-sm font-semibold text-rose-100 transition hover:bg-rose-500/30"
+                >
+                  Supprimer
+                </button>
+              </div>
             </div>
           </div>
         </div>
