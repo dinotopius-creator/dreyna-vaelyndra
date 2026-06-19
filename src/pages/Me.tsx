@@ -536,8 +536,6 @@ export function Me() {
         />
         <ul className="mt-6 grid grid-cols-3 gap-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
           {myPosts.map((article) => {
-            const likes = article.likes.length;
-            const comments = article.comments.length;
             return (
               <li
                 key={article.id}
@@ -556,21 +554,7 @@ export function Me() {
                       className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
                     />
                   </div>
-                  <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(2,6,23,0.08),rgba(2,6,23,0.08)_35%,rgba(2,6,23,0.88)_100%)]" />
-                  <div className="absolute inset-x-0 bottom-0 z-20 p-2.5">
-                    <div className="rounded-[16px] border border-white/10 bg-night-950/72 p-2 backdrop-blur-md">
-                      <p className="line-clamp-2 text-[11px] leading-4 text-ivory/88">
-                        {article.title}
-                      </p>
-                      <p className="mt-1 line-clamp-2 text-[10px] leading-4 text-ivory/58">
-                        {article.excerpt}
-                      </p>
-                      <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-ivory/55">
-                        <span>{likes} likes</span>
-                        <span>{comments} comm.</span>
-                      </div>
-                    </div>
-                  </div>
+                  <div className="absolute inset-0 bg-transparent" />
                 </article>
               </li>
             );
