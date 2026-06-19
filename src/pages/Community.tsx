@@ -357,7 +357,7 @@ export function Community() {
   useEffect(() => {
     let cancelled = false;
     const loadLeaderboard = () => {
-      void apiGetCommunityActivityLeaderboard(5)
+      void apiGetCommunityActivityLeaderboard(10)
       .then((result) => {
         if (cancelled) return;
         setActivityWeekStartIso(result.weekStartIso);
