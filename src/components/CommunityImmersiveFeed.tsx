@@ -69,6 +69,7 @@ interface CommunityImmersiveFeedProps {
   onOpenComposer: () => void;
   onOpenComments: (postId: string) => void;
   onDeletePost?: (postId: string) => void;
+  canModeratePosts?: boolean;
   savedPostIds: Set<string>;
   activeTab: CommunityTab;
   onChangeTab: (tab: CommunityTab) => void;
@@ -151,6 +152,7 @@ export function CommunityImmersiveFeed({
   onOpenComposer,
   onOpenComments,
   onDeletePost,
+  canModeratePosts = false,
   savedPostIds,
   activeTab,
   onChangeTab,
@@ -743,6 +745,25 @@ export function CommunityImmersiveFeed({
                             label="Partager"
                             onClick={() => onShare(post)}
                           />
+                          {currentUserId && (currentUserId === post.authorId || canModeratePosts) ? (
+                            <button
+                              type="button"
+                              onClick={() => setPendingDeletePostId(post.id)}
+                              className="inline-flex min-h-11 w-full min-w-0 flex-col items-center justify-center rounded-full border border-white/10 bg-night-950/45 px-3 py-2 text-xs text-rose-200 backdrop-blur-sm transition hover:border-rose-300/40 hover:text-rose-100"
+                              aria-label="Supprimer ce post"
+                            >
+                              <Trash2 className="h-5 w-5" />
+                              <span className="mt-1 leading-none">Suppr.</span>
+                            </button>
+                          ) : (
+                            <ReportButton
+                              targetType="post"
+                              targetId={post.id}
+                              targetLabel={`Post de ${displayName}`}
+                              targetUrl={`/communaute/post/${post.id}`}
+                              className="inline-flex min-h-11 w-full min-w-0 flex-col items-center justify-center rounded-full border border-rose-400/35 bg-rose-500/8 px-3 py-2 text-xs text-rose-200/90 backdrop-blur-sm transition hover:border-rose-300/55 hover:bg-rose-500/15 hover:text-rose-100"
+                            />
+                          )}
                         </div>
                       </div>
 
@@ -956,12 +977,12 @@ export function CommunityImmersiveFeed({
                         label="Partager"
                         onClick={() => onShare(post)}
                       />
-                      {currentUserId && currentUserId === post.authorId ? (
+                      {currentUserId && (currentUserId === post.authorId || canModeratePosts) ? (
                         <button
                           type="button"
                           onClick={() => setPendingDeletePostId(post.id)}
                           className="inline-flex min-h-11 w-full min-w-0 flex-col items-center justify-center rounded-full border border-white/10 bg-night-950/45 px-3 py-2 text-xs text-rose-200 backdrop-blur-sm transition hover:border-rose-300/40 hover:text-rose-100"
-                          aria-label="Supprimer mon post"
+                          aria-label="Supprimer ce post"
                         >
                           <Trash2 className="h-5 w-5" />
                           <span className="mt-1 leading-none">Suppr.</span>
@@ -971,7 +992,7 @@ export function CommunityImmersiveFeed({
                           targetType="post"
                           targetId={post.id}
                           targetLabel={`Post de ${displayName}`}
-                          targetUrl={`/communaute#post-${post.id}`}
+                          targetUrl={`/communaute/post/${post.id}`}
                           className="inline-flex min-h-11 w-full min-w-0 flex-col items-center justify-center rounded-full border border-rose-400/35 bg-rose-500/8 px-3 py-2 text-xs text-rose-200/90 backdrop-blur-sm transition hover:border-rose-300/55 hover:bg-rose-500/15 hover:text-rose-100"
                         />
                       )}

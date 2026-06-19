@@ -5,11 +5,14 @@ import {
   Banknote,
   Coins,
   ArrowLeft,
+  Camera,
+  Check,
   Gift,
   Loader2,
   MessageCircle,
   Play,
   Trash2,
+  X,
   Sparkles,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
@@ -28,7 +31,7 @@ import { ReportButton } from "../components/ReportButton";
 import { formatDate, formatRelative } from "../lib/helpers";
 import { roleLabelWithIcon } from "../lib/roleLabel";
 import { formatSylvins } from "../lib/sylvins";
-import { apiDeletePost, apiGetProfile, type UserProfileDto } from "../lib/api";
+import { apiDeletePost, apiGetProfile, apiUpdatePost, apiUploadCommunityImage, type UserProfileDto } from "../lib/api";
 import {
   fetchUserFamiliars,
   giftFamiliar,
@@ -70,6 +73,22 @@ export function UserProfile() {
   const [giftAmount, setGiftAmount] = useState("");
   const [giftSending, setGiftSending] = useState(false);
   const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
+  const [thumbnailEditorPostId, setThumbnailEditorPostId] = useState<string | null>(null);
+  const [thumbnailUrlDraft, setThumbnailUrlDraft] = useState("");
+  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
+  const [thumbnailSaving, setThumbnailSaving] = useState(false);
+  const thumbnailPreviewUrl = useMemo(() => {
+    if (!thumbnailFile) return null;
+    return URL.createObjectURL(thumbnailFile);
+  }, [thumbnailFile]);
+
+  useEffect(() => {
+    return () => {
+      if (thumbnailPreviewUrl) {
+        URL.revokeObjectURL(thumbnailPreviewUrl);
+      }
+    };
+  }, [thumbnailPreviewUrl]);
 
   useEffect(() => {
     if (!userId) return;
@@ -209,6 +228,44 @@ export function UserProfile() {
       );
     } finally {
       setDeletingPostId(null);
+    }
+  }
+
+  function openThumbnailEditor(postId: string) {
+    const post = myPosts.find((entry) => entry.id === postId);
+    if (!post) return;
+    setThumbnailEditorPostId(postId);
+    setThumbnailUrlDraft(post.videoThumbnailUrl ?? "");
+    setThumbnailFile(null);
+  }
+
+  async function saveThumbnail() {
+    if (!currentUser || currentUser.id !== profileId || !thumbnailEditorPostId) return;
+    const post = myPosts.find((entry) => entry.id === thumbnailEditorPostId);
+    if (!post) return;
+    setThumbnailSaving(true);
+    try {
+      let uploadedUrl = thumbnailUrlDraft.trim();
+      if (thumbnailFile) {
+        const uploaded = await apiUploadCommunityImage(thumbnailFile);
+        uploadedUrl = uploaded.imageUrl;
+      }
+      const updated = await apiUpdatePost(post.id, {
+        userId: currentUser.id,
+        videoThumbnailUrl: uploadedUrl || undefined,
+      });
+      dispatch({ type: "replacePost", post: updated });
+      notify("Miniature mise à jour.", "success");
+      setThumbnailEditorPostId(null);
+      setThumbnailUrlDraft("");
+      setThumbnailFile(null);
+    } catch (error) {
+      notify(
+        error instanceof Error ? error.message : "Impossible de modifier la miniature.",
+        "error",
+      );
+    } finally {
+      setThumbnailSaving(false);
     }
   }
 
@@ -624,101 +681,241 @@ export function UserProfile() {
           eyebrow="Publications"
           title="Ses dernières publications"
         />
-        <ul className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {myPosts.map((p) => (
-            <li
-              key={p.id}
-              className="overflow-hidden rounded-[26px] border border-white/8 bg-night-950/60 shadow-[0_18px_60px_rgba(0,0,0,0.22)]"
-            >
-              <article className="flex h-full flex-col">
-                <div className="relative aspect-[4/5] overflow-hidden bg-night-900">
-                  {p.imageUrl ? (
-                    <img
-                      src={p.imageUrl}
-                      alt={p.content}
-                      className="h-full w-full object-cover transition duration-500 hover:scale-[1.03]"
-                    />
-                  ) : p.videoUrl ? (
-                    <>
-                      {p.videoThumbnailUrl ? (
-                        <img
-                          src={p.videoThumbnailUrl}
-                          alt={p.content}
-                          className="h-full w-full object-cover transition duration-500 hover:scale-[1.03]"
-                        />
-                      ) : (
-                        <video
-                          src={p.videoUrl}
-                          className="h-full w-full object-cover"
-                          muted
-                          playsInline
-                          loop
-                          autoPlay
-                          preload="metadata"
-                        />
-                      )}
-                      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.05),rgba(7,5,11,0.35))]" />
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-full border border-white/15 bg-night-950/55 text-white/90 backdrop-blur-md">
-                          <Play className="h-5 w-5 fill-current" />
-                        </div>
+        <ul className="mt-6 grid grid-cols-3 gap-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
+          {myPosts.map((p) => {
+            const likes = Object.values(p.reactions ?? {}).reduce(
+              (acc, users) => acc + users.length,
+              0,
+            );
+            const isVideo = Boolean(p.videoUrl);
+            const poster = p.videoThumbnailUrl || p.imageUrl || "";
+            return (
+              <li
+                key={p.id}
+                className="group relative overflow-hidden rounded-[22px] border border-white/8 bg-night-950/70 shadow-[0_18px_60px_rgba(0,0,0,0.22)]"
+              >
+                <Link
+                  to={`/communaute/post/${p.id}`}
+                  className="absolute inset-0 z-10"
+                  aria-label={`Ouvrir le post de ${profile.username}`}
+                />
+                <article className="relative flex aspect-[4/5] flex-col overflow-hidden">
+                  <div className="absolute inset-0 bg-night-950">
+                    {poster ? (
+                      <img
+                        src={poster}
+                        alt={p.content}
+                        className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+                      />
+                    ) : isVideo ? (
+                      <video
+                        src={p.videoUrl}
+                        className="h-full w-full object-cover"
+                        muted
+                        playsInline
+                        loop
+                        autoPlay
+                        preload="metadata"
+                      />
+                    ) : (
+                      <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(251,191,36,0.16),transparent_35%),linear-gradient(180deg,#18111f,#09060d)] px-3 text-center">
+                        <p className="line-clamp-8 whitespace-pre-wrap text-[11px] leading-5 text-ivory/88">
+                          {p.content}
+                        </p>
                       </div>
-                    </>
-                  ) : (
-                    <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(251,191,36,0.16),transparent_35%),linear-gradient(180deg,#18111f,#09060d)] px-4 text-center">
-                      <p className="line-clamp-8 whitespace-pre-wrap text-sm leading-6 text-ivory/88">
-                        {p.content}
-                      </p>
+                    )}
+                  </div>
+
+                  <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(2,6,23,0.08),rgba(2,6,23,0.08)_35%,rgba(2,6,23,0.88)_100%)]" />
+
+                  {isVideo && (
+                    <div className="absolute left-2 top-2 z-20 inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/12 bg-night-950/70 text-white/85 backdrop-blur-md">
+                      <Play className="h-3.5 w-3.5 fill-current" />
                     </div>
                   )}
 
                   {currentUser?.id === profileId && (
-                    <button
-                      type="button"
-                      onClick={() => void deleteOwnPost(p.id)}
-                      disabled={deletingPostId === p.id}
-                      className="absolute right-3 top-3 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-night-950/65 text-rose-200 backdrop-blur-md transition hover:border-rose-300/50 hover:text-rose-100 disabled:opacity-60"
-                      aria-label="Supprimer mon post"
-                    >
-                      {deletingPostId === p.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-4 w-4" />
-                      )}
-                    </button>
+                    <div className="absolute right-2 top-2 z-20 flex gap-1.5">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          openThumbnailEditor(p.id);
+                        }}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-night-950/75 text-gold-100 backdrop-blur-md transition hover:border-gold-300/45 hover:text-gold-50"
+                        aria-label="Modifier la miniature"
+                      >
+                        <Camera className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          void deleteOwnPost(p.id);
+                        }}
+                        disabled={deletingPostId === p.id}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-night-950/75 text-rose-200 backdrop-blur-md transition hover:border-rose-300/50 hover:text-rose-100 disabled:opacity-60"
+                        aria-label="Supprimer mon post"
+                      >
+                        {deletingPostId === p.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
                   )}
 
-                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-night-950 via-night-950/55 to-transparent px-4 pb-4 pt-10">
-                    <p className="text-[10px] uppercase tracking-[0.22em] text-ivory/60">
-                      {formatRelative(p.createdAt)}
-                    </p>
+                  <div className="absolute inset-x-0 bottom-0 z-20 p-2.5">
+                    <div className="rounded-[18px] border border-white/10 bg-night-950/72 p-2.5 backdrop-blur-md">
+                      <p className="line-clamp-2 text-[11px] leading-4 text-ivory/88">
+                        {p.content}
+                      </p>
+                      <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-ivory/55">
+                        <span>{likes} likes</span>
+                        <span>{p.comments.length} comm.</span>
+                      </div>
+                    </div>
                   </div>
-                </div>
-                <div className="flex flex-1 flex-col gap-2 p-4">
-                  <p className="line-clamp-3 whitespace-pre-wrap text-sm leading-6 text-ivory/88">
-                    {p.content}
-                  </p>
-                  <div className="mt-auto flex items-center justify-between gap-3 text-xs text-ivory/55">
-                    <span>
-                      {Object.values(p.reactions ?? {}).reduce(
-                        (acc, users) => acc + users.length,
-                        0,
-                      )}{" "}
-                      likes
-                    </span>
-                    <span>{p.comments.length} commentaires</span>
+
+                  <div className="absolute inset-x-0 top-0 z-20 flex items-center justify-between px-2.5 pt-2.5 text-[10px] uppercase tracking-[0.18em] text-ivory/60">
+                    <span>{isVideo ? "Vidéo" : p.imageUrl ? "Photo" : "Texte"}</span>
+                    <span>{formatRelative(p.createdAt)}</span>
                   </div>
-                </div>
-              </article>
-            </li>
-          ))}
+                </article>
+              </li>
+            );
+          })}
           {myPosts.length === 0 && (
-            <li className="col-span-full text-center text-sm text-ivory/50">
+            <li className="col-span-full rounded-[24px] border border-dashed border-white/10 px-4 py-10 text-center text-sm text-ivory/50">
               Ce membre n'a pas encore publié.
             </li>
           )}
         </ul>
       </section>
+
+      {thumbnailEditorPostId && (
+        <div className="fixed inset-0 z-[260] bg-night-950/85 backdrop-blur-md">
+          <div className="flex h-full w-full items-end justify-center p-4 sm:items-center">
+            <div className="w-full max-w-lg rounded-[28px] border border-white/10 bg-night-950 p-5 shadow-[0_30px_90px_rgba(0,0,0,0.55)]">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.22em] text-gold-300/80">
+                    Miniature
+                  </p>
+                  <h3 className="mt-1 font-display text-2xl text-gold-100">
+                    Modifier la miniature
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setThumbnailEditorPostId(null);
+                    setThumbnailUrlDraft("");
+                    setThumbnailFile(null);
+                  }}
+                  className="rounded-full border border-white/10 p-2 text-ivory/60"
+                  aria-label="Fermer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <p className="mt-3 text-sm leading-6 text-ivory/70">
+                Choisis une image de couverture pour ce post. Elle sera affichée dans
+                la grille du profil et en aperçu.
+              </p>
+
+              <div className="mt-4 space-y-3">
+                <label className="block">
+                  <span className="text-[10px] uppercase tracking-[0.22em] text-gold-300/80">
+                    Importer une image
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    onChange={(event) =>
+                      setThumbnailFile(event.target.files?.[0] ?? null)
+                    }
+                    className="glass-input mt-2 w-full"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-[10px] uppercase tracking-[0.22em] text-gold-300/80">
+                    Ou coller une URL d’image
+                  </span>
+                  <input
+                    value={thumbnailUrlDraft}
+                    onChange={(event) => setThumbnailUrlDraft(event.target.value)}
+                    placeholder="https://…"
+                    className="glass-input mt-2 w-full"
+                  />
+                </label>
+              </div>
+
+              <div className="mt-4 rounded-[22px] border border-white/10 bg-night-900/65 p-3">
+                <p className="mb-2 text-[10px] uppercase tracking-[0.22em] text-ivory/55">
+                  Aperçu
+                </p>
+                <div className="relative aspect-[4/5] overflow-hidden rounded-[18px] bg-night-800">
+                  {thumbnailPreviewUrl ? (
+                    <img
+                      src={thumbnailPreviewUrl}
+                      alt="Aperçu miniature"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : thumbnailUrlDraft.trim() ? (
+                    <img
+                      src={thumbnailUrlDraft.trim()}
+                      alt="Aperçu miniature"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(251,191,36,0.16),transparent_35%),linear-gradient(180deg,#18111f,#09060d)] px-4 text-center">
+                      <p className="text-sm leading-6 text-ivory/70">
+                        La miniature actuelle sera remplacée ici.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setThumbnailEditorPostId(null);
+                    setThumbnailUrlDraft("");
+                    setThumbnailFile(null);
+                  }}
+                  className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/10 px-4 py-2 text-sm text-ivory/75"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void saveThumbnail()}
+                  disabled={thumbnailSaving}
+                  className="inline-flex min-h-11 items-center justify-center rounded-full bg-gold-500/20 px-4 py-2 text-sm font-semibold text-gold-100 disabled:opacity-60"
+                >
+                  {thumbnailSaving ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Sauvegarde…
+                    </>
+                  ) : (
+                    <>
+                      <Check className="mr-2 h-4 w-4" />
+                      Enregistrer
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

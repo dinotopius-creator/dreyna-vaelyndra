@@ -873,6 +873,7 @@ export function Community() {
         usersById={usersById}
         profilesById={profilesById}
         currentUserId={user?.id}
+        canModeratePosts={isQueen}
         mentionTargets={mentionTargets}
         onLike={(postId) => react(postId, LIKE_EMOJI)}
         onShare={(post) => {
