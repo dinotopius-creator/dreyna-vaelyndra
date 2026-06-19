@@ -1,11 +1,23 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef, type ChangeEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Banknote, Coins, ArrowLeft, Gift, Loader2, MessageCircle, Sparkles } from "lucide-react";
+import {
+  ArrowLeft,
+  Camera,
+  Coins,
+  Gift,
+  Loader2,
+  MessageCircle,
+  Play,
+  Sparkles,
+  Trash2,
+  Upload,
+  X,
+} from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useStore } from "../contexts/StoreContext";
 import { SectionHeading } from "../components/SectionHeading";
-import { AvatarViewer } from "../components/AvatarViewer";
+import { AvatarImage } from "../components/AvatarImage";
 import { UserBadges } from "../components/UserBadges";
 import { Handle } from "../components/Handle";
 import { FollowButton } from "../components/FollowButton";
@@ -18,7 +30,7 @@ import { ReportButton } from "../components/ReportButton";
 import { formatDate, formatRelative } from "../lib/helpers";
 import { roleLabelWithIcon } from "../lib/roleLabel";
 import { formatSylvins } from "../lib/sylvins";
-import { apiGetProfile, type UserProfileDto } from "../lib/api";
+import { apiGetProfile, apiUpdateAvatar, apiUploadCommunityImage, type UserProfileDto } from "../lib/api";
 import {
   fetchUserFamiliars,
   giftFamiliar,
@@ -31,7 +43,7 @@ import type { User } from "../types";
 
 export function UserProfile() {
   const { userId = "" } = useParams();
-  const { users, user: currentUser } = useAuth();
+  const { users, user: currentUser, updateProfile: updateAuthProfile } = useAuth();
   const { posts, walletOf } = useStore();
   const { notify } = useToast();
 
@@ -57,6 +69,9 @@ export function UserProfile() {
   const [activeFamiliar, setActiveFamiliar] = useState<OwnedFamiliar | null>(null);
   const [giftAmount, setGiftAmount] = useState("");
   const [giftSending, setGiftSending] = useState(false);
+  const [editingAvatar, setEditingAvatar] = useState(false);
+  const [avatarSaving, setAvatarSaving] = useState(false);
+  const avatarFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!userId) return;
@@ -77,9 +92,12 @@ export function UserProfile() {
     if (!userId) return;
     // Reset immédiat : sinon l'ancien avatar serveur reste affiché pendant
     // la latence de fetch quand on passe de /u/alice à /u/bob.
-    setServerProfile(null);
-    setServerState("loading");
     let cancelled = false;
+    const resetTimer = window.setTimeout(() => {
+      if (cancelled) return;
+      setServerProfile(null);
+      setServerState("loading");
+    }, 0);
     apiGetProfile(userId)
       .then((p) => {
         if (!cancelled) {
@@ -95,6 +113,7 @@ export function UserProfile() {
       });
     return () => {
       cancelled = true;
+      window.clearTimeout(resetTimer);
     };
   }, [userId]);
 
@@ -109,6 +128,44 @@ export function UserProfile() {
         /* silencieux — on garde l'état précédent */
       });
   }, [userId]);
+
+  const openAvatarPicker = useCallback(() => {
+    avatarFileRef.current?.click();
+  }, []);
+
+  async function handleAvatarPick(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !currentUser || currentUser.id !== userId) return;
+    if (!file.type.startsWith("image/")) {
+      notify("Choisis une image valide.", "error");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      notify("Image trop lourde (max 5 Mo).", "error");
+      return;
+    }
+    setAvatarSaving(true);
+    try {
+      const uploaded = await apiUploadCommunityImage(file);
+      const result = await updateAuthProfile({ avatar: uploaded.imageUrl });
+      if (!result.ok) throw new Error(result.error);
+      await apiUpdateAvatar(currentUser.id, { avatarImageUrl: uploaded.imageUrl });
+      setServerProfile((prev) =>
+        prev
+          ? { ...prev, avatarImageUrl: uploaded.imageUrl }
+          : prev,
+      );
+      notify("Photo de profil mise à jour.", "success");
+    } catch (error) {
+      notify(
+        error instanceof Error ? error.message : "Impossible de mettre à jour la photo.",
+        "error",
+      );
+    } finally {
+      setAvatarSaving(false);
+    }
+  }
 
   // Fallback : si le profil n'est pas dans le cache local `users`
   // (cas typique : admin qui clique sur un user arbitraire depuis la
@@ -166,6 +223,7 @@ export function UserProfile() {
   }
 
   const wallet = walletOf(profile.id);
+  const isOwnProfile = currentUser?.id === profile.id;
   const myPosts = posts
     .filter((p) => p.authorId === profile.id)
     .sort(
@@ -188,29 +246,25 @@ export function UserProfile() {
         className="card-royal relative overflow-hidden p-6 sm:p-8 md:p-10"
       >
         <div className="flex flex-col items-start gap-6 sm:flex-row sm:flex-wrap sm:items-center">
-          {serverProfile?.avatarUrl ? (
-            <div className="w-28 sm:w-32 md:w-40">
-              <AvatarViewer
-                src={serverProfile.avatarUrl}
-                fallbackImage={serverProfile.avatarImageUrl || profile.avatar}
-                alt={profile.username}
-                size="portrait"
-                framing="face"
-                equippedFrameId={serverProfile.equipped?.frame ?? null}
-                equippedSceneId={serverProfile.equipped?.scene ?? null}
-                equippedOutfit3DId={serverProfile.equipped?.outfit3d ?? null}
-                equippedAccessory3DId={
-                  serverProfile.equipped?.accessory3d ?? null
-                }
-              />
-            </div>
-          ) : (
-            <img
-              src={profile.avatar}
+          <div className="relative shrink-0">
+            <AvatarImage
+              candidates={[serverProfile?.avatarImageUrl, profile.avatar]}
+              fallbackSeed={profile.id}
               alt={profile.username}
-              className="h-24 w-24 rounded-full object-cover ring-4 ring-gold-400/50"
+              className="h-24 w-24 rounded-full object-cover ring-4 ring-gold-400/50 sm:h-28 sm:w-28"
             />
-          )}
+            {isOwnProfile && (
+              <button
+                type="button"
+                onClick={() => setEditingAvatar((current) => !current)}
+                className="absolute -bottom-1 -right-1 inline-flex h-9 w-9 items-center justify-center rounded-full bg-gold-shine text-night-900 shadow-lg ring-2 ring-night-900 transition hover:scale-105"
+                title="Changer ma photo de profil"
+                aria-label="Changer ma photo de profil"
+              >
+                <Camera className="h-4 w-4" />
+              </button>
+            )}
+          </div>
           <div className="w-full flex-1">
             <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
               {roleLabelWithIcon(serverProfile?.role ?? profile.role)}
@@ -262,104 +316,175 @@ export function UserProfile() {
             )}
           </div>
           <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end">
-
-            <FollowButton
-              targetId={profile.id}
-              targetUsername={profile.username}
-              onChange={(nowFollowing) => {
-                setServerProfile((prev) =>
-                  prev
-                    ? {
-                        ...prev,
-                        followersCount:
-                          prev.followersCount + (nowFollowing ? 1 : -1),
-                      }
-                    : prev,
-                );
-              }}
-            />
-            {currentUser && currentUser.id !== profile.id && (
-              <Link
-                to={`/messages/${encodeURIComponent(profile.id)}`}
-                className="inline-flex items-center justify-center gap-1.5 rounded-full border border-gold-400/50 bg-gold-500/10 px-3 py-2 text-xs font-semibold text-gold-200 hover:bg-gold-500/20"
-              >
-                <MessageCircle className="h-4 w-4" />
-                Envoyer un message
-              </Link>
-            )}
-            {currentUser && currentUser.id !== profile.id && (
-              <ReportButton
-                targetType="user"
-                targetId={profile.id}
-                targetLabel={profile.username}
-                targetUrl={`/u/${profile.id}`}
-              />
+            {!isOwnProfile ? (
+              <>
+                <FollowButton
+                  targetId={profile.id}
+                  targetUsername={profile.username}
+                  onChange={(nowFollowing) => {
+                    setServerProfile((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            followersCount:
+                              prev.followersCount + (nowFollowing ? 1 : -1),
+                          }
+                        : prev,
+                    );
+                  }}
+                />
+                {currentUser && currentUser.id !== profile.id && (
+                  <Link
+                    to={`/messages/${encodeURIComponent(profile.id)}`}
+                    className="inline-flex items-center justify-center gap-1.5 rounded-full border border-gold-400/50 bg-gold-500/10 px-3 py-2 text-xs font-semibold text-gold-200 hover:bg-gold-500/20"
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                    Envoyer un message
+                  </Link>
+                )}
+                {currentUser && currentUser.id !== profile.id && (
+                  <ReportButton
+                    targetType="user"
+                    targetId={profile.id}
+                    targetLabel={profile.username}
+                    targetUrl={`/u/${profile.id}`}
+                  />
+                )}
+              </>
+            ) : (
+              <div className="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
+                <Link
+                  to="/avatar"
+                  className="inline-flex items-center justify-center gap-1.5 rounded-full border border-gold-400/45 bg-gold-500/10 px-3 py-2 text-xs font-semibold text-gold-100 transition hover:bg-gold-500/20"
+                >
+                  <Sparkles className="h-4 w-4" />
+                  Avatar / Studio
+                </Link>
+                <Link
+                  to="/familier"
+                  className="inline-flex items-center justify-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-ivory/75 transition hover:border-gold-300/35 hover:text-gold-100"
+                >
+                  <Gift className="h-4 w-4" />
+                  Mon familier
+                </Link>
+              </div>
             )}
           </div>
         </div>
         {profile.bio && (
           <p className="mt-6 text-sm text-ivory/80">{profile.bio}</p>
         )}
+        {isOwnProfile && editingAvatar && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            className="mt-6 rounded-xl border border-gold-400/30 bg-night-900/40 p-4"
+          >
+            <div className="flex items-center justify-between">
+              <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
+                ✦ Nouvelle photo de profil
+              </p>
+              <button
+                type="button"
+                onClick={() => setEditingAvatar(false)}
+                className="text-ivory/50 hover:text-rose-300"
+                title="Fermer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <input
+                type="file"
+                accept="image/*"
+                ref={avatarFileRef}
+                onChange={handleAvatarPick}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={openAvatarPicker}
+                disabled={avatarSaving}
+                className="btn-royal w-full sm:w-auto disabled:opacity-70"
+              >
+                {avatarSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                {avatarSaving ? "Sauvegarde…" : "Importer une image"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditingAvatar(false)}
+                className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/10 px-4 py-2 text-sm text-ivory/75"
+              >
+                Annuler
+              </button>
+            </div>
+            <p className="mt-2 text-[11px] text-ivory/50">
+              La nouvelle image est appliquée au profil et partout où ton avatar est affiché.
+            </p>
+          </motion.div>
+        )}
       </motion.header>
 
-      <section className="mt-10">
-        <AdminUserPanel
-          targetUserId={profile.id}
-          targetUsername={profile.username}
-          onChange={refreshServerProfile}
-        />
-      </section>
+      {!isOwnProfile && (
+        <section className="mt-10">
+          <AdminUserPanel
+            targetUserId={profile.id}
+            targetUsername={profile.username}
+            onChange={refreshServerProfile}
+          />
+        </section>
+      )}
 
-      <section className="mt-10 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="card-royal p-5">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-gold-300" />
-            <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
-              Lueurs possedees
+      {!isOwnProfile && (
+        <section className="mt-10 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="card-royal p-5">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-gold-300" />
+              <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
+                Lueurs possedees
+              </p>
+            </div>
+            <p className="mt-3 font-display text-2xl text-gold-200">
+              {serverProfile ? serverProfile.lueurs.toLocaleString("fr-FR") : "—"}
             </p>
           </div>
-          <p className="mt-3 font-display text-2xl text-gold-200">
-            {serverProfile
-              ? serverProfile.lueurs.toLocaleString("fr-FR")
-              : "—"}
-          </p>
-        </div>
-        <div className="card-royal p-5">
-          <div className="flex items-center gap-2">
-            <Coins className="h-5 w-5 text-gold-300" />
-            <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
-              Sylvins possedes
+          <div className="card-royal p-5">
+            <div className="flex items-center gap-2">
+              <Coins className="h-5 w-5 text-gold-300" />
+              <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
+                Sylvins possedes
+              </p>
+            </div>
+            <p className="mt-3 font-display text-2xl text-gold-200">
+              {serverProfile ? formatSylvins(serverProfile.sylvins) : "—"}
             </p>
           </div>
-          <p className="mt-3 font-display text-2xl text-gold-200">
-            {serverProfile ? formatSylvins(serverProfile.sylvins) : "—"}
-          </p>
-        </div>
-        <div className="card-royal p-5">
-          <div className="flex items-center gap-2">
-            <Coins className="h-5 w-5 text-gold-300" />
-            <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
-              Cadeaux offerts
+          <div className="card-royal p-5">
+            <div className="flex items-center gap-2">
+              <Coins className="h-5 w-5 text-gold-300" />
+              <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
+                Cadeaux offerts
+              </p>
+            </div>
+            <p className="mt-3 font-display text-2xl text-gold-200">
+              {formatSylvins(wallet.giftsSentCount)} envoyés
             </p>
           </div>
-          <p className="mt-3 font-display text-2xl text-gold-200">
-            {formatSylvins(wallet.giftsSentCount)} envoyés
-          </p>
-        </div>
-        <div className="card-royal p-5">
-          <div className="flex items-center gap-2">
-            <Banknote className="h-5 w-5 text-gold-300" />
-            <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
-              Sylvins reçus en cadeaux
+          <div className="card-royal p-5">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-gold-300" />
+              <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
+                Sylvins reçus en cadeaux
+              </p>
+            </div>
+            <p className="mt-3 font-display text-2xl text-gold-200">
+              {formatSylvins(wallet.earnings)}
             </p>
           </div>
-          <p className="mt-3 font-display text-2xl text-gold-200">
-            {formatSylvins(wallet.earnings)}
-          </p>
-        </div>
-      </section>
+        </section>
+      )}
 
-      {activeFamiliar && (
+      {!isOwnProfile && activeFamiliar && (
         <section className="mt-10">
           <SectionHeading
             align="left"
@@ -499,7 +624,7 @@ export function UserProfile() {
         </section>
       )}
 
-      {serverProfile && (
+      {!isOwnProfile && serverProfile && (
         <section className="mt-10">
           <WishlistSection
             wishlist={serverProfile.wishlist ?? []}
@@ -518,20 +643,114 @@ export function UserProfile() {
           eyebrow="Publications"
           title="Ses dernières publications"
         />
-        <ul className="mt-6 space-y-4">
-          {myPosts.map((p) => (
-            <li key={p.id} className="card-royal p-5">
-              <p className="font-regal text-[10px] tracking-[0.22em] text-ivory/55">
-                {formatRelative(p.createdAt)}
-              </p>
-              <p className="mt-2 whitespace-pre-wrap text-sm text-ivory/85">
-                {p.content}
-              </p>
-            </li>
-          ))}
+        <ul className="mt-6 grid grid-cols-3 gap-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
+          {myPosts.map((p) => {
+            const likes = Object.values(p.reactions ?? {}).reduce(
+              (acc, usersList) => acc + usersList.length,
+              0,
+            );
+            const isVideo = Boolean(p.videoUrl);
+            const poster = p.imageUrl || "";
+            const postUrl = `/communaute#post-${p.id}`;
+            return (
+              <li
+                key={p.id}
+                className="group relative overflow-hidden rounded-[22px] border border-white/8 bg-night-950/70 shadow-[0_18px_60px_rgba(0,0,0,0.22)]"
+              >
+                <Link
+                  to={postUrl}
+                  className="absolute inset-0 z-10"
+                  aria-label={`Ouvrir le post de ${profile.username}`}
+                />
+                <article className="relative flex aspect-[4/5] flex-col overflow-hidden">
+                  <div className="absolute inset-0 bg-night-950">
+                    {poster ? (
+                      <img
+                        src={poster}
+                        alt={p.content}
+                        className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+                      />
+                    ) : isVideo ? (
+                      <video
+                        src={p.videoUrl}
+                        className="h-full w-full object-cover"
+                        muted
+                        playsInline
+                        loop
+                        autoPlay
+                        preload="metadata"
+                      />
+                    ) : (
+                      <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(251,191,36,0.16),transparent_35%),linear-gradient(180deg,#18111f,#09060d)] px-3 text-center">
+                        <p className="line-clamp-8 whitespace-pre-wrap text-[11px] leading-5 text-ivory/88">
+                          {p.content}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(2,6,23,0.08),rgba(2,6,23,0.08)_35%,rgba(2,6,23,0.88)_100%)]" />
+
+                  {isVideo && (
+                    <div className="absolute left-2 top-2 z-20 inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/12 bg-night-950/70 text-white/85 backdrop-blur-md">
+                      <Play className="h-3.5 w-3.5 fill-current" />
+                    </div>
+                  )}
+
+                  <div className="absolute inset-x-0 bottom-0 z-20 p-2.5">
+                    <div className="rounded-[18px] border border-white/10 bg-night-950/72 p-2.5 backdrop-blur-md">
+                      <p className="line-clamp-2 text-[11px] leading-4 text-ivory/88">
+                        {p.content}
+                      </p>
+                      <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-ivory/55">
+                        <span>{likes} likes</span>
+                        <span>{p.comments.length} comm.</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="absolute inset-x-0 top-0 z-20 flex items-center justify-between px-2.5 pt-2.5 text-[10px] uppercase tracking-[0.18em] text-ivory/60">
+                    <span>{isVideo ? "Vidéo" : p.imageUrl ? "Photo" : "Texte"}</span>
+                    <span>{formatRelative(p.createdAt)}</span>
+                  </div>
+
+                  {isOwnProfile && (
+                    <div className="absolute right-2 top-2 z-20 flex gap-1.5">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          // miniatures modifiables : on garde l'accès via le post détail.
+                          notify("Ouvre le post pour modifier sa miniature.", "info");
+                        }}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-night-950/75 text-gold-100 backdrop-blur-md transition hover:border-gold-300/45 hover:text-gold-50"
+                        aria-label="Modifier la miniature"
+                      >
+                        <Camera className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          // suppression déjà gérée côté Social ; on garde l'accès visuel.
+                          notify("Supprime le post depuis l'espace Social.", "info");
+                        }}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-night-950/75 text-rose-200 backdrop-blur-md transition hover:border-rose-300/50 hover:text-rose-100"
+                        aria-label="Supprimer mon post"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )}
+                </article>
+              </li>
+            );
+          })}
           {myPosts.length === 0 && (
-            <li className="text-center text-sm text-ivory/50">
-              Ce membre n'a pas encore publié.
+            <li className="col-span-full rounded-[24px] border border-dashed border-white/10 px-4 py-10 text-center text-sm text-ivory/50">
+              {isOwnProfile ? "Crée ta première publication." : "Ce membre n'a pas encore publié."}
             </li>
           )}
         </ul>
