@@ -112,9 +112,15 @@ export function Me() {
 
   if (!user) return null;
   const currentUser = user;
+  const profileNames = new Set(
+    [currentUser.username, serverProfile?.username]
+      .filter((value): value is string => typeof value === "string")
+      .map((value) => value.trim())
+      .filter(Boolean),
+  );
 
   const myPosts = articles
-    .filter((article) => article.author === currentUser.username)
+    .filter((article) => profileNames.has(article.author.trim()))
     .sort(
       (a, b) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
