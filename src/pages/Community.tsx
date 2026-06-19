@@ -24,7 +24,7 @@ import {
   VolumeX,
   X,
 } from "lucide-react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useParams, useSearchParams } from "react-router-dom";
 import clsx from "clsx";
 import { useStore } from "../contexts/StoreContext";
 import { useAuth } from "../contexts/AuthContext";
@@ -87,6 +87,9 @@ export function Community() {
   const { refresh: refreshProfile } = useProfile();
   const { notify } = useToast();
   const location = useLocation();
+  const { postId: routePostId } = useParams();
+  const [searchParams] = useSearchParams();
+  const routeCommentId = searchParams.get("commentId")?.trim() ?? "";
   const usersById = useMemo(
     () => new Map(users.map((member) => [member.id, member])),
     [users],
@@ -108,6 +111,8 @@ export function Community() {
   const [selectedCommentPostId, setSelectedCommentPostId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<CommunityTab>("for-you");
   const [pendingDeletePostId, setPendingDeletePostId] = useState<string | null>(null);
+  const [highlightedPostId, setHighlightedPostId] = useState<string | null>(null);
+  const [highlightedCommentId, setHighlightedCommentId] = useState<string | null>(null);
   const [savedPostIds, setSavedPostIds] = useState<Set<string>>(() => {
     try {
       const raw = window.localStorage.getItem("vaelyndra-community-saved-posts");
@@ -440,43 +445,74 @@ export function Community() {
 
   useEffect(() => {
     const hash = location.hash.replace(/^#/, "").trim();
-    if (!hash.startsWith("comment-")) return;
-    const commentId = hash.slice("comment-".length);
-    if (!commentId) return;
-    const parentPost = posts.find((post) =>
-      post.comments.some((comment) => comment.id === commentId),
-    );
+    const commentId = routeCommentId || (hash.startsWith("comment-") ? hash.slice("comment-".length) : "");
+    const hashPostId = hash.startsWith("post-") ? hash.slice("post-".length) : "";
+    const postTargetId = routePostId?.trim() || hashPostId || "";
+    const commentTargetId = commentId || "";
+    if (!postTargetId && !commentTargetId) {
+      const reset = window.setTimeout(() => {
+        setHighlightedPostId(null);
+        setHighlightedCommentId(null);
+        setSelectedCommentPostId(null);
+      }, 0);
+      return () => window.clearTimeout(reset);
+    }
+
+    const parentPost = posts.find((post) => {
+      if (postTargetId && post.id === postTargetId) return true;
+      if (!commentTargetId) return false;
+      return post.comments.some((comment) => comment.id === commentTargetId);
+    });
     if (!parentPost) return;
 
     const open = window.setTimeout(() => {
       setOpenComments((current) => ({
         ...current,
-        [parentPost.id]: true,
+        [parentPost.id]: Boolean(commentTargetId),
       }));
+      setSelectedCommentPostId(commentTargetId ? parentPost.id : null);
+      setHighlightedPostId(parentPost.id);
+      setHighlightedCommentId(commentTargetId || null);
     }, 0);
 
-    const scrollToComment = () => {
-      const element = document.getElementById(`comment-${commentId}`);
-      if (!element) return false;
-      element.scrollIntoView({ behavior: "smooth", block: "center" });
-      return true;
+    const cleanupHighlight = window.setTimeout(() => {
+      setHighlightedPostId((current) => (current === parentPost.id ? null : current));
+      setHighlightedCommentId((current) => (current === commentTargetId ? null : current));
+    }, 3200);
+
+    const scrollToTarget = () => {
+      const postElement = document.getElementById(`post-${parentPost.id}`);
+      if (postElement) {
+        postElement.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+      if (!commentTargetId) return Boolean(postElement);
+      const commentElement = document.getElementById(`comment-${commentTargetId}`);
+      if (commentElement) {
+        commentElement.scrollIntoView({ behavior: "smooth", block: "center" });
+        return true;
+      }
+      return Boolean(postElement);
     };
 
-    if (scrollToComment()) {
-      return () => window.clearTimeout(open);
+    if (scrollToTarget()) {
+      return () => {
+        window.clearTimeout(open);
+        window.clearTimeout(cleanupHighlight);
+      };
     }
 
     const frame = window.requestAnimationFrame(() => {
       window.setTimeout(() => {
-        scrollToComment();
+        scrollToTarget();
       }, 80);
     });
 
     return () => {
       window.clearTimeout(open);
+      window.clearTimeout(cleanupHighlight);
       window.cancelAnimationFrame(frame);
     };
-  }, [location.hash, posts]);
+  }, [location.hash, posts, routeCommentId, routePostId]);
 
   async function publish(e: React.FormEvent) {
     e.preventDefault();
@@ -840,7 +876,7 @@ export function Community() {
         mentionTargets={mentionTargets}
         onLike={(postId) => react(postId, LIKE_EMOJI)}
         onShare={(post) => {
-          const url = `${window.location.origin}/communaute#post-${post.id}`;
+          const url = `${window.location.origin}/communaute/post/${post.id}`;
           if (navigator.share) {
             navigator.share({ title: `Post de ${post.authorName}`, url }).catch(() => {});
           } else {
@@ -1015,12 +1051,13 @@ export function Community() {
               </button>
             </div>
             <div className="max-h-[76vh] overflow-y-auto px-4 pb-5 pt-3">
-              <PostComments
-                postId={selectedCommentPost.id}
-                comments={selectedCommentPost.comments}
-                postAuthorId={selectedCommentPost.authorId}
-                profileOverrides={profilesById}
-              />
+                <PostComments
+                  postId={selectedCommentPost.id}
+                  comments={selectedCommentPost.comments}
+                  postAuthorId={selectedCommentPost.authorId}
+                  profileOverrides={profilesById}
+                  highlightedCommentId={highlightedCommentId}
+                />
             </div>
           </div>
         </div>
@@ -1306,6 +1343,8 @@ export function Community() {
                     "card-royal p-5",
                     post.postType === "official_event" &&
                       "border-gold-300/45 bg-gradient-to-br from-gold-500/10 via-royal-900/45 to-night-950",
+                    highlightedPostId === post.id &&
+                      "ring-2 ring-gold-300/65 ring-offset-2 ring-offset-night-950/80",
                   )}
                 >
                 <header className="flex flex-wrap items-start gap-3">
@@ -1544,7 +1583,7 @@ export function Community() {
                   <div className="ml-auto flex items-center gap-1.5">
                     <button
                       onClick={() => {
-                        const url = `${window.location.origin}/communaute#post-${post.id}`;
+                        const url = `${window.location.origin}/communaute/post/${post.id}`;
                         if (navigator.share) {
                           navigator.share({
                             title: `Post de ${post.authorName}`,
@@ -1583,7 +1622,7 @@ export function Community() {
                         targetType="post"
                         targetId={post.id}
                         targetLabel={`Post de ${post.authorName}`}
-                        targetUrl={`/communaute#post-${post.id}`}
+                        targetUrl={`/communaute/post/${post.id}`}
                         compact
                       />
                     )}

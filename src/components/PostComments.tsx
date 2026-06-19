@@ -22,6 +22,7 @@ interface Props {
   comments: Comment[];
   postAuthorId: string;
   profileOverrides?: Record<string, UserProfileDto>;
+  highlightedCommentId?: string | null;
 }
 
 export function PostComments({
@@ -29,6 +30,7 @@ export function PostComments({
   comments,
   postAuthorId,
   profileOverrides = {},
+  highlightedCommentId = null,
 }: Props) {
   const { user, users, isQueen } = useAuth();
   const { refresh: refreshProfile } = useProfile();
@@ -233,6 +235,10 @@ export function PostComments({
         id={`comment-${comment.id}`}
         className={`flex w-full min-w-0 items-start gap-2.5 sm:gap-3 ${
           isReply ? "rounded-2xl bg-night-950/18 py-2" : ""
+        } ${
+          highlightedCommentId === comment.id
+            ? "rounded-2xl ring-2 ring-gold-300/65 ring-offset-2 ring-offset-night-950/80"
+            : ""
         }`}
       >
         <Link to={profileHref(comment.authorId)} className="shrink-0">

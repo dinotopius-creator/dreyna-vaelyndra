@@ -225,6 +225,8 @@ function AnimatedRoutes() {
             <Route path="/live/:broadcasterId" element={<Live />} />
             <Route path="/communaute" element={<Community />} />
             <Route path="/social/play" element={<Community />} />
+            <Route path="/communaute/post/:postId" element={<Community />} />
+            <Route path="/social/post/:postId" element={<Community />} />
             <Route path="/communaute/hashtag/:tag" element={<CommunityHashtag />} />
             <Route path="/social/hashtag/:tag" element={<CommunityHashtag />} />
             <Route path="/mondes/play" element={<Worlds dedicatedMode />} />

@@ -667,6 +667,19 @@ export function Navbar() {
                                   className="h-4 w-4 accent-gold-400"
                                 />
                               </label>
+                              <label className="flex min-h-10 items-center justify-between gap-3 text-xs text-ivory/75">
+                                Son de notification
+                                <input
+                                  type="checkbox"
+                                  checked={preferences.sounds}
+                                  onChange={(event) =>
+                                    updatePreferences({
+                                      sounds: event.target.checked,
+                                    })
+                                  }
+                                  className="h-4 w-4 accent-gold-400"
+                                />
+                              </label>
                               <div className="flex min-h-10 items-center justify-between gap-3 pt-1">
                                 <span className="text-xs text-ivory/75">
                                   Notifications navigateur
