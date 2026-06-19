@@ -835,11 +835,13 @@ export function Community() {
         onSave={(postId) => toggleSave(postId)}
         onOpenComposer={openComposer}
         onOpenComments={openCommentSheet}
+        onDeletePost={removePost}
         savedPostIds={savedPostIds}
         activeTab={activeTab}
         onChangeTab={setActiveTab}
         leaderboard={displayLeaderboard}
         weeklyLabel={activityWeekStartIso ? `Semaine du ${formatRelative(activityWeekStartIso)}` : undefined}
+        weekStartIso={activityWeekStartIso}
       />
 
       {contestAwardedNotice && (

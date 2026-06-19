@@ -12,6 +12,8 @@ import {
   TrendingUp,
   Users,
   Search,
+  Wand2,
+  Trash2,
   X,
 } from "lucide-react";
 import clsx from "clsx";
@@ -21,7 +23,10 @@ import { Handle } from "./Handle";
 import { RichMentionText, buildMentionLookup } from "./RichMentionText";
 import { UserBadges } from "./UserBadges";
 import StreamerGradeBadge from "./StreamerGradeBadge";
+import { WeeklyRankingCountdown } from "./WeeklyRankingCountdown";
+import { ReportButton } from "./ReportButton";
 import { formatRelative, parsePostImageUrl, parseVideoUrl } from "../lib/helpers";
+import { COMMUNITY_DRAWING_CONTEST, formatContestCountdown } from "../data/communityContest";
 import { getOfficial } from "../data/officials";
 import type { StreamerGradeDto } from "../lib/api";
 import type { CommunityPost } from "../types";
@@ -53,6 +58,7 @@ interface CommunityImmersiveFeedProps {
   onSave: (postId: string) => void;
   onOpenComposer: () => void;
   onOpenComments: (postId: string) => void;
+  onDeletePost?: (postId: string) => void;
   savedPostIds: Set<string>;
   activeTab: CommunityTab;
   onChangeTab: (tab: CommunityTab) => void;
@@ -68,6 +74,7 @@ interface CommunityImmersiveFeedProps {
     grade?: StreamerGradeDto | null;
   }>;
   weeklyLabel?: string;
+  weekStartIso?: string | null;
 }
 
 const TAB_META: Record<CommunityTab, { label: string; icon: typeof Users }> = {
@@ -133,14 +140,17 @@ export function CommunityImmersiveFeed({
   onSave,
   onOpenComposer,
   onOpenComments,
+  onDeletePost,
   savedPostIds,
   activeTab,
   onChangeTab,
   leaderboard = [],
   weeklyLabel,
+  weekStartIso,
 }: CommunityImmersiveFeedProps) {
   const location = useLocation();
   const navigate = useNavigate();
+  const [now, setNow] = useState(() => Date.now());
   const [likeBurst, setLikeBurst] = useState<{ postId: string; token: number } | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const tapDownRef = useRef<{ postId: string; x: number; y: number; time: number } | null>(null);
@@ -152,6 +162,11 @@ export function CommunityImmersiveFeed({
     return () => {
       if (burstTimerRef.current) window.clearTimeout(burstTimerRef.current);
     };
+  }, []);
+
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
   }, []);
 
   function triggerLikeBurst(postId: string) {
@@ -230,21 +245,30 @@ export function CommunityImmersiveFeed({
       const top = leaderboard[0];
       return [
         {
+          id: "news-contest",
+          kind: "news",
+          title: "Concours de dessin",
+          subtitle: "Actualité communautaire",
+          body: top
+            ? `Le concours #concoursdessin récompense le post le plus liké avec 1000 lueurs et 6 nourritures familier.`
+            : "Le concours #concoursdessin met les dessins de la communauté en avant pendant 24h00.",
+        },
+        {
           id: "news-top5",
           kind: "news",
           title: "Top 5 les plus actifs",
           subtitle: weeklyLabel ?? "Classement live de la semaine",
           body: top
-            ? `${top.username} domine actuellement la communauté avec ${top.score} points.`
-            : "Aucun classement disponible pour le moment.",
+            ? `${top.username} domine actuellement la communauté avec ${top.score} points. Monte au classement avec des posts, des likes, des commentaires et de l'activité régulière.`
+            : "Aucun classement disponible pour le moment. Publie, commente et réagis pour faire apparaître les premiers profils.",
         },
         {
           id: "news-oracle",
           kind: "news",
           title: "Oracle des runes",
-          subtitle: "Rituels, indices et nouveautés communautaires",
+          subtitle: "Rituels, indices et accès direct",
           body:
-            "Une carte dédiée à l’Oracle des runes peut accueillir les annonces, rituels et révélations de Vaelyndra.",
+            "L’Oracle reste accessible depuis cette interface. Lance un rituel, consulte ton statut quotidien et retrouve le gameplay mystique comme avant.",
         },
       ];
     }
@@ -343,39 +367,172 @@ export function CommunityImmersiveFeed({
                     <p className="mt-4 max-w-2xl text-base leading-7 text-ivory/82">{entry.body}</p>
 
                     {entry.id === "news-top5" && leaderboard.length > 0 && (
-                      <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                        {leaderboard.slice(0, 5).map((member, rank) => (
-                          <Link
-                            key={member.id}
-                            to={`/u/${member.id}`}
-                            className="flex items-center gap-3 rounded-2xl border border-white/8 bg-night-900/40 p-3 transition hover:border-gold-400/40"
-                          >
-                            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gold-500/15 text-sm font-bold text-gold-200">
-                              {rank + 1}
-                            </div>
-                            <AvatarImage
-                              candidates={[member.avatarImageUrl]}
-                              fallbackSeed={member.id}
-                              alt={member.username}
-                              className="h-10 w-10 rounded-full object-cover ring-2 ring-gold-400/30"
-                            />
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate font-display text-sm text-gold-100">
-                                {member.username}
+                      <div className="mt-5 space-y-4">
+                        <div className="rounded-3xl border border-gold-400/20 bg-night-900/45 p-4">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <p className="text-[10px] uppercase tracking-[0.22em] text-gold-200/70">
+                                Comment entrer dans le top
                               </p>
-                              <p className="text-xs text-ivory/55">{member.score} points</p>
+                              <p className="mt-1 text-sm leading-6 text-ivory/78">
+                                Plus tu postes, commentes, likes et relances l’activité, plus ton score monte.
+                              </p>
                             </div>
-                          </Link>
-                        ))}
+                            {weekStartIso ? (
+                              <div className="max-w-[240px]">
+                                <WeeklyRankingCountdown
+                                  weekStartIso={weekStartIso}
+                                  active
+                                  compact
+                                  showWeekRange={false}
+                                  label="Fin de semaine dans"
+                                  completeLabel="Classement hebdo clos"
+                                />
+                              </div>
+                            ) : null}
+                          </div>
+                          <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-ivory/70">
+                            <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">
+                              Publier un post
+                            </span>
+                            <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">
+                              Commenter régulièrement
+                            </span>
+                            <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">
+                              Réagir avec des likes
+                            </span>
+                            <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">
+                              Participer aux événements
+                            </span>
+                          </div>
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          {leaderboard.slice(0, 5).map((member, rank) => (
+                            <Link
+                              key={member.id}
+                              to={`/u/${member.id}`}
+                              className="group rounded-3xl border border-white/8 bg-gradient-to-br from-night-900/75 to-night-950/40 p-4 transition hover:border-gold-400/40"
+                            >
+                              <div className="flex items-start gap-3">
+                                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gold-500/15 text-sm font-bold text-gold-200">
+                                  {rank + 1}
+                                </div>
+                                <AvatarImage
+                                  candidates={[member.avatarImageUrl]}
+                                  fallbackSeed={member.id}
+                                  alt={member.username}
+                                  className="h-11 w-11 rounded-full object-cover ring-2 ring-gold-400/30"
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate font-display text-base text-gold-100 group-hover:text-gold-50">
+                                    {member.username}
+                                  </p>
+                                  <p className="text-xs text-ivory/55">
+                                    {member.score} points • {member.postCount} posts
+                                  </p>
+                                  <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-ivory/65">
+                                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1">
+                                      {member.commentCount} commentaires
+                                    </span>
+                                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1">
+                                      {member.reactionCount} likes
+                                    </span>
+                                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1">
+                                      Score actif
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </Link>
+                          ))}
+                        </div>
+                        <div className="rounded-3xl border border-cyan-300/20 bg-cyan-500/10 p-4 text-sm text-ivory/78">
+                          <p className="font-semibold text-cyan-100">
+                            Récompenses hebdomadaires
+                          </p>
+                          <p className="mt-1 leading-6">
+                            Le top 5 reçoit une mise en avant sociale et les 3 premiers cumulent des récompenses
+                            de Lueurs selon le classement hebdomadaire.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {entry.id === "news-contest" && (
+                      <div className="mt-5 grid gap-4 lg:grid-cols-[1.1fr,0.9fr]">
+                        <div className="overflow-hidden rounded-[28px] border border-gold-400/20 bg-night-950/55">
+                          <div
+                            className="h-52 bg-cover bg-center opacity-95"
+                            style={{
+                              backgroundImage: `linear-gradient(180deg, rgba(8,10,20,0.05), rgba(8,10,20,0.6)), url(${COMMUNITY_DRAWING_CONTEST.bannerImage})`,
+                            }}
+                          />
+                          <div className="p-4">
+                            <p className="text-[10px] uppercase tracking-[0.22em] text-gold-200/70">
+                              Concours officiel
+                            </p>
+                            <p className="mt-1 font-display text-xl text-gold-100">
+                              {COMMUNITY_DRAWING_CONTEST.title}
+                            </p>
+                            <p className="mt-2 text-sm leading-6 text-ivory/78">
+                              Poste ton dessin avec <span className="font-semibold text-gold-100">#concoursdessin</span>.
+                              Le post le plus liké à la clôture gagne <span className="font-semibold text-gold-100">1000 lueurs</span>{" "}
+                              et <span className="font-semibold text-gold-100">6 nourritures familier</span>.
+                            </p>
+                            <div className="mt-4 flex flex-wrap gap-2">
+                              <Link
+                                to="/communaute/hashtag/concoursdessin"
+                                className="inline-flex min-h-10 items-center gap-2 rounded-full bg-gold-500/20 px-4 py-2 text-sm font-semibold text-gold-100 transition hover:bg-gold-500/30"
+                              >
+                                Voir le concours
+                              </Link>
+                              <span className="inline-flex min-h-10 items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-ivory/70">
+                                {formatContestCountdown(
+                                  Math.max(
+                                    0,
+                                    new Date(COMMUNITY_DRAWING_CONTEST.endsAt).getTime() - now,
+                                  ),
+                                )}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="rounded-[28px] border border-gold-400/20 bg-gradient-to-br from-gold-500/10 via-night-900/50 to-royal-500/10 p-4">
+                          <p className="text-[10px] uppercase tracking-[0.22em] text-gold-200/70">
+                            Pour participer
+                          </p>
+                          <div className="mt-3 space-y-2 text-sm text-ivory/78">
+                            {COMMUNITY_DRAWING_CONTEST.rules.map((rule) => (
+                              <div
+                                key={rule}
+                                className="rounded-2xl border border-white/8 bg-night-950/40 px-3 py-2"
+                              >
+                                {rule}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       </div>
                     )}
 
                     {entry.id === "news-oracle" && (
                       <div className="mt-5 rounded-3xl border border-gold-400/20 bg-gradient-to-br from-gold-500/10 via-night-900/50 to-royal-500/10 p-4">
-                        <p className="text-sm text-gold-100">
-                          Oracle des runes prêt à accueillir les annonces, rituels et révélations
-                          de la communauté.
+                        <p className="text-sm leading-6 text-gold-100">
+                          L’Oracle des runes est utilisable depuis son onglet dédié. Tu peux y relancer
+                          tes rituels quotidiens, consulter ton statut et voir les derniers retours.
                         </p>
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <Link
+                            to="/oracle"
+                            className="inline-flex min-h-10 items-center gap-2 rounded-full bg-gold-500/20 px-4 py-2 text-sm font-semibold text-gold-100 transition hover:bg-gold-500/30"
+                          >
+                            <Wand2 className="h-4 w-4" />
+                            Jouer à l’Oracle
+                          </Link>
+                          <span className="inline-flex min-h-10 items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-ivory/70">
+                            3 tentatives / jour
+                          </span>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -446,10 +603,10 @@ export function CommunityImmersiveFeed({
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-row sm:gap-3">
-                          <FeedAction
-                            icon={<Heart className="h-5 w-5" fill={liked ? "currentColor" : "none"} />}
-                            label={liked ? "Aimé" : "Like"}
+                    <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-row sm:gap-3">
+                      <FeedAction
+                        icon={<Heart className="h-5 w-5" fill={liked ? "currentColor" : "none"} />}
+                        label={liked ? "Aimé" : "Like"}
                             active={liked}
                             onClick={() => onLike(post.id)}
                             count={reactionCount}
@@ -651,6 +808,31 @@ export function CommunityImmersiveFeed({
                         label="Partager"
                         onClick={() => onShare(post)}
                       />
+                      {currentUserId && currentUserId === post.authorId ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const confirmDelete = window.confirm(
+                              "Supprimer ton post ? Cette action est définitive.",
+                            );
+                            if (!confirmDelete) return;
+                            onDeletePost?.(post.id);
+                          }}
+                          className="inline-flex min-h-11 w-full min-w-0 flex-col items-center justify-center rounded-full border border-white/10 bg-night-950/45 px-3 py-2 text-xs text-rose-200 backdrop-blur-sm transition hover:border-rose-300/40 hover:text-rose-100"
+                          aria-label="Supprimer mon post"
+                        >
+                          <Trash2 className="h-5 w-5" />
+                          <span className="mt-1 leading-none">Suppr.</span>
+                        </button>
+                      ) : (
+                        <ReportButton
+                          targetType="post"
+                          targetId={post.id}
+                          targetLabel={`Post de ${displayName}`}
+                          targetUrl={`/communaute#post-${post.id}`}
+                          compact
+                        />
+                      )}
                     </div>
                   </div>
                 </div>
