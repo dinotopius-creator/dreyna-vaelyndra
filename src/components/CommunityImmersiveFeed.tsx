@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import {
   Bookmark,
   BookmarkCheck,
+  CalendarClock,
   Heart,
   MessageCircle,
   Newspaper,
@@ -10,6 +11,7 @@ import {
   Share2,
   Sparkles,
   TrendingUp,
+  Trophy,
   Users,
   Search,
   Wand2,
@@ -26,7 +28,11 @@ import StreamerGradeBadge from "./StreamerGradeBadge";
 import { WeeklyRankingCountdown } from "./WeeklyRankingCountdown";
 import { ReportButton } from "./ReportButton";
 import { formatRelative, parsePostImageUrl, parseVideoUrl } from "../lib/helpers";
-import { COMMUNITY_DRAWING_CONTEST, formatContestCountdown } from "../data/communityContest";
+import {
+  COMMUNITY_DRAWING_CONTEST,
+  formatContestCountdown,
+  isDrawingContestEntry,
+} from "../data/communityContest";
 import { getOfficial } from "../data/officials";
 import type { StreamerGradeDto } from "../lib/api";
 import type { CommunityPost } from "../types";
@@ -227,6 +233,11 @@ export function CommunityImmersiveFeed({
     );
   }, [activeTab, filteredPosts, posts]);
 
+  const contestEntries = useMemo(
+    () => posts.filter(isDrawingContestEntry),
+    [posts],
+  );
+
   const feedEntries = useMemo<
     Array<
       | {
@@ -252,9 +263,9 @@ export function CommunityImmersiveFeed({
             : "Le concours #concoursdessin met les dessins de la communauté en avant pendant 24h00.",
         },
         {
-          id: "news-top5",
+          id: "news-top10",
           kind: "news",
-          title: "Top 5 les plus actifs",
+          title: "Top 10 les plus actifs",
           subtitle: weeklyLabel ?? "Classement live de la semaine",
           body: top
             ? `${top.username} domine actuellement la communauté avec ${top.score} points. Monte au classement avec des posts, des likes, des commentaires et de l'activité régulière.`
@@ -364,7 +375,7 @@ export function CommunityImmersiveFeed({
                     <p className="mt-2 text-sm text-ivory/65">{entry.subtitle}</p>
                     <p className="mt-4 max-w-2xl text-base leading-7 text-ivory/82">{entry.body}</p>
 
-                    {entry.id === "news-top5" && leaderboard.length > 0 && (
+                    {entry.id === "news-top10" && leaderboard.length > 0 && (
                       <div className="mt-5 space-y-4">
                         <div className="rounded-3xl border border-gold-400/20 bg-night-900/45 p-4">
                           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -404,8 +415,8 @@ export function CommunityImmersiveFeed({
                             </span>
                           </div>
                         </div>
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          {leaderboard.slice(0, 5).map((member, rank) => (
+                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                          {leaderboard.slice(0, 10).map((member, rank) => (
                             <Link
                               key={member.id}
                               to={`/u/${member.id}`}
@@ -457,57 +468,103 @@ export function CommunityImmersiveFeed({
                     )}
 
                     {entry.id === "news-contest" && (
-                      <div className="mt-5 grid gap-4 lg:grid-cols-[1.1fr,0.9fr]">
-                        <div className="overflow-hidden rounded-[28px] border border-gold-400/20 bg-night-950/55">
+                      <div className="mt-5 overflow-hidden rounded-[32px] border border-gold-400/20 bg-night-950/55 shadow-[0_24px_60px_rgba(0,0,0,0.22)]">
+                        <div className="relative min-h-[18rem] overflow-hidden">
                           <div
-                            className="h-52 bg-cover bg-center opacity-95"
+                            className="absolute inset-0 bg-cover bg-center opacity-90"
                             style={{
-                              backgroundImage: `linear-gradient(180deg, rgba(8,10,20,0.05), rgba(8,10,20,0.6)), url(${COMMUNITY_DRAWING_CONTEST.bannerImage})`,
+                              backgroundImage: `linear-gradient(180deg, rgba(4,6,15,0.04), rgba(4,6,15,0.78)), url(${COMMUNITY_DRAWING_CONTEST.bannerImage})`,
                             }}
                           />
-                          <div className="p-4">
-                            <p className="text-[10px] uppercase tracking-[0.22em] text-gold-200/70">
-                              Concours officiel
-                            </p>
-                            <p className="mt-1 font-display text-xl text-gold-100">
+                          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(250,204,21,0.18),transparent_35%),linear-gradient(135deg,rgba(7,5,11,0.15),rgba(7,5,11,0.72))]" />
+                          <div className="relative flex h-full flex-col justify-end p-5 sm:p-6">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="inline-flex items-center gap-1.5 rounded-full border border-gold-300/35 bg-gold-500/15 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-gold-100">
+                                <Sparkles className="h-3.5 w-3.5" />
+                                Concours officiel
+                              </span>
+                              <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-300/25 bg-sky-500/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-sky-100">
+                                #concoursdessin
+                              </span>
+                            </div>
+                            <h2 className="mt-4 max-w-3xl font-display text-3xl text-gold-100 sm:text-4xl">
                               {COMMUNITY_DRAWING_CONTEST.title}
-                            </p>
-                            <p className="mt-2 text-sm leading-6 text-ivory/78">
+                            </h2>
+                            <p className="mt-3 max-w-3xl text-sm leading-6 text-ivory/78 sm:text-base">
                               Poste ton dessin avec <span className="font-semibold text-gold-100">#concoursdessin</span>.
-                              Le post le plus liké à la clôture gagne <span className="font-semibold text-gold-100">1000 lueurs</span>{" "}
-                              et <span className="font-semibold text-gold-100">6 nourritures familier</span>.
+                              Le post le plus liké gagne <span className="font-semibold text-gold-100">1000 lueurs</span> et{" "}
+                              <span className="font-semibold text-gold-100">6 nourritures familier</span>.
                             </p>
-                            <div className="mt-4 flex flex-wrap gap-2">
+                            <div className="mt-5 flex flex-wrap gap-2">
+                              <span className="inline-flex min-h-10 items-center gap-2 rounded-full border border-white/10 bg-night-950/60 px-4 py-2 text-sm text-ivory/80">
+                                <Trophy className="h-4 w-4 text-gold-200" />
+                                {contestEntries.length} participant{contestEntries.length > 1 ? "s" : ""}
+                              </span>
+                              <span className="inline-flex min-h-10 items-center gap-2 rounded-full border border-white/10 bg-night-950/60 px-4 py-2 text-sm text-ivory/80">
+                                <CalendarClock className="h-4 w-4 text-gold-200" />
+                                {formatContestCountdown(Math.max(0, new Date(COMMUNITY_DRAWING_CONTEST.endsAt).getTime() - now))}
+                              </span>
                               <Link
                                 to="/communaute/hashtag/concoursdessin"
                                 className="inline-flex min-h-10 items-center gap-2 rounded-full bg-gold-500/20 px-4 py-2 text-sm font-semibold text-gold-100 transition hover:bg-gold-500/30"
                               >
-                                Voir le concours
+                                Voir les participations
                               </Link>
-                              <span className="inline-flex min-h-10 items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-ivory/70">
-                                {formatContestCountdown(
-                                  Math.max(
-                                    0,
-                                    new Date(COMMUNITY_DRAWING_CONTEST.endsAt).getTime() - now,
-                                  ),
-                                )}
-                              </span>
                             </div>
                           </div>
                         </div>
-                        <div className="rounded-[28px] border border-gold-400/20 bg-gradient-to-br from-gold-500/10 via-night-900/50 to-royal-500/10 p-4">
-                          <p className="text-[10px] uppercase tracking-[0.22em] text-gold-200/70">
-                            Pour participer
-                          </p>
-                          <div className="mt-3 space-y-2 text-sm text-ivory/78">
-                            {COMMUNITY_DRAWING_CONTEST.rules.map((rule) => (
-                              <div
-                                key={rule}
-                                className="rounded-2xl border border-white/8 bg-night-950/40 px-3 py-2"
-                              >
-                                {rule}
-                              </div>
-                            ))}
+                        <div className="grid gap-4 border-t border-white/8 bg-night-950/45 p-4 sm:p-5 lg:grid-cols-[minmax(0,1fr),360px]">
+                          <div className="space-y-3">
+                            <p className="text-[10px] uppercase tracking-[0.22em] text-gold-200/70">
+                              Comment participer
+                            </p>
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              {COMMUNITY_DRAWING_CONTEST.rules.map((rule) => (
+                                <div
+                                  key={rule}
+                                  className="rounded-2xl border border-white/8 bg-white/[0.04] px-3 py-3 text-sm leading-6 text-ivory/78"
+                                >
+                                  {rule}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="rounded-[28px] border border-gold-400/20 bg-gradient-to-br from-gold-500/10 via-night-900/45 to-royal-500/10 p-4">
+                            <p className="text-[10px] uppercase tracking-[0.22em] text-gold-200/70">
+                              Top 1 à 10
+                            </p>
+                            <div className="mt-3 grid gap-2">
+                              {leaderboard.slice(0, 10).map((member, rank) => (
+                                <Link
+                                  key={member.id}
+                                  to={`/u/${member.id}`}
+                                  className="flex items-center gap-3 rounded-2xl border border-white/8 bg-night-950/45 px-3 py-2 transition hover:border-gold-400/40"
+                                >
+                                  <div className="flex h-8 w-8 items-center justify-center rounded-full border border-gold-400/20 bg-gold-500/10 text-xs font-bold text-gold-100">
+                                    {rank + 1}
+                                  </div>
+                                  <AvatarImage
+                                    candidates={[member.avatarImageUrl]}
+                                    fallbackSeed={member.id}
+                                    alt={member.username}
+                                    className="h-9 w-9 rounded-full object-cover ring-2 ring-gold-400/25"
+                                  />
+                                  <div className="min-w-0 flex-1">
+                                    <p className="truncate font-display text-sm text-gold-100">
+                                      {member.username}
+                                    </p>
+                                    <p className="text-[11px] text-ivory/55">
+                                      {member.score} pts • {member.reactionCount} likes
+                                    </p>
+                                  </div>
+                                </Link>
+                              ))}
+                              {leaderboard.length === 0 && (
+                                <div className="rounded-2xl border border-dashed border-white/10 px-3 py-4 text-sm text-ivory/55">
+                                  Aucun top disponible pour le moment.
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
