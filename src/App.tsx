@@ -48,6 +48,10 @@ const Community = lazy(async () => {
   const mod = await import("./pages/Community");
   return { default: mod.Community };
 });
+const CommunityHashtag = lazy(async () => {
+  const mod = await import("./pages/CommunityHashtag");
+  return { default: mod.CommunityHashtag };
+});
 const Worlds = lazy(async () => {
   const mod = await import("./pages/Worlds");
   return { default: mod.Worlds };
@@ -55,6 +59,14 @@ const Worlds = lazy(async () => {
 const Wiki = lazy(async () => {
   const mod = await import("./pages/Wiki");
   return { default: mod.Wiki };
+});
+const Quests = lazy(async () => {
+  const mod = await import("./pages/Quests");
+  return { default: mod.Quests };
+});
+const ClubHub = lazy(async () => {
+  const mod = await import("./pages/ClubHub");
+  return { default: mod.ClubHub };
 });
 const Oracle = lazy(async () => {
   const mod = await import("./pages/Oracle");
@@ -131,6 +143,10 @@ const Avatar = lazy(async () => {
 const MyFamiliar = lazy(async () => {
   const mod = await import("./pages/MyFamiliar");
   return { default: mod.MyFamiliar };
+});
+const PublicFamiliar = lazy(async () => {
+  const mod = await import("./pages/PublicFamiliar");
+  return { default: mod.PublicFamiliar };
 });
 const FamiliarEnclosure = lazy(async () => {
   const mod = await import("./pages/FamiliarEnclosure");
@@ -212,12 +228,26 @@ function AnimatedRoutes() {
             />
             <Route path="/live/:broadcasterId" element={<Live />} />
             <Route path="/communaute" element={<Community />} />
+            <Route path="/social/play" element={<Community />} />
+            <Route path="/communaute/post/:postId" element={<Community />} />
+            <Route path="/social/post/:postId" element={<Community />} />
+            <Route path="/communaute/hashtag/:tag" element={<CommunityHashtag />} />
+            <Route path="/social/hashtag/:tag" element={<CommunityHashtag />} />
             <Route path="/mondes/play" element={<Worlds dedicatedMode />} />
             <Route path="/mondes" element={<Worlds />} />
             <Route path="/wiki" element={<Wiki />} />
             <Route path="/wiki/:slug" element={<Wiki />} />
+            <Route path="/quetes" element={<Quests />} />
+            <Route path="/quests" element={<Quests />} />
+            <Route path="/missions" element={<Quests />} />
+            <Route path="/clubs" element={<ClubHub />} />
+            <Route path="/clubs/:clubId" element={<ClubHub />} />
             <Route path="/oracle" element={<Oracle />} />
             <Route path="/u/:userId" element={<UserProfile />} />
+            <Route path="/u/:userId/familier" element={<PublicFamiliar />} />
+            <Route path="/profil/:userId/familier" element={<PublicFamiliar />} />
+            <Route path="/familier/public/:userId" element={<PublicFamiliar />} />
+            <Route path="/users/:userId/familiar" element={<PublicFamiliar />} />
             <Route path="/connexion" element={<Login />} />
             <Route path="/inscription" element={<Register />} />
             <Route
@@ -324,6 +354,9 @@ function AnimatedRoutes() {
 function App() {
   const location = useLocation();
   const isWorldPlayRoute = location.pathname === "/mondes/play";
+  const isSocialRoute =
+    location.pathname.startsWith("/social") ||
+    location.pathname.startsWith("/communaute");
 
   if (location.pathname.startsWith("/live/overlay/chat/")) {
     return (
@@ -356,20 +389,20 @@ function App() {
       <NativeAppBootstrap />
       {!isWorldPlayRoute && <MagicBackground />}
       {!isWorldPlayRoute && <EasterEggs />}
-      {!isWorldPlayRoute && <Navbar />}
-      {!isWorldPlayRoute && <OfflineBanner />}
+      {!isWorldPlayRoute && !isSocialRoute && <Navbar />}
+      {!isWorldPlayRoute && !isSocialRoute && <OfflineBanner />}
       <main
         className={
-          isWorldPlayRoute
-            ? "fixed inset-0 h-[100dvh] w-screen overflow-hidden bg-night-950"
+          isWorldPlayRoute || isSocialRoute
+            ? "fixed inset-0 z-[200] h-[100dvh] w-screen overflow-hidden bg-night-950"
             : "flex-1 pb-[calc(4.75rem+env(safe-area-inset-bottom))] lg:pb-0"
         }
       >
         <AnimatedRoutes />
       </main>
-      {!isWorldPlayRoute && <Footer />}
-      {!isWorldPlayRoute && <CookieBanner />}
-      {!isWorldPlayRoute && <FamiliarOnboardingGate />}
+      {!isWorldPlayRoute && !isSocialRoute && <Footer />}
+      {!isWorldPlayRoute && !isSocialRoute && <CookieBanner />}
+      {!isWorldPlayRoute && !isSocialRoute && <FamiliarOnboardingGate />}
     </div>
   );
 }

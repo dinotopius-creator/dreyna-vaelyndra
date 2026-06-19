@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Banknote,
-  Camera,
   Coins,
   Crown,
   Heart,
@@ -11,7 +10,6 @@ import {
   ShoppingBag,
   Sparkles,
   Upload,
-  UserCog,
   X,
 } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -20,12 +18,12 @@ import { useStore } from "../contexts/StoreContext";
 import { useToast } from "../contexts/ToastContext";
 import { useProfile } from "../contexts/ProfileContext";
 import { SectionHeading } from "../components/SectionHeading";
-import { AvatarViewer } from "../components/AvatarViewer";
 import { UserBadges } from "../components/UserBadges";
 import StreamerGradeBadge from "../components/StreamerGradeBadge";
 import { CreaturePickerModal } from "../components/CreaturePickerModal";
 import SoulBondsModal from "../components/SoulBondsModal";
 import { WishlistSection } from "../components/WishlistSection";
+import { AvatarProfileBanner } from "../components/AvatarProfileBanner";
 import { ApiError } from "../lib/api";
 import { formatDate, formatPrice, resizeImageToDataUrl } from "../lib/helpers";
 import { roleLabel, roleLabelWithIcon } from "../lib/roleLabel";
@@ -123,7 +121,9 @@ export function Me() {
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
-    setConnectLoading(true);
+    const startLoading = window.setTimeout(() => {
+      if (!cancelled) setConnectLoading(true);
+    }, 0);
     apiGetStripeConnectStatus()
       .then((status) => {
         if (!cancelled) setConnectStatus(status);
@@ -137,6 +137,7 @@ export function Me() {
       });
     return () => {
       cancelled = true;
+      window.clearTimeout(startLoading);
     };
   }, [user]);
 
@@ -268,30 +269,16 @@ export function Me() {
         animate={{ opacity: 1, y: 0 }}
         className="card-royal relative overflow-hidden p-5 sm:p-8 md:p-10"
       >
-        <div className="flex flex-col items-center gap-5 text-center sm:flex-row sm:text-left">
-          <div className="relative shrink-0">
-            <img
-              src={avatar || user.avatar}
-              alt={user.username}
-              className="h-24 w-24 rounded-full object-cover ring-4 ring-gold-400/50"
-            />
-            <button
-              type="button"
-              onClick={() => setEditingAvatar((v) => !v)}
-              className="absolute -bottom-1 -right-1 inline-flex h-9 w-9 items-center justify-center rounded-full bg-gold-shine text-night-900 shadow-lg ring-2 ring-night-900 transition hover:scale-105"
-              title="Changer ma photo"
-              aria-label="Changer ma photo de profil"
-            >
-              <Camera className="h-4 w-4" />
-            </button>
-          </div>
-          <div className="w-full flex-1">
+        <AvatarProfileBanner
+          title={user.username}
+          subtitle="Votre avatar 3D principal est désormais géré dans un studio dédié. Les profils n'affichent plus le rendu complet, seulement un accès vers l'atelier Avatar."
+          cta="Ouvrir l'atelier Avatar"
+        />
+        <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
             <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
               {roleLabelWithIcon(serverProfile?.role ?? user.role)}
             </p>
-            <h1 className="mt-1 font-display text-3xl text-gold-200 md:text-4xl">
-              {user.username}
-            </h1>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <UserBadges
                 creatureId={serverProfile?.creature?.id ?? user.creatureId}
@@ -309,36 +296,35 @@ export function Me() {
             <p className="mt-2 text-sm text-ivory/60">
               Inscrit·e le {formatDate(user.joinedAt)}
             </p>
-            <div className="mt-3 flex flex-wrap items-center justify-center gap-3 text-sm text-ivory/70 sm:justify-start sm:gap-4">
-              <button
-                type="button"
-                onClick={() => setBondsTab("followers")}
-                className="rounded-full transition hover:text-gold-100"
-              >
-                <strong className="font-display text-gold-200">
-                  {serverProfile?.followersCount ?? 0}
-                </strong>{" "}
-                âmes liées
-              </button>
-              <button
-                type="button"
-                onClick={() => setBondsTab("following")}
-                className="rounded-full transition hover:text-gold-100"
-              >
-                <strong className="font-display text-gold-200">
-                  {serverProfile?.followingCount ?? 0}
-                </strong>{" "}
-                liens tissés
-              </button>
-            </div>
-            {serverProfile?.grade && (
-              <div className="mt-4 max-w-sm">
-                <StreamerGradeBadge grade={serverProfile.grade} size="lg" />
-              </div>
-            )}
           </div>
-
+          <div className="flex flex-wrap items-center gap-3 text-sm text-ivory/70">
+            <button
+              type="button"
+              onClick={() => setBondsTab("followers")}
+              className="rounded-full transition hover:text-gold-100"
+            >
+              <strong className="font-display text-gold-200">
+                {serverProfile?.followersCount ?? 0}
+              </strong>{" "}
+              âmes liées
+            </button>
+            <button
+              type="button"
+              onClick={() => setBondsTab("following")}
+              className="rounded-full transition hover:text-gold-100"
+            >
+              <strong className="font-display text-gold-200">
+                {serverProfile?.followingCount ?? 0}
+              </strong>{" "}
+              liens tissés
+            </button>
+          </div>
         </div>
+        {serverProfile?.grade && (
+          <div className="mt-4 max-w-sm">
+            <StreamerGradeBadge grade={serverProfile.grade} size="lg" />
+          </div>
+        )}
         {isArchitect && (
           <div className="mt-6 rounded-2xl border border-gold-400/40 bg-gradient-to-r from-gold-500/20 via-royal-500/15 to-night-900 p-4 shadow-glow-gold">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -492,50 +478,14 @@ export function Me() {
           align="left"
           eyebrow="Avatar"
           title={<>Ton <span className="text-mystic">avatar</span></>}
-          subtitle="Composé dans l’atelier paper-doll, visible partout sur le site : header, fil communautaire, chat, lives."
+          subtitle="Le rendu complet a migré dans un studio dédié. Sur le profil, on conserve seulement une porte d'entrée élégante vers l'atelier Avatar."
         />
-        <div className="mt-6 grid gap-6 md:grid-cols-[260px_1fr]">
-          <div className="card-royal p-4">
-            <AvatarViewer
-              src={serverProfile?.avatarUrl ?? null}
-              fallbackImage={serverProfile?.avatarImageUrl ?? user.avatar}
-              alt={`Avatar 3D de ${user.username}`}
-              size="portrait"
-              framing="face"
-              equippedFrameId={serverProfile?.equipped?.frame ?? null}
-              equippedSceneId={serverProfile?.equipped?.scene ?? null}
-              equippedOutfit3DId={serverProfile?.equipped?.outfit3d ?? null}
-              equippedAccessory3DId={
-                serverProfile?.equipped?.accessory3d ?? null
-              }
-            />
-          </div>
-          <div className="card-royal flex flex-col justify-between gap-5 p-6">
-            <div>
-              <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
-                ✦ Personnalisez votre avatar
-              </p>
-              <p className="mt-2 text-sm text-ivory/75">
-                Avatar 3D debout, rotation à 360°, rendu unifié sur le profil,
-                les lives et le fil communautaire. Il est sauvegardé sur le
-                serveur et vous suit sur tous vos appareils.
-              </p>
-              <ul className="mt-4 space-y-1.5 text-xs text-ivory/65">
-                <li>• Choix du corps, du visage, des cheveux et des couleurs</li>
-                <li>• Aperçu à 360° instantané, enregistrement en un clic</li>
-                <li>• Prêt pour les tenues et accessoires 3D de la boutique</li>
-              </ul>
-            </div>
-            <Link
-              to="/avatar"
-              className="inline-flex items-center gap-2 self-start rounded-full bg-gold-shine px-5 py-3 font-regal text-[11px] tracking-[0.22em] text-night-900 transition hover:brightness-110"
-            >
-              <UserCog className="h-4 w-4" />
-              {serverProfile?.avatarUrl
-                ? "Modifier mon avatar"
-                : "Composer mon avatar"}
-            </Link>
-          </div>
+        <div className="mt-6">
+          <AvatarProfileBanner
+            title="Composer mon avatar"
+            subtitle="Entrez dans le studio plein écran pour modifier votre apparence 3D, vos tenues et vos accessoires sans passer par le profil."
+            cta={serverProfile?.avatarUrl ? "Modifier mon avatar" : "Composer mon avatar"}
+          />
         </div>
       </section>
 

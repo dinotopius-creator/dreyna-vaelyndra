@@ -28,8 +28,11 @@ from ..models import (  # noqa: E402
     Comment,
     CommentLike,
     CommunityActivityReward,
+    ContestAwardLedger,
     Post,
     Reaction,
+    WalletLedger,
+    UserFamiliar,
     UserProfile,
 )
 from ..ranking_eligibility import is_public_ranking_member  # noqa: E402
@@ -40,6 +43,9 @@ from ..schemas import (  # noqa: E402
     CommentOut,
     CommunityActivityRewardOut,
     CommunityActivityRewardSyncOut,
+    DrawingContestEntryOut,
+    DrawingContestSettlementOut,
+    DrawingContestStatusOut,
     PostCreate,
     PostImageUploadOut,
     PostOut,
@@ -47,6 +53,7 @@ from ..schemas import (  # noqa: E402
     ReactionToggle,
 )
 from .users import _grade_out  # noqa: E402
+from .familiars import _active_row  # noqa: E402
 
 
 # PR M — XP offert à l'auteur quand son post est publié. Volontairement bas
@@ -55,6 +62,14 @@ from .users import _grade_out  # noqa: E402
 # Sylvins reçus (=engagement) et des nouveaux liens d'âme.
 XP_PER_POST = 10
 COMMUNITY_REWARD_BY_RANK = {1: 600, 2: 450, 3: 300}
+DRAWING_CONTEST = {
+    "contest_id": "drawing-contest-2026-06",
+    "hashtag": "concoursdessin",
+    "starts_at": datetime(2026, 6, 18, tzinfo=UTC),
+    "ends_at": datetime(2026, 6, 19, tzinfo=UTC),
+    "reward_lueurs": 1000,
+    "reward_food": 6,
+}
 MOCK_COMMUNITY_USER_IDS = {
     "user-lyria",
     "user-caelum",
@@ -78,7 +93,14 @@ _COMMUNITY_IMAGE_CONTENT_TYPES = {
     "image/webp": ".webp",
     "image/gif": ".gif",
 }
+_COMMUNITY_VIDEO_CONTENT_TYPES = {
+    "video/mp4": ".mp4",
+    "video/webm": ".webm",
+    "video/quicktime": ".mov",
+    "video/ogg": ".ogg",
+}
 _MAX_COMMUNITY_IMAGE_BYTES = 8 * 1024 * 1024
+_MAX_COMMUNITY_VIDEO_BYTES = 60 * 1024 * 1024
 
 
 def _is_queen(user_id: str) -> bool:
@@ -114,6 +136,88 @@ def _session_dep():
 
 def _generate_id(prefix: str) -> str:
     return f"{prefix}-{uuid.uuid4().hex[:12]}"
+
+
+def _normalize_hashtag(raw: str) -> str:
+    value = raw.strip().lower().replace("#", "")
+    replacements = {
+        "ç": "c",
+        "à": "a",
+        "â": "a",
+        "ä": "a",
+        "é": "e",
+        "è": "e",
+        "ê": "e",
+        "ë": "e",
+        "î": "i",
+        "ï": "i",
+        "ô": "o",
+        "ö": "o",
+        "ù": "u",
+        "û": "u",
+        "ü": "u",
+        "ñ": "n",
+    }
+    for src, dst in replacements.items():
+        value = value.replace(src, dst)
+    return "".join(ch for ch in value if ch.isalnum() or ch == "_")
+
+
+def _extract_hashtags(content: str) -> list[str]:
+    import re
+
+    tags: list[str] = []
+    for match in re.finditer(
+        r"(^|[^A-Za-z0-9_])#([A-Za-z0-9_À-ÖØ-öø-ÿ-]{2,80})", content or "",
+    ):
+        slug = _normalize_hashtag(match.group(2) or "")
+        if slug and slug not in tags:
+            tags.append(slug)
+    return tags
+
+
+def _contest_like_count(post: Post) -> int:
+    unique: set[str] = set()
+    for ids in post.reactions.values():
+        for user_id in ids:
+            if user_id:
+                unique.add(user_id)
+    return len(unique)
+
+
+def _is_drawing_contest_entry(post: Post) -> bool:
+    created = _parse_iso(post.created_at)
+    if created is None:
+        return False
+    if not post.image_url:
+        return False
+    if created < DRAWING_CONTEST["starts_at"] or created >= DRAWING_CONTEST["ends_at"]:
+        return False
+    return DRAWING_CONTEST["hashtag"] in _extract_hashtags(post.content or "")
+
+
+def _serialize_contest_entry(
+    post: Post,
+    likes: int,
+    rank: int,
+    eligible: bool,
+    author_handle: str | None = None,
+    author_grade: object | None = None,
+) -> DrawingContestEntryOut:
+    return DrawingContestEntryOut(
+        id=post.id,
+        authorId=post.author_id,
+        authorName=post.author_name,
+        authorHandle=author_handle,
+        authorGrade=author_grade,
+        authorAvatar=post.author_avatar,
+        content=post.content,
+        imageUrl=post.image_url,
+        createdAt=post.created_at,
+        likeCount=likes,
+        participantRank=rank,
+        eligible=eligible,
+    )
 
 
 def _sanitize_avatar(raw: str) -> str:
@@ -405,6 +509,160 @@ def _sync_previous_week_rewards(
     return week_start_iso, [], []
 
 
+def _drawing_contest_rows(session: Session) -> list[tuple[Post, int]]:
+    rows: list[tuple[Post, int]] = []
+    posts = session.exec(select(Post).order_by(Post.created_at.desc())).all()
+    for post in posts:
+        if not _is_drawing_contest_entry(post):
+            continue
+        author = session.get(UserProfile, post.author_id)
+        if author is None or author.banned_at is not None:
+            continue
+        rows.append((post, _contest_like_count(post)))
+    rows.sort(
+        key=lambda item: (
+            -item[1],
+            (_parse_iso(item[0].created_at) or datetime(1970, 1, 1, tzinfo=UTC)).timestamp(),
+        )
+    )
+    return rows
+
+
+def _drawing_contest_status(session: Session) -> DrawingContestStatusOut:
+    now = datetime.now(UTC)
+    rows = _drawing_contest_rows(session)
+    author_ids = [post.author_id for post, _ in rows]
+    handles = _resolve_handles(session, author_ids)
+    grades = _resolve_grades(session, author_ids)
+    entries = [
+        _serialize_contest_entry(
+            post,
+            likes=likes,
+            rank=index + 1,
+            eligible=True,
+            author_handle=handles.get(post.author_id),
+            author_grade=grades.get(post.author_id),
+        )
+        for index, (post, likes) in enumerate(rows)
+    ]
+    award = session.exec(
+        select(ContestAwardLedger).where(
+            ContestAwardLedger.contest_id == DRAWING_CONTEST["contest_id"]
+        )
+    ).first()
+    return DrawingContestStatusOut(
+        contestId=DRAWING_CONTEST["contest_id"],
+        hashtag=DRAWING_CONTEST["hashtag"],
+        startsAt=DRAWING_CONTEST["starts_at"].isoformat(),
+        endsAt=DRAWING_CONTEST["ends_at"].isoformat(),
+        active=now < DRAWING_CONTEST["ends_at"],
+        now=now.isoformat(),
+        timeRemainingMs=max(
+            0,
+            int((DRAWING_CONTEST["ends_at"] - now).total_seconds() * 1000),
+        ),
+        rewardLueurs=DRAWING_CONTEST["reward_lueurs"],
+        rewardFood=DRAWING_CONTEST["reward_food"],
+        announcementPostId="official-event:drawing-contest-post",
+        entries=entries,
+        topEntry=entries[0] if entries else None,
+        winnerAwarded=bool(award),
+    )
+
+
+def _award_drawing_contest(session: Session) -> DrawingContestSettlementOut:
+    status = _drawing_contest_status(session)
+    if status.topEntry is None:
+        return DrawingContestSettlementOut(
+            contestId=status.contestId,
+            active=status.active,
+            alreadyAwarded=status.winnerAwarded,
+            winner=None,
+            rewardLueurs=status.rewardLueurs,
+            rewardFood=status.rewardFood,
+        )
+    if status.active:
+        return DrawingContestSettlementOut(
+            contestId=status.contestId,
+            active=True,
+            alreadyAwarded=status.winnerAwarded,
+            winner=status.topEntry,
+            rewardLueurs=status.rewardLueurs,
+            rewardFood=status.rewardFood,
+        )
+
+    existing = session.exec(
+        select(ContestAwardLedger).where(
+            ContestAwardLedger.contest_id == DRAWING_CONTEST["contest_id"],
+            ContestAwardLedger.user_id == status.topEntry.authorId,
+        )
+    ).first()
+    if existing:
+        return DrawingContestSettlementOut(
+            contestId=status.contestId,
+            active=False,
+            alreadyAwarded=True,
+            winner=status.topEntry,
+            awardedAt=existing.awarded_at,
+            rewardLueurs=existing.lueurs_rewarded,
+            rewardFood=existing.food_rewarded,
+        )
+
+    winner = session.get(UserProfile, status.topEntry.authorId)
+    if winner is None or winner.banned_at is not None:
+        return DrawingContestSettlementOut(
+            contestId=status.contestId,
+            active=False,
+            alreadyAwarded=False,
+            winner=status.topEntry,
+            rewardLueurs=status.rewardLueurs,
+            rewardFood=status.rewardFood,
+        )
+
+    active_familiar = _active_row(session, winner.id)
+    awarded_at = _now_iso()
+    winner.lueurs += DRAWING_CONTEST["reward_lueurs"]
+    if active_familiar is not None:
+        active_familiar.food_stock = max(0, int(active_familiar.food_stock or 0)) + DRAWING_CONTEST["reward_food"]
+        session.add(active_familiar)
+    session.add(
+        WalletLedger(
+            user_id=winner.id,
+            pot="lueurs",
+            delta=DRAWING_CONTEST["reward_lueurs"],
+            balance_after=winner.lueurs,
+            reason=f"contest:drawing:{DRAWING_CONTEST['contest_id']}",
+            reference_id=DRAWING_CONTEST["contest_id"],
+        )
+    )
+    session.add(
+        ContestAwardLedger(
+            contest_id=DRAWING_CONTEST["contest_id"],
+            user_id=winner.id,
+            post_id=status.topEntry.id,
+            post_likes=status.topEntry.likeCount,
+            lueurs_rewarded=DRAWING_CONTEST["reward_lueurs"],
+            food_rewarded=DRAWING_CONTEST["reward_food"] if active_familiar is not None else 0,
+            awarded_at=awarded_at,
+        )
+    )
+    session.add(winner)
+    session.commit()
+    session.refresh(winner)
+    if active_familiar is not None:
+        session.refresh(active_familiar)
+    settled = _drawing_contest_status(session)
+    return DrawingContestSettlementOut(
+        contestId=settled.contestId,
+        active=False,
+        alreadyAwarded=True,
+        winner=settled.topEntry,
+        awardedAt=awarded_at,
+        rewardLueurs=DRAWING_CONTEST["reward_lueurs"],
+        rewardFood=DRAWING_CONTEST["reward_food"] if active_familiar is not None else 0,
+    )
+
+
 def _resolve_handles(
     session: Session, author_ids: List[str]
 ) -> Dict[str, str]:
@@ -457,6 +715,7 @@ def _serialize_post(
         content=post.content,
         imageUrl=post.image_url,
         videoUrl=post.video_url,
+        videoThumbnailUrl=post.video_thumbnail_url,
         postType=post.post_type or "standard",
         officialLabel=post.official_label,
         createdAt=post.created_at,
@@ -588,6 +847,7 @@ def create_post(
         content=payload.content,
         image_url=_sanitize_post_image_url(payload.image_url),
         video_url=payload.video_url,
+        video_thumbnail_url=_sanitize_post_image_url(payload.video_thumbnail_url),
     )
     session.add(post)
     # PR M — crédit XP à l'auteur. On fait un `get` sur la clé primaire
@@ -648,6 +908,46 @@ async def upload_post_image(
     )
 
 
+@router.post(
+    "/uploads/video",
+    response_model=PostImageUploadOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_post_video(
+    request: Request,
+    video: UploadFile = File(...),
+) -> PostImageUploadOut:
+    content_type = (video.content_type or "").lower().strip()
+    extension = _COMMUNITY_VIDEO_CONTENT_TYPES.get(content_type)
+    if extension is None:
+        raise HTTPException(
+            status_code=415,
+            detail="Format video non supporte. Utilise MP4, WEBM, MOV ou OGG.",
+        )
+
+    payload = await video.read()
+    size = len(payload)
+    await video.close()
+    if size <= 0:
+        raise HTTPException(status_code=400, detail="Video vide.")
+    if size > _MAX_COMMUNITY_VIDEO_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail="Video trop lourde. Limite 60 Mo.",
+        )
+
+    filename = f"{uuid.uuid4().hex}{extension}"
+    destination = COMMUNITY_DIR / filename
+    destination.write_bytes(payload)
+
+    return PostImageUploadOut(
+        imageUrl=_build_uploaded_media_url(request, filename),
+        filename=filename,
+        contentType=content_type,
+        size=size,
+    )
+
+
 @router.patch("/{post_id}", response_model=PostOut)
 def update_post(
     post_id: str,
@@ -665,6 +965,8 @@ def update_post(
         post.image_url = _sanitize_post_image_url(payload.image_url)
     if payload.video_url is not None:
         post.video_url = payload.video_url
+    if payload.video_thumbnail_url is not None:
+        post.video_thumbnail_url = _sanitize_post_image_url(payload.video_thumbnail_url)
     session.commit()
     session.refresh(post)
 
@@ -957,3 +1259,17 @@ def toggle_comment_like(
         createdAt=comment.created_at,
         likes=[like.user_id for like in likes],
     )
+
+
+@router.get("/contests/drawing", response_model=DrawingContestStatusOut)
+def get_drawing_contest_status(
+    session: Session = Depends(_session_dep),
+) -> DrawingContestStatusOut:
+    return _drawing_contest_status(session)
+
+
+@router.post("/contests/drawing/settle", response_model=DrawingContestSettlementOut)
+def settle_drawing_contest(
+    session: Session = Depends(_session_dep),
+) -> DrawingContestSettlementOut:
+    return _award_drawing_contest(session)

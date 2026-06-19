@@ -53,6 +53,8 @@ body.vaelyndra-world-game-open {
     min-width: 0;
     overflow-x: hidden;
     -webkit-tap-highlight-color: transparent;
+    -webkit-user-select: none;
+    user-select: none;
     overscroll-behavior-y: none;
   }
 
@@ -104,6 +106,12 @@ body.vaelyndra-world-game-open {
   }
 
   input,
+  textarea {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  input,
   textarea,
   select {
     scroll-margin-block: calc(env(safe-area-inset-top) + 1rem);
@@ -123,6 +131,15 @@ body.vaelyndra-world-game-open {
   ::-webkit-scrollbar-thumb {
     background: linear-gradient(#4d1f96, #d4a94a);
     border-radius: 8px;
+  }
+
+  .hide-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
   }
 }
 
@@ -311,6 +328,18 @@ body.vaelyndra-world-game-open {
     transform: translateY(120%) translateZ(0);
   }
 
+  body.vaelyndra-familiar-enclosure-open {
+    overflow: hidden;
+    overscroll-behavior: none;
+    touch-action: none;
+  }
+
+  body.vaelyndra-familiar-enclosure-open .mobile-tabbar {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(120%) translateZ(0);
+  }
+
   .tag {
     @apply inline-flex items-center gap-1.5 rounded-full border border-royal-500/40 bg-royal-600/10 px-3 py-1 text-xs uppercase tracking-[0.22em] text-royal-300;
   }
@@ -456,6 +485,31 @@ body.vaelyndra-world-game-open {
         0 0 0 0 rgba(230, 194, 116, 0),
         0 0 0 rgba(230, 194, 116, 0);
       background-color: transparent;
+    }
+  }
+
+  @keyframes socialLikeBurst {
+    0% {
+      opacity: 0;
+      transform: scale(0.55);
+      filter: blur(2px);
+    }
+    14% {
+      opacity: 1;
+      transform: scale(1.08);
+      filter: blur(0);
+    }
+    30% {
+      transform: scale(0.98);
+    }
+    55% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    100% {
+      opacity: 0;
+      transform: scale(1.18);
+      filter: blur(1px);
     }
   }
 }

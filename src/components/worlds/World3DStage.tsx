@@ -45,11 +45,20 @@ export interface World3DHotspot {
   glyph: string;
 }
 
+export interface WorldSpeechBubble {
+  id: string;
+  userId: string;
+  content: string;
+  createdAt: number;
+  expiresAt: number;
+}
+
 interface Props {
   district: World3DDistrictId;
   players: World3DPlayer[];
   lueurs: World3DLueur[];
   hotspots: World3DHotspot[];
+  speechBubbles: WorldSpeechBubble[];
   onMove: (position: { x: number; y: number }) => void;
   onSelectPlayer: (playerId: string, anchor: { x: number; y: number }) => void;
   onCollectLueur: (id: string) => void;
@@ -76,8 +85,13 @@ interface AvatarEntity {
   accessoryRoot: THREE.Group;
   parureRoot: THREE.Group;
   familiarRoot: THREE.Group | null;
+  labelRoot: THREE.Group;
+  bubbleRoot: THREE.Group;
   appearanceKey: string;
   familiarKey: string;
+  labelKey: string;
+  bubbleKey: string;
+  interactionKind: string | null;
   jumpVelocity: number;
   jumpHeight: number;
   phase: number;
@@ -102,6 +116,8 @@ const SELF_ID = "__self__";
 const REMOTE_AVATAR_GRACE_MS = 8000;
 const MAX_PIXEL_RATIO = 1.65;
 const JOYSTICK_DEADZONE = 0.12;
+const PLAYER_AVATAR_IMAGE_CACHE = new Map<string, HTMLImageElement>();
+const PLAYER_AVATAR_IMAGE_LOADING = new Set<string>();
 
 interface AnalogInput {
   active: boolean;
@@ -233,6 +249,263 @@ function familiarKey(player: World3DPlayer) {
     player.familiarAccessoryIcon ?? "",
     player.familiarHairIcon ?? "",
   ].join("|");
+}
+
+function playerLabelKey(player: World3DPlayer) {
+  return [
+    player.username,
+    player.appearance?.avatarUrl ?? "",
+    player.voiceEnabled ? "voice" : "silent",
+    player.isSpeaking ? "speaking" : "idle",
+    playerAvatarPreviewState(player),
+  ].join("|");
+}
+
+function playerAvatarPreviewState(player: World3DPlayer) {
+  const url = player.appearance?.avatarUrl;
+  if (!url) return "no-avatar";
+  return PLAYER_AVATAR_IMAGE_CACHE.has(url) ? "avatar-ready" : "avatar-loading";
+}
+
+function ensurePlayerAvatarImage(url: string) {
+  if (PLAYER_AVATAR_IMAGE_CACHE.has(url) || PLAYER_AVATAR_IMAGE_LOADING.has(url)) return;
+  PLAYER_AVATAR_IMAGE_LOADING.add(url);
+  const image = new Image();
+  image.crossOrigin = "anonymous";
+  image.onload = () => {
+    PLAYER_AVATAR_IMAGE_LOADING.delete(url);
+    PLAYER_AVATAR_IMAGE_CACHE.set(url, image);
+  };
+  image.onerror = () => {
+    PLAYER_AVATAR_IMAGE_LOADING.delete(url);
+  };
+  image.src = url;
+}
+
+function speechBubbleKey(bubble: WorldSpeechBubble | null | undefined) {
+  if (!bubble) return "";
+  return `${bubble.id}|${bubble.content}|${bubble.expiresAt}`;
+}
+
+function roundRectPath(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+) {
+  const r = Math.min(radius, width / 2, height / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + width, y, x + width, y + height, r);
+  ctx.arcTo(x + width, y + height, x, y + height, r);
+  ctx.arcTo(x, y + height, x, y, r);
+  ctx.arcTo(x, y, x + width, y, r);
+  ctx.closePath();
+}
+
+function wrapCanvasLines(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number,
+  maxLines: number,
+) {
+  const words = text.split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let current = "";
+  for (const word of words) {
+    const next = current ? `${current} ${word}` : word;
+    if (ctx.measureText(next).width <= maxWidth || !current) {
+      current = next;
+      continue;
+    }
+    lines.push(current);
+    current = word;
+    if (lines.length >= maxLines) break;
+  }
+  if (current && lines.length < maxLines) lines.push(current);
+  if (!lines.length) lines.push(text.slice(0, 1) || " ");
+  if (lines.length === maxLines && words.join(" ").length > lines.join(" ").length) {
+    lines[maxLines - 1] = `${lines[maxLines - 1].replace(/\.\.\.$/, "")}…`;
+  }
+  return lines.slice(0, maxLines);
+}
+
+function initialsForName(name: string) {
+  const cleaned = name.trim();
+  if (!cleaned) return "U";
+  const parts = cleaned.split(/\s+/);
+  if (parts.length === 1) return cleaned.slice(0, 2).toUpperCase();
+  return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
+}
+
+function createTexturedSprite(texture: THREE.CanvasTexture, width: number, height: number) {
+  const material = new THREE.SpriteMaterial({
+    map: texture,
+    transparent: true,
+    depthWrite: false,
+  });
+  const sprite = new THREE.Sprite(material);
+  sprite.scale.set(width, height, 1);
+  return sprite;
+}
+
+function createCanvasTexture(
+  player: World3DPlayer,
+  mode: "label" | "bubble",
+  bubbleText?: string | null,
+) {
+  const width = mode === "label" ? 512 : 520;
+  const height = mode === "label" ? 180 : 150;
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
+  }
+
+  ctx.clearRect(0, 0, width, height);
+  ctx.font = "700 28px Inter, Arial, sans-serif";
+  ctx.textBaseline = "middle";
+  ctx.imageSmoothingEnabled = true;
+
+  if (mode === "label") {
+    const badgeWidth = 364;
+    const badgeHeight = 102;
+    const x = 70;
+    const y = 32;
+    const gradient = ctx.createLinearGradient(x, y, x + badgeWidth, y + badgeHeight);
+    gradient.addColorStop(0, "rgba(11,18,32,0.86)");
+    gradient.addColorStop(1, "rgba(22,28,44,0.72)");
+    ctx.fillStyle = gradient;
+    roundRectPath(ctx, x, y, badgeWidth, badgeHeight, 34);
+    ctx.fill();
+    ctx.strokeStyle = player.isSelf ? "rgba(250,204,21,0.72)" : "rgba(255,255,255,0.16)";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    const avatarX = x + 26;
+    const avatarY = y + 18;
+    const avatarSize = 66;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(avatarX + avatarSize / 2, avatarY + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2);
+    ctx.clip();
+    const avatarUrl = player.appearance?.avatarUrl ?? null;
+    if (avatarUrl) {
+      ensurePlayerAvatarImage(avatarUrl);
+      const cachedImage = PLAYER_AVATAR_IMAGE_CACHE.get(avatarUrl);
+      if (cachedImage) {
+        ctx.drawImage(cachedImage, avatarX, avatarY, avatarSize, avatarSize);
+      } else {
+        ctx.fillStyle = player.isSelf ? "rgba(250,204,21,0.22)" : "rgba(148,163,184,0.16)";
+        ctx.fillRect(avatarX, avatarY, avatarSize, avatarSize);
+        const initials = initialsForName(player.username);
+        ctx.fillStyle = "rgba(255,255,255,0.92)";
+        ctx.font = "800 24px Inter, Arial, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(initials, avatarX + avatarSize / 2, avatarY + avatarSize / 2 + 1);
+      }
+    } else {
+      ctx.fillStyle = player.isSelf ? "rgba(250,204,21,0.22)" : "rgba(148,163,184,0.16)";
+      ctx.fillRect(avatarX, avatarY, avatarSize, avatarSize);
+      const initials = initialsForName(player.username);
+      ctx.fillStyle = "rgba(255,255,255,0.92)";
+      ctx.font = "800 24px Inter, Arial, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(initials, avatarX + avatarSize / 2, avatarY + avatarSize / 2 + 1);
+    }
+    ctx.restore();
+
+    ctx.textAlign = "left";
+    ctx.font = "700 24px Inter, Arial, sans-serif";
+    ctx.fillStyle = "rgba(248,250,252,0.98)";
+    const name = player.username || "Joueur";
+    ctx.fillText(name.slice(0, 20), x + 112, y + 41);
+    ctx.font = "600 18px Inter, Arial, sans-serif";
+    ctx.fillStyle = player.isSpeaking ? "rgba(34,197,94,0.94)" : "rgba(203,213,225,0.88)";
+    const status = player.isSelf
+      ? player.voiceEnabled
+        ? "Vous • micro actif"
+        : "Vous • hors micro"
+      : player.isSpeaking
+        ? "En train de parler"
+        : player.voiceEnabled
+          ? "Micro actif"
+          : "Connecté";
+    ctx.fillText(status, x + 112, y + 72);
+    if (player.isSpeaking) {
+      ctx.fillStyle = "rgba(34,197,94,0.16)";
+      roundRectPath(ctx, x + 256, y + 28, 116, 38, 19);
+      ctx.fill();
+      ctx.fillStyle = "rgba(236,253,245,0.98)";
+      ctx.font = "700 15px Inter, Arial, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("Parle", x + 314, y + 47);
+    }
+  } else {
+    const content = bubbleText ?? "";
+    const panelWidth = 450;
+    const panelHeight = 112;
+    const x = 35;
+    const y = 22;
+    const gradient = ctx.createLinearGradient(x, y, x + panelWidth, y + panelHeight);
+    gradient.addColorStop(0, "rgba(17,24,39,0.95)");
+    gradient.addColorStop(1, "rgba(45,20,80,0.88)");
+    ctx.fillStyle = gradient;
+    roundRectPath(ctx, x, y, panelWidth, panelHeight, 28);
+    ctx.fill();
+    ctx.strokeStyle = player.isSelf ? "rgba(250,204,21,0.55)" : "rgba(255,255,255,0.12)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = "rgba(250,204,21,0.9)";
+    ctx.font = "700 17px Inter, Arial, sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText(player.username.slice(0, 18), x + 20, y + 28);
+    ctx.fillStyle = "rgba(248,250,252,0.98)";
+    ctx.font = "600 19px Inter, Arial, sans-serif";
+    const lines = wrapCanvasLines(ctx, content, 388, 3);
+    lines.forEach((line, index) => {
+      ctx.fillText(line, x + 20, y + 56 + index * 24);
+    });
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+function createPlayerLabel(player: World3DPlayer) {
+  const texture = createCanvasTexture(player, "label");
+  const group = new THREE.Group();
+  const sprite = createTexturedSprite(texture, 3.8, 1.36);
+  sprite.position.set(0, 0, 0);
+  group.add(sprite);
+  group.userData.texture = texture;
+  group.userData.key = playerLabelKey(player);
+  return group;
+}
+
+function createSpeechBubble(player: World3DPlayer, content: string) {
+  const texture = createCanvasTexture(player, "bubble", content);
+  const group = new THREE.Group();
+  const sprite = createTexturedSprite(texture, 4.45, 1.28);
+  group.add(sprite);
+  group.userData.texture = texture;
+  group.userData.key = speechBubbleKey({
+    id: `${player.id}-${content}`,
+    userId: player.id,
+    content,
+    createdAt: Date.now(),
+    expiresAt: Date.now() + 1000,
+  });
+  return group;
 }
 
 function setObjectUserData(object: THREE.Object3D, data: Record<string, string>) {
@@ -558,58 +831,58 @@ function createAvatar(player: World3DPlayer) {
   shadow.position.y = 0.012;
   group.add(shadow);
 
-  const hips = new THREE.Mesh(new THREE.SphereGeometry(0.34, 22, 16), suit);
-  hips.scale.set(1.18, 0.48, 0.82);
-  hips.position.y = 1.05;
+  const hips = new THREE.Mesh(new THREE.SphereGeometry(0.36, 24, 18), suit);
+  hips.scale.set(1.08, 0.52, 0.86);
+  hips.position.y = 1.08;
   hips.castShadow = true;
   group.add(hips);
 
-  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.34, 0.6, 10, 22), suit);
-  torso.scale.set(0.92, 1.03, 0.72);
-  torso.position.y = 1.58;
+  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.35, 0.64, 10, 24), suit);
+  torso.scale.set(0.9, 1.04, 0.74);
+  torso.position.y = 1.6;
   torso.castShadow = true;
   group.add(torso);
-  const chestPlate = new THREE.Mesh(new THREE.CapsuleGeometry(0.17, 0.34, 6, 16), trim);
-  chestPlate.scale.set(1.35, 0.82, 0.16);
-  chestPlate.position.set(0, 1.72, 0.335);
+  const chestPlate = new THREE.Mesh(new THREE.CapsuleGeometry(0.18, 0.36, 6, 16), trim);
+  chestPlate.scale.set(1.3, 0.8, 0.16);
+  chestPlate.position.set(0, 1.75, 0.34);
   chestPlate.castShadow = true;
   group.add(chestPlate);
 
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.34, 20, 20), skin);
-  head.scale.set(0.9, 1.05, 0.8);
-  head.position.y = 2.26;
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.36, 22, 22), skin);
+  head.scale.set(0.88, 1.07, 0.82);
+  head.position.y = 2.31;
   head.castShadow = true;
   group.add(head);
-  const neck = new THREE.Mesh(new THREE.CapsuleGeometry(0.11, 0.1, 6, 12), skin);
-  neck.position.y = 2.0;
+  const neck = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, 0.12, 6, 12), skin);
+  neck.position.y = 2.02;
   neck.castShadow = true;
   group.add(neck);
   [-0.11, 0.11].forEach((x) => {
     const eye = new THREE.Mesh(
-      new THREE.SphereGeometry(0.032, 8, 8),
+      new THREE.SphereGeometry(0.03, 10, 10),
       new THREE.MeshBasicMaterial({ color: player.isSelf ? 0xfef3c7 : 0xe0f2fe }),
     );
-    eye.position.set(x, 2.3, 0.31);
+    eye.position.set(x, 2.32, 0.32);
     group.add(eye);
   });
   const smile = new THREE.Mesh(
-    new THREE.TorusGeometry(0.075, 0.006, 6, 18, Math.PI),
+    new THREE.TorusGeometry(0.078, 0.0065, 6, 18, Math.PI),
     new THREE.MeshBasicMaterial({ color: 0x7c2d12 }),
   );
-  smile.position.set(0, 2.19, 0.313);
+  smile.position.set(0, 2.205, 0.318);
   smile.rotation.z = Math.PI;
   group.add(smile);
   const nose = new THREE.Mesh(
-    new THREE.ConeGeometry(0.026, 0.07, 8),
+    new THREE.ConeGeometry(0.024, 0.064, 8),
     new THREE.MeshStandardMaterial({ color: 0xe8b48f, roughness: 0.8 }),
   );
-  nose.position.set(0, 2.245, 0.327);
+  nose.position.set(0, 2.25, 0.33);
   nose.rotation.x = Math.PI / 2;
   group.add(nose);
 
-  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.36, 18, 12, 0, Math.PI * 2, 0, Math.PI / 2), dark);
-  hair.scale.set(0.96, 0.82, 0.86);
-  hair.position.y = 2.42;
+  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.38, 18, 12, 0, Math.PI * 2, 0, Math.PI / 2), dark);
+  hair.scale.set(0.98, 0.84, 0.88);
+  hair.position.y = 2.44;
   hair.castShadow = true;
   group.add(hair);
 
@@ -620,26 +893,26 @@ function createAvatar(player: World3DPlayer) {
   rightLeg.position.set(0.22, 0.95, 0);
   group.add(rightLeg);
 
-  const leftArm = makeLimb(skin, 0.72);
-  leftArm.scale.set(0.82, 1, 0.82);
-  leftArm.position.set(-0.48, 1.82, 0.02);
+  const leftArm = makeLimb(skin, 0.76);
+  leftArm.scale.set(0.86, 1, 0.86);
+  leftArm.position.set(-0.5, 1.84, 0.02);
   group.add(leftArm);
-  const rightArm = makeLimb(skin, 0.72);
-  rightArm.scale.set(0.82, 1, 0.82);
-  rightArm.position.set(0.48, 1.82, 0.02);
+  const rightArm = makeLimb(skin, 0.76);
+  rightArm.scale.set(0.86, 1, 0.86);
+  rightArm.position.set(0.5, 1.84, 0.02);
   group.add(rightArm);
-  const leftHand = new THREE.Mesh(new THREE.SphereGeometry(0.09, 12, 10), skin);
-  leftHand.scale.set(0.92, 0.8, 0.78);
-  leftHand.position.set(-0.48, 1.37, 0.04);
+  const leftHand = new THREE.Mesh(new THREE.SphereGeometry(0.095, 12, 10), skin);
+  leftHand.scale.set(0.94, 0.82, 0.8);
+  leftHand.position.set(-0.5, 1.35, 0.04);
   leftHand.castShadow = true;
   group.add(leftHand);
   const rightHand = leftHand.clone();
-  rightHand.position.x = 0.48;
+  rightHand.position.x = 0.5;
   group.add(rightHand);
 
-  const leftFoot = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, 0.18, 6, 12), dark);
-  leftFoot.scale.set(1.2, 0.48, 1.72);
-  leftFoot.position.set(-0.22, 0.05, 0.12);
+  const leftFoot = new THREE.Mesh(new THREE.CapsuleGeometry(0.11, 0.2, 6, 12), dark);
+  leftFoot.scale.set(1.18, 0.5, 1.72);
+  leftFoot.position.set(-0.22, 0.03, 0.12);
   leftFoot.rotation.x = Math.PI / 2;
   leftFoot.castShadow = true;
   group.add(leftFoot);
@@ -663,6 +936,15 @@ function createAvatar(player: World3DPlayer) {
   group.add(accessoryRoot);
   const parureRoot = new THREE.Group();
   group.add(parureRoot);
+  const labelRoot = new THREE.Group();
+  const bubbleRoot = new THREE.Group();
+  const initialLabel = createPlayerLabel(player);
+  initialLabel.children.forEach((child) => labelRoot.add(child));
+  labelRoot.userData.texture = initialLabel.userData.texture;
+  const initialBubble = createSpeechBubble(player, " ");
+  initialBubble.children.forEach((child) => bubbleRoot.add(child));
+  bubbleRoot.userData.texture = initialBubble.userData.texture;
+  bubbleRoot.visible = false;
 
   setObjectUserData(group, { kind: "player", id: player.id });
 
@@ -686,8 +968,13 @@ function createAvatar(player: World3DPlayer) {
     accessoryRoot,
     parureRoot,
     familiarRoot: null,
+    labelRoot,
+    bubbleRoot,
     appearanceKey: "",
     familiarKey: "",
+    labelKey: "",
+    bubbleKey: "",
+    interactionKind: player.interactionKind ?? null,
     jumpVelocity: 0,
     jumpHeight: 0,
     phase: 0,
@@ -702,13 +989,17 @@ function createAvatar(player: World3DPlayer) {
 
 function createGround(district: World3DDistrictId) {
   const group = new THREE.Group();
-  const color = district === "observatory" ? 0x1e1b4b : district === "arcades" ? 0x064e5f : 0x14532d;
+  const color = district === "observatory" ? 0x171433 : district === "arcades" ? 0x053846 : 0x132f1f;
   const groundGeometry = new THREE.PlaneGeometry(WORLD_WIDTH + 8, WORLD_DEPTH + 8, 48, 40);
   const positions = groundGeometry.attributes.position;
   for (let index = 0; index < positions.count; index += 1) {
     const x = positions.getX(index);
     const y = positions.getY(index);
-    positions.setZ(index, terrainHeightAt(x, y, district));
+    const height = terrainHeightAt(x, y, district);
+    const centerPull = Math.max(0, 1 - Math.hypot(x, y) / 13);
+    const pathBand = Math.max(0, 1 - Math.abs(y) / 8.2) * Math.max(0, 1 - Math.abs(x) / 11.5);
+    const swell = Math.sin((x + y) * 0.28) * 0.08 + Math.cos(x * 0.18) * 0.05 + Math.sin(y * 0.21) * 0.06;
+    positions.setZ(index, height + centerPull * 0.75 + pathBand * 0.42 + swell);
   }
   groundGeometry.computeVertexNormals();
   const ground = new THREE.Mesh(
@@ -724,33 +1015,71 @@ function createGround(district: World3DDistrictId) {
   ground.receiveShadow = true;
   group.add(ground);
 
-  const socialPlate = new THREE.Mesh(
-    new THREE.CircleGeometry(5.15, 72),
+  const moonRoad = new THREE.Mesh(
+    new THREE.RingGeometry(1.4, 7.6, 96, 1),
     new THREE.MeshStandardMaterial({
-      color: district === "observatory" ? 0x312e81 : district === "arcades" ? 0x0e7490 : 0x3f2b16,
-      roughness: 0.64,
-      metalness: 0.04,
+      color: district === "observatory" ? 0x818cf8 : district === "arcades" ? 0x38bdf8 : 0xfbbf24,
+      roughness: 0.58,
+      metalness: 0.08,
       transparent: true,
-      opacity: 0.84,
+      opacity: 0.22,
+    }),
+  );
+  moonRoad.rotation.x = -Math.PI / 2;
+  moonRoad.position.y = 0.042;
+  group.add(moonRoad);
+
+  const socialPlate = new THREE.Mesh(
+    new THREE.CircleGeometry(5.65, 72),
+    new THREE.MeshStandardMaterial({
+      color: district === "observatory" ? 0x312e81 : district === "arcades" ? 0x0f766e : 0x553c18,
+      roughness: 0.58,
+      metalness: 0.08,
+      transparent: true,
+      opacity: 0.9,
     }),
   );
   socialPlate.rotation.x = -Math.PI / 2;
-  socialPlate.position.y = 0.035;
+  socialPlate.position.y = 0.052;
   socialPlate.receiveShadow = true;
   group.add(socialPlate);
 
+  const socialGlow = new THREE.Mesh(
+    new THREE.CircleGeometry(7.9, 72),
+    new THREE.MeshBasicMaterial({
+      color: district === "observatory" ? 0x8b5cf6 : district === "arcades" ? 0x22d3ee : 0xf59e0b,
+      transparent: true,
+      opacity: 0.16,
+    }),
+  );
+  socialGlow.rotation.x = -Math.PI / 2;
+  socialGlow.position.y = 0.036;
+  group.add(socialGlow);
+
   const path = new THREE.Mesh(
-    new THREE.RingGeometry(2.5, 4.7, 88),
+    new THREE.RingGeometry(2.3, 4.95, 88),
     new THREE.MeshStandardMaterial({
       color: district === "observatory" ? 0x7c3aed : district === "arcades" ? 0x0891b2 : 0xb45309,
-      roughness: 0.72,
+      roughness: 0.66,
       transparent: true,
-      opacity: 0.62,
+      opacity: 0.74,
     }),
   );
   path.rotation.x = -Math.PI / 2;
-  path.position.y = 0.018;
+  path.position.y = 0.022;
   group.add(path);
+
+  const pathAccent = new THREE.Mesh(
+    new THREE.RingGeometry(1.45, 8.35, 96, 1),
+    new THREE.MeshBasicMaterial({
+      color: district === "observatory" ? 0xc4b5fd : district === "arcades" ? 0x67e8f9 : 0xfde68a,
+      transparent: true,
+      opacity: 0.08,
+    }),
+  );
+  pathAccent.rotation.x = -Math.PI / 2;
+  pathAccent.position.y = 0.027;
+  group.add(pathAccent);
 
   const ridgeMaterial = new THREE.MeshStandardMaterial({
     color: district === "observatory" ? 0x312e81 : district === "arcades" ? 0x155e75 : 0x365314,
@@ -770,6 +1099,33 @@ function createGround(district: World3DDistrictId) {
     hill.receiveShadow = true;
     group.add(hill);
   });
+
+  const centerPavilion = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.15, 1.35, 0.28, 12),
+    new THREE.MeshStandardMaterial({
+      color: district === "observatory" ? 0x4338ca : district === "arcades" ? 0x0ea5e9 : 0xeab308,
+      emissive: district === "observatory" ? 0x1d4ed8 : district === "arcades" ? 0x0891b2 : 0x854d0e,
+      emissiveIntensity: 0.12,
+      roughness: 0.48,
+      metalness: 0.06,
+    }),
+  );
+  centerPavilion.position.set(0, 0.18, 0);
+  centerPavilion.castShadow = true;
+  centerPavilion.receiveShadow = true;
+  group.add(centerPavilion);
+
+  const centerLantern = new THREE.Mesh(
+    new THREE.SphereGeometry(0.42, 18, 14),
+    new THREE.MeshStandardMaterial({
+      color: district === "observatory" ? 0xc4b5fd : district === "arcades" ? 0x67e8f9 : 0xfbbf24,
+      emissive: district === "observatory" ? 0x8b5cf6 : district === "arcades" ? 0x06b6d4 : 0xf59e0b,
+      emissiveIntensity: 0.48,
+      roughness: 0.3,
+    }),
+  );
+  centerLantern.position.set(0, 1.1, 0);
+  group.add(centerLantern);
 
   return group;
 }
@@ -798,6 +1154,33 @@ function createWorldProps(district: World3DDistrictId) {
     pillar.receiveShadow = true;
     group.add(pillar);
   });
+
+  const walkway = new THREE.Mesh(
+    new THREE.BoxGeometry(10.4, 0.08, 1.05),
+    new THREE.MeshStandardMaterial({
+      color: district === "observatory" ? 0x312e81 : district === "arcades" ? 0x155e75 : 0x7c2d12,
+      roughness: 0.7,
+      metalness: 0.04,
+    }),
+  );
+  walkway.position.set(0, 0.025, -1.3);
+  walkway.castShadow = true;
+  walkway.receiveShadow = true;
+  group.add(walkway);
+
+  const sidePad = new THREE.Mesh(
+    new THREE.CircleGeometry(1.6, 36),
+    new THREE.MeshStandardMaterial({
+      color: district === "observatory" ? 0x4338ca : district === "arcades" ? 0x0f766e : 0xa16207,
+      roughness: 0.62,
+      metalness: 0.05,
+      transparent: true,
+      opacity: 0.82,
+    }),
+  );
+  sidePad.rotation.x = -Math.PI / 2;
+  sidePad.position.set(-3.5, 0.04, 3.8);
+  group.add(sidePad);
 
   const rockMaterial = new THREE.MeshStandardMaterial({
     color: district === "observatory" ? 0x64748b : district === "arcades" ? 0x0f766e : 0x57534e,
@@ -831,9 +1214,9 @@ function createWorldProps(district: World3DDistrictId) {
     group.add(rock);
   });
 
-  Array.from({ length: 22 }).forEach((_, index) => {
+  Array.from({ length: 12 }).forEach((_, index) => {
     const angle = index * 1.71;
-    const radius = 5.7 + (index % 5) * 0.72;
+    const radius = 5.85 + (index % 4) * 0.68;
     const x = Math.cos(angle) * radius;
     const z = Math.sin(angle) * (radius * 0.68);
     const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.018, 0.24, 5), leafMaterial);
@@ -843,6 +1226,36 @@ function createWorldProps(district: World3DDistrictId) {
     bloom.position.set(x, 0.28, z);
     bloom.castShadow = true;
     group.add(bloom);
+  });
+
+  Array.from({ length: 4 }).forEach((_, index) => {
+    const x = -8.2 + index * 2.75;
+    const lantern = new THREE.Group();
+    const pole = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.05, 0.08, 1.48, 8),
+      new THREE.MeshStandardMaterial({
+        color: district === "observatory" ? 0xc4b5fd : district === "arcades" ? 0x67e8f9 : 0xfde68a,
+        roughness: 0.42,
+        metalness: 0.18,
+      }),
+    );
+    pole.position.y = 0.74;
+    pole.castShadow = true;
+    pole.receiveShadow = true;
+    lantern.add(pole);
+    const bulb = new THREE.Mesh(
+      new THREE.SphereGeometry(0.13, 16, 10),
+      new THREE.MeshStandardMaterial({
+        color: district === "observatory" ? 0xe9d5ff : district === "arcades" ? 0xa5f3fc : 0xfde68a,
+        emissive: district === "observatory" ? 0xa855f7 : district === "arcades" ? 0x06b6d4 : 0xfbbf24,
+        emissiveIntensity: 0.34,
+        roughness: 0.24,
+      }),
+    );
+    bulb.position.y = 1.5;
+    lantern.add(bulb);
+    lantern.position.set(x, 0, index % 2 === 0 ? 5.2 : -5.2);
+    group.add(lantern);
   });
 
   const treeTrunk = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.78 });
@@ -924,6 +1337,18 @@ function createWorldProps(district: World3DDistrictId) {
     );
     dome.position.set(0, 0.7, -4.5);
     group.add(dome);
+    const arch = new THREE.Mesh(
+      new THREE.TorusGeometry(2.3, 0.18, 12, 48, Math.PI),
+      new THREE.MeshStandardMaterial({
+        color: 0x8b5cf6,
+        emissive: 0x6366f1,
+        emissiveIntensity: 0.14,
+        roughness: 0.42,
+      }),
+    );
+    arch.rotation.z = Math.PI / 2;
+    arch.position.set(0, 2.1, -6.1);
+    group.add(arch);
   }
 
   return group;
@@ -974,6 +1399,7 @@ export function World3DStage({
   players,
   lueurs,
   hotspots,
+  speechBubbles,
   onMove,
   onSelectPlayer,
   onCollectLueur,
@@ -987,6 +1413,7 @@ export function World3DStage({
   const playersRef = useRef(players);
   const lueursRef = useRef(lueurs);
   const hotspotsRef = useRef(hotspots);
+  const speechBubblesRef = useRef(speechBubbles);
   const onMoveRef = useRef(onMove);
   const onSelectPlayerRef = useRef(onSelectPlayer);
   const onCollectLueurRef = useRef(onCollectLueur);
@@ -1000,11 +1427,12 @@ export function World3DStage({
     playersRef.current = players;
     lueursRef.current = lueurs;
     hotspotsRef.current = hotspots;
+    speechBubblesRef.current = speechBubbles;
     onMoveRef.current = onMove;
     onSelectPlayerRef.current = onSelectPlayer;
     onCollectLueurRef.current = onCollectLueur;
     onTriggerHotspotRef.current = onTriggerHotspot;
-  }, [hotspots, lueurs, onCollectLueur, onMove, onSelectPlayer, onTriggerHotspot, players]);
+  }, [hotspots, lueurs, onCollectLueur, onMove, onSelectPlayer, onTriggerHotspot, players, speechBubbles]);
 
   const resetJoystick = () => {
     joystickInputRef.current = idleAnalogInput();
@@ -1252,9 +1680,17 @@ export function World3DStage({
       syncCollections();
 
       const playersById = new Map(playersRef.current.map((player) => [player.id, player]));
+      const wallClockNow = Date.now();
+      const bubblesByUserId = new Map(
+        speechBubblesRef.current
+          .filter((bubble) => bubble.expiresAt > wallClockNow)
+          .map((bubble) => [bubble.userId, bubble] as const),
+      );
       const now = performance.now();
       entities.forEach((entity, id) => {
         if (!playersById.has(id) && now - entity.lastSeenAt > REMOTE_AVATAR_GRACE_MS) {
+          if (entity.labelRoot.parent) scene.remove(entity.labelRoot);
+          if (entity.bubbleRoot.parent) scene.remove(entity.bubbleRoot);
           scene.remove(entity.group);
           entities.delete(id);
         }
@@ -1266,6 +1702,8 @@ export function World3DStage({
           entity = createAvatar(player);
           entities.set(player.id, entity);
           scene.add(entity.group);
+          scene.add(entity.labelRoot);
+          scene.add(entity.bubbleRoot);
         }
         entity.lastSeenAt = now;
         if (player.isSelf) {
@@ -1281,6 +1719,43 @@ export function World3DStage({
         micMaterial.emissiveIntensity = player.voiceEnabled ? (player.isSpeaking ? 0.9 : 0.28) : 0.08;
         applyAppearance(entity, player);
         syncFamiliar(entity, player);
+
+        const nextLabelKey = playerLabelKey(player);
+        if (entity.labelKey !== nextLabelKey) {
+          entity.labelKey = nextLabelKey;
+          const existingTexture = entity.labelRoot.userData.texture as THREE.CanvasTexture | undefined;
+          existingTexture?.dispose();
+          entity.labelRoot.clear();
+          const labelSprite = createTexturedSprite(createCanvasTexture(player, "label"), 3.8, 1.36);
+          entity.labelRoot.userData.texture = (labelSprite.material as THREE.SpriteMaterial).map;
+          entity.labelRoot.add(labelSprite);
+        }
+
+        const bubble = bubblesByUserId.get(player.id) ?? null;
+        const nextBubbleKey = speechBubbleKey(bubble);
+        if (entity.bubbleKey !== nextBubbleKey) {
+          entity.bubbleKey = nextBubbleKey;
+          const existingTexture = entity.bubbleRoot.userData.texture as THREE.CanvasTexture | undefined;
+          existingTexture?.dispose();
+          entity.bubbleRoot.clear();
+          if (bubble) {
+            const bubbleSprite = createTexturedSprite(
+              createCanvasTexture(player, "bubble", bubble.content),
+              4.45,
+              1.28,
+            );
+            entity.bubbleRoot.userData.texture = (bubbleSprite.material as THREE.SpriteMaterial).map;
+            entity.bubbleRoot.add(bubbleSprite);
+            entity.bubbleRoot.visible = true;
+          } else {
+            entity.bubbleRoot.visible = false;
+          }
+        }
+
+        const nextInteractionKind = player.interactionKind ?? null;
+        if (entity.interactionKind !== nextInteractionKind) {
+          entity.interactionKind = nextInteractionKind;
+        }
       });
 
       const currentSelf = self;
@@ -1352,6 +1827,55 @@ export function World3DStage({
         entity.rightArm.rotation.x = walk * 0.35;
         entity.torso.rotation.z = entity.moving ? Math.sin(entity.phase * 0.5) * 0.035 : 0;
         entity.head.position.y = 2.26 + Math.sin(entity.phase * 0.7) * 0.02;
+        if (entity.interactionKind) {
+          const pulse = Math.sin(entity.phase * 6.5);
+          if (entity.interactionKind === "dance") {
+            entity.torso.rotation.y = pulse * 0.2;
+            entity.leftArm.rotation.x = -0.55 + pulse * 0.28;
+            entity.rightArm.rotation.x = -0.55 - pulse * 0.28;
+            entity.leftArm.rotation.z = 0.18 + pulse * 0.22;
+            entity.rightArm.rotation.z = -0.18 - pulse * 0.22;
+            entity.head.rotation.z = pulse * 0.08;
+          } else if (entity.interactionKind === "hug") {
+            entity.torso.rotation.y = pulse * 0.08;
+            entity.leftArm.rotation.x = -1.08 + pulse * 0.08;
+            entity.rightArm.rotation.x = -1.08 - pulse * 0.08;
+            entity.leftArm.rotation.z = 0.38;
+            entity.rightArm.rotation.z = -0.38;
+          } else if (entity.interactionKind === "applaud") {
+            entity.torso.rotation.z = pulse * 0.04;
+            entity.leftArm.rotation.x = -0.95 + pulse * 0.15;
+            entity.rightArm.rotation.x = -0.95 - pulse * 0.15;
+            entity.leftArm.rotation.z = 0.28 + pulse * 0.2;
+            entity.rightArm.rotation.z = -0.28 - pulse * 0.2;
+          } else if (entity.interactionKind === "sit") {
+            entity.torso.rotation.x = -0.2;
+            entity.torso.rotation.y = pulse * 0.03;
+            entity.leftArm.rotation.x = 0.2;
+            entity.rightArm.rotation.x = 0.2;
+            entity.leftArm.rotation.z = 0.06;
+            entity.rightArm.rotation.z = -0.06;
+            entity.leftLeg.rotation.x = 0.62;
+            entity.rightLeg.rotation.x = 0.62;
+            entity.group.position.y = 0.08 + Math.sin(entity.phase * 1.4) * 0.01;
+          } else if (entity.interactionKind === "swing") {
+            entity.torso.rotation.z = pulse * 0.08;
+            entity.torso.rotation.x = -0.08 + pulse * 0.02;
+            entity.leftArm.rotation.x = -0.78 + pulse * 0.18;
+            entity.rightArm.rotation.x = -0.78 - pulse * 0.18;
+            entity.leftArm.rotation.z = 0.12 + pulse * 0.12;
+            entity.rightArm.rotation.z = -0.12 - pulse * 0.12;
+            entity.leftLeg.rotation.x = 0.38 + pulse * 0.06;
+            entity.rightLeg.rotation.x = 0.38 - pulse * 0.06;
+            entity.group.position.y = 0.12 + Math.sin(entity.phase * 3.1) * 0.05;
+          } else {
+            entity.torso.rotation.y = pulse * 0.04;
+            entity.head.rotation.y = pulse * 0.08;
+          }
+          entity.group.scale.setScalar(1 + Math.max(0, pulse) * 0.03);
+        } else {
+          entity.group.scale.setScalar(1);
+        }
         if (entity.familiarRoot) {
           const side = entity.userId === currentSelf?.id ? 1 : -1;
           entity.familiarRoot.position.x = THREE.MathUtils.lerp(entity.familiarRoot.position.x, side * 0.72, 0.08);
@@ -1364,6 +1888,18 @@ export function World3DStage({
           0.12,
           0.28 - entity.jumpHeight * 0.06,
         );
+        const labelOffset = entity.userId === currentSelf?.id ? 3.3 : 3.15;
+        entity.labelRoot.position.set(entity.current.x, entity.jumpHeight + labelOffset, entity.current.z);
+        entity.labelRoot.quaternion.copy(camera.quaternion);
+        entity.labelRoot.visible = entity.current.distanceTo(camera.position) <= 24;
+        const activeBubble = bubblesByUserId.get(entity.userId) ?? null;
+        if (activeBubble && activeBubble.expiresAt > wallClockNow) {
+          entity.bubbleRoot.position.set(entity.current.x, entity.jumpHeight + 4.25, entity.current.z);
+          entity.bubbleRoot.quaternion.copy(camera.quaternion);
+          entity.bubbleRoot.visible = entity.current.distanceTo(camera.position) <= 22;
+        } else {
+          entity.bubbleRoot.visible = false;
+        }
       });
 
       if (selfEntity) {

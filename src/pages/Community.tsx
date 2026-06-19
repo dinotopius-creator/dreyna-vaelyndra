@@ -6,7 +6,10 @@ import {
   Film,
   Flame,
   Gift,
+  Bookmark,
+  BookmarkCheck,
   Image,
+  Heart,
   Megaphone,
   MessageCircle,
   Pencil,
@@ -17,9 +20,11 @@ import {
   Trash2,
   Trophy,
   Wand2,
+  Volume2,
+  VolumeX,
   X,
 } from "lucide-react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useParams, useSearchParams } from "react-router-dom";
 import clsx from "clsx";
 import { useStore } from "../contexts/StoreContext";
 import { useAuth } from "../contexts/AuthContext";
@@ -32,10 +37,18 @@ import { UserBadges } from "../components/UserBadges";
 import { Handle } from "../components/Handle";
 import { MemberSearch } from "../components/MemberSearch";
 import { AvatarImage } from "../components/AvatarImage";
-import { RichMentionText, buildMentionLookup } from "../components/RichMentionText";
+import { RichSocialText } from "../components/RichSocialText";
+import { buildMentionLookup } from "../components/RichMentionText";
+import { CommunityImmersiveFeed, type CommunityTab } from "../components/CommunityImmersiveFeed";
 import StreamerGradeBadge from "../components/StreamerGradeBadge";
 import { WeeklyRankingCountdown } from "../components/WeeklyRankingCountdown";
 import { getOfficial } from "../data/officials";
+import {
+  COMMUNITY_DRAWING_CONTEST,
+  drawingContestUrl,
+  extractHashtags,
+  isDrawingContestEntry,
+} from "../data/communityContest";
 import {
   formatRelative,
   parsePostImageUrl,
@@ -47,18 +60,21 @@ import {
   apiUpdatePost,
   apiGetCommunityActivityLeaderboard,
   apiSyncCommunityActivityRewards,
+  apiSettleDrawingContest,
   apiToggleReaction,
   apiGetProfile,
   apiSearchUsers,
   apiUploadCommunityImage,
+  apiUploadCommunityVideo,
   type UserProfileDto,
   type UserSearchHitDto,
   type StreamerGradeDto,
 } from "../lib/api";
-import { isImageFile, validateFile } from "../lib/fileUtils";
+import { isImageFile, isVideoFile, validateFile } from "../lib/fileUtils";
+import type { CommunityPost } from "../types";
 
 
-const QUICK_EMOJIS = ["✨", "👑", "🌿", "⚔️", "🌙", "🔮"];
+const LIKE_EMOJI = "like";
 const COMMUNITY_REWARD_BY_RANK: Record<number, number> = {
   1: 600,
   2: 450,
@@ -71,19 +87,45 @@ export function Community() {
   const { refresh: refreshProfile } = useProfile();
   const { notify } = useToast();
   const location = useLocation();
+  const { postId: routePostId } = useParams();
+  const [searchParams] = useSearchParams();
+  const routeCommentId = searchParams.get("commentId")?.trim() ?? "";
   const usersById = useMemo(
     () => new Map(users.map((member) => [member.id, member])),
     [users],
   );
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const draftTextAreaRef = useRef<HTMLTextAreaElement>(null);
+  const [composerOpen, setComposerOpen] = useState(false);
   const [draft, setDraft] = useState("");
+  const [draftCursor, setDraftCursor] = useState(0);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null);
   const [videoUrl, setVideoUrl] = useState("");
   const [tagQuery, setTagQuery] = useState("");
   const [tagResults, setTagResults] = useState<UserSearchHitDto[]>([]);
   const [tagLoading, setTagLoading] = useState(false);
   const [openComments, setOpenComments] = useState<Record<string, boolean>>({});
+  const [selectedCommentPostId, setSelectedCommentPostId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<CommunityTab>("for-you");
+  const [pendingDeletePostId, setPendingDeletePostId] = useState<string | null>(null);
+  const [highlightedPostId, setHighlightedPostId] = useState<string | null>(null);
+  const [highlightedCommentId, setHighlightedCommentId] = useState<string | null>(null);
+  const [savedPostIds, setSavedPostIds] = useState<Set<string>>(() => {
+    try {
+      const raw = window.localStorage.getItem("vaelyndra-community-saved-posts");
+      if (!raw) return new Set<string>();
+      const parsed = JSON.parse(raw) as unknown;
+      if (Array.isArray(parsed)) {
+        return new Set(parsed.filter((item): item is string => typeof item === "string"));
+      }
+    } catch {
+      /* ignore persisted save state */
+    }
+    return new Set<string>();
+  });
   const [editingPost, setEditingPost] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const editFileInputRef = useRef<HTMLInputElement>(null);
@@ -91,6 +133,11 @@ export function Community() {
   const [editImagePreviewUrl, setEditImagePreviewUrl] = useState<string | null>(null);
   const [editImageRemoved, setEditImageRemoved] = useState(false);
   const [editOriginalImageUrl, setEditOriginalImageUrl] = useState<string | undefined>(undefined);
+  const editThumbnailFileInputRef = useRef<HTMLInputElement>(null);
+  const [editVideoThumbnailFile, setEditVideoThumbnailFile] = useState<File | null>(null);
+  const [editVideoThumbnailPreviewUrl, setEditVideoThumbnailPreviewUrl] = useState<string | null>(null);
+  const [editVideoThumbnailRemoved, setEditVideoThumbnailRemoved] = useState(false);
+  const [editOriginalVideoThumbnailUrl, setEditOriginalVideoThumbnailUrl] = useState<string | undefined>(undefined);
   const [brokenImages, setBrokenImages] = useState<Record<string, boolean>>({});
   const [profilesById, setProfilesById] = useState<Record<string, UserProfileDto>>(
     {},
@@ -109,6 +156,55 @@ export function Community() {
     }>
   >([]);
   const [activityWeekStartIso, setActivityWeekStartIso] = useState<string>("");
+  const [contestAwardedNotice, setContestAwardedNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        "vaelyndra-community-saved-posts",
+        JSON.stringify(Array.from(savedPostIds)),
+      );
+    } catch {
+      /* ignore persist errors */
+    }
+  }, [savedPostIds]);
+
+  const suggestedHashtags = useMemo(() => {
+    const counts = new Map<string, number>();
+    const bump = (tag: string) => counts.set(tag, (counts.get(tag) ?? 0) + 1);
+
+    bump("concoursdessin");
+    bump("vaelyndra");
+    bump("communauté");
+    bump("social");
+    bump("live");
+    bump("aventure");
+    bump("art");
+    bump("dessin");
+    bump("mignon");
+    bump("creature");
+    bump("familier");
+
+    posts.forEach((post) => {
+      extractHashtags(post.content).forEach(bump);
+    });
+
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([tag]) => tag)
+      .slice(0, 8);
+  }, [posts]);
+
+  const hashtagSuggestionState = useMemo(() => {
+    const beforeCursor = draft.slice(0, draftCursor);
+    const match = beforeCursor.match(/(?:^|\s)#([A-Za-z0-9_À-ÖØ-öø-ÿ-]*)$/u);
+    if (!match) return { active: false, query: "", suggestions: [] as string[] };
+    const query = (match[1] ?? "").toLowerCase();
+    const suggestions = suggestedHashtags.filter((tag) =>
+      tag.toLowerCase().startsWith(query),
+    );
+    return { active: true, query, suggestions: suggestions.slice(0, 6) };
+  }, [draft, draftCursor, suggestedHashtags]);
 
   const displayLeaderboard = useMemo(
     () =>
@@ -163,6 +259,32 @@ export function Community() {
     [posts],
   );
 
+  const contestAnnouncementPost = useMemo<CommunityPost>(
+    () => ({
+      id: COMMUNITY_DRAWING_CONTEST.announcementPostId,
+      authorId: "user-dreyna",
+      authorName: "Dreyna",
+      authorHandle: "dreyna",
+      authorGrade: null,
+      authorAvatar: "/favicon.svg",
+      content:
+        "Concours de dessin lancé ! Poste ton dessin avec #concoursdessin pour participer pendant 24h00. Le post avec le plus de likes gagne 1000 lueurs et 6 nourritures familier.",
+      imageUrl: COMMUNITY_DRAWING_CONTEST.bannerImage,
+      videoUrl: undefined,
+      postType: "official_event",
+      officialLabel: "Annonce officielle",
+      createdAt: COMMUNITY_DRAWING_CONTEST.startsAt,
+      reactions: {} as Record<string, string[]>,
+      comments: [] as CommunityPost["comments"],
+    }),
+    [],
+  );
+
+  const feedPosts = useMemo(() => {
+    const hasAnnouncement = sorted.some((post) => post.id === contestAnnouncementPost.id);
+    return hasAnnouncement ? sorted : [contestAnnouncementPost, ...sorted];
+  }, [contestAnnouncementPost, sorted]);
+
   useEffect(() => {
     if (!imagePreviewUrl) return;
     return () => {
@@ -171,14 +293,32 @@ export function Community() {
   }, [imagePreviewUrl]);
 
   useEffect(() => {
+    if (!pendingDeletePostId) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPendingDeletePostId(null);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [pendingDeletePostId]);
+
+  useEffect(() => {
     const q = tagQuery.trim();
     if (q.length < 1) {
-      setTagResults([]);
-      setTagLoading(false);
-      return;
+      const reset = window.setTimeout(() => {
+        setTagResults([]);
+        setTagLoading(false);
+      }, 0);
+      return () => window.clearTimeout(reset);
     }
     let cancelled = false;
-    setTagLoading(true);
+    const loadingStart = window.setTimeout(() => {
+      setTagLoading(true);
+    }, 0);
     const handle = window.setTimeout(() => {
       apiSearchUsers(q, 6)
         .then((hits) => {
@@ -195,6 +335,7 @@ export function Community() {
     }, 250);
     return () => {
       cancelled = true;
+      window.clearTimeout(loadingStart);
       window.clearTimeout(handle);
     };
   }, [tagQuery, user?.id]);
@@ -238,7 +379,7 @@ export function Community() {
   useEffect(() => {
     let cancelled = false;
     const loadLeaderboard = () => {
-      void apiGetCommunityActivityLeaderboard(5)
+      void apiGetCommunityActivityLeaderboard(10)
       .then((result) => {
         if (cancelled) return;
         setActivityWeekStartIso(result.weekStartIso);
@@ -280,37 +421,98 @@ export function Community() {
   }, [notify, refreshProfile, user]);
 
   useEffect(() => {
+    let cancelled = false;
+    const now = Date.now();
+    const contestEndsAt = new Date(COMMUNITY_DRAWING_CONTEST.endsAt).getTime();
+    if (now < contestEndsAt) return;
+    void apiSettleDrawingContest()
+      .then((result) => {
+        if (cancelled || !result.winner) return;
+        setContestAwardedNotice(
+          `${result.winner.authorName} gagne le concours #concoursdessin : +${result.rewardLueurs} lueurs et +${result.rewardFood} nourritures familier.`,
+        );
+        if (user?.id === result.winner.authorId) {
+          void refreshProfile();
+        }
+      })
+      .catch(() => {
+        /* best effort */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshProfile, user?.id]);
+
+  useEffect(() => {
     const hash = location.hash.replace(/^#/, "").trim();
-    if (!hash.startsWith("comment-")) return;
-    const commentId = hash.slice("comment-".length);
-    if (!commentId) return;
-    const parentPost = posts.find((post) =>
-      post.comments.some((comment) => comment.id === commentId),
-    );
+    const commentId = routeCommentId || (hash.startsWith("comment-") ? hash.slice("comment-".length) : "");
+    const hashPostId = hash.startsWith("post-") ? hash.slice("post-".length) : "";
+    const postTargetId = routePostId?.trim() || hashPostId || "";
+    const commentTargetId = commentId || "";
+    if (!postTargetId && !commentTargetId) {
+      const reset = window.setTimeout(() => {
+        setHighlightedPostId(null);
+        setHighlightedCommentId(null);
+        setSelectedCommentPostId(null);
+      }, 0);
+      return () => window.clearTimeout(reset);
+    }
+
+    const parentPost = posts.find((post) => {
+      if (postTargetId && post.id === postTargetId) return true;
+      if (!commentTargetId) return false;
+      return post.comments.some((comment) => comment.id === commentTargetId);
+    });
     if (!parentPost) return;
 
-    setOpenComments((current) => ({
-      ...current,
-      [parentPost.id]: true,
-    }));
+    const open = window.setTimeout(() => {
+      setOpenComments((current) => ({
+        ...current,
+        [parentPost.id]: Boolean(commentTargetId),
+      }));
+      setSelectedCommentPostId(commentTargetId ? parentPost.id : null);
+      setHighlightedPostId(parentPost.id);
+      setHighlightedCommentId(commentTargetId || null);
+    }, 0);
 
-    const scrollToComment = () => {
-      const element = document.getElementById(`comment-${commentId}`);
-      if (!element) return false;
-      element.scrollIntoView({ behavior: "smooth", block: "center" });
-      return true;
+    const cleanupHighlight = window.setTimeout(() => {
+      setHighlightedPostId((current) => (current === parentPost.id ? null : current));
+      setHighlightedCommentId((current) => (current === commentTargetId ? null : current));
+    }, 3200);
+
+    const scrollToTarget = () => {
+      const postElement = document.getElementById(`post-${parentPost.id}`);
+      if (postElement) {
+        postElement.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+      if (!commentTargetId) return Boolean(postElement);
+      const commentElement = document.getElementById(`comment-${commentTargetId}`);
+      if (commentElement) {
+        commentElement.scrollIntoView({ behavior: "smooth", block: "center" });
+        return true;
+      }
+      return Boolean(postElement);
     };
 
-    if (scrollToComment()) return;
+    if (scrollToTarget()) {
+      return () => {
+        window.clearTimeout(open);
+        window.clearTimeout(cleanupHighlight);
+      };
+    }
 
     const frame = window.requestAnimationFrame(() => {
       window.setTimeout(() => {
-        scrollToComment();
+        scrollToTarget();
       }, 80);
     });
 
-    return () => window.cancelAnimationFrame(frame);
-  }, [location.hash, posts]);
+    return () => {
+      window.clearTimeout(open);
+      window.clearTimeout(cleanupHighlight);
+      window.cancelAnimationFrame(frame);
+    };
+  }, [location.hash, posts, routeCommentId, routePostId]);
 
   async function publish(e: React.FormEvent) {
     e.preventDefault();
@@ -332,9 +534,14 @@ export function Community() {
     }
     try {
       let uploadedImageUrl: string | undefined;
+      let uploadedVideoUrl: string | undefined;
       if (imageFile) {
         const uploaded = await apiUploadCommunityImage(imageFile);
         uploadedImageUrl = uploaded.imageUrl;
+      }
+      if (videoFile) {
+        const uploaded = await apiUploadCommunityVideo(videoFile);
+        uploadedVideoUrl = uploaded.imageUrl;
       }
       const post = await apiCreatePost({
         author: {
@@ -344,13 +551,16 @@ export function Community() {
         },
         content: draft.trim(),
         imageUrl: uploadedImageUrl,
-        videoUrl: cleanedVideo || undefined,
+        videoUrl: uploadedVideoUrl || cleanedVideo || undefined,
       });
       dispatch({ type: "addPost", post });
       setDraft("");
       if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
       setImageFile(null);
       setImagePreviewUrl(null);
+      if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
+      setVideoFile(null);
+      setVideoPreviewUrl(null);
       setVideoUrl("");
       setTagQuery("");
       setTagResults([]);
@@ -389,13 +599,20 @@ export function Community() {
     try {
       await apiDeletePost(postId, user.id);
       dispatch({ type: "deletePost", id: postId });
+      setPendingDeletePostId((current) => (current === postId ? null : current));
     } catch (err) {
       console.warn(err);
       notify("Suppression refusée.", "error");
     }
   }
 
-  function startEditPost(post: { id: string; content: string; imageUrl?: string }) {
+  function startEditPost(post: {
+    id: string;
+    content: string;
+    imageUrl?: string;
+    videoUrl?: string;
+    videoThumbnailUrl?: string;
+  }) {
     setEditingPost(post.id);
     setEditDraft(post.content);
     setEditImageFile(null);
@@ -403,6 +620,11 @@ export function Community() {
     setEditImagePreviewUrl(null);
     setEditImageRemoved(false);
     setEditOriginalImageUrl(post.imageUrl);
+    setEditVideoThumbnailFile(null);
+    if (editVideoThumbnailPreviewUrl) URL.revokeObjectURL(editVideoThumbnailPreviewUrl);
+    setEditVideoThumbnailPreviewUrl(null);
+    setEditVideoThumbnailRemoved(false);
+    setEditOriginalVideoThumbnailUrl(post.videoThumbnailUrl);
   }
 
   async function saveEditPost(postId: string) {
@@ -411,16 +633,24 @@ export function Community() {
     if (!trimmed) return;
     try {
       let newImageUrl: string | undefined;
+      let newVideoThumbnailUrl: string | undefined;
       if (editImageFile) {
         const uploaded = await apiUploadCommunityImage(editImageFile);
         newImageUrl = uploaded.imageUrl;
       } else if (editImageRemoved) {
         newImageUrl = "";
       }
+      if (editVideoThumbnailFile) {
+        const uploaded = await apiUploadCommunityImage(editVideoThumbnailFile);
+        newVideoThumbnailUrl = uploaded.imageUrl;
+      } else if (editVideoThumbnailRemoved) {
+        newVideoThumbnailUrl = "";
+      }
       const updated = await apiUpdatePost(postId, {
         userId: user.id,
         content: trimmed,
         imageUrl: newImageUrl,
+        videoThumbnailUrl: newVideoThumbnailUrl,
       });
       dispatch({ type: "replacePost", post: updated });
       setEditingPost(null);
@@ -430,6 +660,12 @@ export function Community() {
       setEditImagePreviewUrl(null);
       setEditImageRemoved(false);
       setEditOriginalImageUrl(undefined);
+      if (editThumbnailFileInputRef.current) editThumbnailFileInputRef.current.value = "";
+      if (editVideoThumbnailPreviewUrl) URL.revokeObjectURL(editVideoThumbnailPreviewUrl);
+      setEditVideoThumbnailFile(null);
+      setEditVideoThumbnailPreviewUrl(null);
+      setEditVideoThumbnailRemoved(false);
+      setEditOriginalVideoThumbnailUrl(undefined);
       notify("Post modifié.", "success");
     } catch (err) {
       console.warn(err);
@@ -465,6 +701,38 @@ export function Community() {
     if (editFileInputRef.current) editFileInputRef.current.value = "";
   }
 
+  function onPickEditVideoThumbnail(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      validateFile(file);
+      if (!isImageFile(file.type)) {
+        throw new Error("Choisis une image JPG, PNG, GIF ou WEBP.");
+      }
+      if (editVideoThumbnailPreviewUrl) {
+        URL.revokeObjectURL(editVideoThumbnailPreviewUrl);
+      }
+      setEditVideoThumbnailFile(file);
+      setEditVideoThumbnailPreviewUrl(URL.createObjectURL(file));
+      setEditVideoThumbnailRemoved(false);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Miniature impossible à utiliser.";
+      notify(message, "error");
+      event.target.value = "";
+    }
+  }
+
+  function clearEditVideoThumbnail() {
+    if (editVideoThumbnailPreviewUrl) {
+      URL.revokeObjectURL(editVideoThumbnailPreviewUrl);
+    }
+    setEditVideoThumbnailFile(null);
+    setEditVideoThumbnailPreviewUrl(null);
+    setEditVideoThumbnailRemoved(true);
+    if (editThumbnailFileInputRef.current) editThumbnailFileInputRef.current.value = "";
+  }
+
   function profileHref(authorId: string) {
     return `/u/${authorId}`;
   }
@@ -477,6 +745,40 @@ export function Community() {
     if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
     setImageFile(null);
     setImagePreviewUrl(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function toggleSave(postId: string) {
+    setSavedPostIds((current) => {
+      const next = new Set(current);
+      if (next.has(postId)) next.delete(postId);
+      else next.add(postId);
+      return next;
+    });
+    notify(savedPostIds.has(postId) ? "Post retiré des enregistrés." : "Post enregistré.");
+  }
+
+  function openCommentSheet(postId: string) {
+    setSelectedCommentPostId(postId);
+  }
+
+  function openComposer() {
+    setComposerOpen(true);
+  }
+
+  function closeComposer() {
+    setComposerOpen(false);
+  }
+
+  const selectedCommentPost = useMemo(
+    () => feedPosts.find((post) => post.id === selectedCommentPostId) ?? null,
+    [feedPosts, selectedCommentPostId],
+  );
+
+  function clearSelectedVideo() {
+    if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
+    setVideoFile(null);
+    setVideoPreviewUrl(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -494,6 +796,34 @@ export function Community() {
     setTagResults([]);
   }
 
+  function insertSuggestedHashtag(tag: string) {
+    const normalized = tag.startsWith("#") ? tag : `#${tag}`;
+    setDraft((current) => {
+      const beforeCursor = current.slice(0, draftCursor);
+      const afterCursor = current.slice(draftCursor);
+      const match = beforeCursor.match(/(?:^|\s)#([A-Za-z0-9_À-ÖØ-öø-ÿ-]*)$/u);
+      if (!match) {
+        return `${current}${current.endsWith(" ") || current.length === 0 ? "" : " "}${normalized} `;
+      }
+      const start = beforeCursor.length - match[0].length;
+      const next = `${current.slice(0, start)}${normalized} ${afterCursor.replace(/^\s*/, "")}`;
+      return next.replace(/\s{2,}/g, " ");
+    });
+    window.requestAnimationFrame(() => {
+      const textarea = draftTextAreaRef.current;
+      if (!textarea) return;
+      textarea.focus();
+      const pos = Math.min(textarea.value.length, draftCursor + normalized.length + 1);
+      textarea.setSelectionRange(pos, pos);
+    });
+  }
+
+  function syncDraftCursor(event?: { currentTarget: HTMLTextAreaElement }) {
+    const target = event?.currentTarget ?? draftTextAreaRef.current;
+    if (!target) return;
+    setDraftCursor(target.selectionStart ?? target.value.length);
+  }
+
   function onPickImage(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -502,6 +832,7 @@ export function Community() {
       if (!isImageFile(file.type)) {
         throw new Error("Choisis une image JPG, PNG, GIF ou WEBP.");
       }
+      clearSelectedVideo();
       if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
       setImageFile(file);
       setImagePreviewUrl(URL.createObjectURL(file));
@@ -512,6 +843,267 @@ export function Community() {
       event.target.value = "";
     }
   }
+
+  function onPickVideo(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      if (!isVideoFile(file.type)) {
+        throw new Error("Choisis une vidéo MP4, WEBM, MOV ou OGG.");
+      }
+      if (file.size > 60 * 1024 * 1024) {
+        throw new Error("Vidéo trop lourde. Max 60 Mo.");
+      }
+      clearSelectedImage();
+      if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
+      setVideoFile(file);
+      setVideoPreviewUrl(URL.createObjectURL(file));
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Vidéo impossible à utiliser.";
+      notify(message, "error");
+      event.target.value = "";
+    }
+  }
+
+  return (
+    <div className="relative h-[100dvh] overflow-hidden bg-night-950 text-ivory">
+      <CommunityImmersiveFeed
+        posts={feedPosts}
+        usersById={usersById}
+        profilesById={profilesById}
+        currentUserId={user?.id}
+        canModeratePosts={isQueen}
+        mentionTargets={mentionTargets}
+        onLike={(postId) => react(postId, LIKE_EMOJI)}
+        onShare={(post) => {
+          const url = `${window.location.origin}/communaute/post/${post.id}`;
+          if (navigator.share) {
+            navigator.share({ title: `Post de ${post.authorName}`, url }).catch(() => {});
+          } else {
+            navigator.clipboard.writeText(url).then(
+              () => notify("Lien copié !", "success"),
+              () => notify("Impossible de copier le lien.", "error"),
+            );
+          }
+        }}
+        onSave={(postId) => toggleSave(postId)}
+        onOpenComposer={openComposer}
+        onOpenComments={openCommentSheet}
+        onDeletePost={removePost}
+        savedPostIds={savedPostIds}
+        activeTab={activeTab}
+        onChangeTab={setActiveTab}
+        leaderboard={displayLeaderboard}
+        weeklyLabel={activityWeekStartIso ? `Semaine du ${formatRelative(activityWeekStartIso)}` : undefined}
+        weekStartIso={activityWeekStartIso}
+      />
+
+      {contestAwardedNotice && (
+        <div className="pointer-events-none absolute left-3 right-3 top-[5.25rem] z-40 rounded-2xl border border-emerald-300/20 bg-emerald-500/12 px-4 py-3 text-sm text-emerald-100 backdrop-blur-md">
+          {contestAwardedNotice}
+        </div>
+      )}
+
+      {composerOpen && (
+        <div className="fixed inset-0 z-[70] bg-night-950/82 backdrop-blur-md">
+          <div className="absolute inset-x-0 bottom-0 max-h-[92dvh] overflow-hidden rounded-t-[32px] border border-white/8 bg-night-950 shadow-[0_-20px_60px_rgba(0,0,0,0.45)]">
+            <div className="mx-auto mb-3 h-1.5 w-16 rounded-full bg-white/20" />
+            <div className="flex items-center justify-between px-4 pt-1">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.28em] text-gold-300/80">Composer</p>
+                <h2 className="font-display text-xl text-gold-100">Créer un post</h2>
+              </div>
+              <button
+                type="button"
+                onClick={closeComposer}
+                className="rounded-full border border-white/10 px-3 py-1.5 text-sm text-ivory/70"
+              >
+                Fermer
+              </button>
+            </div>
+            <div className="max-h-[82dvh] overflow-y-auto px-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-3">
+              <div className="rounded-[28px] border border-white/8 bg-night-900/72 p-4 shadow-[0_18px_60px_rgba(0,0,0,0.28)]">
+                <div className="flex items-start gap-3">
+                  <AvatarImage
+                    candidates={[user?.avatar]}
+                    fallbackSeed={user?.id ?? "anon"}
+                    alt="Vous"
+                    className="h-11 w-11 rounded-full object-cover ring-2 ring-royal-500/40"
+                  />
+                  <div className="min-w-0 flex-1 space-y-3">
+                    <textarea
+                      ref={draftTextAreaRef}
+                      value={draft}
+                      onChange={(e) => {
+                        setDraft(e.target.value);
+                        setDraftCursor(e.target.selectionStart ?? e.target.value.length);
+                      }}
+                      onSelect={syncDraftCursor}
+                      onClick={syncDraftCursor}
+                      onKeyUp={syncDraftCursor}
+                      placeholder={user ? "Partage quelque chose avec la communauté..." : "Connecte-toi pour poster..."}
+                      rows={3}
+                      className="glass-input resize-none"
+                    />
+                    {hashtagSuggestionState.active && hashtagSuggestionState.suggestions.length > 0 && (
+                      <div className="rounded-2xl border border-gold-400/20 bg-night-950/55 p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-[11px] uppercase tracking-[0.22em] text-gold-200/80">Hashtags suggérés</p>
+                          <span className="text-[11px] text-ivory/45">{hashtagSuggestionState.query ? `#${hashtagSuggestionState.query}` : "#"}</span>
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {hashtagSuggestionState.suggestions.map((tag) => (
+                            <button
+                              key={tag}
+                              type="button"
+                              onClick={() => insertSuggestedHashtag(tag)}
+                              className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-ivory/80 transition hover:border-gold-300/55 hover:text-gold-100"
+                            >
+                              <Sparkles className="h-3.5 w-3.5" />
+                              #{tag}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime,video/ogg"
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          if (!file) return;
+                          if (isVideoFile(file.type)) {
+                            onPickVideo(event);
+                            return;
+                          }
+                          onPickImage(event);
+                        }}
+                        className="hidden"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-royal-500/30 px-4 py-2 text-sm text-ivory/80 transition hover:border-gold-400/60 hover:text-gold-200"
+                      >
+                        <Image className="h-4 w-4" />
+                        Importer une image ou vidéo
+                      </button>
+                      <div className="relative min-w-0 flex-1">
+                        <Film className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ivory/40" />
+                        <input
+                          value={videoUrl}
+                          onChange={(e) => setVideoUrl(e.target.value)}
+                          placeholder="URL video YouTube / TikTok / MP4 (optionnel)"
+                          className="glass-input pl-9"
+                        />
+                      </div>
+                      <button type="submit" onClick={publish} className="btn-gold w-full justify-center sm:w-auto">
+                        <Send className="h-4 w-4" /> Publier
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setDraft((current) =>
+                            current.includes("#concoursdessin")
+                              ? current
+                              : `${current}${current.trim() ? " " : ""}#concoursdessin`,
+                          )
+                        }
+                        className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-gold-300/25 bg-gold-500/10 px-3 py-1.5 text-xs text-gold-100 transition hover:border-gold-300/55 hover:bg-gold-500/15"
+                      >
+                        <Sparkles className="h-3.5 w-3.5" />
+                        Ajouter #concoursdessin
+                      </button>
+                      <Link
+                        to={drawingContestUrl()}
+                        className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-ivory/70 transition hover:border-gold-300/45 hover:text-gold-100"
+                      >
+                        Voir le concours
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedCommentPost && (
+        <div className="fixed inset-0 z-[60] bg-night-950/82 backdrop-blur-md">
+          <div className="absolute inset-x-0 bottom-0 max-h-[88vh] overflow-hidden rounded-t-[32px] border border-white/8 bg-night-950 shadow-[0_-20px_60px_rgba(0,0,0,0.45)]">
+            <div className="mx-auto mb-3 h-1.5 w-16 rounded-full bg-white/20" />
+            <div className="flex items-center justify-between px-4 pt-1">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.28em] text-gold-300/80">Commentaires</p>
+                <h2 className="font-display text-xl text-gold-100">Sous le post de {selectedCommentPost.authorName}</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedCommentPostId(null)}
+                className="rounded-full border border-white/10 px-3 py-1.5 text-sm text-ivory/70"
+              >
+                Fermer
+              </button>
+            </div>
+            <div className="max-h-[76vh] overflow-y-auto px-4 pb-5 pt-3">
+                <PostComments
+                  postId={selectedCommentPost.id}
+                  comments={selectedCommentPost.comments}
+                  postAuthorId={selectedCommentPost.authorId}
+                  profileOverrides={profilesById}
+                  highlightedCommentId={highlightedCommentId}
+                />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pendingDeletePostId && (
+        <div className="fixed inset-0 z-[80] bg-night-950/88 backdrop-blur-md">
+          <div className="flex h-full w-full items-end justify-center p-4 sm:items-center">
+            <div className="w-full max-w-md rounded-[28px] border border-white/10 bg-night-950 p-5 shadow-[0_30px_90px_rgba(0,0,0,0.5)]">
+              <p className="text-[10px] uppercase tracking-[0.28em] text-gold-300/80">
+                Suppression du post
+              </p>
+              <h2 className="mt-2 font-display text-2xl text-gold-100">
+                Supprimer définitivement ce post ?
+              </h2>
+              <p className="mt-3 text-sm leading-6 text-ivory/75">
+                Cette action retire le post du feed, du profil et des pages liées.
+                Elle est irréversible.
+              </p>
+              <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setPendingDeletePostId(null)}
+                  className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/10 px-4 py-2 text-sm text-ivory/75 transition hover:border-white/20 hover:text-ivory"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const targetId = pendingDeletePostId;
+                    setPendingDeletePostId(null);
+                    if (targetId) void removePost(targetId);
+                  }}
+                  className="inline-flex min-h-11 items-center justify-center rounded-full bg-rose-500/20 px-4 py-2 text-sm font-semibold text-rose-100 transition hover:bg-rose-500/30"
+                >
+                  Supprimer
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-14">
@@ -541,8 +1133,15 @@ export function Community() {
               />
               <div className="flex-1 space-y-3">
                 <textarea
+                  ref={draftTextAreaRef}
                   value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
+                  onChange={(e) => {
+                    setDraft(e.target.value);
+                    setDraftCursor(e.target.selectionStart ?? e.target.value.length);
+                  }}
+                  onSelect={syncDraftCursor}
+                  onClick={syncDraftCursor}
+                  onKeyUp={syncDraftCursor}
                   placeholder={
                     user
                       ? "Partage quelque chose avec la communauté..."
@@ -551,14 +1150,47 @@ export function Community() {
                   rows={3}
                   className="glass-input resize-none"
                 />
+                {hashtagSuggestionState.active && hashtagSuggestionState.suggestions.length > 0 && (
+                  <div className="rounded-2xl border border-gold-400/20 bg-night-950/55 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[11px] uppercase tracking-[0.22em] text-gold-200/80">
+                        Hashtags suggérés
+                      </p>
+                      <span className="text-[11px] text-ivory/45">
+                        {hashtagSuggestionState.query ? `#${hashtagSuggestionState.query}` : "#"}
+                      </span>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {hashtagSuggestionState.suggestions.map((tag) => (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => insertSuggestedHashtag(tag)}
+                          className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-ivory/80 transition hover:border-gold-300/55 hover:text-gold-100"
+                        >
+                          <Sparkles className="h-3.5 w-3.5" />
+                          #{tag}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr),220px]">
                   <div className="space-y-3">
                     <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
                       <input
                         ref={fileInputRef}
                         type="file"
-                        accept="image/jpeg,image/png,image/webp,image/gif"
-                        onChange={onPickImage}
+                        accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime,video/ogg"
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          if (!file) return;
+                          if (isVideoFile(file.type)) {
+                            onPickVideo(event);
+                            return;
+                          }
+                          onPickImage(event);
+                        }}
                         className="hidden"
                       />
                       <button
@@ -567,7 +1199,7 @@ export function Community() {
                         className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-royal-500/30 px-4 py-2 text-sm text-ivory/80 transition hover:border-gold-400/60 hover:text-gold-200"
                       >
                         <Image className="h-4 w-4" />
-                        Importer une image
+                        Importer une image ou vidéo
                       </button>
                       <div className="relative min-w-0 flex-1">
                         <Film className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ivory/40" />
@@ -583,28 +1215,62 @@ export function Community() {
                       </button>
                     </div>
                     <p className="text-xs text-ivory/45">
-                      Import direct depuis ton téléphone ou ton ordinateur. Le champ URL d'image a été retiré.
+                      Import direct depuis ton téléphone ou ton ordinateur. Tu peux ajouter une image ou une vidéo, ou coller une URL vidéo.
                     </p>
-                    {imagePreviewUrl && (
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setDraft((current) =>
+                            current.includes("#concoursdessin")
+                              ? current
+                              : `${current}${current.trim() ? " " : ""}#concoursdessin`,
+                          )
+                        }
+                        className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-gold-300/25 bg-gold-500/10 px-3 py-1.5 text-xs text-gold-100 transition hover:border-gold-300/55 hover:bg-gold-500/15"
+                      >
+                        <Sparkles className="h-3.5 w-3.5" />
+                        Ajouter #concoursdessin
+                      </button>
+                      <Link
+                        to={drawingContestUrl()}
+                        className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-ivory/70 transition hover:border-gold-300/45 hover:text-gold-100"
+                      >
+                        Voir le concours
+                      </Link>
+                    </div>
+                    {(imagePreviewUrl || videoPreviewUrl) && (
                       <div className="rounded-2xl border border-royal-500/30 bg-night-900/55 p-3">
                         <div className="mb-2 flex items-center justify-between gap-3">
                           <p className="truncate text-xs text-ivory/65">
-                            {imageFile?.name}
+                            {imageFile?.name ?? videoFile?.name}
                           </p>
                           <button
                             type="button"
-                            onClick={clearSelectedImage}
+                            onClick={() => {
+                              clearSelectedImage();
+                              clearSelectedVideo();
+                            }}
                             className="rounded-full p-1 text-ivory/45 transition hover:text-rose-300"
-                            aria-label="Retirer l'image"
+                            aria-label="Retirer le média"
                           >
                             <X className="h-4 w-4" />
                           </button>
                         </div>
-                        <img
-                          src={imagePreviewUrl}
-                          alt="Apercu du post"
-                          className="max-h-56 w-full rounded-xl object-cover"
-                        />
+                        {imagePreviewUrl ? (
+                          <img
+                            src={imagePreviewUrl ?? undefined}
+                            alt="Apercu du post"
+                            className="max-h-56 w-full rounded-xl object-cover"
+                          />
+                        ) : videoPreviewUrl ? (
+                          <video
+                            src={videoPreviewUrl ?? undefined}
+                            controls
+                            playsInline
+                            className="max-h-56 w-full rounded-xl object-cover"
+                          />
+                        ) : null}
                       </div>
                     )}
                   </div>
@@ -659,7 +1325,7 @@ export function Community() {
           </form>
 
           <ul className="mt-6 space-y-4">
-            {sorted.map((post, index) => {
+            {feedPosts.map((post, index) => {
               const profile = resolvedProfile(post.authorId);
               const displayName = profile?.username || post.authorName;
               const displayHandle = profile?.handle ?? post.authorHandle ?? null;
@@ -678,6 +1344,8 @@ export function Community() {
                     "card-royal p-5",
                     post.postType === "official_event" &&
                       "border-gold-300/45 bg-gradient-to-br from-gold-500/10 via-royal-900/45 to-night-950",
+                    highlightedPostId === post.id &&
+                      "ring-2 ring-gold-300/65 ring-offset-2 ring-offset-night-950/80",
                   )}
                 >
                 <header className="flex flex-wrap items-start gap-3">
@@ -739,6 +1407,12 @@ export function Community() {
                         {post.officialLabel ?? "Annonce officielle"}
                       </div>
                     )}
+                    {isDrawingContestEntry(post) && (
+                      <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-emerald-300/40 bg-emerald-500/12 px-3 py-1 font-regal text-[10px] font-semibold uppercase tracking-[0.22em] text-emerald-100">
+                        <Trophy className="h-3.5 w-3.5" />
+                        Participation concours
+                      </div>
+                    )}
                     {editingPost === post.id ? (
                       <div className="mt-2">
                         <textarea
@@ -797,6 +1471,59 @@ export function Community() {
                             />
                           </div>
                         ) : null}
+                        {post.videoUrl && (
+                          <div className="mt-2 rounded-xl border border-royal-500/30 bg-night-900/55 p-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-xs text-ivory/65">Miniature vidéo</p>
+                              {editOriginalVideoThumbnailUrl || editVideoThumbnailPreviewUrl ? (
+                                <button
+                                  type="button"
+                                  onClick={clearEditVideoThumbnail}
+                                  className="rounded-full p-1 text-ivory/45 transition hover:text-rose-300"
+                                  aria-label="Retirer la miniature"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              ) : null}
+                            </div>
+                            {editVideoThumbnailPreviewUrl ? (
+                              <img
+                                src={editVideoThumbnailPreviewUrl}
+                                alt="Nouvelle miniature vidéo"
+                                className="mt-2 max-h-40 w-full rounded-lg object-cover"
+                              />
+                            ) : !editVideoThumbnailRemoved && editOriginalVideoThumbnailUrl ? (
+                              <img
+                                src={editOriginalVideoThumbnailUrl}
+                                alt="Miniature vidéo actuelle"
+                                className="mt-2 max-h-40 w-full rounded-lg object-cover"
+                              />
+                            ) : (
+                              <div className="mt-2 flex min-h-24 items-center justify-center rounded-lg border border-dashed border-white/10 bg-night-950/35 px-3 text-center text-xs text-ivory/45">
+                                Aucune miniature personnalisée pour cette vidéo
+                              </div>
+                            )}
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              <input
+                                ref={editThumbnailFileInputRef}
+                                type="file"
+                                accept="image/jpeg,image/png,image/webp,image/gif"
+                                onChange={onPickEditVideoThumbnail}
+                                className="hidden"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => editThumbnailFileInputRef.current?.click()}
+                                className="inline-flex items-center gap-1.5 rounded-full border border-royal-500/30 px-3 py-1.5 text-xs text-ivory/60 transition hover:border-gold-400/60 hover:text-gold-200"
+                              >
+                                <Image className="h-3.5 w-3.5" />
+                                {editOriginalVideoThumbnailUrl && !editVideoThumbnailFile && !editVideoThumbnailRemoved
+                                  ? "Changer la miniature"
+                                  : "Ajouter une miniature"}
+                              </button>
+                            </div>
+                          </div>
+                        )}
                         <div className="mt-2 flex items-center gap-2">
                           <button
                             type="button"
@@ -809,13 +1536,15 @@ export function Community() {
                               : "Ajouter une image"}
                           </button>
                           <button
-                            onClick={() => saveEditPost(post.id)}
+                            type="button"
+                            onClick={() => void saveEditPost(post.id)}
                             className="inline-flex items-center gap-1.5 rounded-full bg-gold-500/20 px-3 py-1.5 text-xs font-semibold text-gold-200 transition hover:bg-gold-500/30"
                           >
                             <Check className="h-3.5 w-3.5" />
                             Enregistrer
                           </button>
                           <button
+                            type="button"
                             onClick={() => {
                               setEditingPost(null);
                               setEditDraft("");
@@ -824,6 +1553,17 @@ export function Community() {
                               setEditImagePreviewUrl(null);
                               setEditImageRemoved(false);
                               setEditOriginalImageUrl(undefined);
+                              if (editFileInputRef.current) editFileInputRef.current.value = "";
+                              if (editThumbnailFileInputRef.current) {
+                                editThumbnailFileInputRef.current.value = "";
+                              }
+                              if (editVideoThumbnailPreviewUrl) {
+                                URL.revokeObjectURL(editVideoThumbnailPreviewUrl);
+                              }
+                              setEditVideoThumbnailFile(null);
+                              setEditVideoThumbnailPreviewUrl(null);
+                              setEditVideoThumbnailRemoved(false);
+                              setEditOriginalVideoThumbnailUrl(undefined);
                             }}
                             className="inline-flex items-center gap-1.5 rounded-full border border-royal-500/30 px-3 py-1.5 text-xs text-ivory/60 transition hover:text-ivory/90"
                           >
@@ -833,7 +1573,7 @@ export function Community() {
                         </div>
                       </div>
                     ) : (
-                      <RichMentionText
+                      <RichSocialText
                         content={post.content}
                         mentionsByHandle={mentionTargets}
                         profileHref={profileHref}
@@ -844,7 +1584,7 @@ export function Community() {
                   <div className="ml-auto flex items-center gap-1.5">
                     <button
                       onClick={() => {
-                        const url = `${window.location.origin}/communaute#post-${post.id}`;
+                        const url = `${window.location.origin}/communaute/post/${post.id}`;
                         if (navigator.share) {
                           navigator.share({
                             title: `Post de ${post.authorName}`,
@@ -862,12 +1602,28 @@ export function Community() {
                     >
                       <Share2 className="h-4 w-4" />
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => toggleSave(post.id)}
+                      className={`text-ivory/40 transition ${
+                        savedPostIds.has(post.id)
+                          ? "text-gold-200 hover:text-gold-100"
+                          : "hover:text-gold-200"
+                      }`}
+                      title={savedPostIds.has(post.id) ? "Enregistré" : "Enregistrer"}
+                    >
+                      {savedPostIds.has(post.id) ? (
+                        <BookmarkCheck className="h-4 w-4" />
+                      ) : (
+                        <Bookmark className="h-4 w-4" />
+                      )}
+                    </button>
                     {user && user.id !== post.authorId && (
                       <ReportButton
                         targetType="post"
                         targetId={post.id}
                         targetLabel={`Post de ${post.authorName}`}
-                        targetUrl={`/communaute#post-${post.id}`}
+                        targetUrl={`/communaute/post/${post.id}`}
                         compact
                       />
                     )}
@@ -882,7 +1638,7 @@ export function Community() {
                     )}
                     {(user?.id === post.authorId || isQueen) && (
                       <button
-                        onClick={() => removePost(post.id)}
+                        onClick={() => setPendingDeletePostId(post.id)}
                         className="text-ivory/40 hover:text-rose-300"
                         title="Supprimer"
                       >
@@ -902,29 +1658,41 @@ export function Community() {
                     }))
                   }
                 />
-                {post.videoUrl && <PostVideo url={post.videoUrl} />}
+                {post.videoUrl && (
+                  <PostVideo url={post.videoUrl} thumbnailUrl={post.videoThumbnailUrl} />
+                )}
                 <div className="mt-4 flex flex-wrap items-center gap-2">
-                  {QUICK_EMOJIS.map((emoji) => {
-                    const count = post.reactions[emoji]?.length ?? 0;
+                  {(() => {
+                    const likeCount = Object.values(post.reactions ?? {}).reduce(
+                      (sum, usersList) => sum + usersList.length,
+                      0,
+                    );
                     const active = user
-                      ? post.reactions[emoji]?.includes(user.id)
+                      ? Object.values(post.reactions ?? {}).some((usersList) =>
+                          usersList.includes(user.id),
+                        )
                       : false;
                     return (
                       <button
-                        key={emoji}
-                        onClick={() => react(post.id, emoji)}
-                        className={`rounded-full border px-3 py-1 text-sm transition ${
+                        type="button"
+                        onClick={() => react(post.id, LIKE_EMOJI)}
+                        className={`inline-flex min-h-10 items-center gap-1.5 rounded-full border px-4 py-1.5 text-sm transition ${
                           active
                             ? "border-gold-400/70 bg-gold-500/15 text-gold-200"
                             : "border-royal-500/30 text-ivory/70 hover:border-gold-400/40"
                         }`}
                       >
-                        {emoji}
-                        {count > 0 && <span className="ml-1 text-xs">{count}</span>}
+                        <Heart
+                          className="h-4 w-4"
+                          fill={active ? "currentColor" : "none"}
+                        />
+                        Like
+                        {likeCount > 0 && <span className="text-xs">{likeCount}</span>}
                       </button>
                     );
-                  })}
+                  })()}
                   <button
+                    type="button"
                     onClick={() =>
                       setOpenComments((current) => ({
                         ...current,
@@ -1166,7 +1934,14 @@ function PostImageAttachment({
   );
 }
 
-function PostVideo({ url }: { url: string }) {
+function PostVideo({
+  url,
+  thumbnailUrl,
+}: {
+  url: string;
+  thumbnailUrl?: string;
+}) {
+  const [audioEnabled, setAudioEnabled] = useState(false);
   const parsed = parseVideoUrl(url);
   if (!parsed) return null;
 
@@ -1188,14 +1963,36 @@ function PostVideo({ url }: { url: string }) {
 
   if (parsed.kind === "file") {
     return (
-      <video
-        controls
-        preload="metadata"
-        className="mt-4 max-h-[500px] w-full rounded-xl border border-royal-500/30 bg-night-800"
-      >
-        <source src={parsed.src} />
-        Votre navigateur ne supporte pas la lecture video.
-      </video>
+      <div className="relative mt-4 overflow-hidden rounded-xl border border-royal-500/30 bg-night-800">
+        <video
+          controls
+          preload="metadata"
+          poster={thumbnailUrl ?? undefined}
+          className="max-h-[500px] w-full bg-night-800"
+          muted={!audioEnabled}
+          playsInline
+        >
+          <source src={parsed.src} />
+          Votre navigateur ne supporte pas la lecture video.
+        </video>
+        <button
+          type="button"
+          onClick={() => setAudioEnabled((current) => !current)}
+          className="absolute right-3 top-3 inline-flex min-h-10 items-center gap-2 rounded-full border border-white/12 bg-night-950/75 px-3 py-2 text-xs text-ivory/90 backdrop-blur-md transition hover:border-gold-400/45 hover:text-gold-100"
+        >
+          {audioEnabled ? (
+            <>
+              <Volume2 className="h-4 w-4" />
+              Son
+            </>
+          ) : (
+            <>
+              <VolumeX className="h-4 w-4" />
+              Muet
+            </>
+          )}
+        </button>
+      </div>
     );
   }
 

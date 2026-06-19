@@ -62,12 +62,14 @@ export async function apiCreatePost(input: {
   content: string;
   imageUrl?: string;
   videoUrl?: string;
+  videoThumbnailUrl?: string;
 }): Promise<CommunityPost> {
   const body = {
     ...input.author,
     content: input.content,
     image_url: input.imageUrl,
     video_url: input.videoUrl,
+    video_thumbnail_url: input.videoThumbnailUrl,
   };
   return (await request<CommunityPost>("/posts", {
     method: "POST",
@@ -93,6 +95,17 @@ export async function apiUploadCommunityImage(
   })) as CommunityImageUploadDto;
 }
 
+export async function apiUploadCommunityVideo(
+  file: File,
+): Promise<CommunityImageUploadDto> {
+  const body = new FormData();
+  body.append("video", file);
+  return (await request<CommunityImageUploadDto>("/posts/uploads/video", {
+    method: "POST",
+    body,
+  })) as CommunityImageUploadDto;
+}
+
 export async function apiUpdatePost(
   postId: string,
   input: {
@@ -100,12 +113,15 @@ export async function apiUpdatePost(
     content?: string;
     imageUrl?: string;
     videoUrl?: string;
+    videoThumbnailUrl?: string;
   },
 ): Promise<CommunityPost> {
   const body: Record<string, string> = { user_id: input.userId };
   if (input.content !== undefined) body.content = input.content;
   if (input.imageUrl !== undefined) body.image_url = input.imageUrl;
   if (input.videoUrl !== undefined) body.video_url = input.videoUrl;
+  if (input.videoThumbnailUrl !== undefined)
+    body.video_thumbnail_url = input.videoThumbnailUrl;
   return (await request<CommunityPost>(
     `/posts/${encodeURIComponent(postId)}`,
     { method: "PATCH", body: JSON.stringify(body) },
@@ -233,6 +249,57 @@ export async function apiSyncCommunityActivityRewards(): Promise<CommunityActivi
     "/posts/activity-rewards/sync",
     { method: "POST" },
   )) as CommunityActivityRewardSyncDto;
+}
+
+export interface DrawingContestEntryDto {
+  id: string;
+  authorId: string;
+  authorName: string;
+  authorHandle: string | null;
+  authorGrade: StreamerGradeDto | null;
+  authorAvatar: string;
+  content: string;
+  imageUrl: string | null;
+  createdAt: string;
+  likeCount: number;
+  participantRank: number;
+  eligible: boolean;
+}
+
+export interface DrawingContestStatusDto {
+  contestId: string;
+  hashtag: string;
+  startsAt: string;
+  endsAt: string;
+  active: boolean;
+  now: string;
+  timeRemainingMs: number;
+  rewardLueurs: number;
+  rewardFood: number;
+  announcementPostId: string;
+  entries: DrawingContestEntryDto[];
+  topEntry: DrawingContestEntryDto | null;
+  winnerAwarded: boolean;
+}
+
+export interface DrawingContestSettlementDto {
+  contestId: string;
+  active: boolean;
+  alreadyAwarded: boolean;
+  winner: DrawingContestEntryDto | null;
+  awardedAt: string | null;
+  rewardLueurs: number;
+  rewardFood: number;
+}
+
+export async function apiGetDrawingContestStatus(): Promise<DrawingContestStatusDto> {
+  return (await request<DrawingContestStatusDto>("/posts/contests/drawing")) as DrawingContestStatusDto;
+}
+
+export async function apiSettleDrawingContest(): Promise<DrawingContestSettlementDto> {
+  return (await request<DrawingContestSettlementDto>("/posts/contests/drawing/settle", {
+    method: "POST",
+  })) as DrawingContestSettlementDto;
 }
 
 export interface OracleRewardDto {
@@ -668,7 +735,7 @@ export async function apiSendWorldInteraction(
   worldId: string,
   payload: {
     targetUserId: string;
-    kind: "wave" | "heart" | "hug" | "applaud" | "dance" | "lueur";
+    kind: "wave" | "heart" | "hug" | "applaud" | "dance" | "lueur" | "sit" | "swing";
   },
 ): Promise<WorldPresenceDto> {
   return (await sessionRequest<WorldPresenceDto>(

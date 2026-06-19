@@ -28,6 +28,7 @@ import { AvatarImage } from "../components/AvatarImage";
 import type { World3DPlayer } from "../components/worlds/World3DStage";
 import { FollowButton } from "../components/FollowButton";
 import { Handle } from "../components/Handle";
+import { WorldGameShell } from "../components/worlds/WorldGameShell";
 import { useAuth } from "../contexts/AuthContext";
 import { useLive } from "../contexts/LiveContext";
 import { useProfile } from "../contexts/ProfileContext";
@@ -54,6 +55,14 @@ import {
 import { formatRelative } from "../lib/helpers";
 
 type DistrictId = "place" | "arcades" | "observatory";
+
+interface WorldSpeechBubble {
+  id: string;
+  userId: string;
+  content: string;
+  createdAt: number;
+  expiresAt: number;
+}
 
 const World3DStage = lazy(() => import("../components/worlds/World3DStage"));
 
@@ -150,6 +159,7 @@ interface WorldHotspot {
   reward: number;
   glyph: string;
   resonance: string;
+  kind?: WorldCuteInteractionKind | "inspect";
 }
 
 interface WorldAmbientEvent {
@@ -175,7 +185,9 @@ type WorldCuteInteractionKind =
   | "hug"
   | "applaud"
   | "dance"
-  | "lueur";
+  | "lueur"
+  | "sit"
+  | "swing";
 
 const WORLD_ID = "main";
 const WORLD_LUEUR_DAILY_CAP = 90;
@@ -293,6 +305,21 @@ const DISTRICT_HOTSPOTS: Record<DistrictId, WorldHotspot[]> = {
       reward: 5,
       glyph: "F",
       resonance: "Le cercle d'eau renvoie une benediction chaude sur toute la place.",
+      kind: "inspect",
+    },
+    {
+      id: "place-bench",
+      district: "place",
+      title: "Banc des veilleurs",
+      hint: "La pierre semble inviter au repos.",
+      description: "Un banc discret sous la lumière douce du soir.",
+      x: 58,
+      y: 58,
+      radius: 9,
+      reward: 2,
+      glyph: "B",
+      resonance: "Les gravures du banc réchauffent doucement la place.",
+      kind: "sit",
     },
     {
       id: "place-garden",
@@ -306,6 +333,7 @@ const DISTRICT_HOTSPOTS: Record<DistrictId, WorldHotspot[]> = {
       reward: 4,
       glyph: "R",
       resonance: "Les petales se soulevent puis laissent tomber des poussières d'aube.",
+      kind: "inspect",
     },
   ],
   arcades: [
@@ -321,6 +349,7 @@ const DISTRICT_HOTSPOTS: Record<DistrictId, WorldHotspot[]> = {
       reward: 5,
       glyph: "M",
       resonance: "Les vitrines se synchronisent et allument la galerie pendant quelques secondes.",
+      kind: "inspect",
     },
     {
       id: "arcades-workbench",
@@ -334,6 +363,21 @@ const DISTRICT_HOTSPOTS: Record<DistrictId, WorldHotspot[]> = {
       reward: 4,
       glyph: "A",
       resonance: "Une pulsation cyan traverse les panneaux et réveille des lueurs de vitrine.",
+      kind: "inspect",
+    },
+    {
+      id: "arcades-swing",
+      district: "arcades",
+      title: "Balançoire néon",
+      hint: "Elle bouge si quelqu'un s'y installe.",
+      description: "Une balançoire légère installée près du couloir principal.",
+      x: 70,
+      y: 58,
+      radius: 10,
+      reward: 2,
+      glyph: "S",
+      resonance: "La structure néon se met à osciller doucement.",
+      kind: "swing",
     },
   ],
   observatory: [
@@ -349,6 +393,7 @@ const DISTRICT_HOTSPOTS: Record<DistrictId, WorldHotspot[]> = {
       reward: 6,
       glyph: "L",
       resonance: "Le dôme reflète la lune et fait pleuvoir quelques éclats rares.",
+      kind: "inspect",
     },
     {
       id: "observatory-rail",
@@ -362,6 +407,7 @@ const DISTRICT_HOTSPOTS: Record<DistrictId, WorldHotspot[]> = {
       reward: 4,
       glyph: "C",
       resonance: "Une trame froide traverse le balcon et réveille la bordure du ciel.",
+      kind: "inspect",
     },
   ],
 };
@@ -488,6 +534,18 @@ const WORLD_INTERACTION_META: Record<
     toast: "Petite lueur envoyée.",
     copy: (actor, target) => `${actor} envoie une petite lueur scintillante a ${target}.`,
   },
+  sit: {
+    label: "S'asseoir",
+    emoji: "🪑",
+    toast: "Position assise activée.",
+    copy: (actor, target) => `${actor} s'installe tranquillement avec ${target}.`,
+  },
+  swing: {
+    label: "Se balancer",
+    emoji: "🌙",
+    toast: "Balancement activé.",
+    copy: (actor, target) => `${actor} se balance doucement près de ${target}.`,
+  },
 };
 
 function toApiDetail(error: unknown, fallback: string) {
@@ -511,6 +569,16 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
   const familiarsLoadingRef = useRef<Record<string, boolean>>({});
   const [chatMessages, setChatMessages] = useState<WorldChatMessage[]>(BASE_CHAT);
   const [chatInput, setChatInput] = useState("");
+  const chatInputRef = useRef<HTMLInputElement | null>(null);
+  const [worldChatExpanded, setWorldChatExpanded] = useState(false);
+  const [worldChatAttention, setWorldChatAttention] = useState(0);
+  const [worldEmotesOpen, setWorldEmotesOpen] = useState(false);
+  const [worldEmotePulse, setWorldEmotePulse] = useState<{
+    kind: WorldCuteInteractionKind;
+    userIds: string[];
+    expiresAt: number;
+  } | null>(null);
+  const [worldSpeechBubbles, setWorldSpeechBubbles] = useState<WorldSpeechBubble[]>([]);
   const [worldMembers, setWorldMembers] = useState<WorldPresenceDto[]>([]);
   const [selectedMember, setSelectedMember] = useState<SelectedWorldMember | null>(null);
   const [memberActionBusy, setMemberActionBusy] = useState<string | null>(null);
@@ -561,7 +629,38 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
   const [worldBooting, setWorldBooting] = useState(dedicatedMode);
   const [worldBootStep, setWorldBootStep] = useState(0);
   const [worldMenuOpen, setWorldMenuOpen] = useState(false);
+  const [worldSwitchingTo, setWorldSwitchingTo] = useState<DistrictId | null>(null);
+  const [worldViewportLandscape, setWorldViewportLandscape] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.matchMedia("(orientation: landscape)").matches || window.innerWidth > window.innerHeight;
+  });
+  const worldSwitchTimerRef = useRef<number | null>(null);
   const worldGameActive = dedicatedMode || isWorldFullscreen;
+  const worldLandscapeMode = worldGameActive && worldViewportLandscape;
+
+  const focusWorldChatInput = useCallback(() => {
+    const input = chatInputRef.current;
+    if (!input) return;
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        input.focus({ preventScroll: true });
+        input.scrollIntoView({ block: "nearest", inline: "nearest" });
+      });
+    });
+  }, []);
+
+  const openWorldChat = useCallback(() => {
+    setWorldMenuOpen(false);
+    setWorldChatExpanded(true);
+    setWorldChatAttention((value) => value + 1);
+    focusWorldChatInput();
+  }, [focusWorldChatInput]);
+
+  const openWorldEmotes = useCallback(() => {
+    setWorldMenuOpen(false);
+    setWorldEmotesOpen(true);
+  }, []);
+
   function handlePointerDown() {
     // Clicking or tapping the map should not teleport the player.
   }
@@ -600,6 +699,12 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
     setWorldBooting(false);
     setIsWorldFullscreen(false);
     setWorldMenuOpen(false);
+    setWorldSwitchingTo(null);
+    setWorldSpeechBubbles([]);
+    if (worldSwitchTimerRef.current !== null) {
+      window.clearTimeout(worldSwitchTimerRef.current);
+      worldSwitchTimerRef.current = null;
+    }
     setWorldBootStep(0);
     void document.exitFullscreen?.().catch(() => undefined);
     if (dedicatedMode) {
@@ -611,6 +716,42 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
       navigate(returnTo, { replace: true });
     }
   }, [dedicatedMode, location.pathname, location.state, navigate]);
+
+  const switchWorld = useCallback(
+    (nextDistrict: DistrictId) => {
+      if (nextDistrict === district || worldSwitchingTo) return;
+      setWorldMenuOpen(false);
+      setWorldSwitchingTo(nextDistrict);
+      if (worldSwitchTimerRef.current !== null) {
+        window.clearTimeout(worldSwitchTimerRef.current);
+      }
+      worldSwitchTimerRef.current = window.setTimeout(() => {
+        setDistrict(nextDistrict);
+        setWorldSwitchingTo(null);
+        setWorldBooting(false);
+        setIsWorldFullscreen(true);
+        worldSwitchTimerRef.current = null;
+      }, 560);
+    },
+    [district, worldSwitchingTo],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (worldSwitchTimerRef.current !== null) {
+        window.clearTimeout(worldSwitchTimerRef.current);
+        worldSwitchTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const now = Date.now();
+      setWorldSpeechBubbles((current) => current.filter((bubble) => bubble.expiresAt > now));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (!worldBooting) return undefined;
@@ -683,7 +824,7 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
         entry,
         distance: distancePct(position.x, position.y, entry.x, entry.y),
       }))
-      .filter((item) => item.distance <= item.entry.radius + 4)
+      .filter((item) => item.distance <= item.entry.radius + 5.5)
       .sort((a, b) => a.distance - b.distance)[0]?.entry ?? null;
   }, [districtHotspots, position.x, position.y]);
 
@@ -759,6 +900,12 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
   );
 
   const world3DPlayers = useMemo<World3DPlayer[]>(() => {
+    const activePulse =
+      worldEmotePulse && worldEmotePulse.expiresAt > worldClock ? worldEmotePulse : null;
+    const interactionFor = (playerId: string, fallback: string | null) => {
+      if (!activePulse) return fallback;
+      return activePulse.userIds.includes(playerId) ? activePulse.kind : fallback;
+    };
     const selfPlayer: World3DPlayer | null = user
       ? {
           id: user.id,
@@ -768,7 +915,7 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
           isSelf: true,
           voiceEnabled: micEnabled,
           isSpeaking: micEnabled && voiceLevel > 12,
-          interactionKind: myWorldPresence?.interactionKind ?? null,
+          interactionKind: interactionFor(user.id, myWorldPresence?.interactionKind ?? null),
           appearance: {
             avatarUrl: profile?.avatarUrl ?? null,
             outfit3d: profile?.equipped?.outfit3d ?? null,
@@ -790,7 +937,7 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
       y: member.y,
       voiceEnabled: member.voiceEnabled,
       isSpeaking: member.voiceEnabled,
-      interactionKind: member.interactionKind ?? null,
+      interactionKind: interactionFor(member.id, member.interactionKind ?? null),
       appearance: member.appearance ?? null,
       familiarIcon: otherFamiliars[member.id]?.icon ?? null,
       familiarColor: otherFamiliars[member.id]?.color ?? null,
@@ -816,6 +963,8 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
     profile?.equipped?.frame,
     profile?.equipped?.outfit3d,
     stageMembers,
+    worldClock,
+    worldEmotePulse,
     user,
     micEnabled,
     voiceLevel,
@@ -1190,6 +1339,25 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
   }, [worldGameActive]);
 
   useEffect(() => {
+    if (!worldGameActive || typeof window === "undefined") return undefined;
+    const mediaQuery = window.matchMedia("(orientation: landscape)");
+    const updateViewportMode = () => {
+      setWorldViewportLandscape(mediaQuery.matches || window.innerWidth > window.innerHeight);
+    };
+    updateViewportMode();
+    mediaQuery.addEventListener?.("change", updateViewportMode);
+    window.addEventListener("resize", updateViewportMode);
+    window.addEventListener("orientationchange", updateViewportMode);
+    window.visualViewport?.addEventListener("resize", updateViewportMode);
+    return () => {
+      mediaQuery.removeEventListener?.("change", updateViewportMode);
+      window.removeEventListener("resize", updateViewportMode);
+      window.removeEventListener("orientationchange", updateViewportMode);
+      window.visualViewport?.removeEventListener("resize", updateViewportMode);
+    };
+  }, [worldGameActive]);
+
+  useEffect(() => {
     if (!worldMenuOpen) return undefined;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -1257,6 +1425,13 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
   function triggerWorld3DHotspot(hotspotId: string) {
     const hotspot = districtHotspots.find((entry) => entry.id === hotspotId);
     if (!hotspot) return;
+    if (hotspot.kind && hotspot.kind !== "inspect") {
+      const selfId = user?.id ?? selectedMember?.member.id ?? hotspot.id;
+      const actor = user?.username ?? "Visiteur";
+      void sendWorldInteraction(hotspot.kind, selfId, hotspot.title, { messageTarget: hotspot.title });
+      addWorldMessage("Monde", `${actor} utilise ${hotspot.title.toLowerCase()}.`);
+      return;
+    }
     triggerHotspot(hotspot);
   }
 
@@ -1264,6 +1439,7 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
     const cleaned = chatInput.trim();
     if (!cleaned) return;
     const author = user?.username ?? "Visiteur";
+    const now = Date.now();
     setChatMessages((current) => {
       const nextMessage: WorldChatMessage = {
         id: `msg-${Date.now()}`,
@@ -1276,6 +1452,20 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
       };
       return [nextMessage, ...current].slice(0, 12);
     });
+    if (user?.id) {
+      setWorldSpeechBubbles((current) => {
+        const nextBubble: WorldSpeechBubble = {
+          id: `bubble-${user.id}-${now}`,
+          userId: user.id,
+          content: cleaned,
+          createdAt: now,
+          expiresAt: now + 5400,
+        };
+        return [nextBubble, ...current]
+          .filter((bubble) => bubble.expiresAt > now)
+          .slice(0, 10);
+      });
+    }
     setChatInput("");
   }
 
@@ -1306,20 +1496,26 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
     }
   }
 
-  async function sendCuteAction(kind: WorldCuteInteractionKind) {
-    if (!selectedMember) return;
-    const target = selectedMember.profile?.username ?? selectedMember.member.username;
+  async function sendWorldInteraction(
+    kind: WorldCuteInteractionKind,
+    targetUserId: string,
+    targetLabel: string,
+    options?: { messageTarget?: string },
+  ) {
     const actor = user?.username ?? "Visiteur";
     const meta = WORLD_INTERACTION_META[kind];
+    const expiresAt = Date.now() + 5200;
+    const userIds = Array.from(new Set([user?.id, targetUserId].filter(Boolean))) as string[];
+    setWorldEmotePulse({ kind, userIds, expiresAt });
     setMemberActionBusy(kind);
     try {
       await apiSendWorldInteraction(WORLD_ID, {
-        targetUserId: selectedMember.member.id,
+        targetUserId,
         kind,
       });
       await refreshWorldPresence();
-      addWorldMessage("Lien social", meta.copy(actor, target));
-      notify(`${meta.toast} ${target}.`, "success");
+      addWorldMessage("Lien social", meta.copy(actor, options?.messageTarget ?? targetLabel));
+      notify(`${meta.toast} ${targetLabel}.`, "success");
     } catch (err) {
       if (err instanceof ApiError && err.status === 429) {
         notify("Interaction trop rapide. Attends un instant.", "info");
@@ -1329,6 +1525,12 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
     } finally {
       setMemberActionBusy(null);
     }
+  }
+
+  async function sendCuteAction(kind: WorldCuteInteractionKind) {
+    if (!selectedMember) return;
+    const target = selectedMember.profile?.username ?? selectedMember.member.username;
+    await sendWorldInteraction(kind, selectedMember.member.id, target);
   }
 
   async function requestPrivateVoice(targetUserId: string) {
@@ -1502,7 +1704,7 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
 
   function triggerHotspot(hotspot: WorldHotspot) {
     const distance = distancePct(position.x, position.y, hotspot.x, hotspot.y);
-    if (distance > hotspot.radius + 4) {
+    if (distance > hotspot.radius + 5.5) {
       notify(`Approche-toi de ${hotspot.title.toLowerCase()} pour l'activer.`, "info");
       return;
     }
@@ -1540,6 +1742,53 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
         "success",
       );
     }
+  }
+
+  if (worldBooting || worldGameActive) {
+    return (
+      <WorldGameShell
+        district={district}
+        selectedDistrict={selectedDistrict}
+        worldBooting={worldBooting}
+        worldBootStep={worldBootStep}
+        worldGameActive={worldGameActive}
+        worldLandscapeMode={worldLandscapeMode}
+        worldMenuOpen={worldMenuOpen}
+        worldSwitchingTo={worldSwitchingTo}
+        worldChatExpanded={worldChatExpanded}
+        worldChatAttention={worldChatAttention}
+        chatMessages={chatMessages}
+        chatInput={chatInput}
+        chatInputRef={chatInputRef}
+        voiceEnabled={voiceEnabled}
+        micEnabled={micEnabled}
+        voiceLoading={voiceLoading}
+        worldVoiceConnections={worldVoiceConnections}
+        currentChannelId={currentChannelId}
+        privateVoicePartnerId={privateVoicePartnerId}
+        ambientEvent={ambientEvent}
+        nearbyHotspot={nearbyHotspot}
+        lueurBursts={lueurBursts}
+        world3DPlayers={world3DPlayers}
+        visibleLueurs={visibleLueurs}
+        districtHotspots={districtHotspots}
+        worldSpeechBubbles={worldSpeechBubbles}
+        onMove={moveTo}
+        onSelectPlayer={selectWorld3DPlayer}
+        onCollectLueur={collectWorld3DLueur}
+        onTriggerHotspot={triggerWorld3DHotspot}
+        onToggleVoice={toggleVoice}
+        onOpenChat={openWorldChat}
+        onCloseChat={() => setWorldChatExpanded(false)}
+        onOpenEmotes={openWorldEmotes}
+        onToggleMenu={() => setWorldMenuOpen((current) => !current)}
+        onCloseMenu={() => setWorldMenuOpen(false)}
+        onSwitchWorld={switchWorld}
+        onExitWorld={exitWorldGame}
+        onSendMessage={sendMessage}
+        onChatInputChange={setChatInput}
+      />
+    );
   }
 
   return (
@@ -1794,14 +2043,17 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
                   </motion.div>
                 </div>
               )}
-              {worldGameActive && (
-                <div className="absolute right-[calc(0.75rem+env(safe-area-inset-right))] top-[calc(0.75rem+env(safe-area-inset-top))] z-40 flex items-center gap-3">
-                  <div className="rounded-2xl border border-white/10 bg-night-950/58 px-3 py-2 text-right backdrop-blur">
-                    <p className="text-[9px] uppercase tracking-[0.22em] text-gold-200/70">
-                      Mode monde
+              {worldSwitchingTo && (
+                <div className="absolute inset-0 z-[85] flex items-center justify-center bg-night-950/32 px-5 text-center backdrop-blur-sm">
+                  <div className="rounded-[28px] border border-white/12 bg-night-950/82 px-5 py-4 shadow-[0_24px_70px_rgba(0,0,0,0.38)]">
+                    <p className="text-[10px] uppercase tracking-[0.22em] text-gold-200/70">
+                      Changement de monde
                     </p>
-                    <p className="font-display text-sm text-gold-100">
-                      {selectedDistrict.name}
+                    <p className="mt-2 font-display text-lg text-gold-100">
+                      {DISTRICTS.find((entry) => entry.id === worldSwitchingTo)?.name ?? "Nouveau monde"}
+                    </p>
+                    <p className="mt-1 text-sm text-ivory/68">
+                      Synchronisation de la room et de l’avatar...
                     </p>
                   </div>
                 </div>
@@ -1827,6 +2079,7 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
                   players={world3DPlayers}
                   lueurs={visibleLueurs}
                   hotspots={districtHotspots}
+                  speechBubbles={worldSpeechBubbles}
                   onMove={moveTo}
                   onSelectPlayer={selectWorld3DPlayer}
                   onCollectLueur={collectWorld3DLueur}
@@ -1947,46 +2200,187 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
               </div>
 
               {worldGameActive && (
-                <div className="absolute bottom-[calc(0.85rem+env(safe-area-inset-bottom))] right-[calc(0.85rem+env(safe-area-inset-right))] z-50">
+                <>
+                  <button
+                    type="button"
+                    className="fixed inset-0 z-40 cursor-default bg-transparent"
+                    aria-label="Fermer le menu du monde"
+                    onClick={() => setWorldMenuOpen(false)}
+                    hidden={!worldMenuOpen}
+                  />
+                  <div className="absolute right-[calc(0.75rem+env(safe-area-inset-right))] top-[calc(0.75rem+env(safe-area-inset-top))] z-40 flex items-start gap-2">
+                    <div className="rounded-2xl border border-white/10 bg-night-950/58 px-3 py-2 text-right backdrop-blur">
+                      <p className="text-[9px] uppercase tracking-[0.22em] text-gold-200/70">
+                        Mode monde
+                      </p>
+                      <p className="font-display text-sm text-gold-100">
+                        {selectedDistrict.name}
+                      </p>
+                      {worldSwitchingTo && (
+                        <p className="mt-1 text-[10px] text-ivory/55">
+                          Changement vers{" "}
+                          {DISTRICTS.find((entry) => entry.id === worldSwitchingTo)?.name ?? "le monde"}...
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setWorldMenuOpen((current) => !current)}
+                      className="inline-flex h-11 min-h-11 w-11 min-w-11 items-center justify-center rounded-full border border-white/15 bg-night-950/76 text-ivory/86 shadow-[0_18px_58px_rgba(0,0,0,0.42)] backdrop-blur-xl transition hover:border-gold-300/45 hover:text-gold-100 active:scale-95"
+                      aria-haspopup="menu"
+                      aria-expanded={worldMenuOpen}
+                      aria-label="Ouvrir le menu du monde"
+                    >
+                      <MoreHorizontal className="h-5 w-5" />
+                    </button>
+                  </div>
+                  <div className="absolute left-[calc(0.75rem+env(safe-area-inset-left))] top-[calc(0.75rem+env(safe-area-inset-top))] z-40 flex items-start gap-2">
+                    <button
+                      type="button"
+                      onClick={openWorldEmotes}
+                      className="inline-flex h-11 min-h-11 items-center gap-2 rounded-full border border-emerald-400/30 bg-night-950/76 px-4 text-sm text-emerald-100 shadow-[0_18px_58px_rgba(0,0,0,0.42)] backdrop-blur-xl transition hover:border-emerald-300/55 hover:text-emerald-50 active:scale-95"
+                      aria-haspopup="dialog"
+                      aria-expanded={worldEmotesOpen}
+                      aria-label="Ouvrir les emotes du monde"
+                    >
+                      ✨ Emotes
+                    </button>
+                  </div>
                   {worldMenuOpen && (
-                    <>
-                      <button
-                        type="button"
-                        className="fixed inset-0 z-40 cursor-default bg-transparent"
-                        aria-label="Fermer le menu du monde"
-                        onClick={() => setWorldMenuOpen(false)}
-                      />
-                      <div className="absolute bottom-14 right-0 z-50 w-56 overflow-hidden rounded-[24px] border border-white/12 bg-night-950/88 p-2 shadow-[0_24px_80px_rgba(0,0,0,0.48)] backdrop-blur-2xl">
-                        <div className="px-3 pb-2 pt-1">
-                          <p className="text-[10px] uppercase tracking-[0.22em] text-gold-200/68">
-                            Menu du monde
+                    <div className="absolute right-[calc(0.75rem+env(safe-area-inset-right))] top-[calc(4rem+env(safe-area-inset-top))] z-50 w-[min(20rem,calc(100vw-1.25rem))] overflow-hidden rounded-[24px] border border-white/12 bg-night-950/92 p-2 shadow-[0_24px_80px_rgba(0,0,0,0.48)] backdrop-blur-2xl">
+                      <div className="px-3 pb-2 pt-1">
+                        <p className="text-[10px] uppercase tracking-[0.22em] text-gold-200/68">
+                          Menu du monde
+                        </p>
+                        <p className="mt-1 text-sm text-ivory/62">
+                          Micro, changement de monde et chat compact.
+                        </p>
+                      </div>
+                      <div className="space-y-1.5 px-1 pb-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void toggleVoice();
+                            setWorldMenuOpen(false);
+                          }}
+                          className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm text-ivory/88 transition hover:bg-white/8"
+                        >
+                          {micEnabled ? <Mic className="h-4 w-4 text-emerald-300" /> : <MicOff className="h-4 w-4 text-slate-300" />}
+                          {micEnabled ? "Micro activé" : "Activer le micro"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={openWorldChat}
+                          className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm text-ivory/88 transition hover:bg-white/8"
+                        >
+                          <MessageCircle className="h-4 w-4 text-sky-300" />
+                          Ouvrir le chat
+                        </button>
+                        <div className="mt-2 rounded-2xl border border-white/8 bg-white/4 p-2">
+                          <p className="px-1 pb-2 text-[10px] uppercase tracking-[0.18em] text-ivory/48">
+                            Changer de monde
                           </p>
-                          <p className="mt-1 text-sm text-ivory/62">
-                            Interface de jeu dédiée
-                          </p>
+                          <div className="grid gap-1">
+                            {DISTRICTS.map((entry) => {
+                              const active = entry.id === district;
+                              const pending = worldSwitchingTo === entry.id;
+                              return (
+                                <button
+                                  key={entry.id}
+                                  type="button"
+                                  disabled={active || pending}
+                                  onClick={() => switchWorld(entry.id)}
+                                  className={`flex items-center justify-between rounded-2xl px-3 py-2.5 text-left text-sm transition ${
+                                    active
+                                      ? "bg-gold-500/14 text-gold-100"
+                                      : "text-ivory/84 hover:bg-white/8"
+                                  } disabled:cursor-default disabled:opacity-70`}
+                                >
+                                  <span>{entry.name}</span>
+                                  <span className="text-[10px] uppercase tracking-[0.16em] text-ivory/48">
+                                    {active ? "Actuel" : pending ? "..." : "Aller"}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
                         <button
                           type="button"
                           onClick={exitWorldGame}
-                          className="flex min-h-12 w-full items-center justify-between rounded-2xl border border-rose-300/25 bg-rose-500/10 px-3 py-2 text-left text-sm font-semibold text-rose-100 transition hover:border-rose-200/60 hover:bg-rose-500/16"
+                          className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm text-rose-100 transition hover:bg-rose-500/12"
                         >
-                          <span>Quitter le monde</span>
                           <X className="h-4 w-4" />
+                          Quitter le monde
                         </button>
                       </div>
-                    </>
+                    </div>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => setWorldMenuOpen((current) => !current)}
-                    className="inline-flex h-12 min-h-12 w-12 min-w-12 items-center justify-center rounded-full border border-white/15 bg-night-950/76 text-ivory/86 shadow-[0_18px_58px_rgba(0,0,0,0.42)] backdrop-blur-xl transition hover:border-gold-300/45 hover:text-gold-100 active:scale-95"
-                    aria-haspopup="menu"
-                    aria-expanded={worldMenuOpen}
-                    aria-label="Ouvrir le menu du monde"
-                  >
-                    <MoreHorizontal className="h-6 w-6" />
-                  </button>
-                </div>
+                  {worldEmotesOpen && (
+                    <div className="absolute left-[calc(0.75rem+env(safe-area-inset-left))] top-[calc(4rem+env(safe-area-inset-top))] z-50 w-[min(22rem,calc(100vw-1.25rem))] overflow-hidden rounded-[24px] border border-emerald-300/18 bg-night-950/92 p-2 shadow-[0_24px_80px_rgba(0,0,0,0.48)] backdrop-blur-2xl">
+                      <div className="px-3 pb-2 pt-1">
+                        <p className="text-[10px] uppercase tracking-[0.22em] text-emerald-200/75">
+                          Emotes et duos
+                        </p>
+                        <p className="mt-1 text-sm text-ivory/62">
+                          Choisis un joueur pour lui envoyer une interaction ou lance une emote rapide.
+                        </p>
+                      </div>
+                      <div className="grid gap-2 px-1 pb-1 sm:grid-cols-2">
+                        {(Object.entries(WORLD_INTERACTION_META) as Array<
+                          [WorldCuteInteractionKind, (typeof WORLD_INTERACTION_META)[WorldCuteInteractionKind]]
+                        >).map(([kind, meta]) => (
+                          <button
+                            key={kind}
+                            type="button"
+                            disabled={memberActionBusy !== null}
+                            onClick={() => {
+                              setWorldEmotesOpen(false);
+                              if (!selectedMember) {
+                                notify("Choisis d'abord un joueur pour cette interaction.", "info");
+                                return;
+                              }
+                              void sendCuteAction(kind);
+                            }}
+                            className="flex items-center gap-3 rounded-2xl border border-white/10 px-3 py-3 text-left text-sm text-ivory/86 transition hover:border-emerald-300/35 hover:text-emerald-50 disabled:opacity-50"
+                          >
+                            <span className="text-lg">{meta.emoji}</span>
+                            <span className="leading-5">{meta.label}</span>
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={openWorldChat}
+                          className="sm:col-span-2 flex items-center gap-3 rounded-2xl border border-sky-300/20 bg-sky-500/8 px-3 py-3 text-left text-sm text-sky-100 transition hover:border-sky-300/40 hover:bg-sky-500/12"
+                        >
+                          <MessageCircle className="h-4 w-4 text-sky-300" />
+                          Ouvrir le chat du monde
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {nearbyHotspot && (
+                    <button
+                      type="button"
+                      onClick={() => triggerWorld3DHotspot(nearbyHotspot.id)}
+                      className={`fixed z-[92] inline-flex items-center gap-2 rounded-full border border-white/12 bg-night-950/90 px-4 py-2 text-sm text-ivory/90 shadow-[0_20px_50px_rgba(0,0,0,0.35)] backdrop-blur-xl transition hover:border-gold-300/40 hover:text-gold-100 active:scale-95 ${
+                        worldLandscapeMode
+                          ? "left-[calc(50vw-7rem)] bottom-[calc(0.95rem+env(safe-area-inset-bottom))] max-w-[14rem]"
+                          : "left-[calc(50vw-6.75rem)] bottom-[calc(0.95rem+env(safe-area-inset-bottom))] max-w-[13.5rem]"
+                      }`}
+                      aria-label={nearbyHotspot.kind && nearbyHotspot.kind !== "inspect" ? nearbyHotspot.title : `Interagir avec ${nearbyHotspot.title}`}
+                    >
+                      <Sparkles className="h-4 w-4 text-gold-300" />
+                      <span className="truncate">
+                        {nearbyHotspot.kind === "sit"
+                          ? "S'asseoir"
+                          : nearbyHotspot.kind === "swing"
+                            ? "Se balancer"
+                            : "Interagir"}
+                      </span>
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -2201,64 +2595,123 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
             </div>
           </section>
 
-          <section className="rounded-[26px] border border-royal-500/30 bg-night-900/60 p-5">
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-gold-300" />
-              <h3 className="font-display text-xl text-gold-200">Chat du monde</h3>
-            </div>
-            <div className="mt-4 space-y-3">
-              {chatMessages.slice(0, 6).map((message) => (
-                <div
-                  key={message.id}
-                  className={`rounded-2xl border px-3 py-2 ${
-                    message.tone === "system"
-                      ? "border-gold-400/20 bg-gold-500/8"
-                      : "border-royal-500/25 bg-night-950/55"
-                  }`}
+          {worldGameActive && !worldChatExpanded ? (
+            <button
+              type="button"
+              onClick={openWorldChat}
+              className={`fixed z-[96] inline-flex items-center gap-2 rounded-full border border-sky-300/20 bg-night-950/88 px-4 py-2 text-sm text-sky-100 shadow-[0_20px_50px_rgba(0,0,0,0.35)] backdrop-blur-xl transition hover:border-sky-300/40 hover:text-sky-50 active:scale-95 ${
+                worldLandscapeMode
+                  ? "left-[calc(0.75rem+env(safe-area-inset-left))] top-[calc(0.75rem+env(safe-area-inset-top))]"
+                  : "left-[calc(0.9rem+env(safe-area-inset-left))] bottom-[calc(0.9rem+env(safe-area-inset-bottom))]"
+              }`}
+              aria-label="Ouvrir le chat du monde"
+            >
+              <MessageCircle className="h-4 w-4" />
+              Chat
+              <span className="rounded-full bg-sky-400/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.16em] text-sky-200/80">
+                {chatMessages.length}
+              </span>
+            </button>
+          ) : (
+            <section
+              className={`rounded-[26px] border border-royal-500/30 bg-night-900/60 p-4 shadow-[0_20px_50px_rgba(0,0,0,0.18)] ${
+                worldGameActive
+                  ? `fixed z-[95] w-[min(${worldLandscapeMode ? "19rem" : "21rem"},calc(100vw-1rem))] overflow-hidden backdrop-blur-xl touch-pan-y overscroll-contain md:w-[min(22rem,calc(100vw-2rem))] ${
+                      worldLandscapeMode
+                        ? `left-[calc(0.75rem+env(safe-area-inset-left))] top-[calc(0.75rem+env(safe-area-inset-top))] max-h-[calc(100dvh-1.5rem)] ring-1 ring-sky-300/20 shadow-[0_20px_50px_rgba(0,0,0,0.18),0_0_0_1px_rgba(125,211,252,0.08)]`
+                        : `left-[calc(0.9rem+env(safe-area-inset-left))] bottom-[calc(0.9rem+env(safe-area-inset-bottom))] max-h-[min(30rem,calc(100dvh-5rem))] ring-1 ring-sky-300/20 shadow-[0_20px_50px_rgba(0,0,0,0.18),0_0_0_1px_rgba(125,211,252,0.08)]`
+                    }`
+                  : ""
+              }`}
+              onPointerDownCapture={(event) => {
+                if (worldGameActive) event.stopPropagation();
+              }}
+            >
+              <div className={`flex items-center gap-2 ${worldChatAttention > 0 ? "animate-[socialLikeBurst_900ms_ease-out_1]" : ""}`}>
+                <Sparkles className="h-4 w-4 text-gold-300" />
+                <h3 className="font-display text-lg text-gold-200">Chat du monde</h3>
+                <button
+                  type="button"
+                  onClick={() => setWorldChatExpanded(false)}
+                  className="ml-auto rounded-full border border-white/10 px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-ivory/55 transition hover:border-gold-300/35 hover:text-gold-100"
+                  aria-label="Réduire le chat du monde"
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <div className="truncate text-sm font-semibold text-ivory/90">
-                          {message.author}
-                        </div>
-                        {message.district && (
-                          <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[9px] uppercase tracking-[0.18em] text-ivory/55">
-                            {labelForDistrict(message.district)}
-                          </span>
-                        )}
-                      </div>
-                      {message.handle && (
-                        <Handle handle={message.handle} className="text-[11px]" />
-                      )}
-                    </div>
-                    <div className="text-[10px] uppercase tracking-[0.16em] text-ivory/40">
-                      {formatRelative(message.createdAt)}
-                    </div>
-                  </div>
-                  <p className="mt-1 text-sm text-ivory/70">{message.content}</p>
-                </div>
-              ))}
-            </div>
-            <div className="mt-4 flex gap-2">
-              <input
-                value={chatInput}
-                onChange={(event) => setChatInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") sendMessage();
-                }}
-                placeholder="Dire quelque chose dans le hub..."
-                className="glass-input flex-1"
-              />
-              <button
-                type="button"
-                onClick={sendMessage}
-                className="rounded-full border border-gold-400/35 px-4 py-2 text-sm text-gold-100 transition hover:border-gold-300/70"
+                  Réduire
+                </button>
+              </div>
+              <div
+                className={`mt-3 space-y-2 overflow-y-auto pr-1 ${
+                  worldGameActive
+                    ? worldLandscapeMode
+                      ? "max-h-[min(15rem,calc(100dvh-10rem))]"
+                      : "max-h-[min(17rem,calc(100dvh-8rem))]"
+                    : "max-h-none"
+                }`}
               >
-                Envoyer
-              </button>
-            </div>
-          </section>
+                {chatMessages.slice(0, worldGameActive ? 4 : 6).map((message) => (
+                  <div
+                    key={message.id}
+                    className={`rounded-2xl border px-3 py-2 ${
+                      message.tone === "system"
+                        ? "border-gold-400/20 bg-gold-500/8"
+                        : "border-royal-500/25 bg-night-950/55"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <div className="truncate text-sm font-semibold text-ivory/90">
+                            {message.author}
+                          </div>
+                          {message.district && (
+                            <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[9px] uppercase tracking-[0.18em] text-ivory/55">
+                              {labelForDistrict(message.district)}
+                            </span>
+                          )}
+                        </div>
+                        {message.handle && <Handle handle={message.handle} className="text-[11px]" />}
+                      </div>
+                      <div className="text-[10px] uppercase tracking-[0.16em] text-ivory/40">
+                        {formatRelative(message.createdAt)}
+                      </div>
+                    </div>
+                    <p className="mt-1 text-sm text-ivory/70">{message.content}</p>
+                  </div>
+                ))}
+              </div>
+              <div
+                className={`mt-3 flex gap-2 ${
+                  worldGameActive ? (worldLandscapeMode ? "flex-col items-stretch" : "items-end") : ""
+                }`}
+              >
+                <input
+                  key={`world-chat-${worldChatExpanded ? "open" : "closed"}-${worldChatAttention}`}
+                  ref={chatInputRef}
+                  value={chatInput}
+                  onChange={(event) => setChatInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") sendMessage();
+                  }}
+                  placeholder="Dire quelque chose dans le hub..."
+                  data-world-chat-input="true"
+                  inputMode="text"
+                  enterKeyHint="send"
+                  autoComplete="off"
+                  autoFocus={worldChatExpanded}
+                  className={`glass-input flex-1 ${worldGameActive ? "min-h-11 text-sm" : ""} ${worldLandscapeMode ? "w-full" : ""}`}
+                />
+                <button
+                  type="button"
+                  onClick={sendMessage}
+                  className={`rounded-full border border-gold-400/35 px-4 py-2 text-sm text-gold-100 transition hover:border-gold-300/70 ${
+                    worldGameActive ? "min-h-11" : ""
+                  } ${worldLandscapeMode ? "w-full" : ""}`}
+                >
+                  Envoyer
+                </button>
+              </div>
+            </section>
+          )}
         </aside>
       </div>
 
@@ -2381,6 +2834,33 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
               <div className="rounded-[22px] border border-white/10 bg-night-950/55 p-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-[11px] uppercase tracking-[0.22em] text-gold-200/70">
+                    Emotes à deux
+                  </div>
+                  <div className="text-[10px] uppercase tracking-[0.18em] text-ivory/45">
+                    {selectedMember.member.id === user?.id ? "toi" : "cible choisie"}
+                  </div>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  {(Object.entries(WORLD_INTERACTION_META) as Array<
+                    [WorldCuteInteractionKind, (typeof WORLD_INTERACTION_META)[WorldCuteInteractionKind]]
+                  >).map(([kind, meta]) => (
+                    <button
+                      key={kind}
+                      type="button"
+                      disabled={memberActionBusy !== null}
+                      onClick={() => void sendCuteAction(kind)}
+                      className="flex items-center gap-2 rounded-2xl border border-white/10 px-3 py-3 text-left text-sm text-ivory/82 transition hover:border-gold-300/35 hover:text-gold-100 disabled:opacity-50"
+                    >
+                      <span className="text-lg">{meta.emoji}</span>
+                      <span className="leading-5">{meta.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-[22px] border border-white/10 bg-night-950/55 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-[11px] uppercase tracking-[0.22em] text-gold-200/70">
                     Discussion vocale privée
                   </div>
                   <div className="text-[10px] uppercase tracking-[0.18em] text-ivory/45">
@@ -2438,31 +2918,10 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
                 </div>
               </div>
 
-              <div className="rounded-[22px] border border-white/10 bg-night-950/55 p-3">
-                <div className="text-[11px] uppercase tracking-[0.22em] text-gold-200/70">
-                  Interactions mimi
-                </div>
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  {(Object.entries(WORLD_INTERACTION_META) as Array<
-                    [WorldCuteInteractionKind, (typeof WORLD_INTERACTION_META)[WorldCuteInteractionKind]]
-                  >).map(([kind, meta]) => (
-                    <button
-                      key={kind}
-                      type="button"
-                      disabled={memberActionBusy !== null}
-                      onClick={() => void sendCuteAction(kind)}
-                      className="flex items-center gap-2 rounded-2xl border border-white/10 px-3 py-3 text-left text-sm text-ivory/82 transition hover:border-gold-300/35 hover:text-gold-100 disabled:opacity-50"
-                    >
-                      <span className="text-lg">{meta.emoji}</span>
-                      <span className="leading-5">{meta.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
             </div>
           </section>
-        </>
-      )}
+                </>
+              )}
 
       {pendingIncomingVoiceInvite && !selectedMember && (
         <section className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-[24px] border border-cyan-300/25 bg-[linear-gradient(135deg,rgba(15,23,42,0.92),rgba(8,47,73,0.82))] px-4 py-4">

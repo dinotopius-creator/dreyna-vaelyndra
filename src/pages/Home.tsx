@@ -1,14 +1,19 @@
 import type React from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   ArrowRight,
   BookOpen,
   Crown,
+  Bell,
+  Coins,
+  ChevronRight,
+  CircleDot,
   Gem,
   Heart,
   MessageCircleHeart,
+  Mail,
   Play,
   Radio,
   ShoppingBag,
@@ -18,6 +23,9 @@ import {
 } from "lucide-react";
 import { useStore } from "../contexts/StoreContext";
 import { useAuth } from "../contexts/AuthContext";
+import { useMessages } from "../contexts/MessagesContext";
+import { useNotifications } from "../contexts/NotificationsContext";
+import { useLive } from "../contexts/LiveContext";
 import {
   apiGetCommunityActivityLeaderboard,
   apiGetCommunityStats,
@@ -28,8 +36,11 @@ import {
 } from "../lib/api";
 import { formatNumber } from "../lib/helpers";
 import { AvatarImage } from "../components/AvatarImage";
+import { AvatarViewer } from "../components/AvatarViewer";
 import { SectionHeading } from "../components/SectionHeading";
 import { RuneDivider } from "../components/RuneDivider";
+import { CommunityContestBanner } from "../components/CommunityContestBanner";
+import { HomeAvatarHub } from "../components/HomeAvatarHub";
 
 type HomeMember = {
   userId: string;
@@ -53,7 +64,10 @@ function dedupeMembers(input: HomeMember[]) {
 
 export function Home() {
   const { articles, products, isLiveOn } = useStore();
-  const { user } = useAuth();
+  const { user, backendMe } = useAuth();
+  const { unreadCount: unreadMessages } = useMessages();
+  const { unreadCount: unreadNotifications } = useNotifications();
+  const { liveRegistry } = useLive();
   const isRegistered = Boolean(user);
   const dreynaChronicles = articles.filter(
     (article) => article.author.trim().toLowerCase() === "dreyna",
@@ -61,6 +75,12 @@ export function Home() {
   const featuredArticle = dreynaChronicles[0];
   const sideChronicles = dreynaChronicles.slice(1, 4);
   const topProducts = products.filter((p) => p.featured).slice(0, 3);
+  const activeLive = useMemo(() => {
+    const entries = Object.values(liveRegistry).sort(
+      (a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime(),
+    );
+    return entries[0] ?? null;
+  }, [liveRegistry]);
 
   const [stats, setStats] = useState<CommunityStatsOverviewDto | null>(null);
   const [topFans, setTopFans] = useState<CommunityTopFanDto[]>([]);
@@ -83,7 +103,7 @@ export function Home() {
       const postsResult = results[3];
 
       setStats(
-        statsResult.status === "fulfilled" ? statsResult.value ?? null : null,
+        statsResult.status === "fulfilled" ? (statsResult.value ?? null) : null,
       );
 
       const resolvedFans =
@@ -138,30 +158,43 @@ export function Home() {
     };
   }, []);
 
+  const legacyHomeReferences = [
+    featuredArticle,
+    sideChronicles,
+    topProducts,
+    stats,
+    homeMembers,
+    RuneDivider,
+  ];
+  void legacyHomeReferences;
+
+  const legacyHomeComponents = [
+    StatsBar,
+    Pillars,
+    FeaturedArticle,
+    ShopShowcase,
+    CommunityTeaser,
+    CTA,
+  ];
+  void legacyHomeComponents;
+
   return (
-    <div>
-      <Hero
+    <div className="min-h-[100dvh] overflow-x-hidden bg-night-950">
+      <HomeAvatarHub
         isLiveOn={isLiveOn}
         isRegistered={isRegistered}
+        unreadMessages={unreadMessages}
+        unreadNotifications={unreadNotifications}
+        backendMe={backendMe}
+        userAvatar={user?.avatar ?? null}
+        activeLive={activeLive}
         topFans={topFans}
-        homeMembers={homeMembers}
       />
-      <StatsBar stats={stats} />
-      <RuneDivider label="Les portes de Vaelyndra" />
-      <Pillars />
-      <FeaturedArticle article={featuredArticle} sideStories={sideChronicles} />
-      <ShopShowcase products={topProducts} />
-      <CommunityTeaser
-        isRegistered={isRegistered}
-        topFans={topFans}
-        homeMembers={homeMembers}
-      />
-      <CTA isRegistered={isRegistered} />
     </div>
   );
 }
 
-function Hero({
+function LegacyHero({
   isLiveOn,
   isRegistered,
   topFans,
@@ -206,7 +239,7 @@ function Hero({
   ];
 
   return (
-    <section className="relative overflow-hidden pb-20 pt-10 sm:pb-24 sm:pt-14 md:pt-20">
+    <section className="relative overflow-hidden pb-16 pt-8 sm:pb-24 sm:pt-14 md:pt-20">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(167,114,255,0.2),transparent_38%),radial-gradient(circle_at_80%_18%,rgba(255,205,112,0.12),transparent_24%),linear-gradient(180deg,rgba(9,6,18,0.36),transparent_44%)]" />
       <div className="absolute left-1/2 top-20 h-80 w-80 -translate-x-1/2 rounded-full bg-royal-500/15 blur-[140px]" />
       <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 sm:px-6 lg:grid-cols-[1.1fr_0.9fr]">
@@ -226,7 +259,9 @@ function Hero({
           </h1>
           <p className="mt-5 max-w-xl text-base leading-7 text-ivory/80 sm:text-lg md:text-xl">
             Une app sociale fantasy centrée sur les{" "}
-            <span className="text-mystic font-semibold">lives, les avatars</span>{" "}
+            <span className="text-mystic font-semibold">
+              lives, les avatars
+            </span>{" "}
             et les interactions. Entre en scène, retrouve ton familier, façonne
             ton identité et fais vivre ton royaume depuis mobile ou desktop.
           </p>
@@ -249,6 +284,64 @@ function Hero({
             <Link to="/communaute" className="btn-ghost w-full sm:w-auto">
               <Users className="h-4 w-4" /> Le fil de la communauté
             </Link>
+          </div>
+          <div className="mt-6 grid gap-3 sm:grid-cols-3">
+            {[
+              {
+                label: "Accueil rapide",
+                title: "Tes espaces",
+                desc: "Social, Live, Monde et Familiers regroupés au même endroit.",
+              },
+              {
+                label: "Mobile first",
+                title: "Navigation claire",
+                desc: "Des raccourcis pensés pour les doigts, pas pour un bureau.",
+              },
+              {
+                label: "Événement",
+                title: "Concours et lives",
+                desc: "Les temps forts apparaissent avant le reste du fil.",
+              },
+            ].map((item) => (
+              <div
+                key={item.title}
+                className="panel-app-soft min-h-28 p-4"
+              >
+                <p className="font-regal text-[10px] uppercase tracking-[0.22em] text-gold-300/75">
+                  {item.label}
+                </p>
+                <p className="mt-2 font-display text-lg text-gold-100">
+                  {item.title}
+                </p>
+                <p className="mt-2 text-sm leading-6 text-ivory/68">
+                  {item.desc}
+                </p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-6 max-w-3xl">
+            <CommunityContestBanner compact />
+          </div>
+          <div className="mt-5 grid grid-cols-2 gap-2 sm:hidden">
+            {quickLinks.slice(0, 4).map((link) => (
+              <Link
+                key={link.title}
+                to={link.to}
+                className="panel-app-soft flex min-h-24 flex-col justify-between p-3"
+              >
+                <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05] text-gold-200">
+                  {link.icon}
+                </span>
+                <div className="mt-3">
+                  <p className="font-display text-sm text-gold-100">
+                    {link.title}
+                  </p>
+                  <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-ivory/58">
+                    {link.desc}
+                  </p>
+                </div>
+              </Link>
+            ))}
           </div>
           <div className="mt-10 grid max-w-xl grid-cols-1 gap-3 sm:grid-cols-3">
             <Link
@@ -295,8 +388,8 @@ function Hero({
               </div>
             )}
             <p>
-              Des profils, des scènes live et des liens sociaux pensés comme
-              une vraie app.
+              Des profils, des scènes live et des liens sociaux pensés comme une
+              vraie app.
             </p>
           </div>
           {featuredProfiles.length > 0 && (
@@ -552,6 +645,215 @@ function Hero({
                 </div>
               </div>
             </div>
+          </div>
+        </motion.div>
+      </div>
+    </section>
+  );
+}
+
+export const Hero = LegacyHero;
+
+export function PremiumHomeHub({
+  isLiveOn,
+  isRegistered,
+  unreadMessages,
+  unreadNotifications,
+  backendMe,
+  activeLive,
+  topFans,
+}: {
+  isLiveOn: boolean;
+  isRegistered: boolean;
+  unreadMessages: number;
+  unreadNotifications: number;
+  backendMe: ReturnType<typeof useAuth>["backendMe"];
+  activeLive: ReturnType<typeof useLive>["liveRegistry"][string] | null;
+  topFans: CommunityTopFanDto[];
+}) {
+  const { user } = useAuth();
+  const avatarLink = isRegistered ? "/avatar" : "/connexion";
+  const familiarLink = isRegistered ? "/familier" : "/connexion";
+  const currencyPaid =
+    (backendMe?.sylvins_paid ?? 0) + (backendMe?.sylvins_promo ?? 0);
+  const currencyFree = backendMe?.lueurs ?? 0;
+  const liveLink = activeLive ? `/live/${encodeURIComponent(activeLive.userId)}` : "/live";
+  const orbitLinks = [
+    { title: "Boutique", desc: "Tenues, drops et pieces exclusives", to: "/boutique", icon: <ShoppingBag className="h-5 w-5" /> },
+    { title: "Avatar", desc: "Atelier, style et rotation 360deg", to: avatarLink, icon: <Gem className="h-5 w-5" /> },
+    { title: "Mondes", desc: "Entrer dans l'espace 3D", to: "/mondes", icon: <Sparkles className="h-5 w-5" /> },
+    { title: "Social", desc: "Fil, hashtags et concours dessin", to: "/social/play", icon: <Users className="h-5 w-5" /> },
+  ];
+
+  return (
+    <section className="relative overflow-hidden pb-14 pt-4 sm:pb-18 sm:pt-8">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,rgba(253,224,71,0.18),transparent_22%),radial-gradient(circle_at_12%_18%,rgba(103,80,164,0.22),transparent_26%),radial-gradient(circle_at_88%_26%,rgba(244,114,182,0.16),transparent_20%),linear-gradient(180deg,rgba(6,4,13,0.86),rgba(10,7,19,0.96))]" />
+      <div className="absolute left-1/2 top-24 h-72 w-72 -translate-x-1/2 rounded-full bg-gold-500/15 blur-[120px]" />
+      <div className="mx-auto grid max-w-7xl items-start gap-6 px-3 sm:px-6 lg:grid-cols-[1.02fr_0.98fr] lg:gap-10">
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.9, ease: "easeOut" }}
+          className="relative z-10 order-2 lg:order-1"
+        >
+          <div className="panel-app relative overflow-hidden border border-gold-400/18 bg-night-950/50 p-4 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl sm:p-5">
+            <div className="relative z-10 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-regal text-[10px] uppercase tracking-[0.28em] text-gold-300/70">Accueil premium</p>
+                <h1 className="font-display text-[clamp(2rem,7vw,4.25rem)] leading-[0.95] text-gold-100">Ton hub<br />mobile vivant</h1>
+              </div>
+              <div className="flex flex-col items-end gap-2">
+                <span className={`chip-app border border-white/10 bg-white/[0.04] ${isLiveOn ? "text-rose-100" : "text-ivory/65"}`}>
+                  <span className={`h-2 w-2 rounded-full ${isLiveOn ? "animate-pulse bg-rose-400" : "bg-emerald-400"}`} />
+                  {isLiveOn ? "En direct" : "Prêt"}
+                </span>
+                <Link to={isRegistered ? "/compte" : "/connexion"} className="chip-app border-gold-400/20 bg-gold-500/10 text-gold-100">
+                  <Crown className="h-3.5 w-3.5" />
+                  {isRegistered ? "Mon compte" : "Connexion"}
+                </Link>
+              </div>
+            </div>
+
+            <div className="relative mt-5 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+              <div className="relative flex min-h-[28rem] items-center justify-center overflow-hidden rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_50%_30%,rgba(255,255,255,0.06),transparent_28%),radial-gradient(circle_at_50%_80%,rgba(255,202,91,0.12),transparent_28%),linear-gradient(180deg,rgba(18,11,31,0.96),rgba(5,4,12,0.96))] p-4 sm:min-h-[34rem]">
+                <div className="absolute inset-x-8 bottom-8 h-20 rounded-full bg-black/30 blur-3xl" />
+                <div className="absolute left-4 top-5 rounded-full border border-gold-300/18 bg-gold-500/10 px-3 py-1 text-[10px] uppercase tracking-[0.28em] text-gold-100">360 deg avatar</div>
+                <div className="absolute right-4 top-5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[10px] uppercase tracking-[0.28em] text-ivory/60">Drag tactile</div>
+                <div className="relative z-10 flex h-full w-full items-center justify-center">
+                  <div className="absolute inset-0 rounded-[2rem] bg-[radial-gradient(circle_at_center,rgba(255,223,128,0.18),transparent_45%)]" />
+                  <div className="relative flex h-full w-full items-center justify-center">
+                    <div className="absolute inset-x-[16%] top-[14%] h-[58%] rounded-full border border-gold-300/12 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.07),transparent_62%)] blur-3xl" />
+                    <div className="relative z-10 flex h-[19rem] w-[19rem] items-center justify-center rounded-full border border-gold-300/18 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.05),rgba(255,255,255,0.01)_55%,transparent_70%)] p-4 shadow-[0_0_70px_rgba(255,198,88,0.2)] sm:h-[24rem] sm:w-[24rem]">
+                      <AvatarViewer
+                        src={user?.avatar ?? backendMe?.avatar_image_url ?? null}
+                        fallbackImage={user?.avatar ?? backendMe?.avatar_image_url ?? "/crown.svg"}
+                        alt={user ? user.username : "Avatar de l'accueil"}
+                        autoRotate
+                        interactive
+                        framing="body"
+                        size="square"
+                        className="h-full w-full rounded-full border border-white/10 bg-transparent"
+                      />
+                    </div>
+                    <div className="absolute inset-0">
+                      <Link to={liveLink} className="absolute left-2 top-1/2 inline-flex -translate-y-1/2 items-center gap-2 rounded-full border border-rose-300/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-100 transition hover:border-rose-300/40 hover:bg-rose-500/18">
+                        <span className={`h-2.5 w-2.5 rounded-full ${activeLive ? "animate-pulse bg-rose-400" : "bg-emerald-400"}`} />
+                        <span className="font-semibold">{activeLive ? "Live" : "En direct"}</span>
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      </Link>
+                      <Link to={avatarLink} className="absolute right-2 top-[18%] inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.05] px-3 py-2 text-xs text-gold-100 transition hover:border-gold-300/30 hover:bg-gold-500/12">
+                        <Gem className="h-3.5 w-3.5" />
+                        Avatar
+                      </Link>
+                      <Link to="/boutique" className="absolute right-4 top-[57%] inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.05] px-3 py-2 text-xs text-gold-100 transition hover:border-gold-300/30 hover:bg-gold-500/12">
+                        <ShoppingBag className="h-3.5 w-3.5" />
+                        Boutique
+                      </Link>
+                      <Link to="/social/play" className="absolute left-4 bottom-[19%] inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.05] px-3 py-2 text-xs text-gold-100 transition hover:border-gold-300/30 hover:bg-gold-500/12">
+                        <Users className="h-3.5 w-3.5" />
+                        Social
+                      </Link>
+                      <Link to="/mondes" className="absolute bottom-[8%] right-[18%] inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.05] px-3 py-2 text-xs text-gold-100 transition hover:border-gold-300/30 hover:bg-gold-500/12">
+                        <Sparkles className="h-3.5 w-3.5" />
+                        Mondes
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="panel-app-soft border border-gold-400/15 bg-gold-500/10 p-4">
+                    <div className="flex items-center gap-2 text-gold-100">
+                      <Coins className="h-4 w-4" />
+                      <p className="text-[10px] uppercase tracking-[0.24em]">Lueurs</p>
+                    </div>
+                    <p className="mt-3 font-display text-2xl text-gold-100">{formatNumber(currencyFree)}</p>
+                  </div>
+                  <div className="panel-app-soft border border-celeste-400/15 bg-celeste-500/10 p-4">
+                    <div className="flex items-center gap-2 text-celeste-100">
+                      <Coins className="h-4 w-4" />
+                      <p className="text-[10px] uppercase tracking-[0.24em]">Sylvins</p>
+                    </div>
+                    <p className="mt-3 font-display text-2xl text-celeste-100">{formatNumber(currencyPaid)}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <Link to="/messages" className="panel-app-soft flex items-center gap-3 p-4 transition hover:-translate-y-0.5 hover:border-gold-300/30">
+                    <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05] text-gold-200"><Mail className="h-5 w-5" /></span>
+                    <div className="min-w-0"><p className="font-display text-lg text-gold-100">Messages</p><p className="text-xs text-ivory/60">{unreadMessages > 0 ? `${unreadMessages} non lus` : "Boite propre"}</p></div>
+                  </Link>
+                  <Link to="/compte" className="panel-app-soft flex items-center gap-3 p-4 transition hover:-translate-y-0.5 hover:border-gold-300/30">
+                    <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05] text-gold-200"><Bell className="h-5 w-5" /></span>
+                    <div className="min-w-0"><p className="font-display text-lg text-gold-100">Alertes</p><p className="text-xs text-ivory/60">{unreadNotifications > 0 ? `${unreadNotifications} nouvelles` : "Notifications"}</p></div>
+                  </Link>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-2">
+                  {orbitLinks.map((link) => (
+                    <Link key={link.title} to={link.to} className="panel-app-soft group flex min-h-28 flex-col justify-between p-4 transition hover:-translate-y-1 hover:border-gold-300/30">
+                      <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05] text-gold-200 transition group-hover:bg-gold-500/10">{link.icon}</span>
+                      <div className="mt-3">
+                        <p className="font-display text-base text-gold-100">{link.title}</p>
+                        <p className="mt-1 text-xs leading-5 text-ivory/60">{link.desc}</p>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <Link to="/familier" className="panel-app-soft flex items-center gap-3 p-4 transition hover:-translate-y-0.5 hover:border-gold-300/30">
+                    <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05] text-gold-200"><Heart className="h-5 w-5" /></span>
+                    <div className="min-w-0"><p className="font-display text-lg text-gold-100">Familier</p><p className="text-xs text-ivory/60">Enclos et soins</p></div>
+                  </Link>
+                  <Link to="/live" className="panel-app-soft flex items-center gap-3 p-4 transition hover:-translate-y-0.5 hover:border-gold-300/30">
+                    <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05] text-gold-200"><Radio className="h-5 w-5" /></span>
+                    <div className="min-w-0"><p className="font-display text-lg text-gold-100">Live</p><p className="text-xs text-ivory/60">Scenes en direct</p></div>
+                  </Link>
+                  <Link to={isRegistered ? "/compte" : "/connexion"} className="panel-app-soft flex items-center gap-3 p-4 transition hover:-translate-y-0.5 hover:border-gold-300/30">
+                    <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05] text-gold-200"><CircleDot className="h-5 w-5" /></span>
+                    <div className="min-w-0"><p className="font-display text-lg text-gold-100">Profil</p><p className="text-xs text-ivory/60">Compte et identite</p></div>
+                  </Link>
+                </div>
+              </div>
+            </div>
+
+            <div className="relative z-10 mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-3 rounded-full border border-gold-400/15 bg-white/[0.03] px-4 py-3">
+                <div className={`h-2.5 w-2.5 rounded-full ${activeLive ? "animate-pulse bg-rose-400" : "bg-emerald-400"}`} />
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.24em] text-ivory/50">Live rapide</p>
+                  <p className="text-sm text-gold-100">{activeLive ? activeLive.title || activeLive.username : "Aucun live actif"}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Link to={avatarLink} className="chip-app border-gold-400/20 bg-gold-500/10 text-gold-100"><Gem className="h-3.5 w-3.5" /> Avatar</Link>
+                <Link to="/boutique" className="chip-app border-white/10 bg-white/[0.04] text-ivory/75"><ShoppingBag className="h-3.5 w-3.5" /> Boutique</Link>
+                <Link to="/social/play" className="chip-app border-white/10 bg-white/[0.04] text-ivory/75"><Users className="h-3.5 w-3.5" /> Social</Link>
+                <Link to={familiarLink} className="chip-app border-white/10 bg-white/[0.04] text-ivory/75"><Heart className="h-3.5 w-3.5" /> Familier</Link>
+              </div>
+            </div>
+            {topFans.length > 0 && (
+              <div className="mt-4 flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                <div className="flex -space-x-2">
+                  {topFans.slice(0, 4).map((fan) => (
+                    <AvatarImage
+                      key={fan.userId}
+                      candidates={[fan.avatarImageUrl]}
+                      fallbackSeed={fan.userId}
+                      fallbackSrc="/crown.svg"
+                      alt={fan.username}
+                      className="h-9 w-9 rounded-full border border-white/10 object-cover ring-1 ring-white/10"
+                    />
+                  ))}
+                </div>
+                <p className="text-sm text-ivory/70">
+                  Profils actifs et scènes vivantes mis en avant.
+                </p>
+              </div>
+            )}
           </div>
         </motion.div>
       </div>

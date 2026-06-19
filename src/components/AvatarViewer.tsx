@@ -233,12 +233,19 @@ export function AvatarViewer({
 
   // Cadrage caméra : RPM exporte un humain debout, on recule et on remonte
   // la cible pour zoomer sur le buste sur le profil.
-  const cameraOrbit = framing === "face" ? "0deg 80deg 1.7m" : "0deg 90deg 3m";
+  const cameraOrbit = framing === "face" ? "0deg 84deg 1.95m" : "0deg 90deg 2.65m";
 
   // Cas principal depuis le retrait de RPM : avatars 2D (SVG DiceBear,
   // PNG, JPG). On rend directement avec un <img> — pas besoin du CE 3D.
   const flat = isFlatImageUrl(src);
   const avatar3dConfig = decodeAvatar3DUrl(src);
+  const renderConfig = avatar3dConfig
+    ? {
+        ...avatar3dConfig,
+        system: "legacy" as const,
+        baseModel: "procedural-premium" as const,
+      }
+    : null;
   const outfitTheme =
     equippedOutfit3DId && CATALOG_BY_ID[equippedOutfit3DId]?.wearableThemeId
       ? (CATALOG_BY_ID[equippedOutfit3DId]!.wearableThemeId as OutfitTheme)
@@ -247,7 +254,7 @@ export function AvatarViewer({
     equippedAccessory3DId && CATALOG_BY_ID[equippedAccessory3DId]?.wearableThemeId
       ? (CATALOG_BY_ID[equippedAccessory3DId]!.wearableThemeId as AccessoryTheme)
       : null;
-  if (avatar3dConfig) {
+  if (renderConfig) {
     return (
       <div
         className={clsx(
@@ -258,7 +265,7 @@ export function AvatarViewer({
       >
         {sceneId && <SceneBackground sceneId={sceneId} />}
         <Avatar3DModel
-          config={avatar3dConfig}
+          config={renderConfig}
           size={size}
           framing={framing}
           autoRotate={autoRotate}

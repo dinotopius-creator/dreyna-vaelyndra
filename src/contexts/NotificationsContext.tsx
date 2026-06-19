@@ -15,6 +15,8 @@ import type { CommunityPost, User } from "../types";
 import { apiGetProfile, type UserProfileDto } from "../lib/api";
 import { fetchReceivedFamiliarGifts } from "../lib/familiarsApi";
 import { resolveNotificationUrl } from "../lib/notificationRoutes";
+import { playNotificationSound } from "../lib/notificationSounds";
+import { COMMUNITY_DRAWING_CONTEST, drawingContestUrl } from "../data/communityContest";
 
 export type NotificationKind =
   | "community_like"
@@ -71,6 +73,7 @@ export interface NotificationPreferences {
   mentions: boolean;
   familiarGifts: boolean;
   vibration: boolean;
+  sounds: boolean;
 }
 
 interface NotificationInput {
@@ -124,6 +127,7 @@ const DEFAULT_PREFERENCES: NotificationPreferences = {
   mentions: true,
   familiarGifts: true,
   vibration: true,
+  sounds: true,
 };
 
 const MAX_NOTIFICATIONS = 80;
@@ -361,6 +365,8 @@ function collectCommunityEvents(
               title: "Nouveau like sur ta publication",
               body: `${actorName} a réagi ${emoji} à ta publication.`,
               url: postUrl,
+              actionLabel: "Voir le post",
+              actionUrl: postUrl,
               actorId: reactorId,
               actorName,
               actorAvatar: profileAvatar || avatarFor(reactorId, usersById),
@@ -373,17 +379,19 @@ function collectCommunityEvents(
       post.authorId !== currentUser.id &&
       contentMentionsUser(post.content, currentUser)
     ) {
-      events.push({
-        id: `community-mention:${post.id}:${post.authorId}:${post.createdAt}`,
-        kind: "community_mention",
-        title: "Tu as été identifié",
-        body: `${post.authorName} t'a identifié dans une publication.`,
-        url: postUrl,
-        actorId: post.authorId,
-        actorName: post.authorName,
-        actorAvatar:
-          profilesById.get(post.authorId)?.avatarImageUrl ||
-          avatarFor(post.authorId, usersById) ||
+        events.push({
+          id: `community-mention:${post.id}:${post.authorId}:${post.createdAt}`,
+          kind: "community_mention",
+          title: "Tu as été identifié",
+          body: `${post.authorName} t'a identifié dans une publication.`,
+          url: postUrl,
+          actionLabel: "Voir le post",
+          actionUrl: postUrl,
+          actorId: post.authorId,
+          actorName: post.authorName,
+          actorAvatar:
+            profilesById.get(post.authorId)?.avatarImageUrl ||
+            avatarFor(post.authorId, usersById) ||
           post.authorAvatar,
       });
     }
@@ -403,6 +411,8 @@ function collectCommunityEvents(
               title: "Nouveau like sur ton commentaire",
               body: `${actorName} a aimé ton commentaire.`,
               url: commentUrl,
+              actionLabel: "Voir le commentaire",
+              actionUrl: commentUrl,
               actorId: likerId,
               actorName,
               actorAvatar: profileAvatar || avatarFor(likerId, usersById),
@@ -419,6 +429,8 @@ function collectCommunityEvents(
           title: "Nouveau commentaire",
           body: `${comment.authorName} a commenté ta publication.`,
           url: commentUrl,
+          actionLabel: "Voir le commentaire",
+          actionUrl: commentUrl,
           actorId: comment.authorId,
           actorName: comment.authorName,
           actorAvatar:
@@ -434,6 +446,8 @@ function collectCommunityEvents(
           title: "Nouvelle réponse",
           body: `${comment.authorName} a répondu à ton commentaire.`,
           url: commentUrl,
+          actionLabel: "Voir la réponse",
+          actionUrl: commentUrl,
           actorId: comment.authorId,
           actorName: comment.authorName,
           actorAvatar:
@@ -449,6 +463,8 @@ function collectCommunityEvents(
           title: "Tu as été identifié",
           body: `${comment.authorName} t'a identifié en commentaire.`,
           url: commentUrl,
+          actionLabel: "Voir le commentaire",
+          actionUrl: commentUrl,
           actorId: comment.authorId,
           actorName: comment.authorName,
           actorAvatar:
@@ -477,6 +493,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const { user, users } = useAuth();
   const { posts } = useStore();
   const { notify } = useToast();
+  const userId = user?.id ?? null;
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [profilesById, setProfilesById] = useState<Record<string, UserProfileDto>>(
     {},
@@ -492,32 +509,28 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const giftsBootstrappedRef = useRef<string | null>(null);
 
   useEffect(() => {
-    setPermission(getPermission());
-  }, []);
-
-  useEffect(() => {
-    if (!user) {
-      setNotifications([]);
-      setPreferences(DEFAULT_PREFERENCES);
-      setProfilesById({});
+    if (!userId) {
       seenEventIdsRef.current = new Set();
       deliveredNotificationIdsRef.current = new Set();
       bootstrappedUserRef.current = null;
       giftsBootstrappedRef.current = null;
-      return;
+      const reset = window.setTimeout(() => {
+        setNotifications([]);
+        setPreferences(DEFAULT_PREFERENCES);
+        setProfilesById({});
+        setPermission(getPermission());
+      }, 0);
+      return () => window.clearTimeout(reset);
     }
 
     const savedNotifications = readJson<AppNotification[]>(
-      notificationsKey(user.id),
+      notificationsKey(userId),
       [],
     );
     const savedPreferences = readJson<NotificationPreferences>(
-      preferencesKey(user.id),
+      preferencesKey(userId),
       DEFAULT_PREFERENCES,
     );
-    setNotifications(savedNotifications);
-    setPreferences(savedPreferences);
-    setProfilesById({});
     seenEventIdsRef.current = new Set(
       savedNotifications.map((item) => item.id),
     );
@@ -526,7 +539,13 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     );
     bootstrappedUserRef.current = null;
     giftsBootstrappedRef.current = null;
-  }, [user?.id]);
+    const bootstrap = window.setTimeout(() => {
+      setNotifications(savedNotifications);
+      setPreferences(savedPreferences);
+      setProfilesById({});
+    }, 0);
+    return () => window.clearTimeout(bootstrap);
+  }, [userId]);
 
   useEffect(() => {
     if (!user) return;
@@ -578,20 +597,23 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user) return;
     if (Object.keys(profilesById).length === 0) return;
-    setNotifications((current) => {
-      let changed = false;
-      const next = current.map((notification) => {
-        const actorId = notification.actorId;
-        if (!actorId) return notification;
-        const profileAvatar = profilesById[actorId]?.avatarImageUrl?.trim();
-        if (!profileAvatar || profileAvatar === notification.actorAvatar) {
-          return notification;
-        }
-        changed = true;
-        return { ...notification, actorAvatar: profileAvatar };
+    const sync = window.setTimeout(() => {
+      setNotifications((current) => {
+        let changed = false;
+        const next = current.map((notification) => {
+          const actorId = notification.actorId;
+          if (!actorId) return notification;
+          const profileAvatar = profilesById[actorId]?.avatarImageUrl?.trim();
+          if (!profileAvatar || profileAvatar === notification.actorAvatar) {
+            return notification;
+          }
+          changed = true;
+          return { ...notification, actorAvatar: profileAvatar };
+        });
+        return changed ? next : current;
       });
-      return changed ? next : current;
-    });
+    }, 0);
+    return () => window.clearTimeout(sync);
   }, [profilesById, user]);
 
   useEffect(() => {
@@ -668,6 +690,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         if (preferences.vibration) {
           vibrateForNotification(notification);
         }
+        if (preferences.sounds) {
+          playNotificationSound();
+        }
       }
 
       emitBrowserNotification(notification);
@@ -686,35 +711,37 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         .map((event) => [event.id as string, event]),
     );
 
-    setNotifications((current) => {
-      let changed = false;
-      const next = current.map((notification) => {
-        const event = eventsById.get(notification.id);
-        if (!event) return notification;
-        const updated = {
-          ...notification,
-          title: event.title,
-          body: event.body,
-          url: event.url ?? notification.url,
-          actorId: event.actorId ?? notification.actorId,
-          actorName: event.actorName ?? notification.actorName,
-          actorAvatar: event.actorAvatar ?? notification.actorAvatar,
-        };
-        if (
-          updated.title === notification.title &&
-          updated.body === notification.body &&
-          updated.url === notification.url &&
-          updated.actorId === notification.actorId &&
-          updated.actorName === notification.actorName &&
-          updated.actorAvatar === notification.actorAvatar
-        ) {
-          return notification;
-        }
-        changed = true;
-        return updated;
+    const sync = window.setTimeout(() => {
+      setNotifications((current) => {
+        let changed = false;
+        const next = current.map((notification) => {
+          const event = eventsById.get(notification.id);
+          if (!event) return notification;
+          const updated = {
+            ...notification,
+            title: event.title,
+            body: event.body,
+            url: event.url ?? notification.url,
+            actorId: event.actorId ?? notification.actorId,
+            actorName: event.actorName ?? notification.actorName,
+            actorAvatar: event.actorAvatar ?? notification.actorAvatar,
+          };
+          if (
+            updated.title === notification.title &&
+            updated.body === notification.body &&
+            updated.url === notification.url &&
+            updated.actorId === notification.actorId &&
+            updated.actorName === notification.actorName &&
+            updated.actorAvatar === notification.actorAvatar
+          ) {
+            return notification;
+          }
+          changed = true;
+          return updated;
+        });
+        return changed ? next : current;
       });
-      return changed ? next : current;
-    });
+    }, 0);
 
     if (bootstrappedUserRef.current !== user.id) {
       seenEventIdsRef.current = new Set([
@@ -724,15 +751,48 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           .filter((id): id is string => Boolean(id)),
       ]);
       bootstrappedUserRef.current = user.id;
-      return;
+      return () => window.clearTimeout(sync);
     }
 
-    events.forEach((event) => {
-      if (!event.id || seenEventIdsRef.current.has(event.id)) return;
-      seenEventIdsRef.current.add(event.id);
-      pushNotification(event);
-    });
+    const notify = window.setTimeout(() => {
+      events.forEach((event) => {
+        if (!event.id || seenEventIdsRef.current.has(event.id)) return;
+        seenEventIdsRef.current.add(event.id);
+        pushNotification(event);
+      });
+    }, 0);
+    return () => {
+      window.clearTimeout(sync);
+      window.clearTimeout(notify);
+    };
   }, [posts, profilesById, pushNotification, user, users]);
+
+  useEffect(() => {
+    if (!user) return;
+    const endsAt = new Date(COMMUNITY_DRAWING_CONTEST.endsAt).getTime();
+    if (Date.now() >= endsAt) return;
+    const id = COMMUNITY_DRAWING_CONTEST.notificationId;
+    if (seenEventIdsRef.current.has(id)) return;
+    seenEventIdsRef.current.add(id);
+    pushNotification({
+      id,
+      kind: "official_event",
+      title: "Concours de dessin lancé !",
+      body:
+        "Crée un post avec ton dessin et ajoute #concoursdessin pour participer. Le post avec le plus de likes dans 24h00 gagne 1000 lueurs et 6 nourritures familier.",
+      url: drawingContestUrl(),
+      entityType: "official_event",
+      entityId: COMMUNITY_DRAWING_CONTEST.id,
+      postId: COMMUNITY_DRAWING_CONTEST.announcementPostId,
+      postTitle: COMMUNITY_DRAWING_CONTEST.title,
+      communityId: "vaelyndra",
+      communityName: "Communauté Vaelyndra",
+      locationLabel: "Annonce officielle",
+      priority: "important",
+      actionLabel: "Voir le concours",
+      actionUrl: drawingContestUrl(),
+    });
+  }, [pushNotification, user]);
 
   // Offrandes Sylvins reçues sur le familier : pas dérivables des posts,
   // on poll un endpoint dédié. La dédup passe par `seenEventIdsRef`
