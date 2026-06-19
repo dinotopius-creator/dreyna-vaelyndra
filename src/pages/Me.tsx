@@ -1,14 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
-  Banknote,
   Camera,
-  Coins,
   Crown,
-  Heart,
-  Link as LinkIcon,
   Save,
-  ShoppingBag,
   Sparkles,
   Upload,
   X,
@@ -24,34 +19,16 @@ import { UserBadges } from "../components/UserBadges";
 import StreamerGradeBadge from "../components/StreamerGradeBadge";
 import { CreaturePickerModal } from "../components/CreaturePickerModal";
 import SoulBondsModal from "../components/SoulBondsModal";
-import { WishlistSection } from "../components/WishlistSection";
-import { AvatarProfileBanner } from "../components/AvatarProfileBanner";
-import { ApiError } from "../lib/api";
-import { formatDate, formatPrice, resizeImageToDataUrl } from "../lib/helpers";
+import { formatDate, resizeImageToDataUrl } from "../lib/helpers";
 import { roleLabel, roleLabelWithIcon } from "../lib/roleLabel";
-import {
-  MIN_PAYOUT_EUR,
-  PLATFORM_CUT,
-  formatEur,
-  formatSylvins,
-  sylvinsToNetEur,
-} from "../lib/sylvins";
-import {
-  apiCreateStripeConnectDashboardLink,
-  apiCreateStripeConnectOnboardingLink,
-  apiGetStripeConnectStatus,
-  apiWithdrawStripeEarnings,
-  type StripeConnectStatusDto,
-} from "../lib/stripeApi";
 
 export function Me() {
   const { user, updateProfile, backendMe, refreshBackendMe } = useAuth();
-  const { articles, orders, products, myWallet } = useStore();
+  const { articles } = useStore();
   const { profile: serverProfile, refresh: refreshProfile } = useProfile();
   const { notify } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const paymentStatus = searchParams.get("payment");
-  const stripeConnectStatus = searchParams.get("stripe_connect");
 
   /**
    * Au retour d'un paiement Stripe, le flag `?payment=success` reste dans
@@ -114,63 +91,16 @@ export function Me() {
   const [bondsTab, setBondsTab] = useState<"followers" | "following" | null>(
     null,
   );
-  const [connectStatus, setConnectStatus] =
-    useState<StripeConnectStatusDto | null>(null);
-  const [connectLoading, setConnectLoading] = useState(false);
-  const [withdrawLoading, setWithdrawLoading] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
-
-  useEffect(() => {
-    if (!user) return;
-    let cancelled = false;
-    const startLoading = window.setTimeout(() => {
-      if (!cancelled) setConnectLoading(true);
-    }, 0);
-    apiGetStripeConnectStatus()
-      .then((status) => {
-        if (!cancelled) setConnectStatus(status);
-      })
-      .catch((err) => {
-        console.warn("Statut Stripe Connect indisponible :", err);
-        if (!cancelled) setConnectStatus(null);
-      })
-      .finally(() => {
-        if (!cancelled) setConnectLoading(false);
-      });
-    return () => {
-      cancelled = true;
-      window.clearTimeout(startLoading);
-    };
-  }, [user]);
-
-  useEffect(() => {
-    if (!stripeConnectStatus) return;
-    if (stripeConnectStatus !== "return" && stripeConnectStatus !== "refresh") {
-      return;
-    }
-    void refreshProfile();
-    void apiGetStripeConnectStatus()
-      .then((status) => setConnectStatus(status))
-      .catch((err) => console.warn("Refresh Stripe Connect KO :", err));
-    const next = new URLSearchParams(searchParams);
-    next.delete("stripe_connect");
-    setSearchParams(next, { replace: true });
-    if (stripeConnectStatus === "return") {
-      notify("Compte Stripe mis à jour.", "success");
-    }
-  }, [notify, refreshProfile, searchParams, setSearchParams, stripeConnectStatus]);
 
   if (!user) return null;
 
-  const myLikes = articles.filter((a) => a.likes.includes(user.id));
-  const myComments = articles
-    .flatMap((a) =>
-      a.comments
-        .filter((c) => c.authorId === user.id)
-        .map((c) => ({ article: a, comment: c })),
-    )
-    .slice(0, 6);
-  const myOrders = orders.filter((o) => o.userId === user.id);
+  const myPosts = articles
+    .filter((article) => article.author === user.username)
+    .sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
   const isArchitect = backendMe?.role === "architect";
 
   async function saveProfile(e: React.FormEvent) {
@@ -180,52 +110,9 @@ export function Me() {
       notify(res.error ?? "Impossible d'enregistrer.", "error");
       return;
     }
+    void refreshProfile();
     setEditingAvatar(false);
     notify("Votre profil a été scellé aux archives ✨");
-  }
-
-  async function openStripeOnboarding() {
-    try {
-      setConnectLoading(true);
-      const link =
-        connectStatus?.onboardingComplete && connectStatus?.payoutsEnabled
-        ? await apiCreateStripeConnectDashboardLink()
-        : await apiCreateStripeConnectOnboardingLink();
-      window.location.href = link.url;
-    } catch (err) {
-      console.warn(err);
-      notify(
-        err instanceof ApiError && err.message
-          ? err.message
-          : "Impossible d'ouvrir Stripe pour le moment.",
-        "error",
-      );
-    } finally {
-      setConnectLoading(false);
-    }
-  }
-
-  async function withdrawEarnings() {
-    try {
-      setWithdrawLoading(true);
-      const payout = await apiWithdrawStripeEarnings();
-      await refreshProfile();
-      setConnectStatus(await apiGetStripeConnectStatus().catch(() => connectStatus));
-      notify(
-        `Retrait lancé : ${formatEur(payout.amountCents / 100)} envoyés vers Stripe Express.`,
-        "success",
-      );
-    } catch (err) {
-      console.warn(err);
-      notify(
-        err instanceof Error && err.message
-          ? err.message
-          : "Le retrait a échoué.",
-        "error",
-      );
-    } finally {
-      setWithdrawLoading(false);
-    }
   }
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -332,7 +219,7 @@ export function Me() {
             <div className="mt-4 grid grid-cols-3 gap-2 sm:max-w-md">
               <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-center">
                 <div className="font-display text-lg text-gold-100">
-                  {articles.length}
+                  {myPosts.length}
                 </div>
                 <div className="text-[11px] uppercase tracking-[0.18em] text-ivory/55">
                   Posts
@@ -444,13 +331,15 @@ export function Me() {
           >
             <div className="flex items-center justify-between">
               <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
-                ✦ Nouvelle photo de profil
+                ✦ Modifier mon profil
               </p>
               <button
                 type="button"
                 onClick={() => {
                   setEditingAvatar(false);
                   setAvatar(user.avatar);
+                  setUsername(user.username);
+                  setBio(user.bio ?? "");
                 }}
                 className="text-ivory/50 hover:text-rose-300"
                 title="Annuler"
@@ -458,382 +347,153 @@ export function Me() {
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <input
-                type="file"
-                accept="image/*"
-                ref={fileRef}
-                onChange={handleFile}
-                className="hidden"
-              />
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                className="btn-royal w-full sm:w-auto"
-              >
-                <Upload className="h-4 w-4" />
-                <span className="hidden sm:inline">
-                  Importer une image depuis votre ordinateur
-                </span>
-                <span className="sm:hidden">
-                  Importer une photo depuis votre téléphone
-                </span>
-              </button>
-              <div className="relative min-w-0 flex-1">
-                <LinkIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ivory/40" />
-                <input
-                  value={avatar}
-                  onChange={(e) => setAvatar(e.target.value)}
-                  placeholder="ou coller une URL d'image (https://...)"
-                  className="glass-input pl-9"
-                />
-              </div>
-            </div>
-            <p className="mt-2 text-[11px] text-ivory/50">
-              <span className="hidden sm:inline">
-                Astuce : choisissez une image nette depuis votre ordinateur. Max 5 Mo.
-              </span>
-              <span className="sm:hidden">
-                Astuce : choisissez une photo depuis votre téléphone ou votre galerie. Max 5 Mo.
-              </span>
-            </p>
-          </motion.div>
-        )}
-
-        <form onSubmit={saveProfile} className="mt-6 grid gap-4 md:grid-cols-2">
-          <div>
-            <label className="font-regal text-[10px] tracking-[0.22em] text-ivory/60">
-              Pseudo
-            </label>
-            <input
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="glass-input mt-2"
-              placeholder="Votre pseudo"
-              maxLength={32}
-            />
-          </div>
-          <div>
-            <label className="font-regal text-[10px] tracking-[0.22em] text-ivory/60">
-              Rôle
-            </label>
-            <input
-              disabled
-              value={roleLabel(serverProfile?.role ?? user.role)}
-              className="glass-input mt-2 cursor-not-allowed opacity-70"
-            />
-          </div>
-          <div className="md:col-span-2">
-            <label className="font-regal text-[10px] tracking-[0.22em] text-ivory/60">
-              Biographie
-            </label>
-            <textarea
-              rows={3}
-              value={bio}
-              onChange={(e) => setBio(e.target.value)}
-              className="glass-input mt-2 resize-none"
-              placeholder="Parle de toi, de tes lives, de ta passion..."
-            />
-          </div>
-          <div className="flex md:col-span-2 sm:justify-end">
-            <button type="submit" className="btn-gold w-full sm:w-auto">
-              <Save className="h-4 w-4" /> Enregistrer mon profil
-            </button>
-          </div>
-        </form>
-      </motion.header>
-
-      <section className="mt-12">
-        <SectionHeading
-          align="left"
-          eyebrow="Avatar"
-          title={<>Ton <span className="text-mystic">avatar</span></>}
-          subtitle="Le rendu complet a migré dans un studio dédié. Sur le profil, on conserve seulement une porte d'entrée élégante vers l'atelier Avatar."
-        />
-        <div className="mt-6">
-          <AvatarProfileBanner
-            title="Composer mon avatar"
-            subtitle="Entrez dans le studio plein écran pour modifier votre apparence 3D, vos tenues et vos accessoires sans passer par le profil."
-            cta={serverProfile?.avatarUrl ? "Modifier mon avatar" : "Composer mon avatar"}
-          />
-        </div>
-      </section>
-
-      <section className="mt-12">
-        <SectionHeading
-          align="left"
-          eyebrow="Familier"
-          title={<>Ton <span className="text-mystic">familier</span></>}
-          subtitle="Compagnon de chemin unique pour chaque membre. Il gagne de l’XP à mesure que tu postes, commentes, lances des lives ou reçois des cadeaux."
-        />
-        <div className="mt-6 card-royal flex flex-col items-start gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-ivory/75">
-            Niveau, palier d’évolution, statistiques cosmétiques et collection
-            de familiers : tout est dans ta page dédiée.
-          </p>
-          <Link
-            to="/familier"
-            className="inline-flex items-center gap-2 self-start rounded-full bg-gold-shine px-5 py-3 font-regal text-[11px] tracking-[0.22em] text-night-900 transition hover:brightness-110"
-          >
-            ✨ Aller à Mon Familier
-          </Link>
-        </div>
-      </section>
-
-      <section className="mt-12">
-        <WishlistSection
-          wishlist={serverProfile?.wishlist ?? []}
-          ownedIds={serverProfile?.inventory ?? []}
-          targetUserId={user.id}
-          targetUsername={user.username}
-          isSelf
-        />
-      </section>
-
-      <section className="mt-12">
-        <SectionHeading
-          align="left"
-          eyebrow="Trésorerie"
-          title={<>Vos <span className="text-mystic">bourses</span></>}
-          subtitle="Gardez un œil sur vos Lueurs et vos Sylvins. Les Sylvins servent aux cadeaux live, les Lueurs servent aux achats dédiés en boutique."
-        />
-        <div className="mt-6 grid gap-4 lg:grid-cols-[1fr,1fr]">
-          <div className="card-royal p-5">
-            <div className="flex items-center gap-2">
-              <Coins className="h-5 w-5 text-gold-300" />
-              <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
-                Soldes à dépenser
-              </p>
-            </div>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-lg border border-gold-400/30 bg-night-900/40 p-3">
-                <p className="font-regal text-[10px] uppercase tracking-[0.22em] text-gold-300">
-                  Sylvins
-                </p>
-                <p className="mt-1 font-display text-2xl text-gold-200">
-                  {formatSylvins(
-                    serverProfile
-                      ? serverProfile.sylvinsPaid + serverProfile.sylvinsPromo
-                      : myWallet.balance,
-                  )}{" "}
-                  Sylvins
-                </p>
-                <p className="mt-1 text-[11px] text-ivory/55">
-                  Utilisables dans les lives pour offrir des cadeaux animés.
-                </p>
-              </div>
-              <div className="rounded-lg border border-sky-400/30 bg-sky-500/10 p-3">
-                <p className="font-regal text-[10px] uppercase tracking-[0.22em] text-sky-200">
-                  Lueurs
-                </p>
-                <p className="mt-1 font-display text-2xl text-sky-100">
-                  {new Intl.NumberFormat("fr-FR").format(serverProfile?.lueurs ?? 0)}
-                </p>
-                <p className="mt-1 text-[11px] text-ivory/55">
-                  Utilisables dans la boutique pour les produits réservés aux Lueurs.
-                </p>
-              </div>
-            </div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Link to="/boutique" className="btn-gold inline-flex">
-                <Sparkles className="h-4 w-4" /> Voir la boutique
-              </Link>
-              <Link to="/boutique" className="btn-royal inline-flex">
-                <Coins className="h-4 w-4" /> Recharger les Sylvins
-              </Link>
-            </div>
-          </div>
-          <div className="card-royal p-5">
-            <div className="flex items-center gap-2">
-              <Banknote className="h-5 w-5 text-gold-300" />
-              <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
-                Recettes streamer
-              </p>
-            </div>
-            {(() => {
-              // Source de vérité = profil serveur (split paid/promo). Tant
-              // qu'il n'est pas chargé, on affiche le solde client-side en
-              // fallback (anciennement seule source, pré-migration backend).
-              const paid = serverProfile?.earningsPaid ?? 0;
-              const promo =
-                serverProfile?.earningsPromo ?? myWallet.earnings;
-              const retirableNetEur = sylvinsToNetEur(paid);
-              const connectReady =
-                !!connectStatus?.accountId &&
-                connectStatus.onboardingComplete &&
-                connectStatus.payoutsEnabled;
-              const canWithdraw =
-                connectReady &&
-                retirableNetEur >= MIN_PAYOUT_EUR &&
-                paid > 0 &&
-                !withdrawLoading;
-              return (
-                <>
-                  <p className="mt-3 font-display text-3xl text-gold-200">
-                    {formatSylvins(paid + promo)} Sylvins
-                  </p>
-                  <div className="mt-3 grid gap-2 text-xs">
-                    <div className="rounded-lg border border-gold-400/30 bg-night-900/40 p-3">
-                      <p className="font-regal text-[10px] uppercase tracking-[0.22em] text-gold-300">
-                        Retirables
-                      </p>
-                      <p className="mt-1 font-display text-lg text-gold-200">
-                        {formatSylvins(paid)} Sylvins
-                      </p>
-                      <p className="mt-1 text-ivory/60">
-                        Net estimé :{" "}
-                        <span className="text-gold-200">
-                          {formatEur(retirableNetEur)}
-                        </span>{" "}
-                        (après {Math.round(PLATFORM_CUT * 100)}% de frais
-                        plateforme)
-                      </p>
-                      <p className="mt-1 text-[11px] text-ivory/50">
-                        Seulement les cadeaux reçus depuis un achat Stripe
-                        alimentent ce pot.
-                      </p>
-                    </div>
-                    <div className="rounded-lg border border-royal-500/30 bg-night-900/30 p-3">
-                      <p className="font-regal text-[10px] uppercase tracking-[0.22em] text-ivory/60">
-                        En cadeaux uniquement
-                      </p>
-                      <p className="mt-1 font-display text-lg text-ivory/85">
-                        {formatSylvins(promo)} Sylvins
-                      </p>
-                      <p className="mt-1 text-[11px] text-ivory/50">
-                        Reçus depuis un solde promo (events, admin,
-                        récompenses). Non retirables en € — réinjectez-les
-                        en offrant vos propres cadeaux ou en achetant des
-                        items boutique.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-night-900/60">
-                    <div
-                      className="h-full bg-gold-shine"
-                      style={{
-                        width: `${Math.min(
-                          100,
-                          (retirableNetEur / MIN_PAYOUT_EUR) * 100,
-                        )}%`,
-                      }}
+            <form onSubmit={saveProfile} className="mt-4 grid gap-4 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <label className="font-regal text-[10px] tracking-[0.22em] text-ivory/60">
+                  Photo de profil
+                </label>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    ref={fileRef}
+                    onChange={handleFile}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileRef.current?.click()}
+                    className="btn-royal w-full sm:w-auto"
+                  >
+                    <Upload className="h-4 w-4" />
+                    <span className="hidden sm:inline">
+                      Importer une image depuis votre ordinateur
+                    </span>
+                    <span className="sm:hidden">
+                      Importer une photo depuis votre téléphone
+                    </span>
+                  </button>
+                  <div className="min-w-0 flex-1">
+                    <input
+                      value={avatar}
+                      onChange={(e) => setAvatar(e.target.value)}
+                      placeholder="ou coller une URL d'image (https://...)"
+                      className="glass-input"
                     />
                   </div>
-                  <p className="mt-2 text-[11px] text-ivory/50">
-                    Seuil de retrait : {formatEur(MIN_PAYOUT_EUR)} (calculé
-                    sur le pot "Retirables").
-                  </p>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      className="btn-royal inline-flex disabled:cursor-not-allowed disabled:opacity-50"
-                      disabled={!canWithdraw}
-                      onClick={withdrawEarnings}
-                      title={
-                        !connectReady
-                          ? "Configurez Stripe Express d'abord."
-                          : retirableNetEur < MIN_PAYOUT_EUR
-                            ? `Seuil minimum ${formatEur(MIN_PAYOUT_EUR)} non atteint.`
-                            : ""
-                      }
-                    >
-                      <Banknote className="h-4 w-4" />{" "}
-                      {withdrawLoading ? "Retrait en cours…" : "Retirer en €"}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-gold inline-flex disabled:cursor-not-allowed disabled:opacity-50"
-                      onClick={openStripeOnboarding}
-                      disabled={connectLoading || withdrawLoading}
-                    >
-                      <LinkIcon className="h-4 w-4" />{" "}
-                      {connectLoading
-                        ? "Connexion Stripe…"
-                        : connectReady
-                          ? "Ouvrir Stripe Express"
-                          : "Configurer mes retraits"}
-                    </button>
-                  </div>
-                </>
-              );
-            })()}
-          </div>
-        </div>
-      </section>
+                </div>
+              </div>
+              <div>
+                <label className="font-regal text-[10px] tracking-[0.22em] text-ivory/60">
+                  Pseudo
+                </label>
+                <input
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="glass-input mt-2"
+                  placeholder="Votre pseudo"
+                  maxLength={32}
+                />
+              </div>
+              <div>
+                <label className="font-regal text-[10px] tracking-[0.22em] text-ivory/60">
+                  Rôle
+                </label>
+                <input
+                  disabled
+                  value={roleLabel(serverProfile?.role ?? user.role)}
+                  className="glass-input mt-2 cursor-not-allowed opacity-70"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="font-regal text-[10px] tracking-[0.22em] text-ivory/60">
+                  Biographie
+                </label>
+                <textarea
+                  rows={3}
+                  value={bio}
+                  onChange={(e) => setBio(e.target.value)}
+                  className="glass-input mt-2 resize-none"
+                  placeholder="Parle de toi, de tes lives, de ta passion..."
+                />
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row sm:justify-end md:col-span-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingAvatar(false);
+                    setAvatar(user.avatar);
+                    setUsername(user.username);
+                    setBio(user.bio ?? "");
+                  }}
+                  className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/10 px-4 py-2 text-sm text-ivory/75"
+                >
+                  Annuler
+                </button>
+                <button type="submit" className="btn-gold w-full sm:w-auto">
+                  <Save className="h-4 w-4" /> Enregistrer mon profil
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        )}
+      </motion.header>
 
-      <section className="mt-12">
+      <section className="mt-10">
         <SectionHeading
           align="left"
-          eyebrow="Activité"
-          title="Ton activité"
+          eyebrow="Publications"
+          title="Mes publications"
+          subtitle="Le vrai feed de tes posts, juste sous la biographie."
         />
-        <div className="mt-6 grid gap-4 md:grid-cols-3">
-          <div className="card-royal p-5">
-            <Heart className="h-5 w-5 text-gold-300" />
-            <p className="mt-3 font-display text-2xl text-gold-200">
-              {myLikes.length}
-            </p>
-            <p className="font-regal text-[10px] tracking-[0.22em] text-ivory/55">
-              chroniques aimées
-            </p>
-          </div>
-          <div className="card-royal p-5">
-            <ShoppingBag className="h-5 w-5 text-gold-300" />
-            <p className="mt-3 font-display text-2xl text-gold-200">
-              {myOrders.length}
-            </p>
-            <p className="font-regal text-[10px] tracking-[0.22em] text-ivory/55">
-              commandes royales
-            </p>
-          </div>
-          <div className="card-royal p-5">
-            <Crown className="h-5 w-5 text-gold-300" />
-            <p className="mt-3 font-display text-2xl text-gold-200">
-              {myComments.length}
-            </p>
-            <p className="font-regal text-[10px] tracking-[0.22em] text-ivory/55">
-              paroles au grimoire
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {myOrders.length > 0 && (
-        <section className="mt-12">
-          <SectionHeading
-            align="left"
-            eyebrow="Commandes"
-            title="Vos trésors scellés"
-          />
-          <ul className="mt-6 space-y-3">
-            {myOrders.map((o) => (
-              <li key={o.id} className="card-royal p-4">
-                <div className="flex items-center justify-between">
-                  <p className="font-display text-sm text-gold-200">
-                    Ordre #{o.id.slice(-6)}
-                  </p>
-                  <p className="font-display text-lg text-gold-200">
-                    {formatPrice(o.total)}
-                  </p>
-                </div>
-                <p className="mt-1 font-regal text-[10px] tracking-[0.22em] text-ivory/55">
-                  {formatDate(o.createdAt)} · {o.status}
-                </p>
-                <ul className="mt-3 space-y-1 text-sm text-ivory/75">
-                  {o.items.map((it) => {
-                    const p = products.find((x) => x.id === it.productId);
-                    return (
-                      <li key={it.productId}>
-                        ✦ {p?.name ?? "Item"} × {it.quantity}
-                      </li>
-                    );
-                  })}
-                </ul>
+        <ul className="mt-6 grid grid-cols-3 gap-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
+          {myPosts.map((article) => {
+            const likes = article.likes.length;
+            const comments = article.comments.length;
+            return (
+              <li
+                key={article.id}
+                className="group relative overflow-hidden rounded-[20px] border border-white/8 bg-night-950/70 shadow-[0_14px_40px_rgba(0,0,0,0.22)]"
+              >
+                <Link
+                  to={`/blog/${article.slug}`}
+                  className="absolute inset-0 z-10"
+                  aria-label={`Ouvrir la chronique ${article.title}`}
+                />
+                <article className="relative flex aspect-[4/5] flex-col overflow-hidden">
+                  <div className="absolute inset-0 bg-night-950">
+                    <img
+                      src={article.cover}
+                      alt={article.title}
+                      className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+                    />
+                  </div>
+                  <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(2,6,23,0.08),rgba(2,6,23,0.08)_35%,rgba(2,6,23,0.88)_100%)]" />
+                  <div className="absolute inset-x-0 bottom-0 z-20 p-2.5">
+                    <div className="rounded-[16px] border border-white/10 bg-night-950/72 p-2 backdrop-blur-md">
+                      <p className="line-clamp-2 text-[11px] leading-4 text-ivory/88">
+                        {article.title}
+                      </p>
+                      <p className="mt-1 line-clamp-2 text-[10px] leading-4 text-ivory/58">
+                        {article.excerpt}
+                      </p>
+                      <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-ivory/55">
+                        <span>{likes} likes</span>
+                        <span>{comments} comm.</span>
+                      </div>
+                    </div>
+                  </div>
+                </article>
               </li>
-            ))}
-          </ul>
-        </section>
-      )}
-    </div>
+            );
+          })}
+          {myPosts.length === 0 && (
+            <li className="col-span-full rounded-[20px] border border-dashed border-white/10 px-4 py-10 text-center text-sm text-ivory/50">
+              Crée ta première publication.
+            </li>
+          )}
+        </ul>
+      </section>
+      </div>
   );
 }
