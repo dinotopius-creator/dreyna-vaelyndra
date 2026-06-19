@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Banknote,
+  Camera,
   Coins,
   Crown,
   Heart,
@@ -18,6 +19,7 @@ import { useStore } from "../contexts/StoreContext";
 import { useToast } from "../contexts/ToastContext";
 import { useProfile } from "../contexts/ProfileContext";
 import { SectionHeading } from "../components/SectionHeading";
+import { AvatarImage } from "../components/AvatarImage";
 import { UserBadges } from "../components/UserBadges";
 import StreamerGradeBadge from "../components/StreamerGradeBadge";
 import { CreaturePickerModal } from "../components/CreaturePickerModal";
@@ -267,18 +269,43 @@ export function Me() {
       <motion.header
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="card-royal relative overflow-hidden p-5 sm:p-8 md:p-10"
+        className="card-royal relative overflow-hidden p-4 sm:p-6"
       >
-        <AvatarProfileBanner
-          title={user.username}
-          subtitle="Votre avatar 3D principal est désormais géré dans un studio dédié. Les profils n'affichent plus le rendu complet, seulement un accès vers l'atelier Avatar."
-          cta="Ouvrir l'atelier Avatar"
-        />
-        <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
-              {roleLabelWithIcon(serverProfile?.role ?? user.role)}
-            </p>
+        <div className="flex items-start gap-4 sm:gap-5">
+          <div className="relative shrink-0">
+            <AvatarImage
+              candidates={[serverProfile?.avatarImageUrl, user.avatar]}
+              fallbackSeed={user.id}
+              alt={user.username}
+              className="h-20 w-20 rounded-full object-cover ring-4 ring-gold-400/50 sm:h-24 sm:w-24"
+            />
+            <button
+              type="button"
+              onClick={() => setEditingAvatar((current) => !current)}
+              className="absolute -bottom-1 -right-1 inline-flex h-8 w-8 items-center justify-center rounded-full bg-gold-shine text-night-900 shadow-lg ring-2 ring-night-900 transition hover:scale-105"
+              title="Changer ma photo de profil"
+              aria-label="Changer ma photo de profil"
+            >
+              <Camera className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
+                  {roleLabelWithIcon(serverProfile?.role ?? user.role)}
+                </p>
+                <h1 className="mt-1 truncate font-display text-2xl text-gold-200 sm:text-3xl">
+                  {user.username}
+                </h1>
+              </div>
+              {serverProfile?.grade && (
+                <div className="shrink-0">
+                  <StreamerGradeBadge grade={serverProfile.grade} size="md" />
+                </div>
+              )}
+            </div>
+
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <UserBadges
                 creatureId={serverProfile?.creature?.id ?? user.creatureId}
@@ -293,31 +320,74 @@ export function Me() {
                 Changer
               </button>
             </div>
-            <p className="mt-2 text-sm text-ivory/60">
+
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-ivory/78">
+              {serverProfile?.bio || bio || " "}
+            </p>
+
+            <p className="mt-2 text-[11px] text-ivory/50">
               Inscrit·e le {formatDate(user.joinedAt)}
             </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-3 text-sm text-ivory/70">
-            <button
-              type="button"
-              onClick={() => setBondsTab("followers")}
-              className="rounded-full transition hover:text-gold-100"
-            >
-              <strong className="font-display text-gold-200">
-                {serverProfile?.followersCount ?? 0}
-              </strong>{" "}
-              âmes liées
-            </button>
-            <button
-              type="button"
-              onClick={() => setBondsTab("following")}
-              className="rounded-full transition hover:text-gold-100"
-            >
-              <strong className="font-display text-gold-200">
-                {serverProfile?.followingCount ?? 0}
-              </strong>{" "}
-              liens tissés
-            </button>
+
+            <div className="mt-4 grid grid-cols-3 gap-2 sm:max-w-md">
+              <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-center">
+                <div className="font-display text-lg text-gold-100">
+                  {articles.length}
+                </div>
+                <div className="text-[11px] uppercase tracking-[0.18em] text-ivory/55">
+                  Posts
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBondsTab("followers")}
+                className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-center transition hover:border-gold-300/35"
+              >
+                <div className="font-display text-lg text-gold-100">
+                  {serverProfile?.followersCount ?? 0}
+                </div>
+                <div className="text-[11px] uppercase tracking-[0.18em] text-ivory/55">
+                  Abonnés
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setBondsTab("following")}
+                className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-center transition hover:border-gold-300/35"
+              >
+                <div className="font-display text-lg text-gold-100">
+                  {serverProfile?.followingCount ?? 0}
+                </div>
+                <div className="text-[11px] uppercase tracking-[0.18em] text-ivory/55">
+                  Suivis
+                </div>
+              </button>
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setEditingAvatar((current) => !current)}
+                className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full border border-gold-400/45 bg-gold-500/10 px-3 py-2 text-xs font-semibold text-gold-100 transition hover:bg-gold-500/20"
+              >
+                <Sparkles className="h-4 w-4" />
+                Modifier mon profil
+              </button>
+              <Link
+                to="/avatar"
+                className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-ivory/80 transition hover:border-gold-300/35 hover:text-gold-100"
+              >
+                <Sparkles className="h-4 w-4" />
+                Mes avatars
+              </Link>
+              <Link
+                to="/familier"
+                className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-ivory/80 transition hover:border-gold-300/35 hover:text-gold-100"
+              >
+                <Sparkles className="h-4 w-4" />
+                Familier
+              </Link>
+            </div>
           </div>
         </div>
         {serverProfile?.grade && (
