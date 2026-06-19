@@ -758,7 +758,7 @@ export function Navbar() {
                 )}
                 <Link
                   to="/moi"
-                  className="relative flex h-10 items-center gap-2 rounded-full border border-royal-500/30 bg-night-800/60 py-1 pl-1 pr-1 sm:pr-3 lg:pr-1 2xl:pr-3"
+                  className="relative flex h-10 items-center gap-2 rounded-full border border-royal-500/30 bg-night-800/60 py-1 pl-3 pr-3 sm:pr-3 lg:pr-3 2xl:pr-3"
                   title={
                     backendMe?.totp_enabled
                       ? "Double authentification activée"
@@ -767,11 +767,9 @@ export function Navbar() {
                         : undefined
                   }
                 >
-                  <img
-                    src={user.avatar}
-                    alt={user.username}
-                    className="h-7 w-7 rounded-full object-cover ring-2 ring-gold-400/60"
-                  />
+                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-gold-500/15 text-gold-200 ring-2 ring-gold-400/40">
+                    <UserRound className="h-4 w-4" />
+                  </span>
                   <span className="hidden text-xs font-medium text-ivory/90 sm:inline lg:hidden 2xl:inline">
                     {user.username}
                   </span>
