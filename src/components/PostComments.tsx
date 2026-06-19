@@ -368,64 +368,69 @@ export function PostComments({
     : null;
 
   return (
-    <div className="mt-4 border-t border-royal-500/15 pt-4">
+    <div className="mt-4 flex max-h-[min(72dvh,46rem)] min-h-0 flex-col gap-3 border-t border-royal-500/15 pt-4">
       {comments.length === 0 && (
         <div className="rounded-2xl border border-white/10 bg-night-950/35 px-4 py-3 text-sm text-ivory/58">
           Aucun commentaire pour le moment. Soyez le premier à répondre.
         </div>
       )}
 
-      <ul className="space-y-2.5 overflow-x-hidden">
+      <ul className="flex-1 space-y-2.5 overflow-y-auto overflow-x-hidden pr-1">
         {flatThread.map((comment) => renderComment(comment))}
       </ul>
 
-      <form onSubmit={submit} className="mt-3 flex min-w-0 items-start gap-2.5 sm:gap-3">
-        <AvatarImage
-          candidates={[user?.avatar]}
-          fallbackSeed={user?.id ?? "anon"}
-          alt="Vous"
-          className="h-8 w-8 rounded-full object-cover ring-2 ring-royal-500/30"
-        />
+      <form
+        onSubmit={submit}
+        className="shrink-0 border-t border-white/8 bg-gradient-to-t from-night-950 via-night-950/92 to-night-950/70 pt-3 pb-[calc(0.25rem+env(safe-area-inset-bottom))]"
+      >
+        <div className="flex min-w-0 items-start gap-2.5 sm:gap-3">
+          <AvatarImage
+            candidates={[user?.avatar]}
+            fallbackSeed={user?.id ?? "anon"}
+            alt="Vous"
+            className="h-8 w-8 rounded-full object-cover ring-2 ring-royal-500/30"
+          />
 
-        <div className="min-w-0 flex-1">
-          {replyTo && (
-            <div className="mb-2 flex items-center justify-between gap-2 rounded-2xl border border-gold-400/20 bg-gold-500/10 px-3 py-2 text-xs text-gold-100">
-              <span className="truncate">
-                Réponse à <strong>{replyDraftLabel}</strong>
-              </span>
+          <div className="min-w-0 flex-1">
+            {replyTo && (
+              <div className="mb-2 flex items-center justify-between gap-2 rounded-2xl border border-gold-400/20 bg-gold-500/10 px-3 py-2 text-xs text-gold-100">
+                <span className="truncate">
+                  Réponse à <strong>{replyDraftLabel}</strong>
+                </span>
+                <button
+                  type="button"
+                  onClick={resetReply}
+                  className="rounded-full border border-gold-300/25 p-1 transition hover:border-gold-200/45"
+                  title="Annuler la réponse"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
+
+            <div className="flex items-end gap-2">
+              <textarea
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                placeholder={
+                  user
+                    ? replyTo
+                      ? `Répondre à ${replyDraftLabel}...`
+                      : "Commenter cette parole..."
+                    : "Connecte-toi pour commenter..."
+                }
+                rows={1}
+                className="glass-input min-h-11 flex-1 resize-none py-2.5 [overflow-wrap:anywhere]"
+                disabled={!user}
+              />
               <button
-                type="button"
-                onClick={resetReply}
-                className="rounded-full border border-gold-300/25 p-1 transition hover:border-gold-200/45"
-                title="Annuler la réponse"
+                type="submit"
+                className="btn-gold min-h-11 px-4"
+                disabled={!user || !draft.trim() || posting}
               >
-                <X className="h-3.5 w-3.5" />
+                <Send className="h-3.5 w-3.5" />
               </button>
             </div>
-          )}
-
-          <div className="flex items-end gap-2">
-            <textarea
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder={
-                user
-                  ? replyTo
-                    ? `Répondre à ${replyDraftLabel}...`
-                    : "Commenter cette parole..."
-                  : "Connecte-toi pour commenter..."
-              }
-              rows={1}
-              className="glass-input min-h-11 flex-1 resize-none py-2.5 [overflow-wrap:anywhere]"
-              disabled={!user}
-            />
-            <button
-              type="submit"
-              className="btn-gold min-h-11 px-4"
-              disabled={!user || !draft.trim() || posting}
-            >
-              <Send className="h-3.5 w-3.5" />
-            </button>
           </div>
         </div>
       </form>
