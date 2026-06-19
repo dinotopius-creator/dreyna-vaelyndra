@@ -21,7 +21,7 @@ import StreamerGradeBadge from "../components/StreamerGradeBadge";
 import { CreaturePickerModal } from "../components/CreaturePickerModal";
 import SoulBondsModal from "../components/SoulBondsModal";
 import { formatDate, resizeImageToDataUrl } from "../lib/helpers";
-import { roleLabel, roleLabelWithIcon } from "../lib/roleLabel";
+import { roleLabelWithIcon } from "../lib/roleLabel";
 
 export function Me() {
   const { user, updateProfile, backendMe, refreshBackendMe } = useAuth();
@@ -88,6 +88,7 @@ export function Me() {
   const [username, setUsername] = useState(user?.username ?? "");
   const [avatar, setAvatar] = useState(user?.avatar ?? "");
   const [editingAvatar, setEditingAvatar] = useState(false);
+  const [editLoading, setEditLoading] = useState(false);
   const [creaturePickerOpen, setCreaturePickerOpen] = useState(false);
   const [bondsTab, setBondsTab] = useState<"followers" | "following" | null>(
     null,
@@ -106,11 +107,13 @@ export function Me() {
     return new Set<string>();
   });
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const editLoaderRef = useRef<number | null>(null);
 
   if (!user) return null;
+  const currentUser = user;
 
   const myPosts = articles
-    .filter((article) => article.author === user.username)
+    .filter((article) => article.author === currentUser.username)
     .sort(
       (a, b) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
@@ -149,6 +152,26 @@ export function Me() {
     }
   }
 
+  function openEditProfile() {
+    if (editingAvatar || editLoading) return;
+    setEditLoading(true);
+    if (editLoaderRef.current !== null) {
+      window.clearTimeout(editLoaderRef.current);
+    }
+    editLoaderRef.current = window.setTimeout(() => {
+      setEditLoading(false);
+      setEditingAvatar(true);
+    }, 260);
+  }
+
+  function closeEditProfile() {
+    setEditingAvatar(false);
+    setEditLoading(false);
+    setAvatar(currentUser.avatar);
+    setUsername(currentUser.username);
+    setBio(currentUser.bio ?? "");
+  }
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-14">
       {paymentStatus === "success" && (
@@ -181,13 +204,13 @@ export function Me() {
               alt={user.username}
               className="h-20 w-20 rounded-full object-cover ring-4 ring-gold-400/50 sm:h-24 sm:w-24"
             />
-            <button
-              type="button"
-              onClick={() => setEditingAvatar((current) => !current)}
-              className="absolute -bottom-1 -right-1 inline-flex h-8 w-8 items-center justify-center rounded-full bg-gold-shine text-night-900 shadow-lg ring-2 ring-night-900 transition hover:scale-105"
-              title="Changer ma photo de profil"
-              aria-label="Changer ma photo de profil"
-            >
+              <button
+                type="button"
+                onClick={openEditProfile}
+                className="absolute -bottom-1 -right-1 inline-flex h-8 w-8 items-center justify-center rounded-full bg-gold-shine text-night-900 shadow-lg ring-2 ring-night-900 transition hover:scale-105"
+                title="Changer ma photo de profil"
+                aria-label="Changer ma photo de profil"
+              >
               <Camera className="h-4 w-4" />
             </button>
           </div>
@@ -232,35 +255,35 @@ export function Me() {
             </p>
 
             <div className="mt-4 grid grid-cols-3 gap-2 sm:max-w-md">
-              <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-center">
-                <div className="font-display text-lg text-gold-100">
+              <div className="min-h-20 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-center">
+                <div className="font-display text-lg text-gold-100 leading-none">
                   {myPosts.length}
                 </div>
-                <div className="text-[11px] uppercase tracking-[0.18em] text-ivory/55">
+                <div className="mt-1 text-[10px] leading-tight uppercase tracking-[0.16em] text-ivory/55 sm:text-[11px]">
                   Posts
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setBondsTab("followers")}
-                className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-center transition hover:border-gold-300/35"
+                className="min-h-20 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-center transition hover:border-gold-300/35"
               >
-                <div className="font-display text-lg text-gold-100">
+                <div className="font-display text-lg text-gold-100 leading-none">
                   {serverProfile?.followersCount ?? 0}
                 </div>
-                <div className="text-[11px] uppercase tracking-[0.18em] text-ivory/55">
+                <div className="mt-1 text-[10px] leading-tight uppercase tracking-[0.16em] text-ivory/55 sm:text-[11px]">
                   Abonnés
                 </div>
               </button>
               <button
                 type="button"
                 onClick={() => setBondsTab("following")}
-                className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-center transition hover:border-gold-300/35"
+                className="min-h-20 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-center transition hover:border-gold-300/35"
               >
-                <div className="font-display text-lg text-gold-100">
+                <div className="font-display text-lg text-gold-100 leading-none">
                   {serverProfile?.followingCount ?? 0}
                 </div>
-                <div className="text-[11px] uppercase tracking-[0.18em] text-ivory/55">
+                <div className="mt-1 text-[10px] leading-tight uppercase tracking-[0.16em] text-ivory/55 sm:text-[11px]">
                   Suivis
                 </div>
               </button>
@@ -269,7 +292,7 @@ export function Me() {
             <div className="mt-4 flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={() => setEditingAvatar((current) => !current)}
+                onClick={openEditProfile}
                 className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full border border-gold-400/45 bg-gold-500/10 px-3 py-2 text-xs font-semibold text-gold-100 transition hover:bg-gold-500/20"
               >
                 <Sparkles className="h-4 w-4" />
@@ -345,119 +368,161 @@ export function Me() {
           onClose={() => setBondsTab(null)}
         />
 
-        {editingAvatar && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            className="mt-6 rounded-xl border border-gold-400/30 bg-night-900/40 p-4"
-          >
-            <div className="flex items-center justify-between">
-              <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
-                ✦ Modifier mon profil
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingAvatar(false);
-                  setAvatar(user.avatar);
-                  setUsername(user.username);
-                  setBio(user.bio ?? "");
-                }}
-                className="text-ivory/50 hover:text-rose-300"
-                title="Annuler"
-              >
-                <X className="h-4 w-4" />
-              </button>
+        {editLoading && (
+          <div className="absolute inset-0 z-40 flex items-center justify-center bg-night-950/90 backdrop-blur-md">
+            <div className="flex items-center gap-3 rounded-full border border-white/10 bg-night-900/80 px-4 py-3 text-sm text-ivory/80 shadow-2xl">
+              <Sparkles className="h-4 w-4 animate-pulse text-gold-200" />
+              Ouverture de l’éditeur de profil…
             </div>
-            <form onSubmit={saveProfile} className="mt-4 grid gap-4 md:grid-cols-2">
-              <div className="md:col-span-2">
-                <label className="font-regal text-[10px] tracking-[0.22em] text-ivory/60">
-                  Photo de profil
-                </label>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    ref={fileRef}
-                    onChange={handleFile}
-                    className="hidden"
-                  />
+          </div>
+        )}
+
+        {editingAvatar && (
+          <div className="fixed inset-0 z-50 overflow-y-auto bg-night-950">
+            <div className="min-h-full px-4 py-5 sm:px-6 sm:py-8">
+              <div className="mx-auto flex min-h-[calc(100vh-2.5rem)] max-w-4xl flex-col rounded-[28px] border border-white/10 bg-night-900/95 shadow-[0_30px_90px_rgba(0,0,0,0.6)]">
+                <div className="flex items-center justify-between border-b border-white/10 px-5 py-4 sm:px-6">
+                  <div>
+                    <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
+                      Profil
+                    </p>
+                    <h2 className="font-display text-2xl text-gold-100">
+                      Modifier mon profil
+                    </h2>
+                  </div>
                   <button
                     type="button"
-                    onClick={() => fileRef.current?.click()}
-                    className="btn-royal w-full sm:w-auto"
+                    onClick={closeEditProfile}
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 text-ivory/70"
+                    aria-label="Fermer l'éditeur"
                   >
-                    <Upload className="h-4 w-4" />
-                    <span className="hidden sm:inline">
-                      Importer une image depuis votre ordinateur
-                    </span>
-                    <span className="sm:hidden">
-                      Importer une photo depuis votre téléphone
-                    </span>
+                    <X className="h-4 w-4" />
                   </button>
-                  <div className="min-w-0 flex-1">
-                    <input
-                      value={avatar}
-                      onChange={(e) => setAvatar(e.target.value)}
-                      placeholder="ou coller une URL d'image (https://...)"
-                      className="glass-input"
-                    />
-                  </div>
+                </div>
+
+                <div className="grid flex-1 gap-6 px-5 py-5 sm:px-6 lg:grid-cols-[1.1fr_0.9fr]">
+                  <form onSubmit={saveProfile} className="space-y-5">
+                    <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
+                      <label className="font-regal text-[10px] tracking-[0.22em] text-ivory/60">
+                        Photo de profil
+                      </label>
+                      <div className="mt-3 flex items-center gap-4">
+                        <AvatarImage
+                          candidates={[avatar, serverProfile?.avatarImageUrl, user.avatar]}
+                          fallbackSeed={user.id}
+                          alt={user.username}
+                          className="h-20 w-20 rounded-full object-cover ring-4 ring-gold-400/50"
+                        />
+                        <div className="flex flex-1 flex-wrap gap-2">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            ref={fileRef}
+                            onChange={handleFile}
+                            className="hidden"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => fileRef.current?.click()}
+                            className="btn-royal min-h-11"
+                          >
+                            <Upload className="h-4 w-4" />
+                            Importer une image
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setAvatar(user.avatar)}
+                            className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/10 px-4 py-2 text-sm text-ivory/75"
+                          >
+                            Réinitialiser
+                          </button>
+                        </div>
+                      </div>
+                      <div className="mt-3">
+                        <input
+                          value={avatar}
+                          onChange={(e) => setAvatar(e.target.value)}
+                          placeholder="ou coller une URL d'image (https://...)"
+                          className="glass-input"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
+                      <label className="font-regal text-[10px] tracking-[0.22em] text-ivory/60">
+                        Pseudo
+                      </label>
+                      <input
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        className="glass-input mt-2"
+                        placeholder="Votre pseudo"
+                        maxLength={32}
+                      />
+                    </div>
+
+                    <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
+                      <label className="font-regal text-[10px] tracking-[0.22em] text-ivory/60">
+                        Bio
+                      </label>
+                      <textarea
+                        rows={5}
+                        value={bio}
+                        onChange={(e) => setBio(e.target.value)}
+                        className="glass-input mt-2 resize-none"
+                        placeholder="Parle de toi, de tes lives, de ta passion..."
+                        maxLength={240}
+                      />
+                      <p className="mt-2 text-right text-[11px] text-ivory/45">
+                        {bio.length}/240
+                      </p>
+                    </div>
+
+                    <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                      <button
+                        type="button"
+                        onClick={closeEditProfile}
+                        className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/10 px-4 py-2 text-sm text-ivory/75"
+                      >
+                        Annuler
+                      </button>
+                      <button type="submit" className="btn-gold w-full sm:w-auto">
+                        <Save className="h-4 w-4" /> Sauvegarder
+                      </button>
+                    </div>
+                  </form>
+
+                  <aside className="space-y-4">
+                    <div className="rounded-3xl border border-white/10 bg-night-950/60 p-4">
+                      <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
+                        Aperçu
+                      </p>
+                      <div className="mt-4 flex items-center gap-4">
+                        <AvatarImage
+                          candidates={[avatar, serverProfile?.avatarImageUrl, user.avatar]}
+                          fallbackSeed={user.id}
+                          alt={user.username}
+                          className="h-24 w-24 rounded-full object-cover ring-4 ring-gold-400/50"
+                        />
+                        <div>
+                          <p className="font-display text-2xl text-gold-100">{username || user.username}</p>
+                          <p className="mt-1 text-sm text-ivory/70">
+                            {serverProfile?.handle ? `@${serverProfile.handle}` : "@" + user.username.toLowerCase()}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="mt-4 text-sm leading-6 text-ivory/78">
+                        {bio || "Ajoute une bio pour présenter ton profil."}
+                      </p>
+                    </div>
+                    <div className="rounded-3xl border border-white/10 bg-night-950/60 p-4 text-sm text-ivory/65">
+                      Les changements sont appliqués à ton profil personnel et à tes publications associées.
+                    </div>
+                  </aside>
                 </div>
               </div>
-              <div>
-                <label className="font-regal text-[10px] tracking-[0.22em] text-ivory/60">
-                  Pseudo
-                </label>
-                <input
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="glass-input mt-2"
-                  placeholder="Votre pseudo"
-                  maxLength={32}
-                />
-              </div>
-              <div>
-                <label className="font-regal text-[10px] tracking-[0.22em] text-ivory/60">
-                  Rôle
-                </label>
-                <input
-                  disabled
-                  value={roleLabel(serverProfile?.role ?? user.role)}
-                  className="glass-input mt-2 cursor-not-allowed opacity-70"
-                />
-              </div>
-              <div className="md:col-span-2">
-                <label className="font-regal text-[10px] tracking-[0.22em] text-ivory/60">
-                  Biographie
-                </label>
-                <textarea
-                  rows={3}
-                  value={bio}
-                  onChange={(e) => setBio(e.target.value)}
-                  className="glass-input mt-2 resize-none"
-                  placeholder="Parle de toi, de tes lives, de ta passion..."
-                />
-              </div>
-              <div className="flex flex-col gap-2 sm:flex-row sm:justify-end md:col-span-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingAvatar(false);
-                    setAvatar(user.avatar);
-                    setUsername(user.username);
-                    setBio(user.bio ?? "");
-                  }}
-                  className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/10 px-4 py-2 text-sm text-ivory/75"
-                >
-                  Annuler
-                </button>
-                <button type="submit" className="btn-gold w-full sm:w-auto">
-                  <Save className="h-4 w-4" /> Enregistrer mon profil
-                </button>
-              </div>
-            </form>
-          </motion.div>
+            </div>
+          </div>
         )}
       </motion.header>
 
