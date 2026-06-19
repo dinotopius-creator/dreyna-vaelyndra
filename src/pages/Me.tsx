@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import {
   Camera,
   Crown,
+  BookmarkCheck,
   Save,
   Sparkles,
   Upload,
@@ -91,6 +92,19 @@ export function Me() {
   const [bondsTab, setBondsTab] = useState<"followers" | "following" | null>(
     null,
   );
+  const [savedPostIds] = useState<Set<string>>(() => {
+    try {
+      const raw = window.localStorage.getItem("vaelyndra-community-saved-posts");
+      if (!raw) return new Set<string>();
+      const parsed = JSON.parse(raw) as unknown;
+      if (Array.isArray(parsed)) {
+        return new Set(parsed.filter((item): item is string => typeof item === "string"));
+      }
+    } catch {
+      /* ignore persisted save state */
+    }
+    return new Set<string>();
+  });
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   if (!user) return null;
@@ -101,6 +115,7 @@ export function Me() {
       (a, b) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
+  const savedPosts = articles.filter((article) => savedPostIds.has(article.id));
   const isArchitect = backendMe?.role === "architect";
 
   async function saveProfile(e: React.FormEvent) {
@@ -274,6 +289,13 @@ export function Me() {
                 <Sparkles className="h-4 w-4" />
                 Familier
               </Link>
+              <a
+                href="#saved-posts"
+                className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-ivory/80 transition hover:border-gold-300/35 hover:text-gold-100"
+              >
+                <BookmarkCheck className="h-4 w-4" />
+                Sauvé
+              </a>
             </div>
           </div>
         </div>
@@ -490,6 +512,54 @@ export function Me() {
           {myPosts.length === 0 && (
             <li className="col-span-full rounded-[20px] border border-dashed border-white/10 px-4 py-10 text-center text-sm text-ivory/50">
               Crée ta première publication.
+            </li>
+          )}
+        </ul>
+      </section>
+
+      <section id="saved-posts" className="mt-10">
+        <SectionHeading
+          align="left"
+          eyebrow="Privé"
+          title="Posts sauvegardés"
+          subtitle="Les publications que tu as enregistrées dans Social."
+        />
+        <ul className="mt-6 grid grid-cols-3 gap-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
+          {savedPosts.map((article) => (
+            <li
+              key={article.id}
+              className="group relative overflow-hidden rounded-[20px] border border-white/8 bg-night-950/70 shadow-[0_14px_40px_rgba(0,0,0,0.22)]"
+            >
+              <Link
+                to={`/blog/${article.slug}`}
+                className="absolute inset-0 z-10"
+                aria-label={`Ouvrir le post sauvegardé ${article.title}`}
+              />
+              <article className="relative flex aspect-[4/5] flex-col overflow-hidden">
+                <div className="absolute inset-0 bg-night-950">
+                  <img
+                    src={article.cover}
+                    alt={article.title}
+                    className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+                  />
+                </div>
+                <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(2,6,23,0.08),rgba(2,6,23,0.08)_35%,rgba(2,6,23,0.88)_100%)]" />
+                <div className="absolute inset-x-0 bottom-0 z-20 p-2.5">
+                  <div className="rounded-[16px] border border-white/10 bg-night-950/72 p-2 backdrop-blur-md">
+                    <p className="line-clamp-2 text-[11px] leading-4 text-ivory/88">
+                      {article.title}
+                    </p>
+                    <p className="mt-1 line-clamp-2 text-[10px] leading-4 text-ivory/58">
+                      {article.excerpt}
+                    </p>
+                  </div>
+                </div>
+              </article>
+            </li>
+          ))}
+          {savedPosts.length === 0 && (
+            <li className="col-span-full rounded-[20px] border border-dashed border-white/10 px-4 py-10 text-center text-sm text-ivory/50">
+              Aucun post enregistré pour le moment.
             </li>
           )}
         </ul>
