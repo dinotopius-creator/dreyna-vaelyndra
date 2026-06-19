@@ -144,6 +144,10 @@ const MyFamiliar = lazy(async () => {
   const mod = await import("./pages/MyFamiliar");
   return { default: mod.MyFamiliar };
 });
+const PublicFamiliar = lazy(async () => {
+  const mod = await import("./pages/PublicFamiliar");
+  return { default: mod.PublicFamiliar };
+});
 const FamiliarEnclosure = lazy(async () => {
   const mod = await import("./pages/FamiliarEnclosure");
   return { default: mod.FamiliarEnclosure };
@@ -240,6 +244,10 @@ function AnimatedRoutes() {
             <Route path="/clubs/:clubId" element={<ClubHub />} />
             <Route path="/oracle" element={<Oracle />} />
             <Route path="/u/:userId" element={<UserProfile />} />
+            <Route path="/u/:userId/familier" element={<PublicFamiliar />} />
+            <Route path="/profil/:userId/familier" element={<PublicFamiliar />} />
+            <Route path="/familier/public/:userId" element={<PublicFamiliar />} />
+            <Route path="/users/:userId/familiar" element={<PublicFamiliar />} />
             <Route path="/connexion" element={<Login />} />
             <Route path="/inscription" element={<Register />} />
             <Route
