@@ -403,11 +403,11 @@ export function CommunityImmersiveFeed({
         {
           id: "news-contest",
           kind: "news",
-          title: "Concours de dessin",
+          title: "Concours de dessin terminé",
           subtitle: "Actualité communautaire",
           body: top
-            ? `Le concours #concoursdessin récompense le post le plus liké avec 1000 lueurs et 6 nourritures familier.`
-            : "Le concours #concoursdessin met les dessins de la communauté en avant pendant 24h00.",
+            ? `Le concours #concoursdessin est clos. Le Top 1 a été récompensé avec 1000 lueurs et 6 nourritures familier.`
+            : "Le concours #concoursdessin est clos. Les participations restent consultables dans l’archive.",
         },
         {
           id: "news-top10",
@@ -623,7 +623,7 @@ export function CommunityImmersiveFeed({
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="inline-flex items-center gap-1.5 rounded-full border border-gold-300/35 bg-gold-500/15 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-gold-100">
                                 <Sparkles className="h-3.5 w-3.5" />
-                                Concours officiel
+                                Résultat officiel
                               </span>
                               <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-300/25 bg-sky-500/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-sky-100">
                                 #concoursdessin
@@ -633,8 +633,8 @@ export function CommunityImmersiveFeed({
                               {COMMUNITY_DRAWING_CONTEST.title}
                             </h2>
                             <p className="mt-3 max-w-3xl text-sm leading-6 text-ivory/78 sm:text-base">
-                              Poste ton dessin avec <span className="font-semibold text-gold-100">#concoursdessin</span>.
-                              Le post le plus liké gagne <span className="font-semibold text-gold-100">1000 lueurs</span> et{" "}
+                              Le concours dessin est terminé. Le Top 1 a été récompensé avec{" "}
+                              <span className="font-semibold text-gold-100">1000 lueurs</span> et{" "}
                               <span className="font-semibold text-gold-100">6 nourritures familier</span>.
                             </p>
                             <div className="mt-5 flex flex-wrap gap-2">
@@ -650,7 +650,7 @@ export function CommunityImmersiveFeed({
                                 to="/communaute/hashtag/concoursdessin"
                                 className="inline-flex min-h-10 items-center gap-2 rounded-full bg-gold-500/20 px-4 py-2 text-sm font-semibold text-gold-100 transition hover:bg-gold-500/30"
                               >
-                                Voir les participations
+                                Voir l’archive
                               </Link>
                             </div>
                           </div>
@@ -658,7 +658,7 @@ export function CommunityImmersiveFeed({
                         <div className="grid gap-4 border-t border-white/8 bg-night-950/45 p-4 sm:p-5 lg:grid-cols-[minmax(0,1fr),360px]">
                           <div className="space-y-3">
                             <p className="text-[10px] uppercase tracking-[0.22em] text-gold-200/70">
-                              Comment participer
+                              Résumé
                             </p>
                             <div className="grid gap-2 sm:grid-cols-2">
                               {COMMUNITY_DRAWING_CONTEST.rules.map((rule) => (
