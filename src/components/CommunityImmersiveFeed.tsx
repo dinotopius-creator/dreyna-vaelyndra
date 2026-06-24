@@ -168,6 +168,7 @@ export function CommunityImmersiveFeed({
   const [expandedPostIds, setExpandedPostIds] = useState<Set<string>>(() => new Set());
   const [focusedPostIds, setFocusedPostIds] = useState<Set<string>>(() => new Set());
   const [fullscreenPostId, setFullscreenPostId] = useState<string | null>(null);
+  const [visiblePostId, setVisiblePostId] = useState<string | null>(null);
   const tapDownRef = useRef<{ postId: string; x: number; y: number; time: number } | null>(null);
   const feedRootRef = useRef<HTMLDivElement | null>(null);
   const lastTapRef = useRef<{ postId: string | null; time: number } | null>(null);
@@ -214,6 +215,57 @@ export function CommunityImmersiveFeed({
       document.body.style.overflow = previousOverflow;
     };
   }, [fullscreenPostId]);
+
+  useEffect(() => {
+    const root = feedRootRef.current;
+    if (!root || typeof IntersectionObserver === "undefined") return;
+
+    const candidates = new Map<string, number>();
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const target = entry.target as HTMLElement;
+          const postId = target.dataset.socialPostId;
+          if (!postId) continue;
+          if (entry.isIntersecting) {
+            candidates.set(postId, entry.intersectionRatio);
+          } else {
+            candidates.delete(postId);
+          }
+        }
+
+        let bestId: string | null = null;
+        let bestScore = 0.72;
+        for (const [postId, score] of candidates) {
+          if (score > bestScore) {
+            bestId = postId;
+            bestScore = score;
+          }
+        }
+        setVisiblePostId(bestId);
+      },
+      {
+        root,
+        threshold: [0.25, 0.5, 0.65, 0.75, 0.9],
+      },
+    );
+
+    const observed = Array.from(root.querySelectorAll<HTMLElement>("[data-social-post-id]"));
+    observed.forEach((node) => observer.observe(node));
+    return () => {
+      observer.disconnect();
+    };
+  }, [posts, activeTab]);
+
+  useEffect(() => {
+    const root = feedRootRef.current;
+    return () => {
+      root?.querySelectorAll<HTMLVideoElement>("video").forEach((video) => {
+        video.pause();
+        video.muted = true;
+      });
+    };
+  }, []);
 
   function triggerLikeBurst(postId: string) {
     setLikeBurst((current) => ({ postId, token: (current?.token ?? 0) + 1 }));
@@ -326,6 +378,7 @@ export function CommunityImmersiveFeed({
     () => posts.find((post) => post.id === fullscreenPostId) ?? null,
     [posts, fullscreenPostId],
   );
+  const activeVideoPostId = fullscreenPostId ?? visiblePostId;
 
   const contestEntries = useMemo(
     () => posts.filter(isDrawingContestEntry),
@@ -889,6 +942,7 @@ export function CommunityImmersiveFeed({
             >
               <div
                 className="relative h-full w-full overflow-hidden"
+                data-social-post-id={post.id}
                 onPointerDown={(event) => {
                   if (event.button !== 0 && event.pointerType === "mouse") return;
                   tapDownRef.current = {
@@ -927,7 +981,8 @@ export function CommunityImmersiveFeed({
                         poster={post.videoThumbnailUrl ?? undefined}
                         className="h-full w-full rounded-none border-0"
                         videoClassName="h-full w-full object-cover"
-                        muted={activeAudioVideoId !== post.id}
+                        active={activeVideoPostId === post.id}
+                        muted={activeAudioVideoId !== post.id || activeVideoPostId !== post.id}
                         onMutedChange={(nextMuted) => {
                           setActiveAudioVideoId(nextMuted ? null : post.id);
                         }}
@@ -1104,6 +1159,7 @@ export function CommunityImmersiveFeed({
             <div className="fixed inset-0 z-[420] bg-night-950 text-ivory">
               <div
                 className="relative h-[100dvh] w-full overflow-hidden"
+                data-social-post-id={fullscreenPost.id}
                 onClick={(event) => {
                   if (shouldIgnoreTapTarget(event.target)) return;
                   if (event.detail !== 1) return;
@@ -1149,7 +1205,8 @@ export function CommunityImmersiveFeed({
                             poster={post.videoThumbnailUrl ?? undefined}
                             className="h-full w-full rounded-none border-0"
                             videoClassName="h-full w-full object-contain bg-black"
-                            muted={activeAudioVideoId !== post.id}
+                            active={activeVideoPostId === post.id}
+                            muted={activeAudioVideoId !== post.id || activeVideoPostId !== post.id}
                             onMutedChange={(nextMuted) => {
                               setActiveAudioVideoId(nextMuted ? null : post.id);
                             }}
