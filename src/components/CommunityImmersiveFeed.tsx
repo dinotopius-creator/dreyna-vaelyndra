@@ -28,6 +28,7 @@ import { UserBadges } from "./UserBadges";
 import StreamerGradeBadge from "./StreamerGradeBadge";
 import { WeeklyRankingCountdown } from "./WeeklyRankingCountdown";
 import { ReportButton } from "./ReportButton";
+import { FollowButton } from "./FollowButton";
 import { formatRelative, parsePostImageUrl, parseVideoUrl } from "../lib/helpers";
 import {
   COMMUNITY_DRAWING_CONTEST,
@@ -163,6 +164,7 @@ export function CommunityImmersiveFeed({
   const [searchOpen, setSearchOpen] = useState(false);
   const [pendingDeletePostId, setPendingDeletePostId] = useState<string | null>(null);
   const [activeAudioVideoId, setActiveAudioVideoId] = useState<string | null>(null);
+  const [expandedPostIds, setExpandedPostIds] = useState<Set<string>>(() => new Set());
   const tapDownRef = useRef<{ postId: string; x: number; y: number; time: number } | null>(null);
   const feedRootRef = useRef<HTMLDivElement | null>(null);
   const lastTapRef = useRef<{ postId: string | null; time: number } | null>(null);
@@ -202,6 +204,18 @@ export function CommunityImmersiveFeed({
       setLikeBurst((current) => (current?.postId === postId ? null : current));
       burstTimerRef.current = null;
     }, 2000);
+  }
+
+  function toggleExpandedPost(postId: string) {
+    setExpandedPostIds((current) => {
+      const next = new Set(current);
+      if (next.has(postId)) {
+        next.delete(postId);
+      } else {
+        next.add(postId);
+      }
+      return next;
+    });
   }
 
   function handleMediaTap(postId: string, liked: boolean, timestamp: number) {
@@ -651,7 +665,7 @@ export function CommunityImmersiveFeed({
               >
                 <div className="mx-auto flex h-full w-full max-w-none items-stretch px-0">
                   <article className="panel-app relative flex h-full w-full overflow-hidden rounded-none border-0 bg-night-950/80 p-4 shadow-[0_30px_60px_rgba(0,0,0,0.38)] sm:rounded-[28px] sm:border sm:border-white/8 sm:p-6">
-                    <div className="relative flex w-full flex-col justify-between">
+                    <div className="relative flex w-full min-h-0 flex-col justify-between">
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex min-w-0 flex-wrap items-center gap-2">
                           <AvatarImage
@@ -685,67 +699,89 @@ export function CommunityImmersiveFeed({
                           </div>
                         </div>
 
-                    <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-row sm:gap-3">
-                      <FeedAction
-                        icon={<Heart className="h-5 w-5" fill={liked ? "currentColor" : "none"} />}
-                        label={liked ? "Aimé" : "Like"}
-                            active={liked}
-                            onClick={() => onLike(post.id)}
-                            count={reactionCount}
-                          />
-                          <FeedAction
-                            icon={<MessageCircle className="h-5 w-5" />}
-                            label="Com."
-                            onClick={() => onOpenComments(post.id)}
-                            count={post.comments.length}
-                          />
-                          <FeedAction
-                            icon={
-                              saved ? (
-                                <BookmarkCheck className="h-5 w-5" />
-                              ) : (
-                                <Bookmark className="h-5 w-5" />
-                              )
-                            }
-                            label={saved ? "Sauvé" : "Save"}
-                            active={saved}
-                            onClick={() => onSave(post.id)}
-                          />
-                          <FeedAction
-                            icon={<Share2 className="h-5 w-5" />}
-                            label="Partager"
-                            onClick={() => onShare(post)}
-                          />
-                          {currentUserId && (currentUserId === post.authorId || canModeratePosts) ? (
-                            <button
-                              type="button"
-                              onClick={() => setPendingDeletePostId(post.id)}
-                              className="inline-flex min-h-11 w-full min-w-0 flex-col items-center justify-center rounded-full border border-white/10 bg-night-950/45 px-3 py-2 text-xs text-rose-200 backdrop-blur-sm transition hover:border-rose-300/40 hover:text-rose-100"
-                              aria-label="Supprimer ce post"
-                            >
-                              <Trash2 className="h-5 w-5" />
-                              <span className="mt-1 leading-none">Suppr.</span>
-                            </button>
-                          ) : (
-                            <ReportButton
-                              targetType="post"
-                              targetId={post.id}
-                              targetLabel={`Post de ${displayName}`}
-                              targetUrl={`/communaute/post/${post.id}`}
-                              className="inline-flex min-h-11 w-full min-w-0 flex-col items-center justify-center rounded-full border border-rose-400/35 bg-rose-500/8 px-3 py-2 text-xs text-rose-200/90 backdrop-blur-sm transition hover:border-rose-300/55 hover:bg-rose-500/15 hover:text-rose-100"
+                        {currentUserId && currentUserId !== post.authorId && (
+                          <div className="shrink-0 pt-1">
+                            <FollowButton
+                              targetId={post.authorId}
+                              targetUsername={displayName}
+                              onChange={() => {}}
                             />
-                          )}
-                        </div>
+                          </div>
+                        )}
                       </div>
 
-                      <div className="mt-8 flex-1">
-                        <div className="max-w-2xl space-y-3">
+                      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-row sm:gap-3">
+                        <FeedAction
+                          icon={<Heart className="h-5 w-5" fill={liked ? "currentColor" : "none"} />}
+                          label={liked ? "Aimé" : "Like"}
+                          active={liked}
+                          onClick={() => onLike(post.id)}
+                          count={reactionCount}
+                        />
+                        <FeedAction
+                          icon={<MessageCircle className="h-5 w-5" />}
+                          label="Com."
+                          onClick={() => onOpenComments(post.id)}
+                          count={post.comments.length}
+                        />
+                        <FeedAction
+                          icon={
+                            saved ? (
+                              <BookmarkCheck className="h-5 w-5" />
+                            ) : (
+                              <Bookmark className="h-5 w-5" />
+                            )
+                          }
+                          label={saved ? "Sauvé" : "Save"}
+                          active={saved}
+                          onClick={() => onSave(post.id)}
+                        />
+                        <FeedAction
+                          icon={<Share2 className="h-5 w-5" />}
+                          label="Partager"
+                          onClick={() => onShare(post)}
+                        />
+                        {currentUserId && (currentUserId === post.authorId || canModeratePosts) ? (
+                          <button
+                            type="button"
+                            onClick={() => setPendingDeletePostId(post.id)}
+                            className="inline-flex min-h-11 w-full min-w-0 flex-col items-center justify-center rounded-full border border-white/10 bg-night-950/45 px-3 py-2 text-xs text-rose-200 backdrop-blur-sm transition hover:border-rose-300/40 hover:text-rose-100"
+                            aria-label="Supprimer ce post"
+                          >
+                            <Trash2 className="h-5 w-5" />
+                            <span className="mt-1 leading-none">Suppr.</span>
+                          </button>
+                        ) : (
+                          <ReportButton
+                            targetType="post"
+                            targetId={post.id}
+                            targetLabel={`Post de ${displayName}`}
+                            targetUrl={`/communaute/post/${post.id}`}
+                            className="inline-flex min-h-11 w-full min-w-0 flex-col items-center justify-center rounded-full border border-rose-400/35 bg-rose-500/8 px-3 py-2 text-xs text-rose-200/90 backdrop-blur-sm transition hover:border-rose-300/55 hover:bg-rose-500/15 hover:text-rose-100"
+                          />
+                        )}
+                      </div>
+
+                      <div className="mt-6 min-h-0 flex-1 overflow-y-auto pr-1 [scrollbar-width:thin]">
+                        <div className="max-w-2xl space-y-3 pb-4">
                           <RichMentionText
                             content={post.content}
                             mentionsByHandle={mentionTargets}
                             profileHref={(authorId) => `/u/${authorId}`}
-                            className="text-lg leading-8 text-white sm:text-xl sm:leading-8"
+                            className={clsx(
+                              "text-lg leading-8 text-white sm:text-xl sm:leading-8",
+                              !expandedPostIds.has(post.id) && "line-clamp-5 sm:line-clamp-6",
+                            )}
                           />
+                          {post.content.length > 240 && (
+                            <button
+                              type="button"
+                              onClick={() => toggleExpandedPost(post.id)}
+                              className="inline-flex min-h-10 items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-gold-100 transition hover:border-gold-300/35 hover:bg-gold-500/10"
+                            >
+                              {expandedPostIds.has(post.id) ? "Voir moins" : "Voir plus"}
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -793,7 +829,7 @@ export function CommunityImmersiveFeed({
               >
                 <div className="absolute inset-0">
                   {video?.kind ? (
-                    <div className="relative h-full w-full">
+                    <div className="relative h-full w-full min-h-0">
                       <SocialVideoPlayer
                         src={post.videoUrl!}
                         poster={post.videoThumbnailUrl ?? undefined}
@@ -830,7 +866,7 @@ export function CommunityImmersiveFeed({
                   </div>
                 )}
 
-                <div className="absolute inset-0 flex flex-col justify-between px-3 py-4 sm:px-5 sm:py-5">
+                <div className="absolute inset-0 flex min-h-0 flex-col justify-between px-3 py-4 sm:px-5 sm:py-5">
                   <div className="flex items-start justify-between gap-3">
                     <div className="inline-flex rounded-full border border-white/10 bg-night-950/35 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-ivory/70 backdrop-blur-sm">
                       {mediaTitle(post)}
@@ -856,6 +892,13 @@ export function CommunityImmersiveFeed({
                           <Handle handle={displayHandle} size="xs" />
                         </div>
                       </div>
+                      {currentUserId && currentUserId !== post.authorId && (
+                        <FollowButton
+                          targetId={post.authorId}
+                          targetUsername={displayName}
+                          onChange={() => {}}
+                        />
+                      )}
                       <div className="flex flex-wrap items-center gap-2">
                         {grade && <StreamerGradeBadge grade={grade} size="sm" />}
                         <UserBadges
@@ -870,12 +913,26 @@ export function CommunityImmersiveFeed({
                           {formatRelative(post.createdAt)}
                         </span>
                       </div>
-                      <RichMentionText
-                        content={post.content}
-                        mentionsByHandle={mentionTargets}
-                        profileHref={(authorId) => `/u/${authorId}`}
-                        className="max-w-xl text-[15px] leading-6 text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.75)] sm:text-lg sm:leading-7"
-                      />
+                      <div className="min-h-0 max-h-[35dvh] overflow-y-auto pr-1 [scrollbar-width:thin]">
+                        <RichMentionText
+                          content={post.content}
+                          mentionsByHandle={mentionTargets}
+                          profileHref={(authorId) => `/u/${authorId}`}
+                          className={clsx(
+                            "max-w-xl text-[15px] leading-6 text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.75)] sm:text-lg sm:leading-7",
+                            !expandedPostIds.has(post.id) && "line-clamp-4 sm:line-clamp-5",
+                          )}
+                        />
+                      </div>
+                      {post.content.length > 220 && (
+                        <button
+                          type="button"
+                          onClick={() => toggleExpandedPost(post.id)}
+                          className="inline-flex min-h-10 items-center gap-2 rounded-full border border-white/10 bg-night-950/35 px-4 py-2 text-sm text-gold-100 backdrop-blur-sm transition hover:border-gold-300/35 hover:bg-gold-500/10"
+                        >
+                          {expandedPostIds.has(post.id) ? "Voir moins" : "Voir plus"}
+                        </button>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-col sm:items-end sm:gap-3">
