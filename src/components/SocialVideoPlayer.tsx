@@ -20,6 +20,7 @@ type SocialVideoPlayerProps = {
   onMutedChange?: (muted: boolean) => void;
   showChrome?: boolean;
   clickToPlay?: boolean;
+  active?: boolean;
 };
 
 function formatTime(totalSeconds: number) {
@@ -40,6 +41,7 @@ export function SocialVideoPlayer({
   onMutedChange,
   showChrome = true,
   clickToPlay = true,
+  active = true,
 }: SocialVideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
@@ -75,7 +77,18 @@ export function SocialVideoPlayer({
     const video = videoRef.current;
     if (!video) return;
     video.muted = effectiveMuted;
-  }, [effectiveMuted]);
+    if (!active && !video.paused) {
+      video.pause();
+    }
+  }, [active, effectiveMuted]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (!active) {
+      video.pause();
+    }
+  }, [active]);
 
   useEffect(() => {
     const video = videoRef.current;
