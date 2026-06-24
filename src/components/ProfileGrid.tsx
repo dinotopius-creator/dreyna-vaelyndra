@@ -36,7 +36,7 @@ export function ProfileGrid({
               className="group relative overflow-hidden rounded-[20px] border border-white/8 bg-night-950/70 shadow-[0_14px_40px_rgba(0,0,0,0.22)]"
             >
               <Link
-                to={`/communaute#post-${post.id}`}
+                to={`/communaute/post/${post.id}`}
                 className="absolute inset-0 z-10"
                 aria-label={`Ouvrir le post de ${ownerName}`}
               />

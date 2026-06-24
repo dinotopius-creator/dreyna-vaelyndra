@@ -28,6 +28,13 @@ import { apiGetProfile, apiUpdateAvatar, apiUploadCommunityImage, type UserProfi
 import { useProfile } from "../contexts/ProfileContext";
 import type { User } from "../types";
 
+function normalizeProfileKey(value: string | null | undefined) {
+  return (value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/^@/, "");
+}
+
 export function UserProfile() {
   const { userId = "" } = useParams();
   const { users, user: currentUser, updateProfile: updateAuthProfile } = useAuth();
@@ -156,8 +163,21 @@ export function UserProfile() {
   }
 
   const isOwnProfile = currentUser?.id === profile.id;
+  const profileKeys = new Set(
+    [profile.id, profile.handle, profile.username]
+      .filter((value): value is string => typeof value === "string")
+      .map((value) => normalizeProfileKey(value))
+      .filter(Boolean),
+  );
   const myPosts = posts
-    .filter((post) => post.authorId === profile.id)
+    .filter((post) => {
+      const authorKeys = [
+        normalizeProfileKey(post.authorId),
+        normalizeProfileKey(post.authorHandle),
+        normalizeProfileKey(post.authorName),
+      ].filter(Boolean);
+      return authorKeys.some((key) => profileKeys.has(key));
+    })
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   return (
