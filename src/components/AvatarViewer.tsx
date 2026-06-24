@@ -27,6 +27,7 @@ import {
   type AccessoryTheme,
   type OutfitTheme,
 } from "./Avatar3DModel";
+import { VRMViewer } from "./VRMViewer";
 
 /**
  * `<model-viewer>` est un web component chargé dynamiquement via CDN : on
@@ -203,6 +204,9 @@ export function AvatarViewer({
   const sceneId = sceneItem?.sceneId ?? null;
   const isLocal3D = isAvatar3DUrl(src);
   const shouldBootModelViewer = !!src && !isLocal3D && !isFlatImageUrl(src);
+  const isVrmSource =
+    typeof src === "string" &&
+    (/\.vrm(\?|#|$)/i.test(src) || src.startsWith("blob:"));
   const [ready, setReady] = useState(
     typeof window !== "undefined" && !!customElements.get("model-viewer"),
   );
@@ -279,6 +283,17 @@ export function AvatarViewer({
         />
         {equippedFrameId && <FrameOverlay itemId={equippedFrameId} />}
       </div>
+    );
+  }
+  if (src && isVrmSource) {
+    return (
+      <VRMViewer
+        src={src}
+        alt={alt}
+        autoRotate={autoRotate}
+        interactive={interactive}
+        className={clsx(sizeClass, className)}
+      />
     );
   }
   if (src && flat) {

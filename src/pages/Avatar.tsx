@@ -15,7 +15,7 @@
  * Le profil est rechargé via ProfileContext après sauvegarde pour que le
  * nouvel avatar se propage à toute l'app (navbar, posts, chat, lives).
  */
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ChangeEvent } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { ArrowLeft, Save, Sparkles, UserCog } from "lucide-react";
@@ -41,6 +41,8 @@ export function Avatar() {
     avatarUrl: string;
     avatarImageUrl: string;
   } | null>(null);
+  const [localVrmPreview, setLocalVrmPreview] = useState<string | null>(null);
+  const [localVrmName, setLocalVrmName] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   // Re-sync à l'ouverture pour afficher la dernière version (ex. l'utilisateur
@@ -48,6 +50,12 @@ export function Avatar() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    return () => {
+      if (localVrmPreview) URL.revokeObjectURL(localVrmPreview);
+    };
+  }, [localVrmPreview]);
 
   if (!user) {
     return (
@@ -65,7 +73,8 @@ export function Avatar() {
     );
   }
 
-  const currentAvatar = draft?.avatarUrl ?? profile?.avatarUrl ?? null;
+  const currentAvatar =
+    localVrmPreview ?? draft?.avatarUrl ?? profile?.avatarUrl ?? null;
   const currentImage =
     draft?.avatarImageUrl ?? profile?.avatarImageUrl ?? user.avatar ?? null;
   const hasDraft = !!draft;
@@ -94,6 +103,24 @@ export function Avatar() {
   function discardDraft() {
     setDraft(null);
     notify("Brouillon abandonné.", "info");
+  }
+
+  function handleLocalVrmPick(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    const isVrm = /\.vrm$/i.test(file.name) || file.type.includes("vrm");
+    if (!isVrm) {
+      notify("Choisissez un fichier VRM exporté depuis VRoid Studio.", "error");
+      return;
+    }
+    const nextUrl = URL.createObjectURL(file);
+    setLocalVrmPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return nextUrl;
+    });
+    setLocalVrmName(file.name);
+    notify("Prévisualisation VRM chargée. Export prêt pour le site.", "success");
   }
 
   return (
@@ -149,6 +176,39 @@ export function Avatar() {
             <p className="mt-4 text-xs leading-5 text-ivory/50">
               {PREMIUM_AVATAR_PACK.installNote}
             </p>
+            <label className="mt-5 flex cursor-pointer flex-col gap-2 rounded-2xl border border-dashed border-gold-400/30 bg-night-950/45 p-4">
+              <span className="text-[10px] uppercase tracking-[0.24em] text-gold-300">
+                Importer un VRM exporté
+              </span>
+              <span className="text-sm text-ivory/70">
+                Sélectionne le `.vrm` exporté depuis VRoid Studio pour le
+                prévisualiser tout de suite dans le site.
+              </span>
+              <input
+                type="file"
+                accept=".vrm,model/gltf-binary"
+                onChange={handleLocalVrmPick}
+                className="glass-input mt-2 w-full"
+              />
+              {localVrmName && (
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs text-emerald-200">
+                    VRM chargé: {localVrmName}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (localVrmPreview) URL.revokeObjectURL(localVrmPreview);
+                      setLocalVrmPreview(null);
+                      setLocalVrmName(null);
+                    }}
+                    className="rounded-full border border-white/10 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-ivory/65"
+                  >
+                    Retirer
+                  </button>
+                </div>
+              )}
+            </label>
           </div>
 
           <div className="grid w-full max-w-md grid-cols-2 gap-3 sm:grid-cols-3 lg:w-[320px] lg:grid-cols-2">
