@@ -31,6 +31,27 @@ import { SectionHeading } from "../components/SectionHeading";
 import { EQUIP_SLOT } from "../lib/avatarShop";
 import { PREMIUM_AVATAR_PACK } from "../data/premiumAvatarPack";
 
+function VRMPreviewCard({ src, name }: { src: string; name: string }) {
+  return (
+    <div className="flex h-full w-full flex-col">
+      <div className="min-h-0 flex-1">
+        <AvatarViewer
+          src={src}
+          fallbackImage={null}
+          alt={name}
+          size="portrait"
+          framing="body"
+          autoRotate
+          interactive={false}
+        />
+      </div>
+      <div className="border-t border-white/10 bg-night-950/70 px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-gold-200">
+        {name}
+      </div>
+    </div>
+  );
+}
+
 export function Avatar() {
   const { user } = useAuth();
   const { profile, refresh, saveAvatar, loading } = useProfile();
@@ -74,7 +95,11 @@ export function Avatar() {
   }
 
   const currentAvatar =
-    localVrmPreview ?? draft?.avatarUrl ?? profile?.avatarUrl ?? null;
+    localVrmPreview ??
+    draft?.avatarUrl ??
+    profile?.avatarUrl ??
+    PREMIUM_AVATAR_PACK.vrmModels[0]?.path ??
+    null;
   const currentImage =
     draft?.avatarImageUrl ?? profile?.avatarImageUrl ?? user.avatar ?? null;
   const hasDraft = !!draft;
@@ -176,6 +201,27 @@ export function Avatar() {
             <p className="mt-4 text-xs leading-5 text-ivory/50">
               {PREMIUM_AVATAR_PACK.installNote}
             </p>
+            <div className="mt-4 grid gap-3">
+              <p className="text-[10px] uppercase tracking-[0.24em] text-gold-300">
+                Modèles VRM installés
+              </p>
+              <div className="grid gap-2">
+                {PREMIUM_AVATAR_PACK.vrmModels.map((model) => (
+                  <div
+                    key={model.path}
+                    className="rounded-2xl border border-white/10 bg-night-950/55 px-4 py-3"
+                  >
+                    <p className="font-semibold text-gold-100">{model.name}</p>
+                    <p className="mt-1 text-[11px] text-ivory/60">
+                      {model.note}
+                    </p>
+                    <p className="mt-2 truncate text-[10px] uppercase tracking-[0.16em] text-emerald-200/80">
+                      {model.path}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
             <label className="mt-5 flex cursor-pointer flex-col gap-2 rounded-2xl border border-dashed border-gold-400/30 bg-night-950/45 p-4">
               <span className="text-[10px] uppercase tracking-[0.24em] text-gold-300">
                 Importer un VRM exporté
@@ -212,6 +258,14 @@ export function Avatar() {
           </div>
 
           <div className="grid w-full max-w-md grid-cols-2 gap-3 sm:grid-cols-3 lg:w-[320px] lg:grid-cols-2">
+            {PREMIUM_AVATAR_PACK.vrmModels.slice(0, 3).map((model, index) => (
+              <div
+                key={model.path}
+                className={`relative overflow-hidden rounded-2xl border border-white/10 bg-night-950/60 ${index === 0 ? "col-span-2 aspect-[16/10]" : "aspect-square"}`}
+              >
+                <VRMPreviewCard src={model.path} name={model.name} />
+              </div>
+            ))}
             {PREMIUM_AVATAR_PACK.previews.map((preview, index) => (
               <div
                 key={preview}

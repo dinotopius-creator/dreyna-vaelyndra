@@ -43,6 +43,23 @@ export const PREMIUM_AVATAR_PACK = {
     "/avatar-premium/koakuma-04.png",
     "/avatar-premium/koakuma-05.png",
   ],
+  vrmModels: [
+    {
+      name: "Vaelyndra Premium Female",
+      path: "/avatar-premium/vrm/vaelyndra-premium-female.vrm",
+      note: "Modèle principal exporté depuis VRoid Studio.",
+    },
+    {
+      name: "Vaelyndra Premium Female 2",
+      path: "/avatar-premium/vrm/vaelyndra-premium-female-2.vrm",
+      note: "Variante premium alternative avec les mêmes sources.",
+    },
+    {
+      name: "Only air",
+      path: "/avatar-premium/vrm/only-air.vrm",
+      note: "Version de secours / comparaison.",
+    },
+  ],
   installNote:
     "Le runtime web ne lit pas directement les fichiers .vroid/.vroidcustomitem. Ces sources servent de pack de référence, de base de production et de future exportation VRM/GLB.",
 } as const;
