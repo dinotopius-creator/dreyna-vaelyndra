@@ -242,8 +242,8 @@ export function AvatarViewer({
   const renderConfig = avatar3dConfig
     ? {
         ...avatar3dConfig,
-        system: "legacy" as const,
-        baseModel: "procedural-premium" as const,
+        system: "premium-v2" as const,
+        baseModel: "humanoid-v4" as const,
       }
     : null;
   const outfitTheme =
