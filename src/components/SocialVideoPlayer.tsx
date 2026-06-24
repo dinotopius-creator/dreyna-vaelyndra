@@ -19,6 +19,7 @@ type SocialVideoPlayerProps = {
   muted?: boolean;
   onMutedChange?: (muted: boolean) => void;
   showChrome?: boolean;
+  clickToPlay?: boolean;
 };
 
 function formatTime(totalSeconds: number) {
@@ -38,6 +39,7 @@ export function SocialVideoPlayer({
   muted,
   onMutedChange,
   showChrome = true,
+  clickToPlay = true,
 }: SocialVideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
@@ -252,7 +254,7 @@ export function SocialVideoPlayer({
         controlsList="nodownload noplaybackrate"
         disablePictureInPicture
         preload="metadata"
-        onClick={togglePlay}
+        onClick={clickToPlay ? togglePlay : undefined}
       />
 
       <div className="absolute inset-0 bg-gradient-to-t from-night-950/55 via-night-950/15 to-night-950/10 pointer-events-none" />
