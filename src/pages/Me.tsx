@@ -24,9 +24,16 @@ import { formatDate, resizeImageToDataUrl } from "../lib/helpers";
 import { roleLabelWithIcon } from "../lib/roleLabel";
 import type { CommunityPost } from "../types";
 
+function normalizeProfileKey(value: string | null | undefined) {
+  return (value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/^@/, "");
+}
+
 export function Me() {
   const { user, updateProfile, backendMe, refreshBackendMe } = useAuth();
-  const { articles, posts } = useStore();
+  const { posts } = useStore();
   const { profile: serverProfile, refresh: refreshProfile } = useProfile();
   const { notify } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -112,15 +119,28 @@ export function Me() {
 
   if (!user) return null;
   const currentUser = user;
-  const profileNames = new Set(
-    [currentUser.username, serverProfile?.username]
+  const profileKeys = new Set(
+    [
+      currentUser.id,
+      currentUser.username,
+      currentUser.handle,
+      serverProfile?.id,
+      serverProfile?.username,
+      serverProfile?.handle,
+    ]
       .filter((value): value is string => typeof value === "string")
-      .map((value) => value.trim())
+      .map((value) => normalizeProfileKey(value))
       .filter(Boolean),
   );
 
-  const myPosts = articles
-    .filter((article) => profileNames.has(article.author.trim()))
+  const myPosts = posts
+    .filter((post) =>
+      [
+        normalizeProfileKey(post.authorId),
+        normalizeProfileKey(post.authorName),
+        normalizeProfileKey(post.authorHandle),
+      ].some((key) => profileKeys.has(key)),
+    )
     .sort(
       (a, b) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
@@ -541,26 +561,70 @@ export function Me() {
           subtitle="Le vrai feed de tes posts, juste sous la biographie."
         />
         <ul className="mt-6 grid grid-cols-3 gap-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
-          {myPosts.map((article) => {
+          {myPosts.map((post) => {
+            const likes = Object.values(post.reactions ?? {}).reduce(
+              (sum, usersList) => sum + usersList.length,
+              0,
+            );
+            const comments = post.comments.length;
+            const poster = post.videoThumbnailUrl || post.imageUrl || "";
+            const isVideo = Boolean(post.videoUrl);
             return (
               <li
-                key={article.id}
+                key={post.id}
                 className="group relative overflow-hidden rounded-[20px] border border-white/8 bg-night-950/70 shadow-[0_14px_40px_rgba(0,0,0,0.22)]"
               >
                 <Link
-                  to={`/blog/${article.slug}`}
+                  to={`/communaute/post/${post.id}`}
                   className="absolute inset-0 z-10"
-                  aria-label={`Ouvrir la chronique ${article.title}`}
+                  aria-label={`Ouvrir le post de ${post.authorName}`}
                 />
                 <article className="relative flex aspect-[4/5] flex-col overflow-hidden">
                   <div className="absolute inset-0 bg-night-950">
-                    <img
-                      src={article.cover}
-                      alt={article.title}
-                      className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
-                    />
+                    {poster ? (
+                      <img
+                        src={poster}
+                        alt={post.content}
+                        className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+                      />
+                    ) : isVideo ? (
+                      <video
+                        src={post.videoUrl}
+                        className="h-full w-full object-cover"
+                        muted
+                        playsInline
+                        loop
+                        autoPlay
+                        preload="metadata"
+                      />
+                    ) : (
+                      <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(251,191,36,0.16),transparent_35%),linear-gradient(180deg,#18111f,#09060d)] px-3 text-center">
+                        <p className="line-clamp-8 whitespace-pre-wrap text-[11px] leading-5 text-ivory/88">
+                          {post.content}
+                        </p>
+                      </div>
+                    )}
                   </div>
-                  <div className="absolute inset-0 bg-transparent" />
+                  <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(2,6,23,0.08),rgba(2,6,23,0.08)_35%,rgba(2,6,23,0.88)_100%)]" />
+                  {isVideo && (
+                    <div className="absolute left-2 top-2 z-20 inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/12 bg-night-950/70 text-white/85 backdrop-blur-md">
+                      <Sparkles className="h-3.5 w-3.5 fill-current" />
+                    </div>
+                  )}
+                  <div className="absolute inset-x-0 bottom-0 z-20 p-2.5">
+                    <div className="rounded-[16px] border border-white/10 bg-night-950/72 p-2 backdrop-blur-md">
+                      <p className="line-clamp-2 text-[11px] leading-4 text-ivory/88">
+                        {post.authorName}
+                      </p>
+                      <p className="mt-1 line-clamp-2 text-[10px] leading-4 text-ivory/58">
+                        {post.content}
+                      </p>
+                      <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-ivory/55">
+                        <span>{likes} likes</span>
+                        <span>{comments} comm.</span>
+                      </div>
+                    </div>
+                  </div>
                 </article>
               </li>
             );
