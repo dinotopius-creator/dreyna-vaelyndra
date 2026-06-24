@@ -5,6 +5,7 @@ import {
   Crown,
   BookmarkCheck,
   Save,
+  Play,
   Sparkles,
   Upload,
   X,
@@ -562,11 +563,6 @@ export function Me() {
         />
         <ul className="mt-6 grid grid-cols-3 gap-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
           {myPosts.map((post) => {
-            const likes = Object.values(post.reactions ?? {}).reduce(
-              (sum, usersList) => sum + usersList.length,
-              0,
-            );
-            const comments = post.comments.length;
             const poster = post.videoThumbnailUrl || post.imageUrl || "";
             const isVideo = Boolean(post.videoUrl);
             return (
@@ -599,32 +595,24 @@ export function Me() {
                       />
                     ) : (
                       <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(251,191,36,0.16),transparent_35%),linear-gradient(180deg,#18111f,#09060d)] px-3 text-center">
-                        <p className="line-clamp-8 whitespace-pre-wrap text-[11px] leading-5 text-ivory/88">
+                        <p className="line-clamp-6 whitespace-pre-wrap text-[12px] leading-5 text-ivory/84">
                           {post.content}
                         </p>
                       </div>
                     )}
                   </div>
-                  <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(2,6,23,0.08),rgba(2,6,23,0.08)_35%,rgba(2,6,23,0.88)_100%)]" />
-                  {isVideo && (
-                    <div className="absolute left-2 top-2 z-20 inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/12 bg-night-950/70 text-white/85 backdrop-blur-md">
-                      <Sparkles className="h-3.5 w-3.5 fill-current" />
-                    </div>
-                  )}
-                  <div className="absolute inset-x-0 bottom-0 z-20 p-2.5">
-                    <div className="rounded-[16px] border border-white/10 bg-night-950/72 p-2 backdrop-blur-md">
-                      <p className="line-clamp-2 text-[11px] leading-4 text-ivory/88">
-                        {post.authorName}
-                      </p>
-                      <p className="mt-1 line-clamp-2 text-[10px] leading-4 text-ivory/58">
-                        {post.content}
-                      </p>
-                      <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-ivory/55">
-                        <span>{likes} likes</span>
-                        <span>{comments} comm.</span>
+                  <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(2,6,23,0.02),rgba(2,6,23,0.14)_70%,rgba(2,6,23,0.26)_100%)]" />
+                  {isVideo ? (
+                    <div className="absolute inset-0 z-20 flex items-center justify-center">
+                      <div className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/12 bg-night-950/55 text-white/92 backdrop-blur-md shadow-[0_12px_30px_rgba(0,0,0,0.28)]">
+                        <Play className="h-5 w-5 fill-current" />
                       </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="absolute left-2 top-2 z-20 inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/12 bg-night-950/45 text-white/85 backdrop-blur-md">
+                      <Camera className="h-3.5 w-3.5" />
+                    </div>
+                  )}
                 </article>
               </li>
             );
