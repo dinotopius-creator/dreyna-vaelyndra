@@ -49,6 +49,11 @@ export function SocialVideoPlayer({
   const [isFallbackFullscreen, setIsFallbackFullscreen] = useState(false);
   const [isNativeFullscreen, setIsNativeFullscreen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const isIOS =
+    typeof navigator !== "undefined" &&
+    typeof window !== "undefined" &&
+    /iPad|iPhone|iPod/.test(navigator.userAgent) &&
+    !(window as Window & { MSStream?: unknown }).MSStream;
 
   const effectiveMuted = muted ?? internalMuted;
   const progress = useMemo(() => {
@@ -238,11 +243,30 @@ export function SocialVideoPlayer({
         className={clsx("block h-full w-full bg-night-800 object-cover", videoClassName)}
         muted={effectiveMuted}
         playsInline
+        controlsList="nodownload noplaybackrate"
+        disablePictureInPicture
         preload="metadata"
         onClick={togglePlay}
       />
 
       <div className="absolute inset-0 bg-gradient-to-t from-night-950/55 via-night-950/15 to-night-950/10 pointer-events-none" />
+
+      {showChrome && isIOS && effectiveMuted && hasAudio !== false && (
+        <div className="absolute left-3 top-3 z-20">
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              void handleToggleMute();
+            }}
+            className="inline-flex items-center gap-2 rounded-full border border-cyan-200/35 bg-cyan-500/20 px-3 py-2 text-[11px] font-semibold text-cyan-50 shadow-[0_14px_32px_rgba(0,0,0,0.24)] backdrop-blur-md"
+            aria-label="Activer le son"
+          >
+            <Volume2 className="h-4 w-4" />
+            Activer le son
+          </button>
+        </div>
+      )}
 
       {chromeVisible && (
         <div className="absolute inset-x-0 bottom-0 z-20 flex flex-col gap-2 p-3 sm:p-4">

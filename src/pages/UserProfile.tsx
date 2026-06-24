@@ -26,6 +26,7 @@ import { formatDate } from "../lib/helpers";
 import { roleLabelWithIcon } from "../lib/roleLabel";
 import { apiGetProfile, apiUpdateAvatar, apiUploadCommunityImage, type UserProfileDto } from "../lib/api";
 import { useProfile } from "../contexts/ProfileContext";
+import type { CommunityPost } from "../types";
 import type { User } from "../types";
 
 function normalizeProfileKey(value: string | null | undefined) {
@@ -33,6 +34,10 @@ function normalizeProfileKey(value: string | null | undefined) {
     .trim()
     .toLowerCase()
     .replace(/^@/, "");
+}
+
+function hasVisibleMedia(post: CommunityPost) {
+  return Boolean(post.videoUrl || post.imageUrl || post.videoThumbnailUrl);
 }
 
 export function UserProfile() {
@@ -178,6 +183,7 @@ export function UserProfile() {
       ].filter(Boolean);
       return authorKeys.some((key) => profileKeys.has(key));
     })
+    .filter(hasVisibleMedia)
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   return (

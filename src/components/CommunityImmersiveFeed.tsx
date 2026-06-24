@@ -677,11 +677,11 @@ export function CommunityImmersiveFeed({
                           <div className="min-w-0">
                             <Link
                               to={`/u/${post.authorId}`}
-                              className="block truncate font-display text-lg text-gold-100"
+                              className="block truncate font-display text-lg text-gold-50 drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)]"
                             >
                               {displayName}
                             </Link>
-                            <Handle handle={displayHandle} size="xs" />
+                            <Handle handle={displayHandle} size="xs" className="text-ivory/75" />
                             <div className="mt-2 flex flex-wrap items-center gap-2">
                               {grade && <StreamerGradeBadge grade={grade} size="sm" />}
                               <UserBadges
@@ -745,7 +745,7 @@ export function CommunityImmersiveFeed({
                           <button
                             type="button"
                             onClick={() => setPendingDeletePostId(post.id)}
-                            className="inline-flex min-h-11 w-full min-w-0 flex-col items-center justify-center rounded-full border border-white/10 bg-night-950/45 px-3 py-2 text-xs text-rose-200 backdrop-blur-sm transition hover:border-rose-300/40 hover:text-rose-100"
+                            className="inline-flex min-h-11 w-full min-w-0 flex-col items-center justify-center rounded-full border border-rose-300/45 bg-rose-500/18 px-3 py-2 text-xs text-rose-50 shadow-[0_10px_22px_rgba(0,0,0,0.18)] backdrop-blur-sm transition hover:border-rose-200/70 hover:bg-rose-500/28 hover:text-white"
                             aria-label="Supprimer ce post"
                           >
                             <Trash2 className="h-5 w-5" />
@@ -757,7 +757,7 @@ export function CommunityImmersiveFeed({
                             targetId={post.id}
                             targetLabel={`Post de ${displayName}`}
                             targetUrl={`/communaute/post/${post.id}`}
-                            className="inline-flex min-h-11 w-full min-w-0 flex-col items-center justify-center rounded-full border border-rose-400/35 bg-rose-500/8 px-3 py-2 text-xs text-rose-200/90 backdrop-blur-sm transition hover:border-rose-300/55 hover:bg-rose-500/15 hover:text-rose-100"
+                            className="inline-flex min-h-11 w-full min-w-0 flex-col items-center justify-center rounded-full border border-rose-300/45 bg-rose-500/18 px-3 py-2 text-xs text-rose-50 shadow-[0_10px_22px_rgba(0,0,0,0.18)] backdrop-blur-sm transition hover:border-rose-200/70 hover:bg-rose-500/28 hover:text-white"
                           />
                         )}
                       </div>
@@ -885,11 +885,11 @@ export function CommunityImmersiveFeed({
                         <div className="min-w-0">
                           <Link
                             to={`/u/${post.authorId}`}
-                            className="block truncate font-display text-lg text-gold-100 drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]"
+                            className="block truncate font-display text-lg text-gold-50 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]"
                           >
                             {displayName}
                           </Link>
-                          <Handle handle={displayHandle} size="xs" />
+                          <Handle handle={displayHandle} size="xs" className="text-ivory/75" />
                         </div>
                       </div>
                       {currentUserId && currentUserId !== post.authorId && (
@@ -919,7 +919,7 @@ export function CommunityImmersiveFeed({
                           mentionsByHandle={mentionTargets}
                           profileHref={(authorId) => `/u/${authorId}`}
                           className={clsx(
-                            "max-w-xl text-[15px] leading-6 text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.75)] sm:text-lg sm:leading-7",
+                            "max-w-xl text-[15px] leading-6 text-ivory/95 drop-shadow-[0_1px_2px_rgba(0,0,0,0.75)] sm:text-lg sm:leading-7",
                             !expandedPostIds.has(post.id) && "line-clamp-4 sm:line-clamp-5",
                           )}
                         />
@@ -970,7 +970,7 @@ export function CommunityImmersiveFeed({
                         <button
                           type="button"
                           onClick={() => setPendingDeletePostId(post.id)}
-                          className="inline-flex min-h-11 w-full min-w-0 flex-col items-center justify-center rounded-full border border-white/10 bg-night-950/45 px-3 py-2 text-xs text-rose-200 backdrop-blur-sm transition hover:border-rose-300/40 hover:text-rose-100"
+                            className="inline-flex min-h-11 w-full min-w-0 flex-col items-center justify-center rounded-full border border-rose-300/45 bg-rose-500/18 px-3 py-2 text-xs text-rose-50 shadow-[0_10px_22px_rgba(0,0,0,0.18)] backdrop-blur-sm transition hover:border-rose-200/70 hover:bg-rose-500/28 hover:text-white"
                           aria-label="Supprimer ce post"
                         >
                           <Trash2 className="h-5 w-5" />
@@ -982,7 +982,7 @@ export function CommunityImmersiveFeed({
                           targetId={post.id}
                           targetLabel={`Post de ${displayName}`}
                           targetUrl={`/communaute/post/${post.id}`}
-                          className="inline-flex min-h-11 w-full min-w-0 flex-col items-center justify-center rounded-full border border-rose-400/35 bg-rose-500/8 px-3 py-2 text-xs text-rose-200/90 backdrop-blur-sm transition hover:border-rose-300/55 hover:bg-rose-500/15 hover:text-rose-100"
+                            className="inline-flex min-h-11 w-full min-w-0 flex-col items-center justify-center rounded-full border border-rose-300/45 bg-rose-500/18 px-3 py-2 text-xs text-rose-50 shadow-[0_10px_22px_rgba(0,0,0,0.18)] backdrop-blur-sm transition hover:border-rose-200/70 hover:bg-rose-500/28 hover:text-white"
                         />
                       )}
                     </div>

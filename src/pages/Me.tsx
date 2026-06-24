@@ -32,6 +32,10 @@ function normalizeProfileKey(value: string | null | undefined) {
     .replace(/^@/, "");
 }
 
+function hasVisibleMedia(post: CommunityPost) {
+  return Boolean(post.videoUrl || post.imageUrl || post.videoThumbnailUrl);
+}
+
 export function Me() {
   const { user, updateProfile, backendMe, refreshBackendMe } = useAuth();
   const { posts } = useStore();
@@ -142,11 +146,12 @@ export function Me() {
         normalizeProfileKey(post.authorHandle),
       ].some((key) => profileKeys.has(key)),
     )
+    .filter(hasVisibleMedia)
     .sort(
       (a, b) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
-  const savedPosts = posts.filter((post) => savedPostIds.has(post.id));
+  const savedPosts = posts.filter((post) => savedPostIds.has(post.id)).filter(hasVisibleMedia);
   const isArchitect = backendMe?.role === "architect";
 
   async function saveProfile(e: React.FormEvent) {
