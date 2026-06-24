@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Camera, Play, X } from "lucide-react";
+import { Camera, MoreVertical, Play, X } from "lucide-react";
 import type { CommunityPost } from "../types";
 
 type ProfileGridProps = {
@@ -24,9 +24,21 @@ export function ProfileGrid({
   canEditPosts = false,
   ownEmptyLabel,
 }: ProfileGridProps) {
-  const visiblePosts = posts.filter(hasVisibleMedia);
+  const visiblePosts = useMemo(() => posts.filter(hasVisibleMedia), [posts]);
   const [focusedPostId, setFocusedPostId] = useState<string | null>(null);
+  const [menuPostId, setMenuPostId] = useState<string | null>(null);
   const focusedPost = visiblePosts.find((post) => post.id === focusedPostId) ?? null;
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setFocusedPostId(null);
+        setMenuPostId(null);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   return (
     <section className="mt-12">
@@ -36,6 +48,8 @@ export function ProfileGrid({
           const isVideo = Boolean(post.videoUrl);
           const poster = post.videoThumbnailUrl || post.imageUrl || "";
           const isActive = focusedPostId === post.id;
+          const menuOpen = menuPostId === post.id;
+          const canOpenMenu = canEditPosts && Boolean(onEditThumbnail);
 
           return (
             <article
@@ -46,7 +60,9 @@ export function ProfileGrid({
             >
               <button
                 type="button"
-                onClick={() => setFocusedPostId((current) => (current === post.id ? null : post.id))}
+                onClick={() =>
+                  setFocusedPostId((current) => (current === post.id ? null : post.id))
+                }
                 className="absolute inset-0 z-10"
                 aria-label={`Agrandir le post de ${ownerName}`}
               />
@@ -90,35 +106,62 @@ export function ProfileGrid({
                   {isVideo ? <Play className="h-3.5 w-3.5 fill-current" /> : <Camera className="h-3.5 w-3.5" />}
                 </div>
 
-                {canEditPosts && (
-                  <div className="absolute right-2 top-2 z-20 flex gap-1.5">
-                    {onEditThumbnail && isVideo && (
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          onEditThumbnail(post.id);
-                        }}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-gold-300/35 bg-gold-500/18 text-gold-50 shadow-[0_10px_24px_rgba(0,0,0,0.24)] backdrop-blur-md"
-                        aria-label="Modifier la miniature"
-                      >
-                        <Camera className="h-4 w-4" />
-                      </button>
-                    )}
-                    {onDeletePost && (
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          onDeletePost(post.id);
-                        }}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-rose-300/40 bg-rose-500/20 text-rose-50 shadow-[0_10px_24px_rgba(0,0,0,0.24)] backdrop-blur-md"
-                        aria-label="Supprimer mon post"
-                      >
-                        ×
-                      </button>
+                {canOpenMenu && (
+                  <div className="absolute right-2 top-2 z-20">
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        setMenuPostId((current) => (current === post.id ? null : post.id));
+                      }}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/12 bg-night-950/60 text-white/95 shadow-[0_10px_24px_rgba(0,0,0,0.24)] backdrop-blur-md transition hover:border-gold-300/45 hover:bg-night-950/80 hover:text-gold-50"
+                      aria-label="Options du post"
+                    >
+                      <MoreVertical className="h-4 w-4" />
+                    </button>
+
+                    {menuOpen && (
+                      <>
+                        <button
+                          type="button"
+                          className="fixed inset-0 z-30 cursor-default bg-transparent"
+                          aria-label="Fermer le menu"
+                          onClick={() => setMenuPostId(null)}
+                        />
+                        <div className="absolute right-0 top-10 z-40 w-44 overflow-hidden rounded-2xl border border-white/10 bg-night-950/95 p-1 shadow-[0_24px_70px_rgba(0,0,0,0.45)] backdrop-blur-md">
+                          {onEditThumbnail && (
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                setMenuPostId(null);
+                                onEditThumbnail(post.id);
+                              }}
+                              className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-ivory/85 transition hover:bg-gold-500/15 hover:text-gold-100"
+                            >
+                              <Camera className="h-4 w-4" />
+                              Modifier la miniature
+                            </button>
+                          )}
+                          {onDeletePost && (
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                setMenuPostId(null);
+                                onDeletePost(post.id);
+                              }}
+                              className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-rose-100 transition hover:bg-rose-500/15 hover:text-rose-50"
+                            >
+                              <X className="h-4 w-4" />
+                              Supprimer le post
+                            </button>
+                          )}
+                        </div>
+                      </>
                     )}
                   </div>
                 )}
