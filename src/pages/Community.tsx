@@ -60,6 +60,7 @@ import {
   apiGetCommunityActivityLeaderboard,
   apiSyncCommunityActivityRewards,
   apiSettleDrawingContest,
+  type DrawingContestSettlementDto,
   apiToggleReaction,
   apiGetProfile,
   apiSearchUsers,
@@ -70,7 +71,6 @@ import {
   type StreamerGradeDto,
 } from "../lib/api";
 import { isImageFile, isVideoFile, validateFile } from "../lib/fileUtils";
-import type { CommunityPost } from "../types";
 
 
 const LIKE_EMOJI = "like";
@@ -156,6 +156,7 @@ export function Community() {
   >([]);
   const [activityWeekStartIso, setActivityWeekStartIso] = useState<string>("");
   const [contestAwardedNotice, setContestAwardedNotice] = useState<string | null>(null);
+  const [contestSettlement, setContestSettlement] = useState<DrawingContestSettlementDto | null>(null);
 
   useEffect(() => {
     try {
@@ -258,31 +259,7 @@ export function Community() {
     [posts],
   );
 
-  const contestAnnouncementPost = useMemo<CommunityPost>(
-    () => ({
-      id: COMMUNITY_DRAWING_CONTEST.announcementPostId,
-      authorId: "user-dreyna",
-      authorName: "Dreyna",
-      authorHandle: "dreyna",
-      authorGrade: null,
-      authorAvatar: "/favicon.svg",
-      content:
-        "Concours de dessin lancé ! Poste ton dessin avec #concoursdessin pour participer pendant 24h00. Le post avec le plus de likes gagne 1000 lueurs et 6 nourritures familier.",
-      imageUrl: COMMUNITY_DRAWING_CONTEST.bannerImage,
-      videoUrl: undefined,
-      postType: "official_event",
-      officialLabel: "Annonce officielle",
-      createdAt: COMMUNITY_DRAWING_CONTEST.startsAt,
-      reactions: {} as Record<string, string[]>,
-      comments: [] as CommunityPost["comments"],
-    }),
-    [],
-  );
-
-  const feedPosts = useMemo(() => {
-    const hasAnnouncement = sorted.some((post) => post.id === contestAnnouncementPost.id);
-    return hasAnnouncement ? sorted : [contestAnnouncementPost, ...sorted];
-  }, [contestAnnouncementPost, sorted]);
+  const feedPosts = useMemo(() => sorted, [sorted]);
 
   useEffect(() => {
     if (!imagePreviewUrl) return;
@@ -427,6 +404,7 @@ export function Community() {
     void apiSettleDrawingContest()
       .then((result) => {
         if (cancelled || !result.winner) return;
+        setContestSettlement(result);
         setContestAwardedNotice(
           `${result.winner.authorName} gagne le concours #concoursdessin : +${result.rewardLueurs} lueurs et +${result.rewardFood} nourritures familier.`,
         );
@@ -898,7 +876,35 @@ export function Community() {
         weekStartIso={activityWeekStartIso}
       />
 
-      {contestAwardedNotice && (
+      {contestSettlement?.winner && (
+        <div className="absolute left-3 right-3 top-[5.25rem] z-40 overflow-hidden rounded-3xl border border-gold-300/20 bg-night-950/92 shadow-[0_20px_70px_rgba(0,0,0,0.35)]">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(250,204,21,0.20),transparent_35%),linear-gradient(135deg,rgba(9,10,18,0.96),rgba(21,16,34,0.92))]" />
+          <div className="relative flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-[0.28em] text-gold-300/80">Résultat officiel</p>
+              <h2 className="mt-1 font-display text-2xl text-gold-100">
+                Bravo à {contestSettlement.winner.authorName} !
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-ivory/78">
+                Ton dessin est Top 1 du concours #concoursdessin avec{" "}
+                <span className="font-semibold text-gold-100">{contestSettlement.winner.likeCount} likes</span>.
+                Récompense : <span className="font-semibold text-gold-100">1000 lueurs</span> et{" "}
+                <span className="font-semibold text-gold-100">6 nourritures familier</span>.
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <Link
+                to={`/communaute/post/${contestSettlement.winner.id}`}
+                className="inline-flex min-h-10 items-center gap-2 rounded-full border border-gold-300/25 bg-gold-500/15 px-4 py-2 text-sm font-semibold text-gold-100 transition hover:border-gold-300/55 hover:bg-gold-500/20"
+              >
+                Voir le post gagnant
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {contestAwardedNotice && !contestSettlement?.winner && (
         <div className="pointer-events-none absolute left-3 right-3 top-[5.25rem] z-40 rounded-2xl border border-emerald-300/20 bg-emerald-500/12 px-4 py-3 text-sm text-emerald-100 backdrop-blur-md">
           {contestAwardedNotice}
         </div>
@@ -1004,25 +1010,11 @@ export function Community() {
                       </button>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setDraft((current) =>
-                            current.includes("#concoursdessin")
-                              ? current
-                              : `${current}${current.trim() ? " " : ""}#concoursdessin`,
-                          )
-                        }
-                        className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-gold-300/25 bg-gold-500/10 px-3 py-1.5 text-xs text-gold-100 transition hover:border-gold-300/55 hover:bg-gold-500/15"
-                      >
-                        <Sparkles className="h-3.5 w-3.5" />
-                        Ajouter #concoursdessin
-                      </button>
                       <Link
                         to={drawingContestUrl()}
                         className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-ivory/70 transition hover:border-gold-300/45 hover:text-gold-100"
                       >
-                        Voir le concours
+                        Voir l’archive
                       </Link>
                     </div>
                   </div>
@@ -1217,25 +1209,11 @@ export function Community() {
                       Import direct depuis ton téléphone ou ton ordinateur. Tu peux ajouter une image ou une vidéo, ou coller une URL vidéo.
                     </p>
                     <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setDraft((current) =>
-                            current.includes("#concoursdessin")
-                              ? current
-                              : `${current}${current.trim() ? " " : ""}#concoursdessin`,
-                          )
-                        }
-                        className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-gold-300/25 bg-gold-500/10 px-3 py-1.5 text-xs text-gold-100 transition hover:border-gold-300/55 hover:bg-gold-500/15"
-                      >
-                        <Sparkles className="h-3.5 w-3.5" />
-                        Ajouter #concoursdessin
-                      </button>
                       <Link
                         to={drawingContestUrl()}
                         className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-ivory/70 transition hover:border-gold-300/45 hover:text-gold-100"
                       >
-                        Voir le concours
+                        Voir l’archive
                       </Link>
                     </div>
                     {(imagePreviewUrl || videoPreviewUrl) && (

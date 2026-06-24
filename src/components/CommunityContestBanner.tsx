@@ -50,6 +50,7 @@ export function CommunityContestBanner({
     return Math.max(0, new Date(contestEndsAt).getTime() - now);
   }, [contestEndsAt, now, timeRemainingMs]);
   const active = remaining > 0;
+  const closedCopy = "Le concours est terminé. Les participations restent visibles en archive.";
 
   if (!active && !showWhenInactive) {
     return null;
@@ -84,9 +85,17 @@ export function CommunityContestBanner({
                 Concours de dessin de la communauté
               </h2>
               <p className="max-w-2xl text-sm leading-6 text-ivory/78">
-                Crée un post avec ton dessin et le hashtag obligatoire{" "}
-                <span className="font-semibold text-gold-100">#concoursdessin</span>.
-                Le post le plus liké à la fin des 24h00 gagne{" "}
+                {active ? (
+                  <>
+                    Crée un post avec ton dessin et le hashtag obligatoire{" "}
+                    <span className="font-semibold text-gold-100">#concoursdessin</span>.
+                    Le post le plus liké à la fin des 24h00 gagne{" "}
+                  </>
+                ) : (
+                  <>
+                    {closedCopy}
+                  </>
+                )}
                 <span className="font-semibold text-gold-100">1000 lueurs</span>{" "}
                 et <span className="font-semibold text-gold-100">6 nourritures familier</span>.
               </p>
@@ -113,8 +122,8 @@ export function CommunityContestBanner({
                 {active ? formatContestCountdown(remaining) : "Clôturé"}
               </p>
               <p className="mt-2 text-sm text-ivory/70">
-                {active
-                  ? "Le concours est en cours. Participe maintenant."
+              {active
+                  ? "Le concours est en cours."
                   : `L'annonce est conservée en archive pendant ${formatRelative(contestEndsAt)}.`}
               </p>
               {!compact && (
@@ -128,7 +137,7 @@ export function CommunityContestBanner({
                 </div>
               )}
               <span className="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold text-gold-200">
-                Voir les participations <ArrowRight className="h-3.5 w-3.5" />
+                {active ? "Voir les participations" : "Voir l’archive"} <ArrowRight className="h-3.5 w-3.5" />
               </span>
             </div>
           </div>
