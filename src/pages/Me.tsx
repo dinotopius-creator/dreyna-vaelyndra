@@ -20,6 +20,7 @@ import { useToast } from "../contexts/ToastContext";
 import { useProfile } from "../contexts/ProfileContext";
 import { SectionHeading } from "../components/SectionHeading";
 import { AvatarImage } from "../components/AvatarImage";
+import { AvatarViewer } from "../components/AvatarViewer";
 import { UserBadges } from "../components/UserBadges";
 import StreamerGradeBadge from "../components/StreamerGradeBadge";
 import { CreaturePickerModal } from "../components/CreaturePickerModal";
@@ -277,19 +278,23 @@ export function Me() {
       >
         <div className="flex items-start gap-4 sm:gap-5">
           <div className="relative shrink-0">
-            <AvatarImage
-              candidates={[serverProfile?.avatarImageUrl, user.avatar]}
-              fallbackSeed={user.id}
+            <AvatarViewer
+              src={user.avatar ?? null}
+              fallbackImage={serverProfile?.avatarImageUrl ?? user.avatar}
               alt={user.username}
-              className="h-20 w-20 rounded-full object-cover ring-4 ring-gold-400/50 sm:h-24 sm:w-24"
+              className="h-20 w-20 overflow-hidden rounded-full ring-4 ring-gold-400/50 sm:h-24 sm:w-24"
+              size="square"
+              framing="face"
+              interactive={false}
+              autoRotate
             />
-              <button
-                type="button"
-                onClick={openEditProfile}
-                className="absolute -bottom-1 -right-1 inline-flex h-8 w-8 items-center justify-center rounded-full bg-gold-shine text-night-900 shadow-lg ring-2 ring-night-900 transition hover:scale-105"
-                title="Changer ma photo de profil"
-                aria-label="Changer ma photo de profil"
-              >
+            <button
+              type="button"
+              onClick={openEditProfile}
+              className="absolute -bottom-1 -right-1 inline-flex h-8 w-8 items-center justify-center rounded-full bg-gold-shine text-night-900 shadow-lg ring-2 ring-night-900 transition hover:scale-105"
+              title="Changer ma photo de profil"
+              aria-label="Changer ma photo de profil"
+            >
               <Camera className="h-4 w-4" />
             </button>
           </div>

@@ -67,3 +67,26 @@ Reference:
 - `premium-humanoid` is the target slot for the future real 3D base model.
 - Existing avatar URLs remain readable during migration.
 - Purchased cosmetics must map into compatibility slots instead of being deleted.
+
+## Purchased VRoid source pack installed locally
+
+The following legally purchased assets were imported into the repository as source material for the premium avatar direction:
+
+- `7a04m_SuccuHair_01-WineRuby.vroid`
+- `7a_Koakuma-Set_Full_2023-11-14.zip` contents, including `vroidcustomitem` wardrobe pieces and BOOTH preview images
+
+Repository staging:
+
+- `public/avatar-premium/koakuma-01.png`
+- `public/avatar-premium/koakuma-02.png`
+- `public/avatar-premium/koakuma-03.png`
+- `public/avatar-premium/koakuma-04.png`
+- `public/avatar-premium/koakuma-05.png`
+- `public/avatar-premium/succuhair-01-wineruby.vroid`
+
+Usage notes:
+
+- The browser runtime does not render `.vroid` or `vroidcustomitem` directly.
+- These files are kept as the legal source pack for a premium VRoid-style pipeline.
+- The studio now exposes the pack as an installed premium reference set, with previews and metadata.
+- Next production step remains exporting or converting to a web-compatible `VRM` / `GLB` target before runtime rendering.

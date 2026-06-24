@@ -15,7 +15,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useStore } from "../contexts/StoreContext";
 import { useToast } from "../contexts/ToastContext";
 import { SectionHeading } from "../components/SectionHeading";
-import { AvatarImage } from "../components/AvatarImage";
+import { AvatarViewer } from "../components/AvatarViewer";
 import { ProfileGrid } from "../components/ProfileGrid";
 import { UserBadges } from "../components/UserBadges";
 import { Handle } from "../components/Handle";
@@ -245,11 +245,15 @@ export function UserProfile() {
       >
         <div className="flex items-start gap-4 sm:gap-5">
           <div className="relative shrink-0">
-            <AvatarImage
-              candidates={[serverProfile?.avatarImageUrl, profile.avatar]}
-              fallbackSeed={profile.id}
+            <AvatarViewer
+              src={profile.avatar ?? null}
+              fallbackImage={serverProfile?.avatarImageUrl ?? profile.avatar}
               alt={profile.username}
-              className="h-20 w-20 rounded-full object-cover ring-4 ring-gold-400/50 sm:h-24 sm:w-24"
+              className="h-20 w-20 overflow-hidden rounded-full ring-4 ring-gold-400/50 sm:h-24 sm:w-24"
+              size="square"
+              framing="face"
+              interactive={false}
+              autoRotate
             />
             {isOwnProfile && (
               <button

@@ -15,7 +15,7 @@
  * Le profil est rechargé via ProfileContext après sauvegarde pour que le
  * nouvel avatar se propage à toute l'app (navbar, posts, chat, lives).
  */
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ChangeEvent } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { ArrowLeft, Save, Sparkles, UserCog } from "lucide-react";
@@ -29,6 +29,28 @@ import { DailyRewardCard } from "../components/DailyRewardCard";
 import { InventoryPanel } from "../components/InventoryPanel";
 import { SectionHeading } from "../components/SectionHeading";
 import { EQUIP_SLOT } from "../lib/avatarShop";
+import { PREMIUM_AVATAR_PACK } from "../data/premiumAvatarPack";
+
+function VRMPreviewCard({ src, name }: { src: string; name: string }) {
+  return (
+    <div className="flex h-full w-full flex-col">
+      <div className="min-h-0 flex-1">
+        <AvatarViewer
+          src={src}
+          fallbackImage={null}
+          alt={name}
+          size="portrait"
+          framing="body"
+          autoRotate
+          interactive={false}
+        />
+      </div>
+      <div className="border-t border-white/10 bg-night-950/70 px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-gold-200">
+        {name}
+      </div>
+    </div>
+  );
+}
 
 export function Avatar() {
   const { user } = useAuth();
@@ -40,6 +62,8 @@ export function Avatar() {
     avatarUrl: string;
     avatarImageUrl: string;
   } | null>(null);
+  const [localVrmPreview, setLocalVrmPreview] = useState<string | null>(null);
+  const [localVrmName, setLocalVrmName] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   // Re-sync à l'ouverture pour afficher la dernière version (ex. l'utilisateur
@@ -47,6 +71,12 @@ export function Avatar() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    return () => {
+      if (localVrmPreview) URL.revokeObjectURL(localVrmPreview);
+    };
+  }, [localVrmPreview]);
 
   if (!user) {
     return (
@@ -64,7 +94,12 @@ export function Avatar() {
     );
   }
 
-  const currentAvatar = draft?.avatarUrl ?? profile?.avatarUrl ?? null;
+  const currentAvatar =
+    localVrmPreview ??
+    draft?.avatarUrl ??
+    profile?.avatarUrl ??
+    PREMIUM_AVATAR_PACK.vrmModels[0]?.path ??
+    null;
   const currentImage =
     draft?.avatarImageUrl ?? profile?.avatarImageUrl ?? user.avatar ?? null;
   const hasDraft = !!draft;
@@ -95,6 +130,24 @@ export function Avatar() {
     notify("Brouillon abandonné.", "info");
   }
 
+  function handleLocalVrmPick(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    const isVrm = /\.vrm$/i.test(file.name) || file.type.includes("vrm");
+    if (!isVrm) {
+      notify("Choisissez un fichier VRM exporté depuis VRoid Studio.", "error");
+      return;
+    }
+    const nextUrl = URL.createObjectURL(file);
+    setLocalVrmPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return nextUrl;
+    });
+    setLocalVrmName(file.name);
+    notify("Prévisualisation VRM chargée. Export prêt pour le site.", "success");
+  }
+
   return (
     <div className="mx-auto max-w-6xl px-3 py-8 sm:px-6 sm:py-14">
       <div className="mb-6 flex items-center justify-between gap-3 sm:mb-8">
@@ -116,6 +169,118 @@ export function Avatar() {
         title="Composez votre double magique"
         subtitle="Créez votre avatar 3D debout, faites-le pivoter à 360°, puis scellez-le sur votre compte. Vos tenues et accessoires 3D s’y greffent ensuite partout sur Vaelyndra."
       />
+
+      <div className="mt-8 rounded-[28px] border border-gold-400/20 bg-[linear-gradient(135deg,rgba(15,23,42,0.92),rgba(40,20,67,0.92))] p-4 shadow-[0_24px_70px_rgba(0,0,0,0.28)] sm:p-6">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-2xl">
+            <p className="font-regal text-[10px] tracking-[0.24em] text-gold-300">
+              ✦ {PREMIUM_AVATAR_PACK.title}
+            </p>
+            <h2 className="mt-2 font-display text-2xl text-gold-100 sm:text-3xl">
+              Direction premium, base VRoid installée
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-ivory/75">
+              {PREMIUM_AVATAR_PACK.subtitle}
+            </p>
+            <ul className="mt-4 grid gap-2 text-sm text-ivory/72 sm:grid-cols-2">
+              {PREMIUM_AVATAR_PACK.assets.map((asset) => (
+                <li
+                  key={asset.name}
+                  className="rounded-2xl border border-white/10 bg-night-950/55 px-4 py-3"
+                >
+                  <p className="font-semibold text-gold-100">{asset.name}</p>
+                  <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-ivory/45">
+                    {asset.kind} · {asset.format}
+                  </p>
+                  <p className="mt-2 text-xs leading-5 text-ivory/62">
+                    {asset.notes}
+                  </p>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-4 text-xs leading-5 text-ivory/50">
+              {PREMIUM_AVATAR_PACK.installNote}
+            </p>
+            <div className="mt-4 grid gap-3">
+              <p className="text-[10px] uppercase tracking-[0.24em] text-gold-300">
+                Modèles VRM installés
+              </p>
+              <div className="grid gap-2">
+                {PREMIUM_AVATAR_PACK.vrmModels.map((model) => (
+                  <div
+                    key={model.path}
+                    className="rounded-2xl border border-white/10 bg-night-950/55 px-4 py-3"
+                  >
+                    <p className="font-semibold text-gold-100">{model.name}</p>
+                    <p className="mt-1 text-[11px] text-ivory/60">
+                      {model.note}
+                    </p>
+                    <p className="mt-2 truncate text-[10px] uppercase tracking-[0.16em] text-emerald-200/80">
+                      {model.path}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <label className="mt-5 flex cursor-pointer flex-col gap-2 rounded-2xl border border-dashed border-gold-400/30 bg-night-950/45 p-4">
+              <span className="text-[10px] uppercase tracking-[0.24em] text-gold-300">
+                Importer un VRM exporté
+              </span>
+              <span className="text-sm text-ivory/70">
+                Sélectionne le `.vrm` exporté depuis VRoid Studio pour le
+                prévisualiser tout de suite dans le site.
+              </span>
+              <input
+                type="file"
+                accept=".vrm,model/gltf-binary"
+                onChange={handleLocalVrmPick}
+                className="glass-input mt-2 w-full"
+              />
+              {localVrmName && (
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs text-emerald-200">
+                    VRM chargé: {localVrmName}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (localVrmPreview) URL.revokeObjectURL(localVrmPreview);
+                      setLocalVrmPreview(null);
+                      setLocalVrmName(null);
+                    }}
+                    className="rounded-full border border-white/10 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-ivory/65"
+                  >
+                    Retirer
+                  </button>
+                </div>
+              )}
+            </label>
+          </div>
+
+          <div className="grid w-full max-w-md grid-cols-2 gap-3 sm:grid-cols-3 lg:w-[320px] lg:grid-cols-2">
+            {PREMIUM_AVATAR_PACK.vrmModels.slice(0, 3).map((model, index) => (
+              <div
+                key={model.path}
+                className={`relative overflow-hidden rounded-2xl border border-white/10 bg-night-950/60 ${index === 0 ? "col-span-2 aspect-[16/10]" : "aspect-square"}`}
+              >
+                <VRMPreviewCard src={model.path} name={model.name} />
+              </div>
+            ))}
+            {PREMIUM_AVATAR_PACK.previews.map((preview, index) => (
+              <div
+                key={preview}
+                className={`relative overflow-hidden rounded-2xl border border-white/10 bg-night-950/60 ${index === 0 ? "col-span-2 aspect-[16/10]" : "aspect-square"}`}
+              >
+                <img
+                  src={preview}
+                  alt={`Aperçu du pack premium ${index + 1}`}
+                  className="h-full w-full object-cover"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
 
       <div className="mt-10 grid gap-8 lg:grid-cols-[minmax(0,360px)_1fr]">
         <motion.aside
