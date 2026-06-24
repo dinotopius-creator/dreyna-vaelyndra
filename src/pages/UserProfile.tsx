@@ -474,9 +474,9 @@ export function UserProfile() {
       />
 
       {thumbnailEditorPostId && (
-        <div className="fixed inset-0 z-[260] bg-night-950/85 backdrop-blur-md">
-          <div className="flex h-full w-full items-end justify-center p-4 sm:items-center">
-            <div className="w-full max-w-lg rounded-[28px] border border-white/10 bg-night-950 p-5 shadow-[0_30px_90px_rgba(0,0,0,0.55)]">
+        <div className="fixed inset-0 z-[260] overflow-y-auto bg-night-950/85 backdrop-blur-md">
+          <div className="min-h-full px-4 py-4 sm:px-6 sm:py-8">
+            <div className="mx-auto flex min-h-[calc(100dvh-2rem)] w-full max-w-lg flex-col rounded-[28px] border border-white/10 bg-night-950 p-5 shadow-[0_30px_90px_rgba(0,0,0,0.55)]">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-[10px] uppercase tracking-[0.22em] text-gold-300/80">
@@ -506,7 +506,7 @@ export function UserProfile() {
               <div className="mt-4 space-y-3">
                 <label className="block">
                   <span className="text-[10px] uppercase tracking-[0.22em] text-gold-300/80">
-                    Importer une image
+                    Importer une image depuis ton téléphone
                   </span>
                   <input
                     type="file"
@@ -528,7 +528,7 @@ export function UserProfile() {
                 </label>
               </div>
 
-              <div className="mt-4 rounded-[22px] border border-white/10 bg-night-900/65 p-3">
+              <div className="mt-4 flex-1 rounded-[22px] border border-white/10 bg-night-900/65 p-3">
                 <p className="mb-2 text-[10px] uppercase tracking-[0.22em] text-ivory/55">
                   Aperçu
                 </p>
@@ -555,7 +555,7 @@ export function UserProfile() {
                 </div>
               </div>
 
-              <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:justify-end">
+              <div className="mt-5 flex flex-col gap-3 border-t border-white/8 pt-4 sm:flex-row sm:justify-end">
                 <button
                   type="button"
                   onClick={() => {
