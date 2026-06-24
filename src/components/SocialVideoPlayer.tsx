@@ -85,12 +85,18 @@ export function SocialVideoPlayer({
       const tracks = (video as HTMLVideoElement & {
         audioTracks?: { length: number } | null;
         mozHasAudio?: boolean;
+        webkitAudioDecodedByteCount?: number;
       }).audioTracks;
       const mozHasAudio = (video as HTMLVideoElement & { mozHasAudio?: boolean }).mozHasAudio;
+      const webkitAudioDecodedByteCount = (video as HTMLVideoElement & {
+        webkitAudioDecodedByteCount?: number;
+      }).webkitAudioDecodedByteCount;
       if (tracks && typeof tracks.length === "number") {
-        setHasAudio(tracks.length > 0);
+        setHasAudio(tracks.length > 0 ? true : null);
       } else if (typeof mozHasAudio === "boolean") {
         setHasAudio(mozHasAudio);
+      } else if (typeof webkitAudioDecodedByteCount === "number" && webkitAudioDecodedByteCount > 0) {
+        setHasAudio(true);
       } else {
         setHasAudio(null);
       }

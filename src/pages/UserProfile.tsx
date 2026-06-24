@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import {
   ArrowLeft,
   Camera,
+  Check,
   Loader2,
   MessageCircle,
   Sparkles,
@@ -22,12 +23,11 @@ import { FollowButton } from "../components/FollowButton";
 import SoulBondsModal from "../components/SoulBondsModal";
 import StreamerGradeBadge from "../components/StreamerGradeBadge";
 import { ReportButton } from "../components/ReportButton";
+import { apiGetProfile, apiUpdateAvatar, apiUpdatePost, apiUploadCommunityImage, type UserProfileDto } from "../lib/api";
 import { formatDate } from "../lib/helpers";
 import { roleLabelWithIcon } from "../lib/roleLabel";
-import { apiGetProfile, apiUpdateAvatar, apiUploadCommunityImage, type UserProfileDto } from "../lib/api";
 import { useProfile } from "../contexts/ProfileContext";
-import type { CommunityPost } from "../types";
-import type { User } from "../types";
+import type { CommunityPost, User } from "../types";
 
 function normalizeProfileKey(value: string | null | undefined) {
   return (value ?? "")
@@ -43,7 +43,7 @@ function hasVisibleMedia(post: CommunityPost) {
 export function UserProfile() {
   const { userId = "" } = useParams();
   const { users, user: currentUser, updateProfile: updateAuthProfile } = useAuth();
-  const { posts } = useStore();
+  const { posts, dispatch } = useStore();
   const { notify } = useToast();
   const { refresh: refreshProfile } = useProfile();
 
@@ -57,6 +57,10 @@ export function UserProfile() {
   const [bondsTab, setBondsTab] = useState<"followers" | "following" | null>(null);
   const [editingAvatar, setEditingAvatar] = useState(false);
   const [avatarSaving, setAvatarSaving] = useState(false);
+  const [thumbnailEditorPostId, setThumbnailEditorPostId] = useState<string | null>(null);
+  const [thumbnailUrlDraft, setThumbnailUrlDraft] = useState("");
+  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
+  const [thumbnailSaving, setThumbnailSaving] = useState(false);
   const avatarFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -142,6 +146,44 @@ export function UserProfile() {
       );
     } finally {
       setAvatarSaving(false);
+    }
+  }
+
+  function openThumbnailEditor(postId: string) {
+    const post = myPosts.find((entry) => entry.id === postId);
+    if (!post) return;
+    setThumbnailEditorPostId(postId);
+    setThumbnailUrlDraft(post.videoThumbnailUrl ?? "");
+    setThumbnailFile(null);
+  }
+
+  async function saveThumbnail() {
+    if (!currentUser || !profile || currentUser.id !== profile.id || !thumbnailEditorPostId) return;
+    const post = myPosts.find((entry) => entry.id === thumbnailEditorPostId);
+    if (!post) return;
+    setThumbnailSaving(true);
+    try {
+      let uploadedUrl = thumbnailUrlDraft.trim();
+      if (thumbnailFile) {
+        const uploaded = await apiUploadCommunityImage(thumbnailFile);
+        uploadedUrl = uploaded.imageUrl;
+      }
+      const updated = await apiUpdatePost(post.id, {
+        userId: currentUser.id,
+        videoThumbnailUrl: uploadedUrl || undefined,
+      });
+      dispatch({ type: "replacePost", post: updated });
+      notify("Miniature mise à jour.", "success");
+      setThumbnailEditorPostId(null);
+      setThumbnailUrlDraft("");
+      setThumbnailFile(null);
+    } catch (error) {
+      notify(
+        error instanceof Error ? error.message : "Impossible de modifier la miniature.",
+        "error",
+      );
+    } finally {
+      setThumbnailSaving(false);
     }
   }
 
@@ -426,9 +468,128 @@ export function UserProfile() {
       <ProfileGrid
         posts={myPosts}
         ownerName={profile.username}
-        canEditPosts={false}
+        canEditPosts={isOwnProfile}
+        onEditThumbnail={isOwnProfile ? openThumbnailEditor : undefined}
         ownEmptyLabel="Crée ta première publication."
       />
+
+      {thumbnailEditorPostId && (
+        <div className="fixed inset-0 z-[260] bg-night-950/85 backdrop-blur-md">
+          <div className="flex h-full w-full items-end justify-center p-4 sm:items-center">
+            <div className="w-full max-w-lg rounded-[28px] border border-white/10 bg-night-950 p-5 shadow-[0_30px_90px_rgba(0,0,0,0.55)]">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.22em] text-gold-300/80">
+                    Miniature
+                  </p>
+                  <h3 className="mt-1 font-display text-2xl text-gold-100">
+                    Modifier la miniature
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setThumbnailEditorPostId(null);
+                    setThumbnailUrlDraft("");
+                    setThumbnailFile(null);
+                  }}
+                  className="rounded-full border border-white/10 p-2 text-ivory/60"
+                  aria-label="Fermer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <p className="mt-3 text-sm leading-6 text-ivory/70">
+                Choisis une image de couverture pour ce post. Elle apparaîtra dans la grille du profil.
+              </p>
+
+              <div className="mt-4 space-y-3">
+                <label className="block">
+                  <span className="text-[10px] uppercase tracking-[0.22em] text-gold-300/80">
+                    Importer une image
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    onChange={(event) => setThumbnailFile(event.target.files?.[0] ?? null)}
+                    className="glass-input mt-2 w-full"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-[10px] uppercase tracking-[0.22em] text-gold-300/80">
+                    Ou coller une URL d’image
+                  </span>
+                  <input
+                    value={thumbnailUrlDraft}
+                    onChange={(event) => setThumbnailUrlDraft(event.target.value)}
+                    placeholder="https://…"
+                    className="glass-input mt-2 w-full"
+                  />
+                </label>
+              </div>
+
+              <div className="mt-4 rounded-[22px] border border-white/10 bg-night-900/65 p-3">
+                <p className="mb-2 text-[10px] uppercase tracking-[0.22em] text-ivory/55">
+                  Aperçu
+                </p>
+                <div className="relative aspect-[4/5] overflow-hidden rounded-[18px] bg-night-800">
+                  {thumbnailFile ? (
+                    <img
+                      src={URL.createObjectURL(thumbnailFile)}
+                      alt="Aperçu miniature"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : thumbnailUrlDraft.trim() ? (
+                    <img
+                      src={thumbnailUrlDraft.trim()}
+                      alt="Aperçu miniature"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(251,191,36,0.16),transparent_35%),linear-gradient(180deg,#18111f,#09060d)] px-4 text-center">
+                      <p className="text-sm leading-6 text-ivory/70">
+                        La miniature actuelle sera remplacée ici.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setThumbnailEditorPostId(null);
+                    setThumbnailUrlDraft("");
+                    setThumbnailFile(null);
+                  }}
+                  className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/10 px-4 py-2 text-sm text-ivory/75"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void saveThumbnail()}
+                  disabled={thumbnailSaving}
+                  className="inline-flex min-h-11 items-center justify-center rounded-full bg-gold-500/20 px-4 py-2 text-sm font-semibold text-gold-100 disabled:opacity-60"
+                >
+                  {thumbnailSaving ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Sauvegarde…
+                    </>
+                  ) : (
+                    <>
+                      <Check className="mr-2 h-4 w-4" />
+                      Enregistrer
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <section className="mt-10">
         <SectionHeading
