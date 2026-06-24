@@ -113,7 +113,7 @@ export function ReportButton({
         onClick={() => setOpen(true)}
         className={
           className ||
-          "inline-flex items-center gap-1 rounded-full border border-rose-400/30 bg-rose-500/5 px-3 py-1.5 font-regal text-[10px] font-semibold tracking-[0.22em] text-rose-200/80 hover:border-rose-400/60 hover:bg-rose-500/15 hover:text-rose-100"
+          "inline-flex items-center gap-1 rounded-full border border-rose-300/45 bg-rose-500/18 px-3 py-1.5 font-regal text-[10px] font-semibold tracking-[0.22em] text-rose-50 shadow-[0_10px_22px_rgba(0,0,0,0.18)] transition hover:border-rose-200/70 hover:bg-rose-500/28 hover:text-white"
         }
         title="Signaler ce contenu"
         aria-label="Signaler"

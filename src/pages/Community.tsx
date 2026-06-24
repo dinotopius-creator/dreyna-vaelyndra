@@ -1576,7 +1576,7 @@ export function Community() {
                         content={post.content}
                         mentionsByHandle={mentionTargets}
                         profileHref={profileHref}
-                        className="mt-1 whitespace-pre-wrap break-words text-sm text-ivory/85"
+                        className="mt-1 whitespace-pre-wrap break-words text-sm text-ivory/95"
                       />
                     )}
                   </div>
@@ -1596,7 +1596,7 @@ export function Community() {
                           );
                         }
                       }}
-                      className="text-ivory/40 hover:text-gold-200"
+                      className="text-ivory/65 hover:text-gold-100"
                       title="Partager"
                     >
                       <Share2 className="h-4 w-4" />
@@ -1604,7 +1604,7 @@ export function Community() {
                     <button
                       type="button"
                       onClick={() => toggleSave(post.id)}
-                      className={`text-ivory/40 transition ${
+                      className={`text-ivory/65 transition ${
                         savedPostIds.has(post.id)
                           ? "text-gold-200 hover:text-gold-100"
                           : "hover:text-gold-200"
@@ -1629,7 +1629,7 @@ export function Community() {
                     {user?.id === post.authorId && editingPost !== post.id && (
                       <button
                         onClick={() => startEditPost(post)}
-                        className="text-ivory/40 hover:text-gold-200"
+                        className="text-ivory/65 hover:text-gold-100"
                         title="Modifier"
                       >
                         <Pencil className="h-4 w-4" />
@@ -1638,7 +1638,7 @@ export function Community() {
                     {(user?.id === post.authorId || isQueen) && (
                       <button
                         onClick={() => setPendingDeletePostId(post.id)}
-                        className="text-ivory/40 hover:text-rose-300"
+                        className="text-rose-100 hover:text-rose-50"
                         title="Supprimer"
                       >
                         <Trash2 className="h-4 w-4" />
