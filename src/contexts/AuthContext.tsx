@@ -36,6 +36,7 @@ import {
 } from "react";
 import type { User } from "../types";
 import { DREYNA_PROFILE } from "../data/mock";
+import { PREMIUM_AVATAR_PACK } from "../data/premiumAvatarPack";
 import { ApiError, apiUpdateAvatar, apiUpsertProfile } from "../lib/api";
 import {
   authLogin,
@@ -234,7 +235,10 @@ function backendToStored(me: AuthMe): StoredUser {
     // startup n'est pas passé sur les profils pré-PR S.
     handle: me.handle ?? undefined,
     email: me.email ?? `${me.id}@vaelyndra.realm`,
-    avatar: me.avatar_image_url || `https://i.pravatar.cc/150?u=${me.id}`,
+    avatar:
+      me.avatar_image_url ||
+      PREMIUM_AVATAR_PACK.vrmModels[0]?.path ||
+      `https://i.pravatar.cc/150?u=${me.id}`,
     role: normalizeRole(me.role),
     joinedAt: me.created_at,
     bio: me.bio ?? "",
@@ -290,7 +294,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 // PR S — propage le handle fraîchement renvoyé par le backend.
                 handle: me.handle ?? u.handle,
                 email: me.email ?? u.email,
-                avatar: me.avatar_image_url || u.avatar,
+                avatar:
+                  me.avatar_image_url ||
+                  PREMIUM_AVATAR_PACK.vrmModels[0]?.path ||
+                  u.avatar,
                 role: normalizeRole(me.role),
                 bio: me.bio ?? u.bio,
                 creatureId: me.creature_id ?? u.creatureId,

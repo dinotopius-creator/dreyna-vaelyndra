@@ -62,4 +62,6 @@ export const PREMIUM_AVATAR_PACK = {
   ],
   installNote:
     "Le runtime web ne lit pas directement les fichiers .vroid/.vroidcustomitem. Ces sources servent de pack de référence, de base de production et de future exportation VRM/GLB.",
+  missingModelNote:
+    "Le modèle VRM complet 'succu' n'est pas présent dans le dépôt. Les sources disponibles sont le preset SuccuHair et les exports VRM Vaelyndra Premium. Tant que le modèle complet n'est pas fourni, l'atelier affiche le VRM premium installé plutôt qu'un ancien fallback.",
 } as const;
