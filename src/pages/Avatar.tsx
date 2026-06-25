@@ -30,6 +30,7 @@ import { InventoryPanel } from "../components/InventoryPanel";
 import { SectionHeading } from "../components/SectionHeading";
 import { EQUIP_SLOT } from "../lib/avatarShop";
 import { PREMIUM_AVATAR_PACK } from "../data/premiumAvatarPack";
+import { isAvatar3DUrl } from "../lib/avatar3d";
 
 export function Avatar() {
   const { user } = useAuth();
@@ -67,7 +68,7 @@ export function Avatar() {
 
   const currentAvatar =
     draft?.avatarUrl ??
-    profile?.avatarUrl ??
+    (isAvatar3DUrl(profile?.avatarUrl) ? profile?.avatarUrl : null) ??
     PREMIUM_AVATAR_PACK.vrmModels[0]?.path ??
     null;
   const currentImage =

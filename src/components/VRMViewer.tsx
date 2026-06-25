@@ -2,7 +2,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { VRMLoaderPlugin, VRMUtils } from "@pixiv/three-vrm";
+import {
+  VRMHumanBoneName,
+  VRMLoaderPlugin,
+  VRMUtils,
+} from "@pixiv/three-vrm";
 import clsx from "clsx";
 
 interface Props {
@@ -104,6 +108,58 @@ export function VRMViewer({
         vrm.scene.scale.setScalar(1.05);
         scene.add(vrm.scene);
 
+        const leftUpperArm = vrm.humanoid?.getBoneNode(VRMHumanBoneName.LeftUpperArm);
+        const leftLowerArm = vrm.humanoid?.getBoneNode(VRMHumanBoneName.LeftLowerArm);
+        const leftHand = vrm.humanoid?.getBoneNode(VRMHumanBoneName.LeftHand);
+        const rightUpperArm = vrm.humanoid?.getBoneNode(VRMHumanBoneName.RightUpperArm);
+        const rightLowerArm = vrm.humanoid?.getBoneNode(VRMHumanBoneName.RightLowerArm);
+        const rightHand = vrm.humanoid?.getBoneNode(VRMHumanBoneName.RightHand);
+
+        const basePose = {
+          leftUpperArm: leftUpperArm?.quaternion.clone(),
+          leftLowerArm: leftLowerArm?.quaternion.clone(),
+          leftHand: leftHand?.quaternion.clone(),
+          rightUpperArm: rightUpperArm?.quaternion.clone(),
+          rightLowerArm: rightLowerArm?.quaternion.clone(),
+          rightHand: rightHand?.quaternion.clone(),
+        };
+
+        const armSwing = (t: number) => {
+          const sway = Math.sin(t * 1.2) * 0.12;
+          const wave = Math.cos(t * 1.6) * 0.08;
+          const bend = Math.sin(t * 0.9) * 0.06;
+          if (leftUpperArm && basePose.leftUpperArm) {
+            leftUpperArm.quaternion.copy(basePose.leftUpperArm).multiply(
+              new THREE.Quaternion().setFromEuler(new THREE.Euler(0.06 + bend, 0.08 + sway, -0.28 + wave)),
+            );
+          }
+          if (leftLowerArm && basePose.leftLowerArm) {
+            leftLowerArm.quaternion.copy(basePose.leftLowerArm).multiply(
+              new THREE.Quaternion().setFromEuler(new THREE.Euler(0.05 + bend * 0.4, 0.02, -0.22 + wave * 0.4)),
+            );
+          }
+          if (leftHand && basePose.leftHand) {
+            leftHand.quaternion.copy(basePose.leftHand).multiply(
+              new THREE.Quaternion().setFromEuler(new THREE.Euler(0.04, 0.02, 0.06 + sway * 0.3)),
+            );
+          }
+          if (rightUpperArm && basePose.rightUpperArm) {
+            rightUpperArm.quaternion.copy(basePose.rightUpperArm).multiply(
+              new THREE.Quaternion().setFromEuler(new THREE.Euler(0.06 - bend, -0.08 - sway, 0.28 - wave)),
+            );
+          }
+          if (rightLowerArm && basePose.rightLowerArm) {
+            rightLowerArm.quaternion.copy(basePose.rightLowerArm).multiply(
+              new THREE.Quaternion().setFromEuler(new THREE.Euler(0.05 - bend * 0.4, -0.02, 0.22 - wave * 0.4)),
+            );
+          }
+          if (rightHand && basePose.rightHand) {
+            rightHand.quaternion.copy(basePose.rightHand).multiply(
+              new THREE.Quaternion().setFromEuler(new THREE.Euler(0.04, -0.02, -0.06 - sway * 0.3)),
+            );
+          }
+        };
+
         controls = new OrbitControls(camera, renderer.domElement);
         controls.enableZoom = false;
         controls.enablePan = false;
@@ -121,6 +177,7 @@ export function VRMViewer({
           const delta = clock.getDelta();
           if (vrm) {
             vrm.update(delta);
+            armSwing(clock.elapsedTime);
           }
           if (controls) controls.update();
           renderer.render(scene, camera);
