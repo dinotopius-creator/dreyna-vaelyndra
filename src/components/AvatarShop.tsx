@@ -8,12 +8,14 @@ import { Check, Heart, Lock, Sparkles } from "lucide-react";
 import { AvatarViewer } from "./AvatarViewer";
 import { useProfile } from "../contexts/ProfileContext";
 import { useToast } from "../contexts/ToastContext";
+import { PREMIUM_AVATAR_PACK } from "../data/premiumAvatarPack";
 import {
   EQUIP_SLOT,
   SHOP_CATALOG,
   type ShopCategory,
   type ShopItem,
 } from "../lib/avatarShop";
+import { isAvatar3DUrl } from "../lib/avatar3d";
 import { compatibilityForItem } from "../lib/avatarHumanoidCompatibility";
 
 const CATEGORY_LABEL: Record<ShopCategory, string> = {
@@ -113,6 +115,11 @@ export function AvatarShop() {
     if (selectedItem && slot) next[slot] = selectedItem.id;
     return next;
   }, [equippedBySlot, selectedItem]);
+
+  const premiumPreviewAvatar =
+    (isAvatar3DUrl(profile?.avatarUrl) ? profile?.avatarUrl : null) ??
+    PREMIUM_AVATAR_PACK.vrmModels[0]?.path ??
+    null;
 
   const groupedItems = useMemo(() => {
     if (tab !== "accessory3d") return [["Tous", items]] as const;
@@ -401,7 +408,7 @@ export function AvatarShop() {
         <aside className="sticky top-20 z-20 self-start rounded-[28px] border border-gold-400/30 bg-night-950/90 p-3 shadow-[0_18px_50px_rgba(2,6,23,0.42)] backdrop-blur-xl lg:top-24 lg:p-4">
           <div className="grid grid-cols-[112px_1fr] gap-3 lg:block">
             <AvatarViewer
-              src={profile?.avatarUrl ?? null}
+              src={premiumPreviewAvatar}
               fallbackImage={profile?.avatarImageUrl ?? null}
               alt="Aperçu avatar boutique"
               size="portrait"

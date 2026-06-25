@@ -38,6 +38,7 @@ import {
   type UserProfileDto,
 } from "../lib/api";
 import { CATALOG_BY_ID, EQUIP_SLOT } from "../lib/avatarShop";
+import { PREMIUM_AVATAR_PACK } from "../data/premiumAvatarPack";
 import { useAuth } from "./AuthContext";
 
 interface ProfileCtx {
@@ -126,7 +127,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         fresh = await apiUpsertProfile({
           id: user.id,
           username: user.username,
-          avatarImageUrl: user.avatar,
+          avatarImageUrl:
+            user.avatar || PREMIUM_AVATAR_PACK.vrmModels[0]?.path || "",
           creatureId: user.creatureId,
         });
       }

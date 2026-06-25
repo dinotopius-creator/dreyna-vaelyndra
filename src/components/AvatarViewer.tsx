@@ -202,6 +202,9 @@ export function AvatarViewer({
   const sceneId = sceneItem?.sceneId ?? null;
   const isLocal3D = isAvatar3DUrl(src);
   const shouldBootModelViewer = !!src && !isLocal3D && !isFlatImageUrl(src);
+  const isVrmSource =
+    typeof src === "string" &&
+    (/\.vrm(\?|#|$)/i.test(src) || src.startsWith("blob:"));
   const [ready, setReady] = useState(
     typeof window !== "undefined" && !!customElements.get("model-viewer"),
   );
@@ -241,8 +244,8 @@ export function AvatarViewer({
   const renderConfig = avatar3dConfig
     ? {
         ...avatar3dConfig,
-        system: "legacy" as const,
-        baseModel: "procedural-premium" as const,
+        system: "premium-v2" as const,
+        baseModel: "humanoid-v4" as const,
       }
     : null;
   void equippedOutfit3DId;
@@ -275,6 +278,17 @@ export function AvatarViewer({
       </div>
     );
   }
+  if (src && isVrmSource) {
+    return (
+      <VRMViewer
+        src={src}
+        alt={alt}
+        autoRotate={autoRotate}
+        interactive={interactive}
+        className={clsx(sizeClass, className)}
+      />
+    );
+  }
   if (src && flat) {
     return (
       <div
@@ -290,12 +304,7 @@ export function AvatarViewer({
           alt={alt}
           className={clsx(
             "object-cover",
-            sceneId
-              ? // En présence d'une scène, l'avatar devient un médaillon
-                // centré et arrondi : la scène joue le rôle de halo illustré
-                // tout autour. Un ring doré souligne le médaillon.
-                "absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[82%] w-[82%] rounded-full ring-2 ring-gold-400/60 shadow-[0_0_18px_rgba(250,204,21,0.35)]"
-              : "relative h-full w-full",
+            sceneId ? "relative h-full w-full rounded-2xl" : "relative h-full w-full",
           )}
           draggable={false}
         />

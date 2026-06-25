@@ -36,9 +36,9 @@ function contestToBanner(): LiveBanner {
     id: "drawing-contest",
     title: "Concours de dessin",
     description: active
-      ? "Ajoute #concoursdessin à ton post pour participer et tenter de gagner 1000 lueurs + 6 nourritures familier."
-      : "Le concours est terminé. Les participations restent visibles dans la communauté.",
-    ctaLabel: active ? "Participer" : "Voir l'annonce",
+      ? "Le concours est en cours."
+      : "Le concours est terminé. Le résultat officiel est disponible dans l’actualité.",
+    ctaLabel: active ? "Participer" : "Voir le résultat",
     href: "/communaute/hashtag/concoursdessin",
     tone: "gold",
     badge: "Annonce officielle",

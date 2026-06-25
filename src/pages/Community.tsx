@@ -20,8 +20,6 @@ import {
   Trash2,
   Trophy,
   Wand2,
-  Volume2,
-  VolumeX,
   X,
 } from "lucide-react";
 import { Link, useLocation, useParams, useSearchParams } from "react-router-dom";
@@ -37,6 +35,7 @@ import { UserBadges } from "../components/UserBadges";
 import { Handle } from "../components/Handle";
 import { MemberSearch } from "../components/MemberSearch";
 import { AvatarImage } from "../components/AvatarImage";
+import { SocialVideoPlayer } from "../components/SocialVideoPlayer";
 import { RichSocialText } from "../components/RichSocialText";
 import { buildMentionLookup } from "../components/RichMentionText";
 import { CommunityImmersiveFeed, type CommunityTab } from "../components/CommunityImmersiveFeed";
@@ -61,6 +60,7 @@ import {
   apiGetCommunityActivityLeaderboard,
   apiSyncCommunityActivityRewards,
   apiSettleDrawingContest,
+  type DrawingContestSettlementDto,
   apiToggleReaction,
   apiGetProfile,
   apiSearchUsers,
@@ -71,7 +71,6 @@ import {
   type StreamerGradeDto,
 } from "../lib/api";
 import { isImageFile, isVideoFile, validateFile } from "../lib/fileUtils";
-import type { CommunityPost } from "../types";
 
 
 const LIKE_EMOJI = "like";
@@ -157,6 +156,7 @@ export function Community() {
   >([]);
   const [activityWeekStartIso, setActivityWeekStartIso] = useState<string>("");
   const [contestAwardedNotice, setContestAwardedNotice] = useState<string | null>(null);
+  const [contestSettlement, setContestSettlement] = useState<DrawingContestSettlementDto | null>(null);
 
   useEffect(() => {
     try {
@@ -259,31 +259,7 @@ export function Community() {
     [posts],
   );
 
-  const contestAnnouncementPost = useMemo<CommunityPost>(
-    () => ({
-      id: COMMUNITY_DRAWING_CONTEST.announcementPostId,
-      authorId: "user-dreyna",
-      authorName: "Dreyna",
-      authorHandle: "dreyna",
-      authorGrade: null,
-      authorAvatar: "/favicon.svg",
-      content:
-        "Concours de dessin lancé ! Poste ton dessin avec #concoursdessin pour participer pendant 24h00. Le post avec le plus de likes gagne 1000 lueurs et 6 nourritures familier.",
-      imageUrl: COMMUNITY_DRAWING_CONTEST.bannerImage,
-      videoUrl: undefined,
-      postType: "official_event",
-      officialLabel: "Annonce officielle",
-      createdAt: COMMUNITY_DRAWING_CONTEST.startsAt,
-      reactions: {} as Record<string, string[]>,
-      comments: [] as CommunityPost["comments"],
-    }),
-    [],
-  );
-
-  const feedPosts = useMemo(() => {
-    const hasAnnouncement = sorted.some((post) => post.id === contestAnnouncementPost.id);
-    return hasAnnouncement ? sorted : [contestAnnouncementPost, ...sorted];
-  }, [contestAnnouncementPost, sorted]);
+  const feedPosts = useMemo(() => sorted, [sorted]);
 
   useEffect(() => {
     if (!imagePreviewUrl) return;
@@ -428,6 +404,7 @@ export function Community() {
     void apiSettleDrawingContest()
       .then((result) => {
         if (cancelled || !result.winner) return;
+        setContestSettlement(result);
         setContestAwardedNotice(
           `${result.winner.authorName} gagne le concours #concoursdessin : +${result.rewardLueurs} lueurs et +${result.rewardFood} nourritures familier.`,
         );
@@ -899,7 +876,35 @@ export function Community() {
         weekStartIso={activityWeekStartIso}
       />
 
-      {contestAwardedNotice && (
+      {contestSettlement?.winner && (
+        <div className="absolute left-3 right-3 top-[5.25rem] z-40 overflow-hidden rounded-3xl border border-gold-300/20 bg-night-950/92 shadow-[0_20px_70px_rgba(0,0,0,0.35)]">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(250,204,21,0.20),transparent_35%),linear-gradient(135deg,rgba(9,10,18,0.96),rgba(21,16,34,0.92))]" />
+          <div className="relative flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-[0.28em] text-gold-300/80">Résultat officiel</p>
+              <h2 className="mt-1 font-display text-2xl text-gold-100">
+                Bravo à {contestSettlement.winner.authorName} !
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-ivory/78">
+                Ton dessin est Top 1 du concours #concoursdessin avec{" "}
+                <span className="font-semibold text-gold-100">{contestSettlement.winner.likeCount} likes</span>.
+                Récompense : <span className="font-semibold text-gold-100">1000 lueurs</span> et{" "}
+                <span className="font-semibold text-gold-100">6 nourritures familier</span>.
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <Link
+                to={`/communaute/post/${contestSettlement.winner.id}`}
+                className="inline-flex min-h-10 items-center gap-2 rounded-full border border-gold-300/25 bg-gold-500/15 px-4 py-2 text-sm font-semibold text-gold-100 transition hover:border-gold-300/55 hover:bg-gold-500/20"
+              >
+                Voir le post gagnant
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {contestAwardedNotice && !contestSettlement?.winner && (
         <div className="pointer-events-none absolute left-3 right-3 top-[5.25rem] z-40 rounded-2xl border border-emerald-300/20 bg-emerald-500/12 px-4 py-3 text-sm text-emerald-100 backdrop-blur-md">
           {contestAwardedNotice}
         </div>
@@ -1005,25 +1010,11 @@ export function Community() {
                       </button>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setDraft((current) =>
-                            current.includes("#concoursdessin")
-                              ? current
-                              : `${current}${current.trim() ? " " : ""}#concoursdessin`,
-                          )
-                        }
-                        className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-gold-300/25 bg-gold-500/10 px-3 py-1.5 text-xs text-gold-100 transition hover:border-gold-300/55 hover:bg-gold-500/15"
-                      >
-                        <Sparkles className="h-3.5 w-3.5" />
-                        Ajouter #concoursdessin
-                      </button>
                       <Link
                         to={drawingContestUrl()}
                         className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-ivory/70 transition hover:border-gold-300/45 hover:text-gold-100"
                       >
-                        Voir le concours
+                        Voir l’archive
                       </Link>
                     </div>
                   </div>
@@ -1218,25 +1209,11 @@ export function Community() {
                       Import direct depuis ton téléphone ou ton ordinateur. Tu peux ajouter une image ou une vidéo, ou coller une URL vidéo.
                     </p>
                     <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setDraft((current) =>
-                            current.includes("#concoursdessin")
-                              ? current
-                              : `${current}${current.trim() ? " " : ""}#concoursdessin`,
-                          )
-                        }
-                        className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-gold-300/25 bg-gold-500/10 px-3 py-1.5 text-xs text-gold-100 transition hover:border-gold-300/55 hover:bg-gold-500/15"
-                      >
-                        <Sparkles className="h-3.5 w-3.5" />
-                        Ajouter #concoursdessin
-                      </button>
                       <Link
                         to={drawingContestUrl()}
                         className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-ivory/70 transition hover:border-gold-300/45 hover:text-gold-100"
                       >
-                        Voir le concours
+                        Voir l’archive
                       </Link>
                     </div>
                     {(imagePreviewUrl || videoPreviewUrl) && (
@@ -1577,7 +1554,7 @@ export function Community() {
                         content={post.content}
                         mentionsByHandle={mentionTargets}
                         profileHref={profileHref}
-                        className="mt-1 whitespace-pre-wrap break-words text-sm text-ivory/85"
+                        className="mt-1 whitespace-pre-wrap break-words text-sm text-ivory/95"
                       />
                     )}
                   </div>
@@ -1597,7 +1574,7 @@ export function Community() {
                           );
                         }
                       }}
-                      className="text-ivory/40 hover:text-gold-200"
+                      className="text-ivory/65 hover:text-gold-100"
                       title="Partager"
                     >
                       <Share2 className="h-4 w-4" />
@@ -1605,7 +1582,7 @@ export function Community() {
                     <button
                       type="button"
                       onClick={() => toggleSave(post.id)}
-                      className={`text-ivory/40 transition ${
+                      className={`text-ivory/65 transition ${
                         savedPostIds.has(post.id)
                           ? "text-gold-200 hover:text-gold-100"
                           : "hover:text-gold-200"
@@ -1630,7 +1607,7 @@ export function Community() {
                     {user?.id === post.authorId && editingPost !== post.id && (
                       <button
                         onClick={() => startEditPost(post)}
-                        className="text-ivory/40 hover:text-gold-200"
+                        className="text-ivory/65 hover:text-gold-100"
                         title="Modifier"
                       >
                         <Pencil className="h-4 w-4" />
@@ -1639,7 +1616,7 @@ export function Community() {
                     {(user?.id === post.authorId || isQueen) && (
                       <button
                         onClick={() => setPendingDeletePostId(post.id)}
-                        className="text-ivory/40 hover:text-rose-300"
+                        className="text-rose-100 hover:text-rose-50"
                         title="Supprimer"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -1941,7 +1918,6 @@ function PostVideo({
   url: string;
   thumbnailUrl?: string;
 }) {
-  const [audioEnabled, setAudioEnabled] = useState(false);
   const parsed = parseVideoUrl(url);
   if (!parsed) return null;
 
@@ -1963,36 +1939,11 @@ function PostVideo({
 
   if (parsed.kind === "file") {
     return (
-      <div className="relative mt-4 overflow-hidden rounded-xl border border-royal-500/30 bg-night-800">
-        <video
-          controls
-          preload="metadata"
-          poster={thumbnailUrl ?? undefined}
-          className="max-h-[500px] w-full bg-night-800"
-          muted={!audioEnabled}
-          playsInline
-        >
-          <source src={parsed.src} />
-          Votre navigateur ne supporte pas la lecture video.
-        </video>
-        <button
-          type="button"
-          onClick={() => setAudioEnabled((current) => !current)}
-          className="absolute right-3 top-3 inline-flex min-h-10 items-center gap-2 rounded-full border border-white/12 bg-night-950/75 px-3 py-2 text-xs text-ivory/90 backdrop-blur-md transition hover:border-gold-400/45 hover:text-gold-100"
-        >
-          {audioEnabled ? (
-            <>
-              <Volume2 className="h-4 w-4" />
-              Son
-            </>
-          ) : (
-            <>
-              <VolumeX className="h-4 w-4" />
-              Muet
-            </>
-          )}
-        </button>
-      </div>
+      <SocialVideoPlayer
+        src={parsed.src}
+        poster={thumbnailUrl}
+        className="mt-4 max-h-[500px]"
+      />
     );
   }
 

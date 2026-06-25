@@ -1,10 +1,12 @@
+import { createPortal } from "react-dom";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import {
   Bookmark,
   BookmarkCheck,
   CalendarClock,
   Heart,
+  Maximize2,
   MessageCircle,
   Newspaper,
   Plus,
@@ -14,16 +16,13 @@ import {
   Trophy,
   Users,
   Search,
-  Maximize2,
-  Minimize,
   Wand2,
   Trash2,
-  Volume2,
-  VolumeX,
   X,
 } from "lucide-react";
 import clsx from "clsx";
 import { AvatarImage } from "./AvatarImage";
+import { SocialVideoPlayer } from "./SocialVideoPlayer";
 import { MemberSearch } from "./MemberSearch";
 import { Handle } from "./Handle";
 import { RichMentionText, buildMentionLookup } from "./RichMentionText";
@@ -31,6 +30,7 @@ import { UserBadges } from "./UserBadges";
 import StreamerGradeBadge from "./StreamerGradeBadge";
 import { WeeklyRankingCountdown } from "./WeeklyRankingCountdown";
 import { ReportButton } from "./ReportButton";
+import { FollowButton } from "./FollowButton";
 import { formatRelative, parsePostImageUrl, parseVideoUrl } from "../lib/helpers";
 import {
   COMMUNITY_DRAWING_CONTEST,
@@ -160,18 +160,19 @@ export function CommunityImmersiveFeed({
   weeklyLabel,
   weekStartIso,
 }: CommunityImmersiveFeedProps) {
-  const navigate = useNavigate();
   const [now, setNow] = useState(() => Date.now());
   const [likeBurst, setLikeBurst] = useState<{ postId: string; token: number } | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [audibleVideoPostId, setAudibleVideoPostId] = useState<string | null>(null);
   const [pendingDeletePostId, setPendingDeletePostId] = useState<string | null>(null);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [activeAudioVideoId, setActiveAudioVideoId] = useState<string | null>(null);
+  const [expandedPostIds, setExpandedPostIds] = useState<Set<string>>(() => new Set());
+  const [focusedPostIds, setFocusedPostIds] = useState<Set<string>>(() => new Set());
+  const [fullscreenPostId, setFullscreenPostId] = useState<string | null>(null);
+  const [visiblePostId, setVisiblePostId] = useState<string | null>(null);
   const tapDownRef = useRef<{ postId: string; x: number; y: number; time: number } | null>(null);
   const feedRootRef = useRef<HTMLDivElement | null>(null);
   const lastTapRef = useRef<{ postId: string | null; time: number } | null>(null);
   const burstTimerRef = useRef<number | null>(null);
-  const fullscreenSocialMode = false;
   useEffect(() => {
     return () => {
       if (burstTimerRef.current) window.clearTimeout(burstTimerRef.current);
@@ -181,18 +182,6 @@ export function CommunityImmersiveFeed({
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(id);
-  }, []);
-
-  useEffect(() => {
-    const syncFullscreen = () => {
-      setIsFullscreen(
-        document.fullscreenElement === feedRootRef.current ||
-          document.fullscreenElement === document.documentElement,
-      );
-    };
-    document.addEventListener("fullscreenchange", syncFullscreen);
-    syncFullscreen();
-    return () => document.removeEventListener("fullscreenchange", syncFullscreen);
   }, []);
 
   useEffect(() => {
@@ -211,15 +200,72 @@ export function CommunityImmersiveFeed({
     };
   }, [pendingDeletePostId]);
 
-  async function toggleFullscreenMode() {
-    const node = feedRootRef.current;
-    if (!node) return;
-    if (document.fullscreenElement) {
-      await document.exitFullscreen?.().catch(() => undefined);
-      return;
-    }
-    await node.requestFullscreen?.().catch(() => undefined);
-  }
+  useEffect(() => {
+    if (!fullscreenPostId) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setFullscreenPostId(null);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [fullscreenPostId]);
+
+  useEffect(() => {
+    const root = feedRootRef.current;
+    if (!root || typeof IntersectionObserver === "undefined") return;
+
+    const candidates = new Map<string, number>();
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const target = entry.target as HTMLElement;
+          const postId = target.dataset.socialPostId;
+          if (!postId) continue;
+          if (entry.isIntersecting) {
+            candidates.set(postId, entry.intersectionRatio);
+          } else {
+            candidates.delete(postId);
+          }
+        }
+
+        let bestId: string | null = null;
+        let bestScore = 0.72;
+        for (const [postId, score] of candidates) {
+          if (score > bestScore) {
+            bestId = postId;
+            bestScore = score;
+          }
+        }
+        setVisiblePostId(bestId);
+      },
+      {
+        root,
+        threshold: [0.25, 0.5, 0.65, 0.75, 0.9],
+      },
+    );
+
+    const observed = Array.from(root.querySelectorAll<HTMLElement>("[data-social-post-id]"));
+    observed.forEach((node) => observer.observe(node));
+    return () => {
+      observer.disconnect();
+    };
+  }, [posts, activeTab]);
+
+  useEffect(() => {
+    const root = feedRootRef.current;
+    return () => {
+      root?.querySelectorAll<HTMLVideoElement>("video").forEach((video) => {
+        video.pause();
+        video.muted = true;
+      });
+    };
+  }, []);
 
   function triggerLikeBurst(postId: string) {
     setLikeBurst((current) => ({ postId, token: (current?.token ?? 0) + 1 }));
@@ -230,6 +276,52 @@ export function CommunityImmersiveFeed({
     }, 2000);
   }
 
+  function toggleExpandedPost(postId: string) {
+    setExpandedPostIds((current) => {
+      const next = new Set(current);
+      if (next.has(postId)) {
+        next.delete(postId);
+      } else {
+        next.add(postId);
+      }
+      return next;
+    });
+  }
+
+  function toggleFocus(postId: string) {
+    setFocusedPostIds((current) => {
+      const next = new Set(current);
+      if (next.has(postId)) {
+        next.delete(postId);
+      } else {
+        next.add(postId);
+      }
+      return next;
+    });
+  }
+
+  function openFullscreenPost(postId: string) {
+    setFullscreenPostId(postId);
+    setFocusedPostIds((current) => {
+      const next = new Set(current);
+      next.add(postId);
+      return next;
+    });
+  }
+
+  function closeFullscreenPost() {
+    setFullscreenPostId(null);
+  }
+
+  function shouldIgnoreTapTarget(target: EventTarget | null) {
+    const element = target instanceof Element ? target : null;
+    return Boolean(
+      element?.closest(
+        "button, a, input, textarea, select, summary, video, [role='button'], [data-social-no-focus]",
+      ),
+    );
+  }
+
   function handleMediaTap(postId: string, liked: boolean, timestamp: number) {
     const now = timestamp;
     const last = lastTapRef.current;
@@ -237,7 +329,7 @@ export function CommunityImmersiveFeed({
       lastTapRef.current = null;
       triggerLikeBurst(postId);
       if (!liked) onLike(postId);
-      return;
+      return true;
     }
     lastTapRef.current = { postId, time: now };
     window.setTimeout(() => {
@@ -245,6 +337,7 @@ export function CommunityImmersiveFeed({
         lastTapRef.current = null;
       }
     }, 340);
+    return false;
   }
 
   const filteredPosts = useMemo(() => {
@@ -281,6 +374,12 @@ export function CommunityImmersiveFeed({
     );
   }, [activeTab, filteredPosts, posts]);
 
+  const fullscreenPost = useMemo(
+    () => posts.find((post) => post.id === fullscreenPostId) ?? null,
+    [posts, fullscreenPostId],
+  );
+  const activeVideoPostId = fullscreenPostId ?? visiblePostId;
+
   const contestEntries = useMemo(
     () => posts.filter(isDrawingContestEntry),
     [posts],
@@ -304,11 +403,11 @@ export function CommunityImmersiveFeed({
         {
           id: "news-contest",
           kind: "news",
-          title: "Concours de dessin",
+          title: "Concours de dessin terminé",
           subtitle: "Actualité communautaire",
           body: top
-            ? `Le concours #concoursdessin récompense le post le plus liké avec 1000 lueurs et 6 nourritures familier.`
-            : "Le concours #concoursdessin met les dessins de la communauté en avant pendant 24h00.",
+            ? `Le concours #concoursdessin est clos. Le Top 1 a été récompensé avec 1000 lueurs et 6 nourritures familier.`
+            : "Le concours #concoursdessin est clos. Les participations restent consultables dans l’archive.",
         },
         {
           id: "news-top10",
@@ -338,7 +437,6 @@ export function CommunityImmersiveFeed({
       ref={feedRootRef}
       className={clsx(
         "relative h-[100dvh] min-h-0 overflow-hidden bg-night-950 text-ivory",
-        isFullscreen && "bg-black",
       )}
     >
       <div className="absolute inset-x-0 top-0 z-30 border-b border-white/8 bg-night-950/68 backdrop-blur-xl">
@@ -375,16 +473,6 @@ export function CommunityImmersiveFeed({
             >
               <Search className="h-5 w-5" />
             </button>
-            {fullscreenSocialMode && (
-              <button
-                type="button"
-                onClick={() => navigate(-1)}
-                className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-ivory/75 transition hover:border-gold-400/40 hover:text-gold-100"
-                aria-label="Quitter le Social"
-              >
-                ←
-              </button>
-            )}
             <button
               type="button"
               onClick={onOpenComposer}
@@ -535,7 +623,7 @@ export function CommunityImmersiveFeed({
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="inline-flex items-center gap-1.5 rounded-full border border-gold-300/35 bg-gold-500/15 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-gold-100">
                                 <Sparkles className="h-3.5 w-3.5" />
-                                Concours officiel
+                                Résultat officiel
                               </span>
                               <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-300/25 bg-sky-500/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-sky-100">
                                 #concoursdessin
@@ -545,8 +633,8 @@ export function CommunityImmersiveFeed({
                               {COMMUNITY_DRAWING_CONTEST.title}
                             </h2>
                             <p className="mt-3 max-w-3xl text-sm leading-6 text-ivory/78 sm:text-base">
-                              Poste ton dessin avec <span className="font-semibold text-gold-100">#concoursdessin</span>.
-                              Le post le plus liké gagne <span className="font-semibold text-gold-100">1000 lueurs</span> et{" "}
+                              Le concours dessin est terminé. Le Top 1 a été récompensé avec{" "}
+                              <span className="font-semibold text-gold-100">1000 lueurs</span> et{" "}
                               <span className="font-semibold text-gold-100">6 nourritures familier</span>.
                             </p>
                             <div className="mt-5 flex flex-wrap gap-2">
@@ -562,7 +650,7 @@ export function CommunityImmersiveFeed({
                                 to="/communaute/hashtag/concoursdessin"
                                 className="inline-flex min-h-10 items-center gap-2 rounded-full bg-gold-500/20 px-4 py-2 text-sm font-semibold text-gold-100 transition hover:bg-gold-500/30"
                               >
-                                Voir les participations
+                                Voir l’archive
                               </Link>
                             </div>
                           </div>
@@ -570,7 +658,7 @@ export function CommunityImmersiveFeed({
                         <div className="grid gap-4 border-t border-white/8 bg-night-950/45 p-4 sm:p-5 lg:grid-cols-[minmax(0,1fr),360px]">
                           <div className="space-y-3">
                             <p className="text-[10px] uppercase tracking-[0.22em] text-gold-200/70">
-                              Comment participer
+                              Résumé
                             </p>
                             <div className="grid gap-2 sm:grid-cols-2">
                               {COMMUNITY_DRAWING_CONTEST.rules.map((rule) => (
@@ -668,7 +756,7 @@ export function CommunityImmersiveFeed({
             0,
           );
           const isMedia = isMediaPost(post);
-
+          const isFocused = focusedPostIds.has(post.id);
           if (!isMedia || activeTab === "text") {
             return (
               <section
@@ -677,9 +765,41 @@ export function CommunityImmersiveFeed({
                 className="h-[calc(100dvh-5.25rem)] snap-start px-0 py-0"
               >
                 <div className="mx-auto flex h-full w-full max-w-none items-stretch px-0">
-                  <article className="panel-app relative flex h-full w-full overflow-hidden rounded-none border-0 bg-night-950/80 p-4 shadow-[0_30px_60px_rgba(0,0,0,0.38)] sm:rounded-[28px] sm:border sm:border-white/8 sm:p-6">
-                    <div className="relative flex w-full flex-col justify-between">
-                      <div className="flex items-start justify-between gap-4">
+                  <article
+                    className="panel-app relative flex h-full w-full overflow-hidden rounded-none border-0 bg-night-950/80 p-4 shadow-[0_30px_60px_rgba(0,0,0,0.38)] sm:rounded-[28px] sm:border sm:border-white/8 sm:p-6"
+                    onPointerDown={(event) => {
+                      if (event.button !== 0 && event.pointerType === "mouse") return;
+                      tapDownRef.current = {
+                        postId: post.id,
+                        x: event.clientX,
+                        y: event.clientY,
+                        time: Date.now(),
+                      };
+                    }}
+                    onPointerUp={(event) => {
+                      const down = tapDownRef.current;
+                      if (!down || down.postId !== post.id) return;
+                      tapDownRef.current = null;
+                      if (shouldIgnoreTapTarget(event.target)) return;
+                      const travel = Math.hypot(event.clientX - down.x, event.clientY - down.y);
+                      const heldFor = Date.now() - down.time;
+                      if (travel > 14 || heldFor > 650) return;
+                      const isDouble = handleMediaTap(post.id, liked, event.timeStamp);
+                      if (!isDouble) toggleFocus(post.id);
+                    }}
+                    onPointerCancel={() => {
+                      tapDownRef.current = null;
+                    }}
+                    onDoubleClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      triggerLikeBurst(post.id);
+                      if (!liked) onLike(post.id);
+                    }}
+                  >
+                    <div className="relative flex w-full min-h-0 flex-col justify-between">
+                      {!isFocused && (
+                        <div className="flex items-start justify-between gap-4">
                         <div className="flex min-w-0 flex-wrap items-center gap-2">
                           <AvatarImage
                             candidates={[avatar, post.authorAvatar]}
@@ -690,11 +810,11 @@ export function CommunityImmersiveFeed({
                           <div className="min-w-0">
                             <Link
                               to={`/u/${post.authorId}`}
-                              className="block truncate font-display text-lg text-gold-100"
+                              className="block truncate font-display text-lg text-gold-50 drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)]"
                             >
                               {displayName}
                             </Link>
-                            <Handle handle={displayHandle} size="xs" />
+                            <Handle handle={displayHandle} size="xs" className="text-ivory/75" />
                             <div className="mt-2 flex flex-wrap items-center gap-2">
                               {grade && <StreamerGradeBadge grade={grade} size="sm" />}
                               <UserBadges
@@ -710,12 +830,55 @@ export function CommunityImmersiveFeed({
                               </span>
                             </div>
                           </div>
+                          <button
+                            type="button"
+                            onClick={() => openFullscreenPost(post.id)}
+                            className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-night-950/55 text-ivory/80 shadow-[0_10px_28px_rgba(0,0,0,0.22)] backdrop-blur-md transition hover:border-gold-300/40 hover:text-gold-100"
+                            aria-label="Plein écran"
+                          >
+                            <Maximize2 className="h-4 w-4" />
+                          </button>
                         </div>
+                        </div>
+                      )}
 
-                    <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-row sm:gap-3">
-                      <FeedAction
-                        icon={<Heart className="h-5 w-5" fill={liked ? "currentColor" : "none"} />}
-                        label={liked ? "Aimé" : "Like"}
+                      {!isFocused && currentUserId && currentUserId !== post.authorId && (
+                        <div className="pt-1">
+                          <FollowButton
+                            targetId={post.authorId}
+                            targetUsername={displayName}
+                            onChange={() => {}}
+                          />
+                        </div>
+                      )}
+
+                      <div className="mt-6 min-h-0 flex-1 overflow-y-auto pr-1 [scrollbar-width:thin]">
+                        <div className="max-w-2xl space-y-3 pb-4">
+                          <RichMentionText
+                            content={post.content}
+                            mentionsByHandle={mentionTargets}
+                            profileHref={(authorId) => `/u/${authorId}`}
+                            className={clsx(
+                              "text-lg leading-8 text-white sm:text-xl sm:leading-8",
+                              !expandedPostIds.has(post.id) && "line-clamp-5 sm:line-clamp-6",
+                            )}
+                          />
+                          {!isFocused && post.content.length > 240 && (
+                            <button
+                              type="button"
+                              onClick={() => toggleExpandedPost(post.id)}
+                              className="inline-flex min-h-10 items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-gold-100 transition hover:border-gold-300/35 hover:bg-gold-500/10"
+                            >
+                              {expandedPostIds.has(post.id) ? "Voir moins" : "Voir plus"}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      {!isFocused && (
+                        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-row sm:gap-3">
+                          <FeedAction
+                            icon={<Heart className="h-5 w-5" fill={liked ? "currentColor" : "none"} />}
+                            label={liked ? "Aimé" : "Like"}
                             active={liked}
                             onClick={() => onLike(post.id)}
                             count={reactionCount}
@@ -747,7 +910,7 @@ export function CommunityImmersiveFeed({
                             <button
                               type="button"
                               onClick={() => setPendingDeletePostId(post.id)}
-                              className="inline-flex min-h-11 w-full min-w-0 flex-col items-center justify-center rounded-full border border-white/10 bg-night-950/45 px-3 py-2 text-xs text-rose-200 backdrop-blur-sm transition hover:border-rose-300/40 hover:text-rose-100"
+                              className="inline-flex min-h-11 w-full min-w-0 flex-col items-center justify-center rounded-full border border-rose-300/45 bg-rose-500/18 px-3 py-2 text-xs text-rose-50 shadow-[0_10px_22px_rgba(0,0,0,0.18)] backdrop-blur-sm transition hover:border-rose-200/70 hover:bg-rose-500/28 hover:text-white"
                               aria-label="Supprimer ce post"
                             >
                               <Trash2 className="h-5 w-5" />
@@ -759,22 +922,11 @@ export function CommunityImmersiveFeed({
                               targetId={post.id}
                               targetLabel={`Post de ${displayName}`}
                               targetUrl={`/communaute/post/${post.id}`}
-                              className="inline-flex min-h-11 w-full min-w-0 flex-col items-center justify-center rounded-full border border-rose-400/35 bg-rose-500/8 px-3 py-2 text-xs text-rose-200/90 backdrop-blur-sm transition hover:border-rose-300/55 hover:bg-rose-500/15 hover:text-rose-100"
+                              className="inline-flex min-h-11 w-full min-w-0 flex-col items-center justify-center rounded-full border border-rose-300/45 bg-rose-500/18 px-3 py-2 text-xs text-rose-50 shadow-[0_10px_22px_rgba(0,0,0,0.18)] backdrop-blur-sm transition hover:border-rose-200/70 hover:bg-rose-500/28 hover:text-white"
                             />
                           )}
                         </div>
-                      </div>
-
-                      <div className="mt-8 flex-1">
-                        <div className="max-w-2xl space-y-3">
-                          <RichMentionText
-                            content={post.content}
-                            mentionsByHandle={mentionTargets}
-                            profileHref={(authorId) => `/u/${authorId}`}
-                            className="text-lg leading-8 text-white sm:text-xl sm:leading-8"
-                          />
-                        </div>
-                      </div>
+                      )}
                     </div>
                   </article>
                 </div>
@@ -790,6 +942,7 @@ export function CommunityImmersiveFeed({
             >
               <div
                 className="relative h-full w-full overflow-hidden"
+                data-social-post-id={post.id}
                 onPointerDown={(event) => {
                   if (event.button !== 0 && event.pointerType === "mouse") return;
                   tapDownRef.current = {
@@ -803,10 +956,12 @@ export function CommunityImmersiveFeed({
                   const down = tapDownRef.current;
                   if (!down || down.postId !== post.id) return;
                   tapDownRef.current = null;
+                  if (shouldIgnoreTapTarget(event.target)) return;
                   const travel = Math.hypot(event.clientX - down.x, event.clientY - down.y);
                   const heldFor = Date.now() - down.time;
                   if (travel > 14 || heldFor > 650) return;
-                  handleMediaTap(post.id, liked, event.timeStamp);
+                  const isDouble = handleMediaTap(post.id, liked, event.timeStamp);
+                  if (!isDouble) toggleFocus(post.id);
                 }}
                 onPointerCancel={() => {
                   tapDownRef.current = null;
@@ -820,39 +975,18 @@ export function CommunityImmersiveFeed({
               >
                 <div className="absolute inset-0">
                   {video?.kind ? (
-                    <div className="relative h-full w-full">
-                      <video
-                        src={post.videoUrl}
-                        className="h-full w-full object-cover"
-                        muted={audibleVideoPostId !== post.id}
-                        loop
-                        playsInline
-                        autoPlay
-                        preload="metadata"
-                        controls
-                      />
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setAudibleVideoPostId((current) =>
-                            current === post.id ? null : post.id,
-                          );
+                    <div className="relative h-full w-full min-h-0">
+                      <SocialVideoPlayer
+                        src={post.videoUrl!}
+                        poster={post.videoThumbnailUrl ?? undefined}
+                        className="h-full w-full rounded-none border-0"
+                        videoClassName="h-full w-full object-cover"
+                        active={activeVideoPostId === post.id}
+                        muted={activeAudioVideoId !== post.id || activeVideoPostId !== post.id}
+                        onMutedChange={(nextMuted) => {
+                          setActiveAudioVideoId(nextMuted ? null : post.id);
                         }}
-                        className="absolute right-3 top-3 inline-flex min-h-10 items-center gap-2 rounded-full border border-white/12 bg-night-950/70 px-3 py-2 text-xs text-ivory/90 backdrop-blur-md transition hover:border-gold-400/45 hover:text-gold-100"
-                      >
-                        {audibleVideoPostId === post.id ? (
-                          <>
-                            <Volume2 className="h-4 w-4" />
-                            Son
-                          </>
-                        ) : (
-                          <>
-                            <VolumeX className="h-4 w-4" />
-                            Muet
-                          </>
-                        )}
-                      </button>
+                      />
                     </div>
                   ) : media?.kind === "image" ? (
                     <img
@@ -879,31 +1013,27 @@ export function CommunityImmersiveFeed({
                   </div>
                 )}
 
-                <div className="absolute inset-0 flex flex-col justify-between px-3 py-4 sm:px-5 sm:py-5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="inline-flex rounded-full border border-white/10 bg-night-950/35 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-ivory/70 backdrop-blur-sm">
-                      {mediaTitle(post)}
+                <div
+                  className={clsx(
+                    "absolute inset-0 flex min-h-0 flex-col justify-between px-3 py-4 sm:px-5 sm:py-5",
+                    isFocused && "pointer-events-none opacity-0",
+                  )}
+                >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="inline-flex rounded-full border border-white/10 bg-night-950/35 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-ivory/70 backdrop-blur-sm">
+                        {mediaTitle(post)}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => openFullscreenPost(post.id)}
+                        className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-night-950/55 text-ivory/80 shadow-[0_10px_28px_rgba(0,0,0,0.22)] backdrop-blur-md transition hover:border-gold-300/40 hover:text-gold-100"
+                        aria-label="Plein écran"
+                      >
+                        <Maximize2 className="h-4 w-4" />
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={toggleFullscreenMode}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-night-950/35 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-ivory/70 backdrop-blur-sm transition hover:border-gold-400/35 hover:text-gold-100"
-                    >
-                      {isFullscreen ? (
-                        <>
-                          <Minimize className="h-3.5 w-3.5" />
-                          Quitter
-                        </>
-                      ) : (
-                        <>
-                          <Maximize2 className="h-3.5 w-3.5" />
-                          Plein écran
-                        </>
-                      )}
-                    </button>
-                  </div>
 
-                  <div className="mt-auto flex items-end justify-between gap-4">
+                    <div className="mt-auto flex items-end justify-between gap-4">
                     <div className="max-w-[62%] space-y-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <AvatarImage
@@ -915,13 +1045,20 @@ export function CommunityImmersiveFeed({
                         <div className="min-w-0">
                           <Link
                             to={`/u/${post.authorId}`}
-                            className="block truncate font-display text-lg text-gold-100 drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]"
+                            className="block truncate font-display text-lg text-gold-50 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]"
                           >
                             {displayName}
                           </Link>
-                          <Handle handle={displayHandle} size="xs" />
+                          <Handle handle={displayHandle} size="xs" className="text-ivory/75" />
                         </div>
                       </div>
+                      {currentUserId && currentUserId !== post.authorId && (
+                        <FollowButton
+                          targetId={post.authorId}
+                          targetUsername={displayName}
+                          onChange={() => {}}
+                        />
+                      )}
                       <div className="flex flex-wrap items-center gap-2">
                         {grade && <StreamerGradeBadge grade={grade} size="sm" />}
                         <UserBadges
@@ -936,12 +1073,26 @@ export function CommunityImmersiveFeed({
                           {formatRelative(post.createdAt)}
                         </span>
                       </div>
-                      <RichMentionText
-                        content={post.content}
-                        mentionsByHandle={mentionTargets}
-                        profileHref={(authorId) => `/u/${authorId}`}
-                        className="max-w-xl text-[15px] leading-6 text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.75)] sm:text-lg sm:leading-7"
-                      />
+                      <div className="min-h-0 max-h-[35dvh] overflow-y-auto pr-1 [scrollbar-width:thin]">
+                        <RichMentionText
+                          content={post.content}
+                          mentionsByHandle={mentionTargets}
+                          profileHref={(authorId) => `/u/${authorId}`}
+                          className={clsx(
+                            "max-w-xl text-[15px] leading-6 text-ivory/95 drop-shadow-[0_1px_2px_rgba(0,0,0,0.75)] sm:text-lg sm:leading-7",
+                            !expandedPostIds.has(post.id) && "line-clamp-4 sm:line-clamp-5",
+                          )}
+                        />
+                      </div>
+                      {post.content.length > 220 && (
+                        <button
+                          type="button"
+                          onClick={() => toggleExpandedPost(post.id)}
+                          className="inline-flex min-h-10 items-center gap-2 rounded-full border border-white/10 bg-night-950/35 px-4 py-2 text-sm text-gold-100 backdrop-blur-sm transition hover:border-gold-300/35 hover:bg-gold-500/10"
+                        >
+                          {expandedPostIds.has(post.id) ? "Voir moins" : "Voir plus"}
+                        </button>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-col sm:items-end sm:gap-3">
@@ -979,7 +1130,7 @@ export function CommunityImmersiveFeed({
                         <button
                           type="button"
                           onClick={() => setPendingDeletePostId(post.id)}
-                          className="inline-flex min-h-11 w-full min-w-0 flex-col items-center justify-center rounded-full border border-white/10 bg-night-950/45 px-3 py-2 text-xs text-rose-200 backdrop-blur-sm transition hover:border-rose-300/40 hover:text-rose-100"
+                            className="inline-flex min-h-11 w-full min-w-0 flex-col items-center justify-center rounded-full border border-rose-300/45 bg-rose-500/18 px-3 py-2 text-xs text-rose-50 shadow-[0_10px_22px_rgba(0,0,0,0.18)] backdrop-blur-sm transition hover:border-rose-200/70 hover:bg-rose-500/28 hover:text-white"
                           aria-label="Supprimer ce post"
                         >
                           <Trash2 className="h-5 w-5" />
@@ -991,17 +1142,261 @@ export function CommunityImmersiveFeed({
                           targetId={post.id}
                           targetLabel={`Post de ${displayName}`}
                           targetUrl={`/communaute/post/${post.id}`}
-                          className="inline-flex min-h-11 w-full min-w-0 flex-col items-center justify-center rounded-full border border-rose-400/35 bg-rose-500/8 px-3 py-2 text-xs text-rose-200/90 backdrop-blur-sm transition hover:border-rose-300/55 hover:bg-rose-500/15 hover:text-rose-100"
+                            className="inline-flex min-h-11 w-full min-w-0 flex-col items-center justify-center rounded-full border border-rose-300/45 bg-rose-500/18 px-3 py-2 text-xs text-rose-50 shadow-[0_10px_22px_rgba(0,0,0,0.18)] backdrop-blur-sm transition hover:border-rose-200/70 hover:bg-rose-500/28 hover:text-white"
                         />
                       )}
                     </div>
                   </div>
                 </div>
-              </div>
-            </section>
+                </div>
+              </section>
           );
         })}
       </div>
+
+      {fullscreenPost && typeof document !== "undefined"
+        ? createPortal(
+            <div className="fixed inset-0 z-[420] bg-night-950 text-ivory">
+              <div
+                className="relative h-[100dvh] w-full overflow-hidden"
+                data-social-post-id={fullscreenPost.id}
+                onClick={(event) => {
+                  if (shouldIgnoreTapTarget(event.target)) return;
+                  if (event.detail !== 1) return;
+                  toggleFocus(fullscreenPost.id);
+                }}
+                onDoubleClick={(event) => {
+                  if (shouldIgnoreTapTarget(event.target)) return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  triggerLikeBurst(fullscreenPost.id);
+                  if (!currentUserId || !Object.values(fullscreenPost.reactions ?? {}).some((users) => users.includes(currentUserId))) {
+                    onLike(fullscreenPost.id);
+                  }
+                }}
+              >
+                {(() => {
+                  const post = fullscreenPost;
+                  const profile = profilesById[post.authorId];
+                  const author = usersById.get(post.authorId);
+                  const displayName = profile?.username || author?.username || post.authorName;
+                  const displayHandle = profile?.handle ?? author?.handle ?? post.authorHandle ?? null;
+                  const avatar = profile?.avatarImageUrl || author?.avatar || post.authorAvatar;
+                  const grade = profile?.grade ?? post.authorGrade ?? null;
+                  const media = post.imageUrl ? parsePostImageUrl(post.imageUrl) : null;
+                  const video = post.videoUrl ? parseVideoUrl(post.videoUrl) : null;
+                  const liked = currentUserId
+                    ? Object.values(post.reactions ?? {}).some((users) => users.includes(currentUserId))
+                    : false;
+                  const saved = savedPostIds.has(post.id);
+                  const reactionCount = Object.values(post.reactions ?? {}).reduce(
+                    (sum, users) => sum + users.length,
+                    0,
+                  );
+                  const focused = focusedPostIds.has(post.id);
+
+                  return (
+                    <>
+                      <div className="absolute inset-0 bg-night-950" />
+                      <div className="absolute inset-0">
+                        {video?.kind ? (
+                          <SocialVideoPlayer
+                            src={post.videoUrl!}
+                            poster={post.videoThumbnailUrl ?? undefined}
+                            className="h-full w-full rounded-none border-0"
+                            videoClassName="h-full w-full object-contain bg-black"
+                            active={activeVideoPostId === post.id}
+                            muted={activeAudioVideoId !== post.id || activeVideoPostId !== post.id}
+                            onMutedChange={(nextMuted) => {
+                              setActiveAudioVideoId(nextMuted ? null : post.id);
+                            }}
+                            showChrome={!focused}
+                            clickToPlay={false}
+                          />
+                        ) : media?.kind === "image" ? (
+                          <img
+                            src={media.src}
+                            alt="Media du post"
+                            className="h-full w-full object-contain bg-black"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(251,191,36,0.16),transparent_40%),linear-gradient(180deg,#020617,#0f172a)] px-6 text-center">
+                            <RichMentionText
+                              content={post.content}
+                              mentionsByHandle={mentionTargets}
+                              profileHref={(authorId) => `/u/${authorId}`}
+                              className={clsx(
+                                "max-w-3xl text-2xl leading-10 text-white sm:text-3xl sm:leading-[3rem]",
+                                !expandedPostIds.has(post.id) && "line-clamp-8",
+                              )}
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      {likeBurst?.postId === post.id && (
+                        <div
+                          key={likeBurst.token}
+                          className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center"
+                        >
+                          <div className="flex flex-col items-center gap-2 rounded-full border border-white/10 bg-night-950/35 px-6 py-5 text-center text-white shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-md animate-[socialLikeBurst_2s_ease-out_forwards]">
+                            <Heart className="h-20 w-20 text-rose-400 drop-shadow-[0_0_18px_rgba(244,63,94,0.45)]" fill="currentColor" />
+                            <span className="text-sm font-semibold text-white/92">Tu as aimé le post</span>
+                          </div>
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={closeFullscreenPost}
+                        className="absolute right-4 top-[calc(env(safe-area-inset-top)+1rem)] z-40 inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-night-950/70 text-ivory/80 shadow-[0_12px_34px_rgba(0,0,0,0.28)] backdrop-blur-md transition hover:border-gold-300/40 hover:text-gold-100"
+                        aria-label="Fermer le plein écran"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+
+                      {!focused && (
+                        <div className="absolute inset-0 flex min-h-0 flex-col justify-between px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-[calc(env(safe-area-inset-top)+1rem)] sm:px-6 sm:py-6">
+                          <div className="flex items-start justify-between gap-3 pr-14">
+                            <div className="inline-flex rounded-full border border-white/10 bg-night-950/35 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-ivory/70 backdrop-blur-sm">
+                              {media?.kind === "image" ? "Photo" : video?.kind ? "Vidéo" : "Texte"}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => toggleFocus(post.id)}
+                              className="inline-flex h-11 items-center gap-2 rounded-full border border-white/10 bg-night-950/55 px-4 text-xs text-ivory/80 backdrop-blur-md transition hover:border-gold-300/40 hover:text-gold-100"
+                            >
+                              Masquer les infos
+                            </button>
+                          </div>
+
+                          <div className="mt-auto grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+                            <div className="max-w-3xl space-y-3">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <AvatarImage
+                                  candidates={[avatar, post.authorAvatar]}
+                                  fallbackSeed={post.authorId}
+                                  alt={displayName}
+                                  className="h-12 w-12 rounded-full object-cover ring-2 ring-gold-400/35"
+                                />
+                                <div className="min-w-0">
+                                  <Link
+                                    to={`/u/${post.authorId}`}
+                                    className="block truncate font-display text-lg text-gold-50 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]"
+                                  >
+                                    {displayName}
+                                  </Link>
+                                  <Handle handle={displayHandle} size="xs" className="text-ivory/75" />
+                                </div>
+                                {currentUserId && currentUserId !== post.authorId && (
+                                  <FollowButton
+                                    targetId={post.authorId}
+                                    targetUsername={displayName}
+                                    onChange={() => {}}
+                                  />
+                                )}
+                              </div>
+
+                              <div className="flex flex-wrap items-center gap-2">
+                                {grade && <StreamerGradeBadge grade={grade} size="sm" />}
+                                <UserBadges
+                                  role={profile?.role ?? getOfficial(post.authorId)?.role}
+                                  creatureId={
+                                    profile?.creature?.id ??
+                                    author?.creatureId ??
+                                    getOfficial(post.authorId)?.creatureId
+                                  }
+                                />
+                                <span className="text-[11px] uppercase tracking-[0.22em] text-ivory/70">
+                                  {formatRelative(post.createdAt)}
+                                </span>
+                              </div>
+
+                              <div className="max-h-[32dvh] overflow-y-auto pr-1 [scrollbar-width:thin]">
+                                <RichMentionText
+                                  content={post.content}
+                                  mentionsByHandle={mentionTargets}
+                                  profileHref={(authorId) => `/u/${authorId}`}
+                                  className={clsx(
+                                    "max-w-3xl text-[15px] leading-6 text-ivory/95 drop-shadow-[0_1px_2px_rgba(0,0,0,0.75)] sm:text-lg sm:leading-7",
+                                    !expandedPostIds.has(post.id) && "line-clamp-4 sm:line-clamp-5",
+                                  )}
+                                />
+                              </div>
+
+                              {post.content.length > 220 && (
+                                <button
+                                  type="button"
+                                  onClick={() => toggleExpandedPost(post.id)}
+                                  className="inline-flex min-h-10 items-center gap-2 rounded-full border border-white/10 bg-night-950/35 px-4 py-2 text-sm text-gold-100 backdrop-blur-sm transition hover:border-gold-300/35 hover:bg-gold-500/10"
+                                >
+                                  {expandedPostIds.has(post.id) ? "Voir moins" : "Voir plus"}
+                                </button>
+                              )}
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-col sm:items-end sm:gap-3">
+                              <FeedAction
+                                icon={<Heart className="h-5 w-5" fill={liked ? "currentColor" : "none"} />}
+                                label={liked ? "Aimé" : "Like"}
+                                active={liked}
+                                onClick={() => onLike(post.id)}
+                                count={reactionCount}
+                              />
+                              <FeedAction
+                                icon={<MessageCircle className="h-5 w-5" />}
+                                label="Com."
+                                onClick={() => onOpenComments(post.id)}
+                                count={post.comments.length}
+                              />
+                              <FeedAction
+                                icon={
+                                  saved ? (
+                                    <BookmarkCheck className="h-5 w-5" />
+                                  ) : (
+                                    <Bookmark className="h-5 w-5" />
+                                  )
+                                }
+                                label={saved ? "Sauvé" : "Save"}
+                                active={saved}
+                                onClick={() => onSave(post.id)}
+                              />
+                              <FeedAction
+                                icon={<Share2 className="h-5 w-5" />}
+                                label="Partager"
+                                onClick={() => onShare(post)}
+                              />
+                              {currentUserId && (currentUserId === post.authorId || canModeratePosts) ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setPendingDeletePostId(post.id)}
+                                  className="inline-flex min-h-11 w-full min-w-0 flex-col items-center justify-center rounded-full border border-rose-300/45 bg-rose-500/18 px-3 py-2 text-xs text-rose-50 shadow-[0_10px_22px_rgba(0,0,0,0.18)] backdrop-blur-sm transition hover:border-rose-200/70 hover:bg-rose-500/28 hover:text-white"
+                                  aria-label="Supprimer ce post"
+                                >
+                                  <Trash2 className="h-5 w-5" />
+                                  <span className="mt-1 leading-none">Suppr.</span>
+                                </button>
+                              ) : (
+                                <ReportButton
+                                  targetType="post"
+                                  targetId={post.id}
+                                  targetLabel={`Post de ${displayName}`}
+                                  targetUrl={`/communaute/post/${post.id}`}
+                                  className="inline-flex min-h-11 w-full min-w-0 flex-col items-center justify-center rounded-full border border-rose-300/45 bg-rose-500/18 px-3 py-2 text-xs text-rose-50 shadow-[0_10px_22px_rgba(0,0,0,0.18)] backdrop-blur-sm transition hover:border-rose-200/70 hover:bg-rose-500/28 hover:text-white"
+                                />
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
 
       {searchOpen && (
         <div className="absolute inset-0 z-40 bg-night-950/80 backdrop-blur-md">

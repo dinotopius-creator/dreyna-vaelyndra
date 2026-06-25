@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
-  Banknote,
-  Coins,
+  Camera,
   Crown,
-  Heart,
-  Link as LinkIcon,
+  BookmarkCheck,
+  Check,
+  Loader2,
+  MoreVertical,
   Save,
-  ShoppingBag,
+  Play,
   Sparkles,
   Upload,
   X,
@@ -18,38 +19,35 @@ import { useStore } from "../contexts/StoreContext";
 import { useToast } from "../contexts/ToastContext";
 import { useProfile } from "../contexts/ProfileContext";
 import { SectionHeading } from "../components/SectionHeading";
+import { AvatarImage } from "../components/AvatarImage";
+import { AvatarViewer } from "../components/AvatarViewer";
 import { UserBadges } from "../components/UserBadges";
 import StreamerGradeBadge from "../components/StreamerGradeBadge";
 import { CreaturePickerModal } from "../components/CreaturePickerModal";
 import SoulBondsModal from "../components/SoulBondsModal";
-import { WishlistSection } from "../components/WishlistSection";
-import { AvatarProfileBanner } from "../components/AvatarProfileBanner";
-import { ApiError } from "../lib/api";
-import { formatDate, formatPrice, resizeImageToDataUrl } from "../lib/helpers";
-import { roleLabel, roleLabelWithIcon } from "../lib/roleLabel";
-import {
-  MIN_PAYOUT_EUR,
-  PLATFORM_CUT,
-  formatEur,
-  formatSylvins,
-  sylvinsToNetEur,
-} from "../lib/sylvins";
-import {
-  apiCreateStripeConnectDashboardLink,
-  apiCreateStripeConnectOnboardingLink,
-  apiGetStripeConnectStatus,
-  apiWithdrawStripeEarnings,
-  type StripeConnectStatusDto,
-} from "../lib/stripeApi";
+import { formatDate, resizeImageToDataUrl } from "../lib/helpers";
+import { roleLabelWithIcon } from "../lib/roleLabel";
+import { apiUpdatePost, apiUploadCommunityImage } from "../lib/api";
+import type { CommunityPost } from "../types";
+
+function normalizeProfileKey(value: string | null | undefined) {
+  return (value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/^@/, "");
+}
+
+function hasVisibleMedia(post: CommunityPost) {
+  return Boolean(post.videoUrl || post.imageUrl || post.videoThumbnailUrl);
+}
 
 export function Me() {
   const { user, updateProfile, backendMe, refreshBackendMe } = useAuth();
-  const { articles, orders, products, myWallet } = useStore();
+  const { posts, dispatch } = useStore();
   const { profile: serverProfile, refresh: refreshProfile } = useProfile();
   const { notify } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const paymentStatus = searchParams.get("payment");
-  const stripeConnectStatus = searchParams.get("stripe_connect");
 
   /**
    * Au retour d'un paiement Stripe, le flag `?payment=success` reste dans
@@ -108,67 +106,61 @@ export function Me() {
   const [username, setUsername] = useState(user?.username ?? "");
   const [avatar, setAvatar] = useState(user?.avatar ?? "");
   const [editingAvatar, setEditingAvatar] = useState(false);
+  const [editLoading, setEditLoading] = useState(false);
   const [creaturePickerOpen, setCreaturePickerOpen] = useState(false);
   const [bondsTab, setBondsTab] = useState<"followers" | "following" | null>(
     null,
   );
-  const [connectStatus, setConnectStatus] =
-    useState<StripeConnectStatusDto | null>(null);
-  const [connectLoading, setConnectLoading] = useState(false);
-  const [withdrawLoading, setWithdrawLoading] = useState(false);
+  const [thumbnailEditorPostId, setThumbnailEditorPostId] = useState<string | null>(null);
+  const [thumbnailUrlDraft, setThumbnailUrlDraft] = useState("");
+  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
+  const [thumbnailSaving, setThumbnailSaving] = useState(false);
+  const [savedPostIds] = useState<Set<string>>(() => {
+    try {
+      const raw = window.localStorage.getItem("vaelyndra-community-saved-posts");
+      if (!raw) return new Set<string>();
+      const parsed = JSON.parse(raw) as unknown;
+      if (Array.isArray(parsed)) {
+        return new Set(parsed.filter((item): item is string => typeof item === "string"));
+      }
+    } catch {
+      /* ignore persisted save state */
+    }
+    return new Set<string>();
+  });
   const fileRef = useRef<HTMLInputElement | null>(null);
-
-  useEffect(() => {
-    if (!user) return;
-    let cancelled = false;
-    const startLoading = window.setTimeout(() => {
-      if (!cancelled) setConnectLoading(true);
-    }, 0);
-    apiGetStripeConnectStatus()
-      .then((status) => {
-        if (!cancelled) setConnectStatus(status);
-      })
-      .catch((err) => {
-        console.warn("Statut Stripe Connect indisponible :", err);
-        if (!cancelled) setConnectStatus(null);
-      })
-      .finally(() => {
-        if (!cancelled) setConnectLoading(false);
-      });
-    return () => {
-      cancelled = true;
-      window.clearTimeout(startLoading);
-    };
-  }, [user]);
-
-  useEffect(() => {
-    if (!stripeConnectStatus) return;
-    if (stripeConnectStatus !== "return" && stripeConnectStatus !== "refresh") {
-      return;
-    }
-    void refreshProfile();
-    void apiGetStripeConnectStatus()
-      .then((status) => setConnectStatus(status))
-      .catch((err) => console.warn("Refresh Stripe Connect KO :", err));
-    const next = new URLSearchParams(searchParams);
-    next.delete("stripe_connect");
-    setSearchParams(next, { replace: true });
-    if (stripeConnectStatus === "return") {
-      notify("Compte Stripe mis à jour.", "success");
-    }
-  }, [notify, refreshProfile, searchParams, setSearchParams, stripeConnectStatus]);
+  const editLoaderRef = useRef<number | null>(null);
 
   if (!user) return null;
+  const currentUser = user;
+  const profileKeys = new Set(
+    [
+      currentUser.id,
+      currentUser.username,
+      currentUser.handle,
+      serverProfile?.id,
+      serverProfile?.username,
+      serverProfile?.handle,
+    ]
+      .filter((value): value is string => typeof value === "string")
+      .map((value) => normalizeProfileKey(value))
+      .filter(Boolean),
+  );
 
-  const myLikes = articles.filter((a) => a.likes.includes(user.id));
-  const myComments = articles
-    .flatMap((a) =>
-      a.comments
-        .filter((c) => c.authorId === user.id)
-        .map((c) => ({ article: a, comment: c })),
+  const myPosts = posts
+    .filter((post) =>
+      [
+        normalizeProfileKey(post.authorId),
+        normalizeProfileKey(post.authorName),
+        normalizeProfileKey(post.authorHandle),
+      ].some((key) => profileKeys.has(key)),
     )
-    .slice(0, 6);
-  const myOrders = orders.filter((o) => o.userId === user.id);
+    .filter(hasVisibleMedia)
+    .sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+  const savedPosts = posts.filter((post) => savedPostIds.has(post.id)).filter(hasVisibleMedia);
   const isArchitect = backendMe?.role === "architect";
 
   async function saveProfile(e: React.FormEvent) {
@@ -178,52 +170,9 @@ export function Me() {
       notify(res.error ?? "Impossible d'enregistrer.", "error");
       return;
     }
+    void refreshProfile();
     setEditingAvatar(false);
     notify("Votre profil a été scellé aux archives ✨");
-  }
-
-  async function openStripeOnboarding() {
-    try {
-      setConnectLoading(true);
-      const link =
-        connectStatus?.onboardingComplete && connectStatus?.payoutsEnabled
-        ? await apiCreateStripeConnectDashboardLink()
-        : await apiCreateStripeConnectOnboardingLink();
-      window.location.href = link.url;
-    } catch (err) {
-      console.warn(err);
-      notify(
-        err instanceof ApiError && err.message
-          ? err.message
-          : "Impossible d'ouvrir Stripe pour le moment.",
-        "error",
-      );
-    } finally {
-      setConnectLoading(false);
-    }
-  }
-
-  async function withdrawEarnings() {
-    try {
-      setWithdrawLoading(true);
-      const payout = await apiWithdrawStripeEarnings();
-      await refreshProfile();
-      setConnectStatus(await apiGetStripeConnectStatus().catch(() => connectStatus));
-      notify(
-        `Retrait lancé : ${formatEur(payout.amountCents / 100)} envoyés vers Stripe Express.`,
-        "success",
-      );
-    } catch (err) {
-      console.warn(err);
-      notify(
-        err instanceof Error && err.message
-          ? err.message
-          : "Le retrait a échoué.",
-        "error",
-      );
-    } finally {
-      setWithdrawLoading(false);
-    }
   }
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -242,6 +191,64 @@ export function Me() {
       notify("Image chargée — n'oubliez pas d'enregistrer 💾", "info");
     } catch {
       notify("Image illisible, essaye un autre format.", "error");
+    }
+  }
+
+  function openEditProfile() {
+    if (editingAvatar || editLoading) return;
+    setEditLoading(true);
+    if (editLoaderRef.current !== null) {
+      window.clearTimeout(editLoaderRef.current);
+    }
+    editLoaderRef.current = window.setTimeout(() => {
+      setEditLoading(false);
+      setEditingAvatar(true);
+    }, 260);
+  }
+
+  function closeEditProfile() {
+    setEditingAvatar(false);
+    setEditLoading(false);
+    setAvatar(currentUser.avatar);
+    setUsername(currentUser.username);
+    setBio(currentUser.bio ?? "");
+  }
+
+  function openThumbnailEditor(postId: string) {
+    const post = myPosts.find((entry) => entry.id === postId);
+    if (!post) return;
+    setThumbnailEditorPostId(postId);
+    setThumbnailUrlDraft(post.videoThumbnailUrl ?? "");
+    setThumbnailFile(null);
+  }
+
+  async function saveThumbnail() {
+    if (!user || !thumbnailEditorPostId) return;
+    const post = myPosts.find((entry) => entry.id === thumbnailEditorPostId);
+    if (!post) return;
+    setThumbnailSaving(true);
+    try {
+      let uploadedUrl = thumbnailUrlDraft.trim();
+      if (thumbnailFile) {
+        const uploaded = await apiUploadCommunityImage(thumbnailFile);
+        uploadedUrl = uploaded.imageUrl;
+      }
+      const updated = await apiUpdatePost(post.id, {
+        userId: user.id,
+        videoThumbnailUrl: uploadedUrl || undefined,
+      });
+      dispatch({ type: "replacePost", post: updated });
+      notify("Miniature mise à jour.", "success");
+      setThumbnailEditorPostId(null);
+      setThumbnailUrlDraft("");
+      setThumbnailFile(null);
+    } catch (error) {
+      notify(
+        error instanceof Error ? error.message : "Impossible de modifier la miniature.",
+        "error",
+      );
+    } finally {
+      setThumbnailSaving(false);
     }
   }
 
@@ -267,18 +274,47 @@ export function Me() {
       <motion.header
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="card-royal relative overflow-hidden p-5 sm:p-8 md:p-10"
+        className="card-royal relative overflow-hidden p-4 sm:p-6"
       >
-        <AvatarProfileBanner
-          title={user.username}
-          subtitle="Votre avatar 3D principal est désormais géré dans un studio dédié. Les profils n'affichent plus le rendu complet, seulement un accès vers l'atelier Avatar."
-          cta="Ouvrir l'atelier Avatar"
-        />
-        <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
-              {roleLabelWithIcon(serverProfile?.role ?? user.role)}
-            </p>
+        <div className="flex items-start gap-4 sm:gap-5">
+          <div className="relative shrink-0">
+            <AvatarViewer
+              src={user.avatar ?? null}
+              fallbackImage={serverProfile?.avatarImageUrl ?? user.avatar}
+              alt={user.username}
+              className="h-20 w-20 overflow-hidden rounded-full ring-4 ring-gold-400/50 sm:h-24 sm:w-24"
+              size="square"
+              framing="face"
+              interactive={false}
+              autoRotate
+            />
+            <button
+              type="button"
+              onClick={openEditProfile}
+              className="absolute -bottom-1 -right-1 inline-flex h-8 w-8 items-center justify-center rounded-full bg-gold-shine text-night-900 shadow-lg ring-2 ring-night-900 transition hover:scale-105"
+              title="Changer ma photo de profil"
+              aria-label="Changer ma photo de profil"
+            >
+              <Camera className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
+                  {roleLabelWithIcon(serverProfile?.role ?? user.role)}
+                </p>
+                <h1 className="mt-1 truncate font-display text-2xl text-gold-200 sm:text-3xl">
+                  {user.username}
+                </h1>
+              </div>
+              {serverProfile?.grade && (
+                <div className="shrink-0">
+                  <StreamerGradeBadge grade={serverProfile.grade} size="md" />
+                </div>
+              )}
+            </div>
+
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <UserBadges
                 creatureId={serverProfile?.creature?.id ?? user.creatureId}
@@ -293,31 +329,81 @@ export function Me() {
                 Changer
               </button>
             </div>
-            <p className="mt-2 text-sm text-ivory/60">
+
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-ivory/78">
+              {serverProfile?.bio || bio || " "}
+            </p>
+
+            <p className="mt-2 text-[11px] text-ivory/50">
               Inscrit·e le {formatDate(user.joinedAt)}
             </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-3 text-sm text-ivory/70">
-            <button
-              type="button"
-              onClick={() => setBondsTab("followers")}
-              className="rounded-full transition hover:text-gold-100"
-            >
-              <strong className="font-display text-gold-200">
-                {serverProfile?.followersCount ?? 0}
-              </strong>{" "}
-              âmes liées
-            </button>
-            <button
-              type="button"
-              onClick={() => setBondsTab("following")}
-              className="rounded-full transition hover:text-gold-100"
-            >
-              <strong className="font-display text-gold-200">
-                {serverProfile?.followingCount ?? 0}
-              </strong>{" "}
-              liens tissés
-            </button>
+
+            <div className="mt-4 grid grid-cols-3 gap-2 sm:max-w-md">
+              <div className="min-h-20 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-center">
+                <div className="font-display text-lg text-gold-100 leading-none">
+                  {myPosts.length}
+                </div>
+                <div className="mt-1 text-[10px] leading-tight uppercase tracking-[0.16em] text-ivory/55 sm:text-[11px]">
+                  Posts
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBondsTab("followers")}
+                className="min-h-20 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-center transition hover:border-gold-300/35"
+              >
+                <div className="font-display text-lg text-gold-100 leading-none">
+                  {serverProfile?.followersCount ?? 0}
+                </div>
+                <div className="mt-1 text-[10px] leading-tight uppercase tracking-[0.16em] text-ivory/55 sm:text-[11px]">
+                  Abonnés
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setBondsTab("following")}
+                className="min-h-20 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-center transition hover:border-gold-300/35"
+              >
+                <div className="font-display text-lg text-gold-100 leading-none">
+                  {serverProfile?.followingCount ?? 0}
+                </div>
+                <div className="mt-1 text-[10px] leading-tight uppercase tracking-[0.16em] text-ivory/55 sm:text-[11px]">
+                  Suivis
+                </div>
+              </button>
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={openEditProfile}
+                className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full border border-gold-400/45 bg-gold-500/10 px-3 py-2 text-xs font-semibold text-gold-100 transition hover:bg-gold-500/20"
+              >
+                <Sparkles className="h-4 w-4" />
+                Modifier mon profil
+              </button>
+              <Link
+                to="/avatar"
+                className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-ivory/80 transition hover:border-gold-300/35 hover:text-gold-100"
+              >
+                <Sparkles className="h-4 w-4" />
+                Mes avatars
+              </Link>
+              <Link
+                to="/familier"
+                className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-ivory/80 transition hover:border-gold-300/35 hover:text-gold-100"
+              >
+                <Sparkles className="h-4 w-4" />
+                Familier
+              </Link>
+              <a
+                href="#saved-posts"
+                className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-ivory/80 transition hover:border-gold-300/35 hover:text-gold-100"
+              >
+                <BookmarkCheck className="h-4 w-4" />
+                Sauvé
+              </a>
+            </div>
           </div>
         </div>
         {serverProfile?.grade && (
@@ -366,404 +452,448 @@ export function Me() {
           onClose={() => setBondsTab(null)}
         />
 
-        {editingAvatar && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            className="mt-6 rounded-xl border border-gold-400/30 bg-night-900/40 p-4"
-          >
-            <div className="flex items-center justify-between">
-              <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
-                ✦ Nouvelle photo de profil
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingAvatar(false);
-                  setAvatar(user.avatar);
-                }}
-                className="text-ivory/50 hover:text-rose-300"
-                title="Annuler"
-              >
-                <X className="h-4 w-4" />
-              </button>
+        {editLoading && (
+          <div className="absolute inset-0 z-40 flex items-center justify-center bg-night-950/90 backdrop-blur-md">
+            <div className="flex items-center gap-3 rounded-full border border-white/10 bg-night-900/80 px-4 py-3 text-sm text-ivory/80 shadow-2xl">
+              <Sparkles className="h-4 w-4 animate-pulse text-gold-200" />
+              Ouverture de l’éditeur de profil…
             </div>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <input
-                type="file"
-                accept="image/*"
-                ref={fileRef}
-                onChange={handleFile}
-                className="hidden"
-              />
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                className="btn-royal w-full sm:w-auto"
-              >
-                <Upload className="h-4 w-4" />
-                <span className="hidden sm:inline">
-                  Importer une image depuis votre ordinateur
-                </span>
-                <span className="sm:hidden">
-                  Importer une photo depuis votre téléphone
-                </span>
-              </button>
-              <div className="relative min-w-0 flex-1">
-                <LinkIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ivory/40" />
-                <input
-                  value={avatar}
-                  onChange={(e) => setAvatar(e.target.value)}
-                  placeholder="ou coller une URL d'image (https://...)"
-                  className="glass-input pl-9"
-                />
-              </div>
-            </div>
-            <p className="mt-2 text-[11px] text-ivory/50">
-              <span className="hidden sm:inline">
-                Astuce : choisissez une image nette depuis votre ordinateur. Max 5 Mo.
-              </span>
-              <span className="sm:hidden">
-                Astuce : choisissez une photo depuis votre téléphone ou votre galerie. Max 5 Mo.
-              </span>
-            </p>
-          </motion.div>
+          </div>
         )}
 
-        <form onSubmit={saveProfile} className="mt-6 grid gap-4 md:grid-cols-2">
-          <div>
-            <label className="font-regal text-[10px] tracking-[0.22em] text-ivory/60">
-              Pseudo
-            </label>
-            <input
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="glass-input mt-2"
-              placeholder="Votre pseudo"
-              maxLength={32}
-            />
+        {editingAvatar && (
+          <div className="fixed inset-0 z-50 overflow-y-auto bg-night-950">
+            <div className="min-h-full px-4 py-5 sm:px-6 sm:py-8">
+              <div className="mx-auto flex min-h-[calc(100vh-2.5rem)] max-w-4xl flex-col rounded-[28px] border border-white/10 bg-night-900/95 shadow-[0_30px_90px_rgba(0,0,0,0.6)]">
+                <div className="flex items-center justify-between border-b border-white/10 px-5 py-4 sm:px-6">
+                  <div>
+                    <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
+                      Profil
+                    </p>
+                    <h2 className="font-display text-2xl text-gold-100">
+                      Modifier mon profil
+                    </h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closeEditProfile}
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 text-ivory/70"
+                    aria-label="Fermer l'éditeur"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="grid flex-1 gap-6 px-5 py-5 sm:px-6 lg:grid-cols-[1.1fr_0.9fr]">
+                  <form onSubmit={saveProfile} className="space-y-5">
+                    <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
+                      <label className="font-regal text-[10px] tracking-[0.22em] text-ivory/60">
+                        Photo de profil
+                      </label>
+                      <div className="mt-3 flex items-center gap-4">
+                        <AvatarImage
+                          candidates={[avatar, serverProfile?.avatarImageUrl, user.avatar]}
+                          fallbackSeed={user.id}
+                          alt={user.username}
+                          className="h-20 w-20 rounded-full object-cover ring-4 ring-gold-400/50"
+                        />
+                        <div className="flex flex-1 flex-wrap gap-2">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            ref={fileRef}
+                            onChange={handleFile}
+                            className="hidden"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => fileRef.current?.click()}
+                            className="btn-royal min-h-11"
+                          >
+                            <Upload className="h-4 w-4" />
+                            Importer une image
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setAvatar(user.avatar)}
+                            className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/10 px-4 py-2 text-sm text-ivory/75"
+                          >
+                            Réinitialiser
+                          </button>
+                        </div>
+                      </div>
+                      <div className="mt-3">
+                        <input
+                          value={avatar}
+                          onChange={(e) => setAvatar(e.target.value)}
+                          placeholder="ou coller une URL d'image (https://...)"
+                          className="glass-input"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
+                      <label className="font-regal text-[10px] tracking-[0.22em] text-ivory/60">
+                        Pseudo
+                      </label>
+                      <input
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        className="glass-input mt-2"
+                        placeholder="Votre pseudo"
+                        maxLength={32}
+                      />
+                    </div>
+
+                    <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
+                      <label className="font-regal text-[10px] tracking-[0.22em] text-ivory/60">
+                        Bio
+                      </label>
+                      <textarea
+                        rows={5}
+                        value={bio}
+                        onChange={(e) => setBio(e.target.value)}
+                        className="glass-input mt-2 resize-none"
+                        placeholder="Parle de toi, de tes lives, de ta passion..."
+                        maxLength={240}
+                      />
+                      <p className="mt-2 text-right text-[11px] text-ivory/45">
+                        {bio.length}/240
+                      </p>
+                    </div>
+
+                    <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                      <button
+                        type="button"
+                        onClick={closeEditProfile}
+                        className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/10 px-4 py-2 text-sm text-ivory/75"
+                      >
+                        Annuler
+                      </button>
+                      <button type="submit" className="btn-gold w-full sm:w-auto">
+                        <Save className="h-4 w-4" /> Sauvegarder
+                      </button>
+                    </div>
+                  </form>
+
+                  <aside className="space-y-4">
+                    <div className="rounded-3xl border border-white/10 bg-night-950/60 p-4">
+                      <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
+                        Aperçu
+                      </p>
+                      <div className="mt-4 flex items-center gap-4">
+                        <AvatarImage
+                          candidates={[avatar, serverProfile?.avatarImageUrl, user.avatar]}
+                          fallbackSeed={user.id}
+                          alt={user.username}
+                          className="h-24 w-24 rounded-full object-cover ring-4 ring-gold-400/50"
+                        />
+                        <div>
+                          <p className="font-display text-2xl text-gold-100">{username || user.username}</p>
+                          <p className="mt-1 text-sm text-ivory/70">
+                            {serverProfile?.handle ? `@${serverProfile.handle}` : "@" + user.username.toLowerCase()}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="mt-4 text-sm leading-6 text-ivory/78">
+                        {bio || "Ajoute une bio pour présenter ton profil."}
+                      </p>
+                    </div>
+                    <div className="rounded-3xl border border-white/10 bg-night-950/60 p-4 text-sm text-ivory/65">
+                      Les changements sont appliqués à ton profil personnel et à tes publications associées.
+                    </div>
+                  </aside>
+                </div>
+              </div>
+            </div>
           </div>
-          <div>
-            <label className="font-regal text-[10px] tracking-[0.22em] text-ivory/60">
-              Rôle
-            </label>
-            <input
-              disabled
-              value={roleLabel(serverProfile?.role ?? user.role)}
-              className="glass-input mt-2 cursor-not-allowed opacity-70"
-            />
-          </div>
-          <div className="md:col-span-2">
-            <label className="font-regal text-[10px] tracking-[0.22em] text-ivory/60">
-              Biographie
-            </label>
-            <textarea
-              rows={3}
-              value={bio}
-              onChange={(e) => setBio(e.target.value)}
-              className="glass-input mt-2 resize-none"
-              placeholder="Parle de toi, de tes lives, de ta passion..."
-            />
-          </div>
-          <div className="flex md:col-span-2 sm:justify-end">
-            <button type="submit" className="btn-gold w-full sm:w-auto">
-              <Save className="h-4 w-4" /> Enregistrer mon profil
-            </button>
-          </div>
-        </form>
+        )}
       </motion.header>
 
-      <section className="mt-12">
+      <section className="mt-10">
         <SectionHeading
           align="left"
-          eyebrow="Avatar"
-          title={<>Ton <span className="text-mystic">avatar</span></>}
-          subtitle="Le rendu complet a migré dans un studio dédié. Sur le profil, on conserve seulement une porte d'entrée élégante vers l'atelier Avatar."
+          eyebrow="Publications"
+          title="Mes publications"
+          subtitle="Le vrai feed de tes posts, juste sous la biographie."
         />
-        <div className="mt-6">
-          <AvatarProfileBanner
-            title="Composer mon avatar"
-            subtitle="Entrez dans le studio plein écran pour modifier votre apparence 3D, vos tenues et vos accessoires sans passer par le profil."
-            cta={serverProfile?.avatarUrl ? "Modifier mon avatar" : "Composer mon avatar"}
-          />
-        </div>
-      </section>
-
-      <section className="mt-12">
-        <SectionHeading
-          align="left"
-          eyebrow="Familier"
-          title={<>Ton <span className="text-mystic">familier</span></>}
-          subtitle="Compagnon de chemin unique pour chaque membre. Il gagne de l’XP à mesure que tu postes, commentes, lances des lives ou reçois des cadeaux."
-        />
-        <div className="mt-6 card-royal flex flex-col items-start gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-ivory/75">
-            Niveau, palier d’évolution, statistiques cosmétiques et collection
-            de familiers : tout est dans ta page dédiée.
-          </p>
-          <Link
-            to="/familier"
-            className="inline-flex items-center gap-2 self-start rounded-full bg-gold-shine px-5 py-3 font-regal text-[11px] tracking-[0.22em] text-night-900 transition hover:brightness-110"
-          >
-            ✨ Aller à Mon Familier
-          </Link>
-        </div>
-      </section>
-
-      <section className="mt-12">
-        <WishlistSection
-          wishlist={serverProfile?.wishlist ?? []}
-          ownedIds={serverProfile?.inventory ?? []}
-          targetUserId={user.id}
-          targetUsername={user.username}
-          isSelf
-        />
-      </section>
-
-      <section className="mt-12">
-        <SectionHeading
-          align="left"
-          eyebrow="Trésorerie"
-          title={<>Vos <span className="text-mystic">bourses</span></>}
-          subtitle="Gardez un œil sur vos Lueurs et vos Sylvins. Les Sylvins servent aux cadeaux live, les Lueurs servent aux achats dédiés en boutique."
-        />
-        <div className="mt-6 grid gap-4 lg:grid-cols-[1fr,1fr]">
-          <div className="card-royal p-5">
-            <div className="flex items-center gap-2">
-              <Coins className="h-5 w-5 text-gold-300" />
-              <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
-                Soldes à dépenser
-              </p>
-            </div>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-lg border border-gold-400/30 bg-night-900/40 p-3">
-                <p className="font-regal text-[10px] uppercase tracking-[0.22em] text-gold-300">
-                  Sylvins
-                </p>
-                <p className="mt-1 font-display text-2xl text-gold-200">
-                  {formatSylvins(
-                    serverProfile
-                      ? serverProfile.sylvinsPaid + serverProfile.sylvinsPromo
-                      : myWallet.balance,
-                  )}{" "}
-                  Sylvins
-                </p>
-                <p className="mt-1 text-[11px] text-ivory/55">
-                  Utilisables dans les lives pour offrir des cadeaux animés.
-                </p>
-              </div>
-              <div className="rounded-lg border border-sky-400/30 bg-sky-500/10 p-3">
-                <p className="font-regal text-[10px] uppercase tracking-[0.22em] text-sky-200">
-                  Lueurs
-                </p>
-                <p className="mt-1 font-display text-2xl text-sky-100">
-                  {new Intl.NumberFormat("fr-FR").format(serverProfile?.lueurs ?? 0)}
-                </p>
-                <p className="mt-1 text-[11px] text-ivory/55">
-                  Utilisables dans la boutique pour les produits réservés aux Lueurs.
-                </p>
-              </div>
-            </div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Link to="/boutique" className="btn-gold inline-flex">
-                <Sparkles className="h-4 w-4" /> Voir la boutique
-              </Link>
-              <Link to="/boutique" className="btn-royal inline-flex">
-                <Coins className="h-4 w-4" /> Recharger les Sylvins
-              </Link>
-            </div>
-          </div>
-          <div className="card-royal p-5">
-            <div className="flex items-center gap-2">
-              <Banknote className="h-5 w-5 text-gold-300" />
-              <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
-                Recettes streamer
-              </p>
-            </div>
-            {(() => {
-              // Source de vérité = profil serveur (split paid/promo). Tant
-              // qu'il n'est pas chargé, on affiche le solde client-side en
-              // fallback (anciennement seule source, pré-migration backend).
-              const paid = serverProfile?.earningsPaid ?? 0;
-              const promo =
-                serverProfile?.earningsPromo ?? myWallet.earnings;
-              const retirableNetEur = sylvinsToNetEur(paid);
-              const connectReady =
-                !!connectStatus?.accountId &&
-                connectStatus.onboardingComplete &&
-                connectStatus.payoutsEnabled;
-              const canWithdraw =
-                connectReady &&
-                retirableNetEur >= MIN_PAYOUT_EUR &&
-                paid > 0 &&
-                !withdrawLoading;
-              return (
-                <>
-                  <p className="mt-3 font-display text-3xl text-gold-200">
-                    {formatSylvins(paid + promo)} Sylvins
-                  </p>
-                  <div className="mt-3 grid gap-2 text-xs">
-                    <div className="rounded-lg border border-gold-400/30 bg-night-900/40 p-3">
-                      <p className="font-regal text-[10px] uppercase tracking-[0.22em] text-gold-300">
-                        Retirables
-                      </p>
-                      <p className="mt-1 font-display text-lg text-gold-200">
-                        {formatSylvins(paid)} Sylvins
-                      </p>
-                      <p className="mt-1 text-ivory/60">
-                        Net estimé :{" "}
-                        <span className="text-gold-200">
-                          {formatEur(retirableNetEur)}
-                        </span>{" "}
-                        (après {Math.round(PLATFORM_CUT * 100)}% de frais
-                        plateforme)
-                      </p>
-                      <p className="mt-1 text-[11px] text-ivory/50">
-                        Seulement les cadeaux reçus depuis un achat Stripe
-                        alimentent ce pot.
-                      </p>
+        <ul className="mt-6 grid grid-cols-3 gap-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
+          {myPosts.map((post) => {
+            const poster = post.videoThumbnailUrl || post.imageUrl || "";
+            const isVideo = Boolean(post.videoUrl);
+            return (
+              <li
+                key={post.id}
+                className="group relative overflow-hidden rounded-[20px] border border-white/8 bg-night-950/70 shadow-[0_14px_40px_rgba(0,0,0,0.22)]"
+              >
+                <Link
+                  to={`/communaute/post/${post.id}`}
+                  className="absolute inset-0 z-10"
+                  aria-label={`Ouvrir le post de ${post.authorName}`}
+                />
+                <article className="relative flex aspect-[4/5] flex-col overflow-hidden">
+                  <div className="absolute inset-0 bg-night-950">
+                    {poster ? (
+                      <img
+                        src={poster}
+                        alt={post.content}
+                        className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+                      />
+                    ) : isVideo ? (
+                      <video
+                        src={post.videoUrl}
+                        className="h-full w-full object-cover"
+                        muted
+                        playsInline
+                        loop
+                        autoPlay
+                        preload="metadata"
+                      />
+                    ) : (
+                      <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(251,191,36,0.16),transparent_35%),linear-gradient(180deg,#18111f,#09060d)] px-3 text-center">
+                        <p className="line-clamp-6 whitespace-pre-wrap text-[12px] leading-5 text-ivory/84">
+                          {post.content}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(2,6,23,0.02),rgba(2,6,23,0.14)_70%,rgba(2,6,23,0.26)_100%)]" />
+                  {isVideo ? (
+                    <div className="absolute inset-0 z-20 flex items-center justify-center">
+                      <div className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/12 bg-night-950/55 text-white/92 backdrop-blur-md shadow-[0_12px_30px_rgba(0,0,0,0.28)]">
+                        <Play className="h-5 w-5 fill-current" />
+                      </div>
                     </div>
-                    <div className="rounded-lg border border-royal-500/30 bg-night-900/30 p-3">
-                      <p className="font-regal text-[10px] uppercase tracking-[0.22em] text-ivory/60">
-                        En cadeaux uniquement
-                      </p>
-                      <p className="mt-1 font-display text-lg text-ivory/85">
-                        {formatSylvins(promo)} Sylvins
-                      </p>
-                      <p className="mt-1 text-[11px] text-ivory/50">
-                        Reçus depuis un solde promo (events, admin,
-                        récompenses). Non retirables en € — réinjectez-les
-                        en offrant vos propres cadeaux ou en achetant des
-                        items boutique.
-                      </p>
+                  ) : (
+                    <div className="absolute left-2 top-2 z-20 inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/12 bg-night-950/45 text-white/85 backdrop-blur-md">
+                      <Camera className="h-3.5 w-3.5" />
                     </div>
-                  </div>
-                  <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-night-900/60">
-                    <div
-                      className="h-full bg-gold-shine"
-                      style={{
-                        width: `${Math.min(
-                          100,
-                          (retirableNetEur / MIN_PAYOUT_EUR) * 100,
-                        )}%`,
-                      }}
-                    />
-                  </div>
-                  <p className="mt-2 text-[11px] text-ivory/50">
-                    Seuil de retrait : {formatEur(MIN_PAYOUT_EUR)} (calculé
-                    sur le pot "Retirables").
-                  </p>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      className="btn-royal inline-flex disabled:cursor-not-allowed disabled:opacity-50"
-                      disabled={!canWithdraw}
-                      onClick={withdrawEarnings}
-                      title={
-                        !connectReady
-                          ? "Configurez Stripe Express d'abord."
-                          : retirableNetEur < MIN_PAYOUT_EUR
-                            ? `Seuil minimum ${formatEur(MIN_PAYOUT_EUR)} non atteint.`
-                            : ""
-                      }
-                    >
-                      <Banknote className="h-4 w-4" />{" "}
-                      {withdrawLoading ? "Retrait en cours…" : "Retirer en €"}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-gold inline-flex disabled:cursor-not-allowed disabled:opacity-50"
-                      onClick={openStripeOnboarding}
-                      disabled={connectLoading || withdrawLoading}
-                    >
-                      <LinkIcon className="h-4 w-4" />{" "}
-                      {connectLoading
-                        ? "Connexion Stripe…"
-                        : connectReady
-                          ? "Ouvrir Stripe Express"
-                          : "Configurer mes retraits"}
-                    </button>
-                  </div>
-                </>
-              );
-            })()}
-          </div>
-        </div>
-      </section>
-
-      <section className="mt-12">
-        <SectionHeading
-          align="left"
-          eyebrow="Activité"
-          title="Ton activité"
-        />
-        <div className="mt-6 grid gap-4 md:grid-cols-3">
-          <div className="card-royal p-5">
-            <Heart className="h-5 w-5 text-gold-300" />
-            <p className="mt-3 font-display text-2xl text-gold-200">
-              {myLikes.length}
-            </p>
-            <p className="font-regal text-[10px] tracking-[0.22em] text-ivory/55">
-              chroniques aimées
-            </p>
-          </div>
-          <div className="card-royal p-5">
-            <ShoppingBag className="h-5 w-5 text-gold-300" />
-            <p className="mt-3 font-display text-2xl text-gold-200">
-              {myOrders.length}
-            </p>
-            <p className="font-regal text-[10px] tracking-[0.22em] text-ivory/55">
-              commandes royales
-            </p>
-          </div>
-          <div className="card-royal p-5">
-            <Crown className="h-5 w-5 text-gold-300" />
-            <p className="mt-3 font-display text-2xl text-gold-200">
-              {myComments.length}
-            </p>
-            <p className="font-regal text-[10px] tracking-[0.22em] text-ivory/55">
-              paroles au grimoire
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {myOrders.length > 0 && (
-        <section className="mt-12">
-          <SectionHeading
-            align="left"
-            eyebrow="Commandes"
-            title="Vos trésors scellés"
-          />
-          <ul className="mt-6 space-y-3">
-            {myOrders.map((o) => (
-              <li key={o.id} className="card-royal p-4">
-                <div className="flex items-center justify-between">
-                  <p className="font-display text-sm text-gold-200">
-                    Ordre #{o.id.slice(-6)}
-                  </p>
-                  <p className="font-display text-lg text-gold-200">
-                    {formatPrice(o.total)}
-                  </p>
-                </div>
-                <p className="mt-1 font-regal text-[10px] tracking-[0.22em] text-ivory/55">
-                  {formatDate(o.createdAt)} · {o.status}
-                </p>
-                <ul className="mt-3 space-y-1 text-sm text-ivory/75">
-                  {o.items.map((it) => {
-                    const p = products.find((x) => x.id === it.productId);
-                    return (
-                      <li key={it.productId}>
-                        ✦ {p?.name ?? "Item"} × {it.quantity}
-                      </li>
-                    );
-                  })}
-                </ul>
+                  )}
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      openThumbnailEditor(post.id);
+                    }}
+                    className="absolute right-2 top-2 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full border border-gold-300/35 bg-night-950/70 text-gold-50 shadow-[0_10px_24px_rgba(0,0,0,0.24)] backdrop-blur-md transition hover:border-gold-200/70 hover:bg-gold-500/18 hover:text-white"
+                    aria-label="Modifier la miniature"
+                  >
+                    <MoreVertical className="h-4 w-4" />
+                  </button>
+                </article>
               </li>
-            ))}
-          </ul>
-        </section>
+            );
+          })}
+          {myPosts.length === 0 && (
+            <li className="col-span-full rounded-[20px] border border-dashed border-white/10 px-4 py-10 text-center text-sm text-ivory/50">
+              Crée ta première publication.
+            </li>
+          )}
+        </ul>
+      </section>
+
+      {thumbnailEditorPostId && (
+        <div className="fixed inset-0 z-[260] overflow-y-auto bg-night-950/85 backdrop-blur-md">
+          <div className="min-h-full px-4 py-4 sm:px-6 sm:py-8">
+            <div className="mx-auto flex min-h-[calc(100dvh-2rem)] w-full max-w-lg flex-col rounded-[28px] border border-white/10 bg-night-950 p-5 shadow-[0_30px_90px_rgba(0,0,0,0.55)]">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.22em] text-gold-300/80">
+                    Miniature
+                  </p>
+                  <h3 className="mt-1 font-display text-2xl text-gold-100">
+                    Modifier la miniature
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setThumbnailEditorPostId(null);
+                    setThumbnailUrlDraft("");
+                    setThumbnailFile(null);
+                  }}
+                  className="rounded-full border border-white/10 p-2 text-ivory/60"
+                  aria-label="Fermer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <p className="mt-3 text-sm leading-6 text-ivory/70">
+                Choisis une image de couverture pour ce post. Elle apparaîtra dans la grille du profil.
+              </p>
+
+              <div className="mt-4 space-y-3">
+                <label className="block">
+                  <span className="text-[10px] uppercase tracking-[0.22em] text-gold-300/80">
+                    Importer une image depuis ton téléphone
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    onChange={(event) => setThumbnailFile(event.target.files?.[0] ?? null)}
+                    className="glass-input mt-2 w-full"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-[10px] uppercase tracking-[0.22em] text-gold-300/80">
+                    Ou coller une URL d’image
+                  </span>
+                  <input
+                    value={thumbnailUrlDraft}
+                    onChange={(event) => setThumbnailUrlDraft(event.target.value)}
+                    placeholder="https://…"
+                    className="glass-input mt-2 w-full"
+                  />
+                </label>
+              </div>
+
+              <div className="mt-4 flex-1 rounded-[22px] border border-white/10 bg-night-900/65 p-3">
+                <p className="mb-2 text-[10px] uppercase tracking-[0.22em] text-ivory/55">
+                  Aperçu
+                </p>
+                <div className="relative aspect-[4/5] overflow-hidden rounded-[18px] bg-night-800">
+                  {thumbnailFile ? (
+                    <img
+                      src={URL.createObjectURL(thumbnailFile)}
+                      alt="Aperçu miniature"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : thumbnailUrlDraft.trim() ? (
+                    <img
+                      src={thumbnailUrlDraft.trim()}
+                      alt="Aperçu miniature"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(251,191,36,0.16),transparent_35%),linear-gradient(180deg,#18111f,#09060d)] px-4 text-center">
+                      <p className="text-sm leading-6 text-ivory/70">
+                        La miniature actuelle sera remplacée ici.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-5 flex flex-col gap-3 border-t border-white/8 pt-4 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setThumbnailEditorPostId(null);
+                    setThumbnailUrlDraft("");
+                    setThumbnailFile(null);
+                  }}
+                  className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/10 px-4 py-2 text-sm text-ivory/75"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void saveThumbnail()}
+                  disabled={thumbnailSaving}
+                  className="inline-flex min-h-11 items-center justify-center rounded-full bg-gold-500/20 px-4 py-2 text-sm font-semibold text-gold-100 disabled:opacity-60"
+                >
+                  {thumbnailSaving ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Sauvegarde…
+                    </>
+                  ) : (
+                    <>
+                      <Check className="mr-2 h-4 w-4" />
+                      Enregistrer
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
-    </div>
+
+      <section id="saved-posts" className="mt-10">
+        <SectionHeading
+          align="left"
+          eyebrow="Privé"
+          title="Posts sauvegardés"
+          subtitle="Les publications que tu as enregistrées dans Social."
+        />
+        <ul className="mt-6 grid grid-cols-3 gap-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
+          {savedPosts.map((post: CommunityPost) => {
+            const likes = Object.values(post.reactions ?? {}).reduce(
+              (sum, usersList) => sum + usersList.length,
+              0,
+            );
+            const comments = post.comments.length;
+            const poster = post.videoThumbnailUrl || post.imageUrl || "";
+            const isVideo = Boolean(post.videoUrl);
+            return (
+            <li
+              key={post.id}
+              className="group relative overflow-hidden rounded-[20px] border border-white/8 bg-night-950/70 shadow-[0_14px_40px_rgba(0,0,0,0.22)]"
+            >
+              <Link
+                to={`/communaute#post-${post.id}`}
+                className="absolute inset-0 z-10"
+                aria-label={`Ouvrir le post sauvegardé de ${post.authorName}`}
+              />
+              <article className="relative flex aspect-[4/5] flex-col overflow-hidden">
+                <div className="absolute inset-0 bg-night-950">
+                  {poster ? (
+                    <img
+                      src={poster}
+                      alt={post.content}
+                      className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+                    />
+                  ) : isVideo ? (
+                    <video
+                      src={post.videoUrl}
+                      className="h-full w-full object-cover"
+                      muted
+                      playsInline
+                      loop
+                      autoPlay
+                      preload="metadata"
+                    />
+                  ) : (
+                    <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(251,191,36,0.16),transparent_35%),linear-gradient(180deg,#18111f,#09060d)] px-3 text-center">
+                      <p className="line-clamp-8 whitespace-pre-wrap text-[11px] leading-5 text-ivory/88">
+                        {post.content}
+                      </p>
+                    </div>
+                  )}
+                </div>
+                <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(2,6,23,0.08),rgba(2,6,23,0.08)_35%,rgba(2,6,23,0.88)_100%)]" />
+                {isVideo && (
+                  <div className="absolute left-2 top-2 z-20 inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/12 bg-night-950/70 text-white/85 backdrop-blur-md">
+                    <Sparkles className="h-3.5 w-3.5 fill-current" />
+                  </div>
+                )}
+                <div className="absolute inset-x-0 bottom-0 z-20 p-2.5">
+                  <div className="rounded-[16px] border border-white/10 bg-night-950/72 p-2 backdrop-blur-md">
+                    <p className="line-clamp-2 text-[11px] leading-4 text-ivory/88">
+                      {post.authorName}
+                    </p>
+                    <p className="mt-1 line-clamp-2 text-[10px] leading-4 text-ivory/58">
+                      {post.content}
+                    </p>
+                    <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-ivory/55">
+                      <span>{likes} likes</span>
+                      <span>{comments} comm.</span>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            </li>
+            );
+          })}
+          {savedPosts.length === 0 && (
+            <li className="col-span-full rounded-[20px] border border-dashed border-white/10 px-4 py-10 text-center text-sm text-ivory/50">
+              Aucun post enregistré pour le moment.
+            </li>
+          )}
+        </ul>
+      </section>
+      </div>
   );
 }

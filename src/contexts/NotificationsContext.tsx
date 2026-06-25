@@ -777,9 +777,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     pushNotification({
       id,
       kind: "official_event",
-      title: "Concours de dessin lancé !",
+      title: "Concours de dessin terminé",
       body:
-        "Crée un post avec ton dessin et ajoute #concoursdessin pour participer. Le post avec le plus de likes dans 24h00 gagne 1000 lueurs et 6 nourritures familier.",
+        "Le concours dessin est terminé. Le Top 1 a reçu 1000 lueurs et 6 nourritures pour son familier.",
       url: drawingContestUrl(),
       entityType: "official_event",
       entityId: COMMUNITY_DRAWING_CONTEST.id,
