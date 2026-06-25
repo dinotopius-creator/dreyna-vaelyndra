@@ -21,13 +21,11 @@ import {
 import clsx from "clsx";
 import { isFlatImageUrl } from "../lib/dicebear";
 import { CATALOG_BY_ID, type SceneId } from "../lib/avatarShop";
-import { decodeAvatar3DUrl, isAvatar3DUrl } from "../lib/avatar3d";
 import {
-  Avatar3DModel,
-  type AccessoryTheme,
-  type OutfitTheme,
-} from "./Avatar3DModel";
-import { VRMViewer } from "./VRMViewer";
+  buildAvatar3DPosterDataUrl,
+  decodeAvatar3DUrl,
+  isAvatar3DUrl,
+} from "../lib/avatar3d";
 
 /**
  * `<model-viewer>` est un web component chargé dynamiquement via CDN : on
@@ -250,14 +248,11 @@ export function AvatarViewer({
         baseModel: "humanoid-v4" as const,
       }
     : null;
-  const outfitTheme =
-    equippedOutfit3DId && CATALOG_BY_ID[equippedOutfit3DId]?.wearableThemeId
-      ? (CATALOG_BY_ID[equippedOutfit3DId]!.wearableThemeId as OutfitTheme)
-      : "base";
-  const accessoryTheme =
-    equippedAccessory3DId && CATALOG_BY_ID[equippedAccessory3DId]?.wearableThemeId
-      ? (CATALOG_BY_ID[equippedAccessory3DId]!.wearableThemeId as AccessoryTheme)
-      : null;
+  void equippedOutfit3DId;
+  void equippedAccessory3DId;
+  void autoRotate;
+  void framing;
+  void interactive;
   if (renderConfig) {
     return (
       <div
@@ -268,18 +263,16 @@ export function AvatarViewer({
         )}
       >
         {sceneId && <SceneBackground sceneId={sceneId} />}
-        <Avatar3DModel
-          config={renderConfig}
-          size={size}
-          framing={framing}
-          autoRotate={autoRotate}
-          interactive={interactive}
-          outfit={outfitTheme}
-          accessory={accessoryTheme}
+        <img
+          src={buildAvatar3DPosterDataUrl(renderConfig)}
+          alt={alt}
           className={clsx(
-            sceneId &&
-              "absolute inset-0 h-full w-full rounded-2xl ring-0 shadow-none",
+            "object-cover",
+            sceneId
+              ? "absolute left-1/2 top-1/2 h-[82%] w-[82%] -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-gold-400/60 shadow-[0_0_18px_rgba(250,204,21,0.35)]"
+              : "relative h-full w-full",
           )}
+          draggable={false}
         />
         {equippedFrameId && <FrameOverlay itemId={equippedFrameId} />}
       </div>
