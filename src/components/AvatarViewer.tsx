@@ -278,7 +278,7 @@ export function AvatarViewer({
           accessory={accessoryTheme}
           className={clsx(
             sceneId &&
-              "absolute left-1/2 top-1/2 h-[82%] w-[82%] -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-gold-400/60 shadow-[0_0_18px_rgba(250,204,21,0.35)]",
+              "absolute inset-0 h-full w-full rounded-2xl ring-0 shadow-none",
           )}
         />
         {equippedFrameId && <FrameOverlay itemId={equippedFrameId} />}
@@ -311,12 +311,7 @@ export function AvatarViewer({
           alt={alt}
           className={clsx(
             "object-cover",
-            sceneId
-              ? // En présence d'une scène, l'avatar devient un médaillon
-                // centré et arrondi : la scène joue le rôle de halo illustré
-                // tout autour. Un ring doré souligne le médaillon.
-                "absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[82%] w-[82%] rounded-full ring-2 ring-gold-400/60 shadow-[0_0_18px_rgba(250,204,21,0.35)]"
-              : "relative h-full w-full",
+            sceneId ? "relative h-full w-full rounded-2xl" : "relative h-full w-full",
           )}
           draggable={false}
         />

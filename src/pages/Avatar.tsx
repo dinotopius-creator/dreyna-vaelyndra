@@ -158,12 +158,15 @@ export function Avatar() {
               <p className="text-[10px] uppercase tracking-[0.24em] text-gold-300">
                 Aperçu principal
               </p>
-              <p className="mt-1 text-sm text-ivory/70">
-                L’avatar principal est affiché ici. Il remplace l’ancien rendu moche
-                et sert de référence unique pour le profil, les posts, les commentaires
-                et les lives.
-              </p>
-            </div>
+            <p className="mt-1 text-sm text-ivory/70">
+              L’avatar principal est affiché ici. Il remplace l’ancien rendu moche
+              et sert de référence unique pour le profil, les posts, les commentaires
+              et les lives.
+            </p>
+            <p className="mt-3 rounded-2xl border border-amber-300/20 bg-amber-500/10 px-3 py-2 text-[11px] leading-5 text-amber-100/85">
+              {PREMIUM_AVATAR_PACK.missingModelNote}
+            </p>
+          </div>
           </div>
 
           <div className="grid w-full max-w-md grid-cols-2 gap-3 sm:grid-cols-3 lg:w-[320px] lg:grid-cols-2">
