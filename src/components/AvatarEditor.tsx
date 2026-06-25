@@ -9,7 +9,6 @@ import {
   AVATAR_3D_SKIN_TONES,
   buildAvatar3DPosterDataUrl,
   buildAvatar3DUrl,
-  decodeAvatar3DUrl,
   DEFAULT_AVATAR_3D_CONFIG,
   type Avatar3DConfig,
   type Avatar3DBodyType,
@@ -18,7 +17,6 @@ import {
 } from "../lib/avatar3d";
 
 interface Props {
-  initialAvatarUrl?: string | null;
   defaultSeed: string;
   onExport: (input: { avatarUrl: string; avatarImageUrl: string }) => void;
   onClose?: () => void;
@@ -79,7 +77,6 @@ function ColorSwatch({
 }
 
 export function AvatarEditor({
-  initialAvatarUrl,
   defaultSeed,
   onExport,
   onClose,
@@ -89,22 +86,18 @@ export function AvatarEditor({
   equippedOutfit3DId = null,
   equippedAccessory3DId = null,
 }: Props) {
-  const [config, setConfig] = useState<Avatar3DConfig>(() => {
-    const parsed = decodeAvatar3DUrl(initialAvatarUrl);
-    if (parsed) return parsed;
-    return {
-      ...DEFAULT_AVATAR_3D_CONFIG,
-      bodyType: defaultSeed.length % 2 === 0 ? "femme" : "homme",
-      hairStyle:
-        defaultSeed.length % 3 === 0
-          ? "braids"
-          : defaultSeed.length % 3 === 1
-            ? "wave"
-            : defaultSeed.length % 5 === 0
-              ? "ponytail"
-              : "bob",
-    };
-  });
+  const [config, setConfig] = useState<Avatar3DConfig>(() => ({
+    ...DEFAULT_AVATAR_3D_CONFIG,
+    bodyType: defaultSeed.length % 2 === 0 ? "femme" : "homme",
+    hairStyle:
+      defaultSeed.length % 3 === 0
+        ? "braids"
+        : defaultSeed.length % 3 === 1
+          ? "wave"
+          : defaultSeed.length % 5 === 0
+            ? "ponytail"
+            : "bob",
+  }));
 
   function update<K extends keyof Avatar3DConfig>(
     key: K,

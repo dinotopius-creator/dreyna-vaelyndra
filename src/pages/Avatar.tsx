@@ -265,7 +265,6 @@ export function Avatar() {
         <div className="relative">
           {editing ? (
             <AvatarEditor
-              initialAvatarUrl={null}
               defaultSeed={user.username}
               equippedFrameId={profile?.equipped?.[EQUIP_SLOT.Frame] ?? null}
               equippedSceneId={profile?.equipped?.[EQUIP_SLOT.Scene] ?? null}
