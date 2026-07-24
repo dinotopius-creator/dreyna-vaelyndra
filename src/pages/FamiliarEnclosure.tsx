@@ -12,7 +12,7 @@ import {
   Timer,
   Utensils,
 } from "lucide-react";
-import { FamiliarPortrait } from "../components/FamiliarPortrait";
+import { Familiar3DStage } from "../components/Familiar3DStage";
 import { useAuth } from "../contexts/AuthContext";
 import { useProfile } from "../contexts/ProfileContext";
 import { useToast } from "../contexts/ToastContext";
@@ -401,13 +401,9 @@ export function FamiliarEnclosure() {
                     animate={{ y: [0, -18, 0, 16, 0], x: [0, -8, 0, 8, 0] }}
                     transition={{ duration: 7.2, repeat: Infinity, ease: "easeInOut" }}
                   >
-                    <FamiliarPortrait
-                      familiar={active}
-                      size="lg"
-                      animated
-                      showFrame
-                      className="scale-[0.98] sm:scale-[1.03]"
-                    />
+                    <div className="h-full w-full overflow-hidden rounded-[28px]">
+                      <Familiar3DStage familiar={active} />
+                    </div>
                   </motion.div>
                   <FeedHeartBurst burstId={feedBurstId} />
                 </div>

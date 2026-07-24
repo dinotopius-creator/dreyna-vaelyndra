@@ -17,6 +17,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ArrowLeftRight, Check, Loader2, Lock, Pencil, ShoppingBag, Sparkles } from "lucide-react";
+import { Familiar3DStage } from "../components/Familiar3DStage";
 import { FamiliarPortrait } from "../components/FamiliarPortrait";
 import { useAuth } from "../contexts/AuthContext";
 import { useProfile } from "../contexts/ProfileContext";
@@ -258,7 +259,9 @@ export function MyFamiliar() {
           aria-hidden
         />
         <div className="relative flex flex-col items-center gap-3 sm:flex-row sm:items-start sm:gap-6">
-          <FamiliarPortrait familiar={active} size="lg" />
+          <div className="relative h-64 w-64 overflow-hidden rounded-[28px] sm:h-72 sm:w-72">
+            <Familiar3DStage familiar={active} />
+          </div>
 
           <div className="flex-1 text-center sm:text-left">
             <div className="flex flex-col items-center gap-1 sm:items-start">
@@ -391,7 +394,9 @@ export function MyFamiliar() {
                   Aperçu direct
                 </p>
                 <div className="mt-4 flex justify-center">
-                  <FamiliarPortrait familiar={active} size="lg" />
+                  <div className="relative h-64 w-64 overflow-hidden rounded-[28px] sm:h-72 sm:w-72">
+            <Familiar3DStage familiar={active} />
+          </div>
                 </div>
                 <p className="mt-3 text-sm font-semibold text-ivory">
                   {active.nickname || active.name}
