@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
+import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
 import type { OwnedFamiliar } from "../lib/familiarsApi";
 
 interface Familiar3DStageProps {
@@ -51,6 +52,10 @@ function colorForFamiliar(familiar: OwnedFamiliar) {
 
 function getSpeciesProfile(familiar: OwnedFamiliar): FamiliarSpeciesProfile {
   return FAMILIAR_SPECIES[familiar.familiarId] ?? DEFAULT_SPECIES;
+}
+
+function shouldUsePinkCatModel(familiar: OwnedFamiliar) {
+  return familiar.familiarId === "chat-astral";
 }
 
 function createLeg(material: THREE.Material) {
@@ -145,6 +150,7 @@ function roundRect(
 export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const [ready, setReady] = useState(false);
+  const [modelError, setModelError] = useState<string | null>(null);
 
   const familiarColor = useMemo(() => colorForFamiliar(familiar), [familiar]);
   const species = useMemo(() => getSpeciesProfile(familiar), [familiar]);
@@ -153,6 +159,7 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
     const host = hostRef.current;
     if (!host) return;
     const hostElement = host;
+    const usePinkCatModel = shouldUsePinkCatModel(familiar);
 
     const scene = new THREE.Scene();
     scene.fog = new THREE.Fog(0x07111f, 5.5, 18);
@@ -213,6 +220,13 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
       maxZ: 0.72,
     };
 
+    const fallbackCreature = new THREE.Group();
+    root.add(fallbackCreature);
+    const modelHolder = new THREE.Group();
+    modelHolder.visible = false;
+    modelHolder.position.set(0, -0.48, 0);
+    root.add(modelHolder);
+
     const shadow = new THREE.Mesh(
       new THREE.CircleGeometry(0.62, 24),
       new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.25 }),
@@ -246,24 +260,24 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
     body.scale.set(...species.bodyScale);
     body.position.set(0, -0.18, 0);
     body.castShadow = true;
-    root.add(body);
+    fallbackCreature.add(body);
 
     const chest = new THREE.Mesh(new THREE.SphereGeometry(0.2, 18, 12), bellyMaterial);
     chest.scale.set(1.12, 0.8, 0.75);
     chest.position.set(0, -0.16, 0.22);
     chest.castShadow = true;
-    root.add(chest);
+    fallbackCreature.add(chest);
 
     const head = new THREE.Mesh(new THREE.SphereGeometry(0.29, 22, 18), bodyMaterial);
     head.scale.set(...species.headScale);
     head.position.set(0, 0.3, 0.13);
     head.castShadow = true;
-    root.add(head);
+    fallbackCreature.add(head);
 
     const muzzle = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 10), bellyMaterial);
     muzzle.scale.set(1.35, 0.84, 1.0);
     muzzle.position.set(0, 0.22, 0.36);
-    root.add(muzzle);
+    fallbackCreature.add(muzzle);
 
     const earLeft = new THREE.Mesh(
       new THREE.ConeGeometry(species.earScale[0], species.earScale[1], 8),
@@ -272,7 +286,7 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
     earLeft.rotation.z = -0.35;
     earLeft.position.set(-species.earOffsetX, species.earOffsetY, 0.03);
     earLeft.castShadow = true;
-    root.add(earLeft);
+    fallbackCreature.add(earLeft);
 
     const earRight = new THREE.Mesh(
       new THREE.ConeGeometry(species.earScale[0], species.earScale[1], 8),
@@ -281,22 +295,22 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
     earRight.rotation.z = 0.35;
     earRight.position.set(species.earOffsetX, species.earOffsetY, 0.03);
     earRight.castShadow = true;
-    root.add(earRight);
+    fallbackCreature.add(earRight);
 
     const eyeLeft = new THREE.Mesh(new THREE.SphereGeometry(0.03, 10, 10), eyeMaterial);
     eyeLeft.position.set(-0.07, 0.34, 0.38);
-    root.add(eyeLeft);
+    fallbackCreature.add(eyeLeft);
     const eyeRight = eyeLeft.clone();
     eyeRight.position.x = 0.07;
-    root.add(eyeRight);
+    fallbackCreature.add(eyeRight);
 
     const blushLeft = new THREE.Mesh(new THREE.SphereGeometry(0.032, 10, 10), blushMaterial);
     blushLeft.position.set(-0.12, 0.27, 0.33);
     blushLeft.scale.set(1.4, 0.62, 0.8);
-    root.add(blushLeft);
+    fallbackCreature.add(blushLeft);
     const blushRight = blushLeft.clone();
     blushRight.position.x = 0.12;
-    root.add(blushRight);
+    fallbackCreature.add(blushRight);
 
     const mouth = new THREE.Mesh(
       new THREE.TorusGeometry(0.038, 0.012, 6, 10, Math.PI),
@@ -305,19 +319,19 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
     mouth.rotation.x = Math.PI / 2;
     mouth.rotation.z = Math.PI;
     mouth.position.set(0, 0.2, 0.38);
-    root.add(mouth);
+    fallbackCreature.add(mouth);
 
     const leftLeg = createLeg(bodyMaterial);
     leftLeg.position.set(-0.15, -0.5, 0.08);
-    root.add(leftLeg);
+    fallbackCreature.add(leftLeg);
     const rightLeg = createLeg(bodyMaterial);
     rightLeg.position.set(0.15, -0.5, -0.02);
-    root.add(rightLeg);
+    fallbackCreature.add(rightLeg);
 
     const tail = createTail(bodyMaterial);
     tail.position.set(...species.tailOffset);
     tail.scale.set(1, 1, species.tailLength / 0.12);
-    root.add(tail);
+    fallbackCreature.add(tail);
 
     const collar = new THREE.Mesh(
       new THREE.TorusGeometry(0.16, 0.026, 8, 16),
@@ -330,11 +344,60 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
     );
     collar.rotation.x = Math.PI / 2;
     collar.position.set(0, 0.03, 0.28);
-    root.add(collar);
+    fallbackCreature.add(collar);
 
     const nameTag = createNameTag(familiar.nickname || familiar.name, familiarColor.getStyle());
     if (nameTag) {
       root.add(nameTag);
+    }
+
+    if (usePinkCatModel) {
+      const loader = new FBXLoader();
+      loader.load(
+        "/assets/familiar-pinkcat/PinkCat.fbx",
+        (fbx) => {
+          const box = new THREE.Box3().setFromObject(fbx);
+          const size = new THREE.Vector3();
+          const center = new THREE.Vector3();
+          box.getSize(size);
+          box.getCenter(center);
+
+          const maxSize = Math.max(size.x, size.y, size.z) || 1;
+          const scale = 1.45 / maxSize;
+
+          fbx.traverse((obj) => {
+            if (obj instanceof THREE.Mesh) {
+              obj.castShadow = true;
+              obj.receiveShadow = true;
+              const material = obj.material;
+              if (Array.isArray(material)) {
+                material.forEach((mat) => {
+                  if (mat instanceof THREE.Material) {
+                    mat.side = THREE.DoubleSide;
+                  }
+                });
+              } else if (material instanceof THREE.Material) {
+                material.side = THREE.DoubleSide;
+              }
+            }
+          });
+
+          fbx.scale.setScalar(scale);
+          fbx.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
+          fbx.rotation.y = Math.PI;
+          modelHolder.add(fbx);
+          modelHolder.visible = true;
+          fallbackCreature.visible = false;
+          setModelError(null);
+        },
+        undefined,
+        (err) => {
+          console.error("Familiar3DStage FBX load error", err);
+          setModelError("Le modele 3D du familier n'a pas pu etre charge.");
+          modelHolder.visible = false;
+          fallbackCreature.visible = true;
+        },
+      );
     }
 
     scene.add(root);
@@ -450,6 +513,9 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
       head.rotation.x = Math.sin(roamTimer * 1.8) * 0.04 + (isWalking ? 0.02 : 0);
       head.rotation.y = Math.sin(roamTimer * 1.6) * 0.05;
       body.rotation.z = Math.sin(roamTimer * 2.4) * 0.012;
+      modelHolder.rotation.y = Math.PI + Math.sin(roamTimer * 0.65) * 0.12;
+      modelHolder.position.y = -0.48 + Math.sin(roamTimer * species.bounce * 0.8) * 0.02;
+      modelHolder.position.x = Math.sin(roamTimer * 0.45) * 0.02;
       if (nameTag) {
         nameTag.position.set(0, 1.02 + Math.sin(roamTimer * 2.2) * 0.04, 0);
       }
@@ -493,6 +559,11 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
       {!ready && (
         <div className="absolute inset-0 flex items-center justify-center text-xs uppercase tracking-[0.2em] text-ivory/50">
           Chargement du familier 3D…
+        </div>
+      )}
+      {modelError && (
+        <div className="pointer-events-none absolute inset-x-4 bottom-4 rounded-2xl border border-amber-300/20 bg-night-950/80 px-3 py-2 text-[11px] text-amber-100 backdrop-blur">
+          {modelError}
         </div>
       )}
     </div>
