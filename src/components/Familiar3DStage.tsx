@@ -422,7 +422,7 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
           box.getCenter(center);
 
           const maxSize = Math.max(size.x, size.y, size.z) || 1;
-          const scale = 1.45 / maxSize;
+          const scale = 1.95 / maxSize;
 
           fbx.traverse((obj) => {
             if (obj instanceof THREE.Mesh) {
@@ -433,7 +433,7 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
           });
 
           fbx.scale.setScalar(scale);
-          fbx.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
+          fbx.position.set(-center.x * scale, (-box.min.y * scale) + 0.12, -center.z * scale);
           fbx.rotation.y = Math.PI;
           modelHolder.add(fbx);
           modelHolder.visible = true;
@@ -564,6 +564,7 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
       head.rotation.y = Math.sin(roamTimer * 1.6) * 0.05;
       body.rotation.z = Math.sin(roamTimer * 2.4) * 0.012;
       modelHolder.rotation.y = Math.PI + Math.sin(roamTimer * 0.65) * 0.12;
+      modelHolder.scale.setScalar(1.08);
       modelHolder.position.y = -0.48 + Math.sin(roamTimer * species.bounce * 0.8) * 0.02;
       modelHolder.position.x = Math.sin(roamTimer * 0.45) * 0.02;
       if (nameTag) {
