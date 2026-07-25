@@ -75,45 +75,51 @@ function createPinkCatTextureSet() {
   return { color, metal, normal, eye, mouth };
 }
 
-function buildPinkCatMaterial(
-  mesh: THREE.Mesh,
-  textures: ReturnType<typeof createPinkCatTextureSet>,
-) {
-  const materialName = Array.isArray(mesh.material)
-    ? mesh.material.map((entry) => entry?.name ?? "").join(" ")
-    : mesh.material?.name ?? "";
-  const name = `${mesh.name || ""} ${(mesh.parent?.name || "")} ${materialName}`.toLowerCase();
+function buildPinkCatMaterial(textureName: string | undefined, textures: ReturnType<typeof createPinkCatTextureSet>) {
+  const name = (textureName ?? "").toLowerCase();
   const isEye = name.includes("eye");
   const isMouth = name.includes("mouth");
   const isHair = name.includes("hair") || name.includes("fur");
+
   const material = new THREE.MeshStandardMaterial({
-    color: 0xffffff,
-    roughness: isEye ? 0.2 : 0.78,
-    metalness: isEye ? 0.0 : 0.06,
-    emissive: isEye ? new THREE.Color(0x0a1020) : new THREE.Color(0x000000),
-    emissiveIntensity: isEye ? 0.04 : 0.0,
+    color: isEye ? 0xfef3c7 : 0xff8fb6,
+    roughness: isEye ? 0.22 : 0.68,
+    metalness: isEye ? 0.0 : 0.04,
+    emissive: isEye ? new THREE.Color(0x0a1020) : new THREE.Color(0x2b1020),
+    emissiveIntensity: isEye ? 0.04 : 0.08,
+    side: THREE.DoubleSide,
   });
 
   if (isEye) {
     material.map = textures.eye;
+    material.color = new THREE.Color(0xfef3c7);
     material.roughness = 0.35;
     material.metalness = 0;
   } else if (isMouth) {
     material.map = textures.mouth;
-    material.roughness = 0.9;
+    material.color = new THREE.Color(0xffd0dc);
+    material.roughness = 0.88;
     material.metalness = 0;
   } else {
     material.map = textures.color;
+    material.color = new THREE.Color(0xff94be);
+    material.emissiveMap = textures.color;
     material.normalMap = textures.normal;
     material.metalnessMap = textures.metal;
     material.roughnessMap = textures.metal;
     if (isHair) {
-      material.roughness = 0.68;
+      material.roughness = 0.72;
     }
   }
 
+  material.envMapIntensity = isEye ? 0.28 : 0.95;
   material.needsUpdate = true;
   return material;
+}
+
+function buildPinkCatMaterials(mesh: THREE.Mesh, textures: ReturnType<typeof createPinkCatTextureSet>) {
+  const slots = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+  return slots.map((slot) => buildPinkCatMaterial(slot?.name, textures));
 }
 
 function createLeg(material: THREE.Material) {
@@ -428,7 +434,7 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
             if (obj instanceof THREE.Mesh) {
               obj.castShadow = true;
               obj.receiveShadow = true;
-              obj.material = buildPinkCatMaterial(obj, textures);
+              obj.material = buildPinkCatMaterials(obj, textures);
             }
           });
 
