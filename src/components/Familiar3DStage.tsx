@@ -58,6 +58,64 @@ function shouldUsePinkCatModel(familiar: OwnedFamiliar) {
   return familiar.familiarId === "chat-astral";
 }
 
+function createPinkCatTextureSet() {
+  const loader = new THREE.TextureLoader();
+  const color = loader.load("/assets/familiar-pinkcat/T_PinkCat_Body_B.png");
+  const metal = loader.load("/assets/familiar-pinkcat/T_PinkCat_Body_M.png");
+  const normal = loader.load("/assets/familiar-pinkcat/T_PinkCat_Body_N.png");
+  const eye = loader.load("/assets/familiar-pinkcat/T_PinkCat_Eye_B.png");
+  const mouth = loader.load("/assets/familiar-pinkcat/T_PinkCat_Mouth_B.png");
+
+  color.colorSpace = THREE.SRGBColorSpace;
+  metal.colorSpace = THREE.SRGBColorSpace;
+  eye.colorSpace = THREE.SRGBColorSpace;
+  mouth.colorSpace = THREE.SRGBColorSpace;
+  normal.colorSpace = THREE.NoColorSpace;
+
+  return { color, metal, normal, eye, mouth };
+}
+
+function buildPinkCatMaterial(
+  mesh: THREE.Mesh,
+  textures: ReturnType<typeof createPinkCatTextureSet>,
+) {
+  const materialName = Array.isArray(mesh.material)
+    ? mesh.material.map((entry) => entry?.name ?? "").join(" ")
+    : mesh.material?.name ?? "";
+  const name = `${mesh.name || ""} ${(mesh.parent?.name || "")} ${materialName}`.toLowerCase();
+  const isEye = name.includes("eye");
+  const isMouth = name.includes("mouth");
+  const isHair = name.includes("hair") || name.includes("fur");
+  const material = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    roughness: isEye ? 0.2 : 0.78,
+    metalness: isEye ? 0.0 : 0.06,
+    emissive: isEye ? new THREE.Color(0x0a1020) : new THREE.Color(0x000000),
+    emissiveIntensity: isEye ? 0.04 : 0.0,
+  });
+
+  if (isEye) {
+    material.map = textures.eye;
+    material.roughness = 0.35;
+    material.metalness = 0;
+  } else if (isMouth) {
+    material.map = textures.mouth;
+    material.roughness = 0.9;
+    material.metalness = 0;
+  } else {
+    material.map = textures.color;
+    material.normalMap = textures.normal;
+    material.metalnessMap = textures.metal;
+    material.roughnessMap = textures.metal;
+    if (isHair) {
+      material.roughness = 0.68;
+    }
+  }
+
+  material.needsUpdate = true;
+  return material;
+}
+
 function createLeg(material: THREE.Material) {
   const leg = new THREE.Group();
   const thigh = new THREE.Mesh(new THREE.CapsuleGeometry(0.055, 0.2, 6, 10), material);
@@ -352,6 +410,7 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
     }
 
     if (usePinkCatModel) {
+      const textures = createPinkCatTextureSet();
       const loader = new FBXLoader();
       loader.load(
         "/assets/familiar-pinkcat/PinkCat.fbx",
@@ -369,16 +428,7 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
             if (obj instanceof THREE.Mesh) {
               obj.castShadow = true;
               obj.receiveShadow = true;
-              const material = obj.material;
-              if (Array.isArray(material)) {
-                material.forEach((mat) => {
-                  if (mat instanceof THREE.Material) {
-                    mat.side = THREE.DoubleSide;
-                  }
-                });
-              } else if (material instanceof THREE.Material) {
-                material.side = THREE.DoubleSide;
-              }
+              obj.material = buildPinkCatMaterial(obj, textures);
             }
           });
 
@@ -569,3 +619,4 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
     </div>
   );
 }
+
