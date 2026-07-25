@@ -6,6 +6,7 @@ import type { OwnedFamiliar } from "../lib/familiarsApi";
 interface Familiar3DStageProps {
   familiar: OwnedFamiliar;
   onTap?: () => void;
+  variant?: "default" | "enclosure";
 }
 
 type FamiliarSpeciesProfile = {
@@ -211,7 +212,7 @@ function roundRect(
   ctx.closePath();
 }
 
-export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
+export function Familiar3DStage({ familiar, onTap, variant = "default" }: Familiar3DStageProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const [ready, setReady] = useState(false);
   const [modelError, setModelError] = useState<string | null>(null);
@@ -428,7 +429,7 @@ export function Familiar3DStage({ familiar, onTap }: Familiar3DStageProps) {
           box.getCenter(center);
 
           const maxSize = Math.max(size.x, size.y, size.z) || 1;
-          const scale = 1.95 / maxSize;
+          const scale = (variant === "enclosure" ? 2.25 : 1.95) / maxSize;
 
           fbx.traverse((obj) => {
             if (obj instanceof THREE.Mesh) {

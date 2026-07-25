@@ -402,7 +402,7 @@ export function FamiliarEnclosure() {
                     transition={{ duration: 7.2, repeat: Infinity, ease: "easeInOut" }}
                   >
                     <div className="h-full w-full overflow-hidden rounded-[28px]">
-                      <Familiar3DStage familiar={active} />
+                      <Familiar3DStage familiar={active} variant="enclosure" />
                     </div>
                   </motion.div>
                   <FeedHeartBurst burstId={feedBurstId} />
