@@ -260,7 +260,7 @@ function describeCameraAccessError(
       err.name === "ConstraintNotSatisfiedError"
     ) {
       return fallback === "switch"
-        ? "Cette caméra ne peut pas être ouverte avec les réglages demandés. Vaelyndra repasse sur un mode compatible."
+        ? "Cette caméra ne peut pas être ouverte avec les réglages demandés. PulseForge repasse sur un mode compatible."
         : "Cet appareil refuse les réglages vidéo demandés. Réessaie depuis un navigateur à jour.";
     }
     return `${
@@ -1558,7 +1558,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             clearHostReconnectTimer();
             const friendly =
               err.type === "unavailable-id"
-                ? "Un live Vaelyndra est déjà actif à ton nom ailleurs. Ferme l'autre onglet."
+                ? "Un live PulseForge est déjà actif à ton nom ailleurs. Ferme l'autre onglet."
                 : `Impossible de démarrer le relais live : ${err.message || err.type || "erreur inconnue"}`;
             pauseLiveForRecovery(mode, friendly);
             return;
@@ -1570,7 +1570,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
           if (!isLiveStartTokenCurrent(startToken)) return;
           if (peerOpened) {
             setLastError(
-              "Connexion live instable : Vaelyndra tente de reconnecter le relais automatiquement.",
+              "Connexion live instable : PulseForge tente de reconnecter le relais automatiquement.",
             );
             try {
               peer.reconnect();
@@ -2323,7 +2323,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         try {
           avatarHandle = await createLiveAvatarStream({
             avatarUrl: me?.avatar ?? null,
-            username: me?.username ?? "Vaelyndra",
+            username: me?.username ?? "PulseForge",
           });
         } catch {
           setLastError(
@@ -3109,7 +3109,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         mode: "camera",
       });
       setLastError(
-        "Le partage d'écran mobile reste désactivé pour cette version. Vaelyndra repasse sur la caméra pour garder ton live stable.",
+        "Le partage d'écran mobile reste désactivé pour cette version. PulseForge repasse sur la caméra pour garder ton live stable.",
       );
       setCameraFacing(marker.facing);
       await startCameraShare(marker.facing);

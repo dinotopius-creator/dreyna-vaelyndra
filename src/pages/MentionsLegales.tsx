@@ -11,12 +11,12 @@ export function MentionsLegales() {
         Conformément aux dispositions de l'article 6 de la loi n° 2004-575 du 21
         juin 2004 pour la confiance dans l'économie numérique (LCEN), les
         présentes mentions légales sont portées à la connaissance des visiteurs
-        du site <strong>Vaelyndra</strong>.
+        du site <strong>PulseForge</strong>.
       </p>
 
       <h2>1. Éditeur du site</h2>
       <p>
-        Le site Vaelyndra (ci-après <em>« le Site »</em> ou{" "}
+        Le site PulseForge (ci-après <em>« le Site »</em> ou{" "}
         <em>« le Royaume »</em>) est édité, à titre{" "}
         <strong>non-professionnel</strong>, par une personne physique connue sur
         le Site et sur ses réseaux sous un pseudonyme d'artiste.
@@ -32,7 +32,7 @@ export function MentionsLegales() {
       </p>
       <ul>
         <li>
-          <strong>Direction de la publication :</strong> fondation Vaelyndra
+          <strong>Direction de la publication :</strong> fondation PulseForge
           (équipe éditoriale anonyme)
         </li>
         <li>
@@ -90,8 +90,8 @@ export function MentionsLegales() {
       <h2>3. Propriété intellectuelle</h2>
       <p>
         L'ensemble des éléments du Site (textes, illustrations, code source,
-        identité graphique, univers narratif de Vaelyndra, logos, nom{" "}
-        <em>« Vaelyndra »</em>) est la propriété exclusive de la
+        identité graphique, univers narratif de PulseForge, logos, nom{" "}
+        <em>« PulseForge »</em>) est la propriété exclusive de la
         directrice de la publication, sauf mentions contraires précisées dans
         le contenu. Toute reproduction, représentation, adaptation ou
         diffusion, totale ou partielle, est interdite sans autorisation écrite
@@ -100,14 +100,14 @@ export function MentionsLegales() {
       <p>
         Toutes les marques et logos tiers éventuellement affichés sur le Site
         (applications d'avatars, plateformes de streaming, réseaux sociaux) restent
-        la propriété exclusive de leurs détenteurs respectifs. Vaelyndra est un
+        la propriété exclusive de leurs détenteurs respectifs. PulseForge est un
         site indépendant et n'est affilié à aucune plateforme tierce.
       </p>
 
       <h2>4. Liens hypertextes</h2>
       <p>
         Le Site peut contenir des liens vers d'autres sites tiers (YouTube,
-        Twitch, réseaux sociaux, etc.). Vaelyndra n'exerce aucun contrôle sur
+        Twitch, réseaux sociaux, etc.). PulseForge n'exerce aucun contrôle sur
         ces sites tiers et décline toute responsabilité quant à leur contenu.
       </p>
 

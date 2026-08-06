@@ -1,7 +1,7 @@
 /**
  * Helper unique pour afficher le "rôle" d'un utilisateur de façon sobre.
  *
- * Historiquement, l'app affichait des titres fantasy ("Reine de Vaelyndra",
+ * Historiquement, l'app affichait des titres fantasy ("Reine de PulseForge",
  * "Chevalier·e lunaire", "Elfe de la cour") en dur sur les profils. Sur
  * un vrai réseau social, le rôle doit juste dire ce que la personne EST
  * sur la plateforme (admin / animateur / membre), sans fiction narrative.

@@ -44,7 +44,7 @@ export function AdminOfficialEventsTab() {
           Annonce officielle
         </h2>
         <p className="mt-1 text-sm text-ivory/60">
-          Publie un événement Vaelyndra mis en avant dans le fil communauté.
+          Publie un événement PulseForge mis en avant dans le fil communauté.
           Les membres normaux ne peuvent pas créer ce type de publication.
         </p>
       </div>

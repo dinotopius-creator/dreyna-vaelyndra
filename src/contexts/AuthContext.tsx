@@ -1,5 +1,5 @@
 /**
- * Contexte d'authentification Vaelyndra.
+ * Contexte d'authentification PulseForge.
  *
  * Source de vérité : **le backend FastAPI** (endpoints `/auth/*`, cookie
  * HttpOnly `vaelyndra_session`). Le `users` local (localStorage) est
@@ -165,7 +165,7 @@ const ROI_DES_ZEMS: StoredUser = {
   avatar: "https://api.dicebear.com/7.x/personas/svg?seed=RoiDesZems",
   role: "queen",
   joinedAt: "2024-01-01T00:00:00Z",
-  bio: "Gardien du trésor du royaume — admin de Vaelyndra.",
+  bio: "Gardien du trésor du royaume — admin de PulseForge.",
   creatureId: "dragon",
   passwordHash: legacyHash("zemsdiamant"),
 };

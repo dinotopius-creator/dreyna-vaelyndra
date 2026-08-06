@@ -6,7 +6,7 @@
  *
  * Principes :
  * - Un `<canvas>` 720×720 est créé hors DOM.
- * - On y dessine en boucle : fond gradient nuit Vaelyndra, l'image de
+ * - On y dessine en boucle : fond gradient nuit PulseForge, l'image de
  *   l'avatar (DiceBear SVG, PNG, JPG…), le pseudo, et un mini sous-titre
  *   "Caméra masquée". Léger flottement vertical pour ne pas avoir un
  *   rendu totalement statique.
@@ -16,7 +16,7 @@
  *
  * Limites connues :
  * - Si l'URL de l'avatar n'est pas CORS-friendly (rare : DiceBear et les
- *   uploads Vaelyndra le sont), le canvas sera "tainted" et `captureStream`
+ *   uploads PulseForge le sont), le canvas sera "tainted" et `captureStream`
  *   peut planter. Dans ce cas, `createLiveAvatarStream` retombe sur un
  *   rendu purement textuel (pseudo + initiale) sans charger l'image.
  * - Si l'URL est un modèle 3D `.glb`, on ne peut pas le rendre dans un
@@ -102,7 +102,7 @@ export async function createLiveAvatarStream(
 
   const drawFrame = () => {
     const t = (performance.now() - startedAt) / 1000;
-    // Fond radial sombre nuit Vaelyndra.
+    // Fond radial sombre nuit PulseForge.
     const grad = ctx.createRadialGradient(
       size / 2,
       size / 2,

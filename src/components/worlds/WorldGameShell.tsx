@@ -74,7 +74,7 @@ const WORLD_BOOT_STEPS = [
   "Chargement de votre avatar...",
   "Préparation de l'univers...",
   "Synchronisation du vocal...",
-  "Entrée dans Vaelyndra...",
+  "Entrée dans PulseForge...",
 ];
 
 export function WorldGameShell({
@@ -139,7 +139,7 @@ export function WorldGameShell({
               <Sparkles className="h-9 w-9 animate-pulse text-gold-200" />
             </div>
             <p className="mt-5 text-[11px] uppercase tracking-[0.28em] text-gold-200/75">
-              Mode jeu Vaelyndra
+              Mode jeu PulseForge
             </p>
             <h3 className="mt-2 font-display text-3xl text-gold-100">Entrée dans le monde</h3>
             <p className="mt-3 min-h-6 text-sm text-ivory/70">{WORLD_BOOT_STEPS[worldBootStep]}</p>

@@ -1102,7 +1102,7 @@ export function Community() {
         eyebrow="Fil communautaire"
         title={
           <>
-            Le <span className="text-mystic">fil</span> de Vaelyndra
+            Le <span className="text-mystic">fil</span> de PulseForge
           </>
         }
         subtitle="Poste tes créations, pensées et annonces. Tous les membres se croisent ici."
@@ -1852,7 +1852,7 @@ export function Community() {
             <ul className="mt-3 space-y-2 text-sm text-ivory/75">
               <li>Respect pour chaque membre.</li>
               <li>Pas de haine, pas de spam.</li>
-              <li>Cree, inspire, fais briller Vaelyndra.</li>
+              <li>Cree, inspire, fais briller PulseForge.</li>
             </ul>
           </div>
         </aside>

@@ -10,7 +10,7 @@ export function CGU() {
     >
       <p>
         Les présentes Conditions Générales d'Utilisation (« CGU ») régissent
-        l'accès et l'usage du site <strong>Vaelyndra</strong> (ci-après
+        l'accès et l'usage du site <strong>PulseForge</strong> (ci-après
         <em> « le Royaume »</em>). En créant un compte ou en utilisant le
         Royaume, tu reconnais avoir lu, compris et accepté les présentes CGU
         sans réserve.
@@ -18,7 +18,7 @@ export function CGU() {
 
       <h2>1. Objet du Royaume</h2>
       <p>
-        Vaelyndra est un <strong>mini-réseau social magique</strong> : une
+        PulseForge est un <strong>mini-réseau social magique</strong> : une
         plateforme communautaire où chaque membre peut poster, streamer, tisser
         des liens d'âme et gravir les grades de la cour. Le Royaume permet
         notamment :
@@ -30,7 +30,7 @@ export function CGU() {
           autorisés, avec mise en avant graduelle des plus actifs dans la rubrique
           « Top lives » et progression automatique dans les 6 grades de streamer,</li>
         <li>
-          l'achat de <strong>Sylvins de Vaelyndra</strong> (monnaie virtuelle
+          l'achat de <strong>Sylvins de PulseForge</strong> (monnaie virtuelle
           interne) permettant d'offrir des cadeaux animés en direct,
         </li>
         <li>
@@ -94,7 +94,7 @@ export function CGU() {
         ni aucune garantie de durée.
       </p>
 
-      <h2>5. Monnaie virtuelle « Sylvins de Vaelyndra »</h2>
+      <h2>5. Monnaie virtuelle « Sylvins de PulseForge »</h2>
       <p>
         Les Sylvins sont une monnaie <strong>strictement virtuelle</strong>,
         utilisable uniquement à l'intérieur du Royaume pour offrir des
@@ -114,7 +114,7 @@ export function CGU() {
 
       <h2>6. Modération, sanctions et bannissement</h2>
       <p>
-        L'équipe de modération de Vaelyndra peut, à sa seule appréciation et
+        L'équipe de modération de PulseForge peut, à sa seule appréciation et
         sans délai, modérer, masquer ou supprimer tout contenu contrevenant aux présentes
         CGU, suspendre ou résilier un compte, couper un live, retirer la
         possibilité de diffuser, ou bannir définitivement un membre. Les
@@ -130,7 +130,7 @@ export function CGU() {
       <h2>7. Propriété intellectuelle des contenus</h2>
       <p>
         Tu conserves la propriété de tes contenus (posts, commentaires,
-        lives). En les publiant sur Vaelyndra, tu accordes au Royaume une
+        lives). En les publiant sur PulseForge, tu accordes au Royaume une
         licence gratuite, mondiale et non exclusive pour les héberger, les
         afficher et les promouvoir dans le cadre du service, pendant toute la
         durée de ton compte et 30 jours au-delà.
@@ -138,7 +138,7 @@ export function CGU() {
 
       <h2>8. Responsabilité</h2>
       <p>
-        Vaelyndra met en œuvre ses meilleurs efforts pour assurer la
+        PulseForge met en œuvre ses meilleurs efforts pour assurer la
         continuité du service, sans toutefois garantir l'absence totale
         d'interruption (maintenance, incident réseau, faille tierce). Notre
         responsabilité ne saurait être engagée pour des dommages indirects.

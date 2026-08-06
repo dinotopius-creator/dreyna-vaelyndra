@@ -1,5 +1,5 @@
 /**
- * Catalogue figé des 9 créatures de Vaelyndra (miroir du backend).
+ * Catalogue figé des 9 créatures de PulseForge (miroir du backend).
  *
  * On garde une copie côté front pour pouvoir afficher la grille de
  * sélection à l'inscription sans attendre un round-trip réseau — et pour
@@ -59,7 +59,7 @@ export const CREATURES: Creature[] = [
     name: "Alien",
     icon: "👽",
     color: "#34d399",
-    description: "Venu·e d'une étoile lointaine, regard neuf sur Vaelyndra.",
+    description: "Venu·e d'une étoile lointaine, regard neuf sur PulseForge.",
   },
   {
     id: "fee",

@@ -1,5 +1,5 @@
 /**
- * Constantes économiques du royaume de Vaelyndra.
+ * Constantes économiques du royaume de PulseForge.
  *
  * Le prix de référence est le pack d'entrée "Pochée de Sylvins" (100 Sylvins
  * pour 1,99 €), soit **0,0199 € / Sylvin**. Cette conversion n'est utilisée
@@ -9,7 +9,7 @@
 export const SYLVIN_TO_EUR = 1.99 / 100;
 
 /**
- * Part que la plateforme Vaelyndra prélève sur les gains des streamers
+ * Part que la plateforme PulseForge prélève sur les gains des streamers
  * (0,30 = 30 %). Le streamer touche donc `1 - PLATFORM_CUT` (70 %) net.
  */
 export const PLATFORM_CUT = 0.3;

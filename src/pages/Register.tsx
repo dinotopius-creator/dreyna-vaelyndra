@@ -74,7 +74,7 @@ export function Register() {
         return;
       }
       notify(
-        `Bienvenue sur Vaelyndra, ${username} ${creatureLabel?.icon ?? "✨"}`,
+        `Bienvenue sur PulseForge, ${username} ${creatureLabel?.icon ?? "✨"}`,
       );
       navigate("/moi");
     } finally {

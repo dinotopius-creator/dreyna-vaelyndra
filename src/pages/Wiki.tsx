@@ -82,8 +82,8 @@ export function Wiki() {
 
   useEffect(() => {
     document.title = article
-      ? `${article.title} - Wiki Vaelyndra`
-      : "Wiki Vaelyndra - Guide d'utilisation";
+      ? `${article.title} - Wiki PulseForge`
+      : "Wiki PulseForge - Guide d'utilisation";
   }, [article]);
 
   if (slug && !article) {
@@ -112,7 +112,7 @@ function WikiHome() {
             eyebrow="Centre d'aide"
             title={
               <>
-                Wiki officiel <span className="text-mystic">Vaelyndra</span>
+                Wiki officiel <span className="text-mystic">PulseForge</span>
               </>
             }
             subtitle="Guides utilisateurs, streamers, avatar, familiers, lives, monde 3D, communauté, grades et offrandes. Tout est basé sur les vraies routes et fonctionnalités du site."

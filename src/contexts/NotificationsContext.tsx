@@ -257,7 +257,7 @@ function enrichCommunityEvent(
 
   const postTitle = excerpt(post.content, "Publication communauté");
   const isOfficialEvent = post.postType === "official_event";
-  const communityName = isOfficialEvent ? "Événements Vaelyndra" : "Vaelyndra";
+  const communityName = isOfficialEvent ? "Événements PulseForge" : "PulseForge";
   const actorName = event.actorName ?? "Un membre";
 
   if (event.kind === "community_mention" && comment) {
@@ -289,7 +289,7 @@ function enrichCommunityEvent(
       postTitle,
       communityId: "vaelyndra",
       communityName,
-      locationLabel: isOfficialEvent ? "Événement Vaelyndra" : "Fil communauté",
+      locationLabel: isOfficialEvent ? "Événement PulseForge" : "Fil communauté",
       priority: "mention",
     };
   }
@@ -786,7 +786,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       postId: COMMUNITY_DRAWING_CONTEST.announcementPostId,
       postTitle: COMMUNITY_DRAWING_CONTEST.title,
       communityId: "vaelyndra",
-      communityName: "Communauté Vaelyndra",
+      communityName: "Communauté PulseForge",
       locationLabel: "Annonce officielle",
       priority: "important",
       actionLabel: "Voir le concours",

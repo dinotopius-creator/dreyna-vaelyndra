@@ -41,7 +41,7 @@ export function Login() {
         setError(res.error ?? "Erreur inconnue");
         return;
       }
-      notify(res.legacy ? "Bienvenue (mode hors-ligne)" : "Bienvenue sur Vaelyndra ✨");
+      notify(res.legacy ? "Bienvenue (mode hors-ligne)" : "Bienvenue sur PulseForge ✨");
       navigate(location.state?.from ?? "/moi");
     } finally {
       setSubmitting(false);

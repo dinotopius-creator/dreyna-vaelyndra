@@ -61,7 +61,7 @@ export function VerifyEmail() {
               to="/connexion"
               className="btn-gold mt-6 inline-flex justify-center"
             >
-              Entrer dans Vaelyndra
+              Entrer dans PulseForge
             </Link>
           </>
         )}

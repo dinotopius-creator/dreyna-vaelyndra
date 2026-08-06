@@ -200,7 +200,7 @@ export function UserProfile() {
       <div className="mx-auto max-w-3xl px-6 py-16 text-center">
         <SectionHeading eyebrow="Page manquante" title="Ce profil a disparu" />
         <p className="mt-6 text-sm text-ivory/60">
-          Le profil demandé n&apos;existe pas (ou plus) sur Vaelyndra.
+          Le profil demandé n&apos;existe pas (ou plus) sur PulseForge.
         </p>
         <Link to="/communaute" className="btn-gold mt-8 inline-flex">
           <ArrowLeft className="h-4 w-4" /> Retour au fil
