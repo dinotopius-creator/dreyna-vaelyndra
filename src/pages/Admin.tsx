@@ -609,7 +609,7 @@ function ProductsAdmin() {
           }
         >
           <option>Lueurs</option>
-          <option>Sylvins</option>
+          <option>Aureons</option>
           <option>Merch</option>
           <option>Digital</option>
           <option>VIP</option>
@@ -622,7 +622,7 @@ function ProductsAdmin() {
             placeholder={
               form.category === "Lueurs"
                 ? "Lueurs créditées"
-                : "Sylvins crédités"
+                : "Aureons crédités"
             }
             value={form.currencyAmount}
             onChange={(e) =>
@@ -660,7 +660,7 @@ function ProductsAdmin() {
                 {p.lueurs
                   ? `· ${p.lueurs.toLocaleString("fr-FR")} Lueurs`
                   : p.sylvins
-                    ? `· ${p.sylvins.toLocaleString("fr-FR")} Sylvins`
+                    ? `· ${p.sylvins.toLocaleString("fr-FR")} Aureons`
                     : ""}
               </p>
             </div>

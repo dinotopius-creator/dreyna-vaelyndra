@@ -89,7 +89,7 @@ export function WishlistSection({
       notify(
         item.currency === "lueurs"
           ? "Pas assez de Lueurs pour offrir cet item."
-          : "Pas assez de Sylvins pour offrir cet item.",
+          : "Pas assez de Aureons pour offrir cet item.",
         "error",
       );
       return;
@@ -159,7 +159,7 @@ export function WishlistSection({
                   </p>
                   <p className="text-[11px] text-ivory/55">
                     {item.price}{" "}
-                    {item.currency === "lueurs" ? "Lueurs" : "Sylvins"}
+                    {item.currency === "lueurs" ? "Lueurs" : "Aureons"}
                   </p>
                 </div>
                 {isSelf ? (

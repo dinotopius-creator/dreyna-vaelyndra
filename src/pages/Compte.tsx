@@ -965,11 +965,11 @@ export function Compte() {
               value={backendMe?.lueurs ?? "—"}
             />
             <Field
-              label="Sylvins (promo)"
+              label="Aureons (promo)"
               value={backendMe?.sylvins_promo ?? "—"}
             />
             <Field
-              label="Sylvins (payés)"
+              label="Aureons (payés)"
               value={backendMe?.sylvins_paid ?? "—"}
             />
           </dl>
