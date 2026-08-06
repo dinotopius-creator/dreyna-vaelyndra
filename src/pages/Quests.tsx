@@ -19,7 +19,7 @@ const QUESTS: Quest[] = [
   {
     title: "Publier un post",
     description: "Partage une création ou une idée dans Social pour lancer ta journée.",
-    reward: "+25 Lueurs",
+    reward: "+25 Eclats",
     status: "available",
     actionLabel: "Aller au Social",
     to: "/social/play",
@@ -29,7 +29,7 @@ const QUESTS: Quest[] = [
   {
     title: "Liker 3 posts",
     description: "Encourage la communauté en aimant trois publications.",
-    reward: "+20 Lueurs",
+    reward: "+20 Eclats",
     status: "available",
     actionLabel: "Voir Social",
     to: "/social/play",
@@ -39,7 +39,7 @@ const QUESTS: Quest[] = [
   {
     title: "Visiter le Monde",
     description: "Entre dans les Mondes pour découvrir la scène vivante.",
-    reward: "+15 Lueurs",
+    reward: "+15 Eclats",
     status: "available",
     actionLabel: "Entrer dans le Monde",
     to: "/mondes",
@@ -59,7 +59,7 @@ const QUESTS: Quest[] = [
   {
     title: "Regarder un live",
     description: "Rejoins un live actif et découvre ce qui se passe en direct.",
-    reward: "+20 Lueurs",
+    reward: "+20 Eclats",
     status: "available",
     actionLabel: "Ouvrir les lives",
     to: "/live",
@@ -69,7 +69,7 @@ const QUESTS: Quest[] = [
   {
     title: "Personnaliser ton avatar",
     description: "Ouvre l’atelier pour ajuster ton style, tes tenues et ton look.",
-    reward: "+10 Lueurs",
+    reward: "+10 Eclats",
     status: "available",
     actionLabel: "Ouvrir l’atelier",
     to: "/avatar",

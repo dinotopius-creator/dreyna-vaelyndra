@@ -24,7 +24,7 @@ import {
   type OwnedFamiliar,
 } from "../lib/familiarsApi";
 import { formatRelative } from "../lib/helpers";
-import { formatSylvins } from "../lib/sylvins";
+import { formatAureons } from "../lib/sylvins";
 
 const PRESET_DONATIONS = [1, 5, 10];
 
@@ -128,7 +128,7 @@ export function PublicFamiliar() {
   );
   const isOwnProfile = currentUser?.id === profile?.id;
   const wallet = walletOf(currentUser?.id ?? "__anon__");
-  const availableSylvins = wallet.balance;
+  const availableAureons = wallet.balance;
 
   async function sendDonation() {
     if (!profile || !familiar) return;
@@ -149,8 +149,8 @@ export function PublicFamiliar() {
       notify("Choisis un montant valide.", "error");
       return;
     }
-    if (amount > availableSylvins) {
-      notify("Tu n'as pas assez de Sylvins pour ce don.", "error");
+    if (amount > availableAureons) {
+      notify("Tu n'as pas assez de Aureons pour ce don.", "error");
       return;
     }
 
@@ -362,7 +362,7 @@ export function PublicFamiliar() {
                       Soutenir ce familier
                     </p>
                     <h2 className="mt-1 font-display text-2xl text-gold-100">
-                      Faire un don en Sylvins
+                      Faire un don en Aureons
                     </h2>
                     <p className="mt-2 max-w-xl text-sm leading-6 text-ivory/70">
                       Les dons donnent de l'XP au familier du membre visité. Le débit est
@@ -374,7 +374,7 @@ export function PublicFamiliar() {
                       Ton solde
                     </p>
                     <p className="mt-1 font-display text-2xl text-gold-100">
-                      {formatSylvins(availableSylvins)}
+                      {formatAureons(availableAureons)}
                     </p>
                   </div>
                 </div>
@@ -391,7 +391,7 @@ export function PublicFamiliar() {
                       }}
                       className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-ivory/80 transition hover:border-gold-300/40 hover:text-gold-100"
                     >
-                      {formatSylvins(amount)}
+                      {formatAureons(amount)}
                     </button>
                   ))}
                   <button
@@ -427,7 +427,7 @@ export function PublicFamiliar() {
                       {familiar.nickname || familiar.name}
                     </h3>
                     <p className="mt-2 text-sm text-ivory/65">
-                      Choisis un montant de Sylvins à offrir.
+                      Choisis un montant de Aureons à offrir.
                     </p>
                   </div>
                   <button
@@ -456,7 +456,7 @@ export function PublicFamiliar() {
                             : "border-white/10 bg-white/[0.04] text-ivory/80 hover:border-gold-300/35"
                         }`}
                       >
-                        {formatSylvins(amount)}
+                        {formatAureons(amount)}
                       </button>
                     );
                   })}
@@ -479,7 +479,7 @@ export function PublicFamiliar() {
                   <div className="flex items-center justify-between gap-3">
                     <span>Solde disponible</span>
                     <span className="font-semibold text-gold-100">
-                      {formatSylvins(availableSylvins)}
+                      {formatAureons(availableAureons)}
                     </span>
                   </div>
                   <div className="mt-2 flex items-center justify-between gap-3">
@@ -517,7 +517,7 @@ export function PublicFamiliar() {
                 </div>
 
                 <p className="mt-3 text-[11px] text-ivory/45">
-                  Le don débite ton solde de Sylvins et envoie de l'XP au familier de{" "}
+                  Le don débite ton solde de Aureons et envoie de l'XP au familier de{" "}
                   {profile.username}.
                 </p>
               </motion.div>

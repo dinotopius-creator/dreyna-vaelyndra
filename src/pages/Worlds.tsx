@@ -167,7 +167,7 @@ interface WorldAmbientEvent {
   district: DistrictId;
   title: string;
   copy: string;
-  bonusLueurs: number;
+  bonusEclats: number;
   durationMs: number;
 }
 
@@ -419,7 +419,7 @@ const DISTRICT_AMBIENT_EVENTS: Record<DistrictId, WorldAmbientEvent[]> = {
       district: "place",
       title: "Brise doree",
       copy: "Les herbes hautes se penchent et de nouvelles lueurs glissent vers les parterres.",
-      bonusLueurs: 2,
+      bonusEclats: 2,
       durationMs: 9000,
     },
     {
@@ -427,7 +427,7 @@ const DISTRICT_AMBIENT_EVENTS: Record<DistrictId, WorldAmbientEvent[]> = {
       district: "place",
       title: "Chant de la fontaine",
       copy: "La place retient son souffle : le bassin central relache un cycle de gouttes lumineuses.",
-      bonusLueurs: 3,
+      bonusEclats: 3,
       durationMs: 8000,
     },
   ],
@@ -437,7 +437,7 @@ const DISTRICT_AMBIENT_EVENTS: Record<DistrictId, WorldAmbientEvent[]> = {
       district: "arcades",
       title: "Surge neon",
       copy: "Les vitrines se synchronisent. Quelques éclats de création deviennent visibles.",
-      bonusLueurs: 2,
+      bonusEclats: 2,
       durationMs: 9000,
     },
     {
@@ -445,7 +445,7 @@ const DISTRICT_AMBIENT_EVENTS: Record<DistrictId, WorldAmbientEvent[]> = {
       district: "arcades",
       title: "Murmure de galerie",
       copy: "Une onde traverse les cadres. Les panneaux caches s'ouvrent un instant.",
-      bonusLueurs: 3,
+      bonusEclats: 3,
       durationMs: 8500,
     },
   ],
@@ -455,7 +455,7 @@ const DISTRICT_AMBIENT_EVENTS: Record<DistrictId, WorldAmbientEvent[]> = {
       district: "observatory",
       title: "Dérive météore",
       copy: "Une traînée lente coupe le dôme et réveille des lueurs plus rares.",
-      bonusLueurs: 2,
+      bonusEclats: 2,
       durationMs: 8500,
     },
     {
@@ -463,7 +463,7 @@ const DISTRICT_AMBIENT_EVENTS: Record<DistrictId, WorldAmbientEvent[]> = {
       district: "observatory",
       title: "Halo lunaire",
       copy: "La terrasse s'eclaircit. Le puits lunaire pulse et attire les explorateurs.",
-      bonusLueurs: 3,
+      bonusEclats: 3,
       durationMs: 9500,
     },
   ],
@@ -589,10 +589,10 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
     () => createInitialLueurNodes(),
   );
   const [lueurBursts, setLueurBursts] = useState<LueurBurst[]>([]);
-  const [sessionLueurs, setSessionLueurs] = useState(0);
-  const [queuedLueurs, setQueuedLueurs] = useState(0);
-  const [syncingLueurs, setSyncingLueurs] = useState(false);
-  const [dailyWorldLueurs, setDailyWorldLueurs] = useState(() =>
+  const [sessionEclats, setSessionEclats] = useState(0);
+  const [queuedEclats, setQueuedEclats] = useState(0);
+  const [syncingEclats, setSyncingEclats] = useState(false);
+  const [dailyWorldEclats, setDailyWorldEclats] = useState(() =>
     readWorldLueurProgress(null).total,
   );
   const [discoveredHotspots, setDiscoveredHotspots] = useState<Record<string, boolean>>(() =>
@@ -807,7 +807,7 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
     [district],
   );
 
-  const visibleLueurs = useMemo(
+  const visibleEclats = useMemo(
     () =>
       lueurNodes[district].filter((entry) => entry.availableAt <= worldClock),
     [district, lueurNodes, worldClock],
@@ -829,8 +829,8 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
   }, [districtHotspots, position.x, position.y]);
 
   const lueurPouchTotal = useMemo(
-    () => (profile?.lueurs ?? 0) + queuedLueurs,
-    [profile?.lueurs, queuedLueurs],
+    () => (profile?.lueurs ?? 0) + queuedEclats,
+    [profile?.lueurs, queuedEclats],
   );
 
   const hiddenSecretsCount = useMemo(
@@ -990,7 +990,7 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
 
   useEffect(() => {
     const progress = readWorldLueurProgress(user?.id ?? null);
-    setDailyWorldLueurs(progress.total);
+    setDailyWorldEclats(progress.total);
     setDiscoveredHotspots(progress.hotspots);
   }, [user?.id]);
 
@@ -1013,10 +1013,10 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
 
   useEffect(() => {
     writeWorldLueurProgress(user?.id ?? null, {
-      total: dailyWorldLueurs,
+      total: dailyWorldEclats,
       hotspots: discoveredHotspots,
     });
-  }, [dailyWorldLueurs, discoveredHotspots, user?.id]);
+  }, [dailyWorldEclats, discoveredHotspots, user?.id]);
 
   useEffect(() => {
     setSelectedMember(null);
@@ -1168,19 +1168,19 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
   }, [liveEntries]);
 
   useEffect(() => {
-    if (!visibleLueurs.length) return;
-    const nearbyNodes = visibleLueurs
+    if (!visibleEclats.length) return;
+    const nearbyNodes = visibleEclats
       .filter((entry) => distancePct(position.x, position.y, entry.x, entry.y) <= 6.5)
       .slice(0, 2);
     nearbyNodes.forEach((entry) => collectLueur(entry, "proximity"));
-  }, [district, position.x, position.y, visibleLueurs, worldClock]);
+  }, [district, position.x, position.y, visibleEclats, worldClock]);
 
   useEffect(() => {
-    if (!queuedLueurs || !user || syncingLueurs) return;
+    if (!queuedEclats || !user || syncingEclats) return;
     const timeout = window.setTimeout(async () => {
       const amount = lueurFlushRef.current;
       if (!amount) return;
-      setSyncingLueurs(true);
+      setSyncingEclats(true);
       try {
         const updated = await apiApplyWalletDelta(user.id, {
           lueurs: amount,
@@ -1188,20 +1188,20 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
         });
         profileRef.current = updated;
         setProfile(updated);
-        setQueuedLueurs((current) => Math.max(0, current - amount));
+        setQueuedEclats((current) => Math.max(0, current - amount));
       } catch {
         notify("Les lueurs vibrent encore hors ligne. Elles seront retentées.", "info");
       } finally {
-        setSyncingLueurs(false);
+        setSyncingEclats(false);
       }
     }, WORLD_SYNC_DEBOUNCE_MS);
 
     return () => window.clearTimeout(timeout);
-  }, [district, notify, queuedLueurs, setProfile, syncingLueurs, user]);
+  }, [district, notify, queuedEclats, setProfile, syncingEclats, user]);
 
   useEffect(() => {
-    lueurFlushRef.current = queuedLueurs;
-  }, [queuedLueurs]);
+    lueurFlushRef.current = queuedEclats;
+  }, [queuedEclats]);
 
   useEffect(() => {
     if (!lueurBursts.length) return;
@@ -1224,7 +1224,7 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
         ...event,
         id: `${event.id}-${Date.now()}`,
       });
-      awakenDormantLueurs(district, event.bonusLueurs);
+      awakenDormantEclats(district, event.bonusEclats);
       addWorldMessage("Flux du monde", event.copy);
       timeout = window.setTimeout(() => {
         if (!cancelled) setAmbientEvent(null);
@@ -1417,7 +1417,7 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
   }
 
   function collectWorld3DLueur(nodeId: string) {
-    const node = visibleLueurs.find((entry) => entry.id === nodeId);
+    const node = visibleEclats.find((entry) => entry.id === nodeId);
     if (!node) return;
     collectLueur(node, "tap");
   }
@@ -1578,19 +1578,19 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
     }
   }
 
-  function awardWorldLueurs(rawAmount: number, reason: string) {
+  function awardWorldEclats(rawAmount: number, reason: string) {
     if (rawAmount <= 0) return 0;
-    const remaining = Math.max(0, WORLD_LUEUR_DAILY_CAP - dailyWorldLueurs);
+    const remaining = Math.max(0, WORLD_LUEUR_DAILY_CAP - dailyWorldEclats);
     const granted = Math.min(rawAmount, remaining);
     if (!granted) {
       notify("Le flux quotidien de lueurs a déjà été capté pour aujourd'hui.", "info");
       return 0;
     }
 
-    setDailyWorldLueurs((current) => current + granted);
-    setSessionLueurs((current) => current + granted);
+    setDailyWorldEclats((current) => current + granted);
+    setSessionEclats((current) => current + granted);
     if (user) {
-      setQueuedLueurs((current) => current + granted);
+      setQueuedEclats((current) => current + granted);
     }
     setComboCount((current) =>
       Date.now() - lastCollectAt < 6000 ? current + 1 : 1,
@@ -1606,12 +1606,12 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
       setProfile(optimistic);
     }
 
-    if (!user && sessionLueurs === 0 && granted > 0) {
+    if (!user && sessionEclats === 0 && granted > 0) {
       notify("Connecte-toi pour lier durablement ces lueurs a ton compte.", "info");
     }
 
     if (granted >= 3) {
-      addWorldMessage("Lueurs", `${reason} réveille ${granted} lueurs autour de toi.`);
+      addWorldMessage("Eclats", `${reason} réveille ${granted} lueurs autour de toi.`);
     }
 
     return granted;
@@ -1640,7 +1640,7 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
     }
   }
 
-  function awakenDormantLueurs(targetDistrict: DistrictId, count: number) {
+  function awakenDormantEclats(targetDistrict: DistrictId, count: number) {
     setLueurNodes((current) => {
       const nodes = [...current[targetDistrict]];
       const sleeping = nodes
@@ -1691,7 +1691,7 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
       },
     ]);
 
-    const granted = awardWorldLueurs(
+    const granted = awardWorldEclats(
       node.value,
       source === "tap" ? node.label : `La ${node.label}`,
     );
@@ -1711,9 +1711,9 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
 
     const isFirstDiscovery = !discoveredHotspots[hotspot.id];
     setDiscoveredHotspots((current) => ({ ...current, [hotspot.id]: true }));
-    awakenDormantLueurs(hotspot.district, isFirstDiscovery ? 3 : 1);
+    awakenDormantEclats(hotspot.district, isFirstDiscovery ? 3 : 1);
 
-    const granted = awardWorldLueurs(
+    const granted = awardWorldEclats(
       isFirstDiscovery ? hotspot.reward : 1,
       hotspot.title,
     );
@@ -1730,7 +1730,7 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
       district: hotspot.district,
       title: hotspot.title,
       copy: hotspot.description,
-      bonusLueurs: isFirstDiscovery ? 2 : 1,
+      bonusEclats: isFirstDiscovery ? 2 : 1,
       durationMs: 7000,
     });
 
@@ -1770,7 +1770,7 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
         nearbyHotspot={nearbyHotspot}
         lueurBursts={lueurBursts}
         world3DPlayers={world3DPlayers}
-        visibleLueurs={visibleLueurs}
+        visibleEclats={visibleEclats}
         districtHotspots={districtHotspots}
         worldSpeechBubbles={worldSpeechBubbles}
         onMove={moveTo}
@@ -1974,7 +1974,7 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-2">
                 <CompactStat label="Presence" value={String(stageMembers.length + (user ? 1 : 0))} />
                 <CompactStat label="Lives" value={String(liveEntries.length)} />
-                <CompactStat label="Lueurs" value={String(visibleLueurs.length)} />
+                <CompactStat label="Eclats" value={String(visibleEclats.length)} />
                 <CompactStat label="Secrets" value={String(districtHotspots.length)} />
               </div>
             </div>
@@ -2077,7 +2077,7 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
                 <World3DStage
                   district={district}
                   players={world3DPlayers}
-                  lueurs={visibleLueurs}
+                  lueurs={visibleEclats}
                   hotspots={districtHotspots}
                   speechBubbles={worldSpeechBubbles}
                   onMove={moveTo}
@@ -2398,27 +2398,27 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
 
             <div className="mt-4 grid grid-cols-2 gap-3">
               <CompactStat label="En poche" value={String(lueurPouchTotal)} />
-              <CompactStat label="Session" value={String(sessionLueurs)} />
+              <CompactStat label="Session" value={String(sessionEclats)} />
             </div>
 
             <div className="mt-4 rounded-2xl border border-white/10 bg-night-950/55 p-4">
               <div className="flex items-center justify-between gap-3 text-xs uppercase tracking-[0.18em] text-ivory/55">
                 <span>Flux du jour</span>
-                <span>{dailyWorldLueurs}/{WORLD_LUEUR_DAILY_CAP}</span>
+                <span>{dailyWorldEclats}/{WORLD_LUEUR_DAILY_CAP}</span>
               </div>
               <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/8">
                 <div
                   className="h-full rounded-full bg-gradient-to-r from-gold-300 via-amber-300 to-cyan-300 transition-all"
                   style={{
-                    width: `${Math.min(100, (dailyWorldLueurs / WORLD_LUEUR_DAILY_CAP) * 100)}%`,
+                    width: `${Math.min(100, (dailyWorldEclats / WORLD_LUEUR_DAILY_CAP) * 100)}%`,
                   }}
                 />
               </div>
               <div className="mt-3 text-xs text-ivory/60">
-                {syncingLueurs
+                {syncingEclats
                   ? "Synchronisation des lueurs en cours..."
-                  : queuedLueurs > 0
-                    ? `${queuedLueurs} lueur${queuedLueurs > 1 ? "s" : ""} en attente de scellement.`
+                  : queuedEclats > 0
+                    ? `${queuedEclats} lueur${queuedEclats > 1 ? "s" : ""} en attente de scellement.`
                     : "Toutes tes lueurs visibles sont déjà scellées."}
               </div>
             </div>
@@ -2430,7 +2430,7 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
               <div className="mt-2 text-sm text-ivory/70">
                 {nearbyHotspot
                   ? `${nearbyHotspot.title} : ${nearbyHotspot.hint}`
-                  : `Il reste ${visibleLueurs.length} lueur${visibleLueurs.length > 1 ? "s" : ""} visible${visibleLueurs.length > 1 ? "s" : ""} dans ${selectedDistrict.name.toLowerCase()}.`}
+                  : `Il reste ${visibleEclats.length} lueur${visibleEclats.length > 1 ? "s" : ""} visible${visibleEclats.length > 1 ? "s" : ""} dans ${selectedDistrict.name.toLowerCase()}.`}
               </div>
               <div className="mt-3 flex flex-wrap gap-2 text-xs text-ivory/60">
                 <span className="rounded-full border border-white/10 px-2.5 py-1">
@@ -2566,7 +2566,7 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
                       En cours dans {labelForDistrict(ambientEvent.district)}
                     </div>
                     <span className="rounded-full border border-gold-300/35 px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-gold-100">
-                      +{ambientEvent.bonusLueurs} lueurs réveillées
+                      +{ambientEvent.bonusEclats} lueurs réveillées
                     </span>
                   </div>
                   <div className="mt-2 font-display text-gold-100">{ambientEvent.title}</div>
@@ -2972,7 +2972,7 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
         />
         <WorldFact
           icon={<Sparkles className="h-4 w-4" />}
-          title="Lueurs a collecter"
+          title="Eclats a collecter"
           copy="Chaque monde révèle ses propres éclats, secrets et mini-événements pour récompenser l'exploration."
         />
       </section>

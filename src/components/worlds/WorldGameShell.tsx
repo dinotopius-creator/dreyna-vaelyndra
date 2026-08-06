@@ -50,7 +50,7 @@ export interface WorldGameShellProps {
   nearbyHotspot: { title: string } | null;
   lueurBursts: Array<{ id: string; x: number; y: number; value: number; rarity: "common" | "rare" | "epic" }>;
   world3DPlayers: World3DPlayer[];
-  visibleLueurs: World3DLueur[];
+  visibleEclats: World3DLueur[];
   districtHotspots: World3DHotspot[];
   worldSpeechBubbles: WorldSpeechBubble[];
   onMove: (position: { x: number; y: number }) => void;
@@ -101,7 +101,7 @@ export function WorldGameShell({
   nearbyHotspot,
   lueurBursts,
   world3DPlayers,
-  visibleLueurs,
+  visibleEclats,
   districtHotspots,
   worldSpeechBubbles,
   onMove,
@@ -186,7 +186,7 @@ export function WorldGameShell({
           <World3DStage
             district={district}
             players={world3DPlayers}
-            lueurs={visibleLueurs}
+            lueurs={visibleEclats}
             hotspots={districtHotspots}
             speechBubbles={worldSpeechBubbles}
             onMove={onMove}

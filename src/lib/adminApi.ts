@@ -68,9 +68,9 @@ export type WalletPot =
   | "earnings_paid";
 
 export const WALLET_POT_LABELS: Record<WalletPot, string> = {
-  lueurs: "Lueurs (monnaie gratuite)",
-  sylvins_promo: "Sylvins promo (non retirables)",
-  sylvins_paid: "Sylvins payés (retirables)",
+  lueurs: "Eclats (monnaie gratuite)",
+  sylvins_promo: "Aureons promo (non retirables)",
+  sylvins_paid: "Aureons payés (retirables)",
   earnings_promo: "Earnings promo streamer",
   earnings_paid: "Earnings payés streamer (retirables)",
 };

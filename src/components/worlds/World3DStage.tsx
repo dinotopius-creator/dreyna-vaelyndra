@@ -1638,9 +1638,9 @@ export function World3DStage({
     renderer.domElement.addEventListener("pointercancel", finishCameraPointer);
 
     const syncCollections = () => {
-      const currentLueurs = new Set(lueursRef.current.map((entry) => entry.id));
+      const currentEclats = new Set(lueursRef.current.map((entry) => entry.id));
       lueurEntities.forEach((entity, id) => {
-        if (!currentLueurs.has(id)) {
+        if (!currentEclats.has(id)) {
           scene.remove(entity.group);
           lueurEntities.delete(id);
         }

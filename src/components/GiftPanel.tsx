@@ -6,8 +6,8 @@ import { useStore } from "../contexts/StoreContext";
 import { useAuth } from "../contexts/AuthContext";
 import { useProfile } from "../contexts/ProfileContext";
 import { useToast } from "../contexts/ToastContext";
-import { apiGiftSylvins, ApiError } from "../lib/api";
-import { formatSylvins } from "../lib/sylvins";
+import { apiGiftAureons, ApiError } from "../lib/api";
+import { formatAureons } from "../lib/sylvins";
 import type { Gift, GiftRarity } from "../types";
 
 interface Props {
@@ -104,7 +104,7 @@ export function GiftPanel({
     if (sending) return;
     if (effectiveBalance < gift.price) {
       notify(
-        "Solde insuffisant — rechargez vos Sylvins dans la boutique.",
+        "Solde insuffisant — rechargez vos Aureons dans la boutique.",
         "info",
       );
       return;
@@ -127,7 +127,7 @@ export function GiftPanel({
     //    earnings_paid/earnings_promo du receiver. C'est ce qui alimente
     //    la Trésorerie retirable (split paid/promo).
     try {
-      await apiGiftSylvins({
+      await apiGiftAureons({
         senderId: user.id,
         receiverId: hostId,
         amount: gift.price,
@@ -187,13 +187,13 @@ export function GiftPanel({
               className="h-4 w-4"
             />
             <span className="font-display text-sm text-gold-200">
-              {formatSylvins(effectiveBalance)} Sylvins
+              {formatAureons(effectiveBalance)} Aureons
             </span>
           </div>
           <Link
             to="/boutique"
             className="btn-royal text-xs"
-            title="Acheter des Sylvins"
+            title="Acheter des Aureons"
           >
             <Plus className="h-3 w-3" /> Recharger
           </Link>
@@ -243,7 +243,7 @@ export function GiftPanel({
                 </p>
                 <p className={`mt-1 inline-flex items-center gap-1 text-xs ${insufficient ? "text-rose-300" : "text-ivory/70"}`}>
                   <Coins className="h-3 w-3 text-gold-300" />
-                  {formatSylvins(g.price)}
+                  {formatAureons(g.price)}
                 </p>
               </button>
             </li>
@@ -283,7 +283,7 @@ export function GiftPanel({
               </p>
               <p className="mt-4 inline-flex items-center gap-2 rounded-full border border-gold-400/40 bg-night-900/50 px-4 py-1.5 font-display text-gold-200">
                 <Coins className="h-4 w-4 text-gold-300" />
-                {formatSylvins(selected.price)} Sylvins
+                {formatAureons(selected.price)} Aureons
               </p>
               <div className="mt-6 flex items-center justify-center gap-3">
                 <button
@@ -305,7 +305,7 @@ export function GiftPanel({
               {effectiveBalance < selected.price && (
                 <p className="mt-3 text-xs text-rose-300">
                   Il vous manque{" "}
-                  {formatSylvins(selected.price - effectiveBalance)} Sylvins —{" "}
+                  {formatAureons(selected.price - effectiveBalance)} Aureons —{" "}
                   <Link to="/boutique" className="underline">
                     recharger
                   </Link>

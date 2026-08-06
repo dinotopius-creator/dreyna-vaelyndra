@@ -6,7 +6,7 @@
  *  - barre XP avec progression dans le niveau courant
  *  - liste de stats cosmétiques (Aura, Énergie, Récolte, Affinité, Charisme)
  *  - liste des familiers possédés avec switch en 1 clic (1er gratuit, puis
- *    coût Sylvins)
+ *    coût Aureons)
  *  - lien vers la boutique (à venir en PR familiers#4)
  *
  * Si l'utilisateur n'a pas encore de familier (cas pré-onboarding), on
@@ -50,7 +50,7 @@ const COSMETIC_TABS: Array<{ slot: FamiliarCosmeticSlot; label: string }> = [
 function cosmeticPriceLabel(item: FamiliarCosmeticCatalogItem) {
   if (item.currency === "free" || item.price <= 0) return "Gratuit";
   return `${item.price.toLocaleString("fr-FR")} ${
-    item.currency === "lueurs" ? "Lueurs" : "Sylvins"
+    item.currency === "lueurs" ? "Eclats" : "Aureons"
   }`;
 }
 
@@ -145,7 +145,7 @@ export function MyFamiliar() {
     if (!user?.id || pendingSwitch) return;
     if (collection && !collection.nextSwitchFree) {
       const ok = window.confirm(
-        `Changer de familier coûte ${collection.switchPriceSylvins} Sylvins. Ta progression suivra le nouveau familier. Confirmer ?`,
+        `Changer de familier coûte ${collection.switchPriceAureons} Aureons. Ta progression suivra le nouveau familier. Confirmer ?`,
       );
       if (!ok) return;
     }
@@ -371,7 +371,7 @@ export function MyFamiliar() {
                   Enclos du familier
                 </h3>
                 <p className="mt-2 max-w-xl text-sm leading-6 text-ivory/62">
-                  Laisse ton compagnon se promener, nettoie son refuge au toucher et gagne des Lueurs avec une chance très rare de Sylvin promo.
+                  Laisse ton compagnon se promener, nettoie son refuge au toucher et gagne des Eclats avec une chance très rare de Sylvin promo.
                 </p>
               </div>
               <Link
@@ -402,8 +402,8 @@ export function MyFamiliar() {
                   {active.nickname || active.name}
                 </p>
                 <p className="mt-1 text-xs text-ivory/50">
-                  {profile?.lueurs?.toLocaleString("fr-FR") ?? 0} Lueurs ·{" "}
-                  {profile?.sylvins?.toLocaleString("fr-FR") ?? 0} Sylvins
+                  {profile?.lueurs?.toLocaleString("fr-FR") ?? 0} Eclats ·{" "}
+                  {profile?.sylvins?.toLocaleString("fr-FR") ?? 0} Aureons
                 </p>
               </div>
 
@@ -417,7 +417,7 @@ export function MyFamiliar() {
                       Personnaliser mon familier
                     </h3>
                     <p className="mt-2 max-w-2xl text-sm leading-6 text-ivory/62">
-                      Change ses couleurs, son visage, ses petites touffes, ses accessoires et son cadre. Les achats passent par le serveur avec les Lueurs ou les Sylvins.
+                      Change ses couleurs, son visage, ses petites touffes, ses accessoires et son cadre. Les achats passent par le serveur avec les Eclats ou les Aureons.
                     </p>
                   </div>
                 </div>
@@ -601,14 +601,14 @@ export function MyFamiliar() {
               pending={pendingSwitch === f.familiarId}
               onSwitch={() => doSwitch(f.familiarId)}
               switchPrice={
-                collection.nextSwitchFree ? 0 : collection.switchPriceSylvins
+                collection.nextSwitchFree ? 0 : collection.switchPriceAureons
               }
             />
           ))}
         </div>
         <p className="mt-3 text-center text-[11px] text-ivory/50">
-          1er changement de familier gratuit, puis {collection.switchPriceSylvins}{" "}
-          Sylvins. Ta progression (XP, niveau, palier) suit toujours ton
+          1er changement de familier gratuit, puis {collection.switchPriceAureons}{" "}
+          Aureons. Ta progression (XP, niveau, palier) suit toujours ton
           nouveau familier.
         </p>
       </section>
@@ -670,7 +670,7 @@ function OwnedFamiliarCard({
           ) : (
             <ArrowLeftRight className="h-3 w-3" aria-hidden />
           )}
-          Changer {switchPrice > 0 && `(${switchPrice} Sylvins)`}
+          Changer {switchPrice > 0 && `(${switchPrice} Aureons)`}
         </button>
       )}
     </div>

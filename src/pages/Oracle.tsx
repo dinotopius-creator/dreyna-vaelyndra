@@ -250,7 +250,7 @@ export function Oracle() {
             Oracle des <span className="text-mystic">Runes</span>
           </>
         }
-        subtitle="Trois runes. Trois tentatives par jour. Les Lueurs tombent souvent, le Sylvin n'arrive presque jamais."
+        subtitle="Trois runes. Trois tentatives par jour. Les Eclats tombent souvent, le Sylvin n'arrive presque jamais."
       />
 
       <div className="mt-10 grid gap-8 lg:grid-cols-[1.15fr,0.85fr]">

@@ -194,10 +194,10 @@ def _apply_migrations() -> None:
 
         # One-shot : reset du wallet de Dreyna (dé-Dreyna-isation du site).
         # Son compte devient un profil normal d'animatrice ; on purge les
-        # Sylvins/Lueurs qui ont pu être accumulés pendant la phase où elle
+        # Aureons/Eclats qui ont pu être accumulés pendant la phase où elle
         # avait un traitement spécial. Idempotent via PRAGMA user_version :
         # tant que la version < 1, on applique et on bump. Les éventuels
-        # Sylvins gagnés après le déploiement sont respectés.
+        # Aureons gagnés après le déploiement sont respectés.
         user_version = conn.exec_driver_sql(
             "PRAGMA user_version"
         ).fetchone()[0]

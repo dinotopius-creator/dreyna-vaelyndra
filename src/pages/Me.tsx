@@ -55,45 +55,45 @@ export function Me() {
    * crédite seulement ensuite le wallet. On relance `refreshBackendMe`
    * quelques fois (toutes les 2 s pendant ~20 s) pour rafraîchir le wallet
    * affiché sans que l'utilisateur ait à faire F5 manuellement. Une fois
-   * que les Sylvins payés ou les Lueurs ont bougé, on retire le flag de l'URL.
+   * que les Aureons payés ou les Eclats ont bougé, on retire le flag de l'URL.
    */
   const startPaidRef = useRef<number | null>(null);
-  const startLueursRef = useRef<number | null>(null);
+  const startEclatsRef = useRef<number | null>(null);
   const backendMeLoaded = backendMe !== null;
   useEffect(() => {
     if (paymentStatus !== "success") return;
     // Le redirect Stripe est un full-page load : `backendMe` est `null`
     // pendant que `/auth/me` se résout. Si on capturait la baseline à
     // ce moment-là, elle vaudrait `0` et n'importe quel utilisateur qui
-    // a déjà des Sylvins payés verrait le toast "paiement confirmé"
+    // a déjà des Aureons payés verrait le toast "paiement confirmé"
     // dès le premier tick (faux positif). On attend donc que
     // `backendMe` soit chargé avant de démarrer le polling.
     if (!backendMeLoaded) return;
     if (startPaidRef.current === null) {
       startPaidRef.current = backendMe?.sylvins_paid ?? 0;
     }
-    if (startLueursRef.current === null) {
-      startLueursRef.current = backendMe?.lueurs ?? 0;
+    if (startEclatsRef.current === null) {
+      startEclatsRef.current = backendMe?.lueurs ?? 0;
     }
     let tries = 0;
     const interval = setInterval(async () => {
       tries += 1;
       const fresh = await refreshBackendMe().catch(() => null);
       const nowPaid = fresh?.sylvins_paid ?? backendMe?.sylvins_paid ?? 0;
-      const nowLueurs = fresh?.lueurs ?? backendMe?.lueurs ?? 0;
+      const nowEclats = fresh?.lueurs ?? backendMe?.lueurs ?? 0;
       const startPaid = startPaidRef.current ?? 0;
-      const startLueurs = startLueursRef.current ?? 0;
-      if (nowPaid > startPaid || nowLueurs > startLueurs || tries >= 10) {
+      const startEclats = startEclatsRef.current ?? 0;
+      if (nowPaid > startPaid || nowEclats > startEclats || tries >= 10) {
         clearInterval(interval);
         const next = new URLSearchParams(searchParams);
         next.delete("payment");
         next.delete("session_id");
         setSearchParams(next, { replace: true });
-        if (nowPaid > startPaid || nowLueurs > startLueurs) {
+        if (nowPaid > startPaid || nowEclats > startEclats) {
           notify(
-            nowLueurs > startLueurs
-              ? "Paiement confirmé, Lueurs créditées ✨"
-              : "Paiement confirmé, Sylvins crédités ✨",
+            nowEclats > startEclats
+              ? "Paiement confirmé, Eclats créditées ✨"
+              : "Paiement confirmé, Aureons crédités ✨",
             "success",
           );
         }
@@ -263,7 +263,7 @@ export function Me() {
                 Paiement reçu — confirmation en cours
               </p>
               <p className="mt-1 text-xs text-emerald-100/80">
-                Ton paiement Stripe a bien été accepté. Les Sylvins arrivent
+                Ton paiement Stripe a bien été accepté. Les Aureons arrivent
                 sur ton compte dès que la confirmation serveur nous parvient
                 (quelques secondes).
               </p>

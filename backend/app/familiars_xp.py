@@ -136,7 +136,7 @@ def grant_gift_received_xp(
     amount_sylvins: int,
     reference_id: Optional[str] = None,
 ) -> int:
-    """Grant XP pour un cadeau Sylvins (ou item équivalent) reçu.
+    """Grant XP pour un cadeau Aureons (ou item équivalent) reçu.
 
     Cumulé avec un cap **par jour** de `GIFT_RECEIVED_DAILY_CAP` XP — un
     streamer ne progresse pas plus vite que ce plafond même si la donation

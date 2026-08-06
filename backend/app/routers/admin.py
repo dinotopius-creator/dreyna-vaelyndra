@@ -67,7 +67,7 @@ def _now_iso() -> str:
 
 
 # Les pots wallet éditables par un admin. On expose les 4 sous-pots
-# (Lueurs + les 3 autres Sylvins split paid/promo + earnings) parce qu'un
+# (Eclats + les 3 autres Aureons split paid/promo + earnings) parce qu'un
 # admin doit pouvoir corriger chaque ligne comptable indépendamment.
 WALLET_POTS: set[str] = {
     "lueurs",

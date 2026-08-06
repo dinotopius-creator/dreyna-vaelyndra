@@ -61,7 +61,7 @@ class Reaction(SQLModel, table=True):
 class CommunityActivityReward(SQLModel, table=True):
     """Récompense hebdo du classement communauté.
 
-    Une ligne = un gain de Lueurs déjà attribué pour une semaine donnée.
+    Une ligne = un gain de Eclats déjà attribué pour une semaine donnée.
     Sert de garde-fou idempotent : si le cron/endpoint de sync est rejoué,
     on ne recrédite jamais deux fois les mêmes gagnants.
     """
@@ -129,8 +129,8 @@ class UserProfile(SQLModel, table=True):
     - `inventory` est une liste d'ids d'items possédés, encodée en JSON. Les
       items équipés sont dans `equipped` (dict slot → itemId).
     - `lueurs` est la monnaie gratuite (daily claim, récompenses). Les
-      Sylvins (monnaie premium) sont **séparés en deux pots** pour empêcher
-      l'auto-fraude (fondateur qui se crédite gratuitement des Sylvins et
+      Aureons (monnaie premium) sont **séparés en deux pots** pour empêcher
+      l'auto-fraude (fondateur qui se crédite gratuitement des Aureons et
       les retire en vrai argent) :
 
       - `sylvins_paid` = solde acheté avec du vrai € via Stripe. Seul pot
@@ -458,11 +458,11 @@ class CatalogProduct(SQLModel, table=True):
     # Toujours "€" en v1 ; on garde la colonne pour compat future.
     currency: str = Field(default="€")
     image: str = ""
-    # "Merch" | "Digital" | "VIP" | "Exclusif" | "Sylvins"
+    # "Merch" | "Digital" | "VIP" | "Exclusif" | "Aureons"
     category: str = Field(default="Merch", index=True)
-    # Null sauf pour les packs Sylvins (montant crédité à l'achat).
+    # Null sauf pour les packs Aureons (montant crédité à l'achat).
     sylvins: Optional[int] = None
-    # Null sauf pour les packs Lueurs vendus en euros.
+    # Null sauf pour les packs Eclats vendus en euros.
     lueurs: Optional[int] = None
     rating: float = Field(default=5.0)
     stock: int = Field(default=0)
@@ -501,7 +501,7 @@ class CatalogArticle(SQLModel, table=True):
 
 
 class GiftLedger(SQLModel, table=True):
-    """Journal append-only de chaque cadeau Sylvins envoyé.
+    """Journal append-only de chaque cadeau Aureons envoyé.
 
     Alimente :
       - Classement hebdo des streamers (agrégé par `receiver_id` sur une
@@ -539,9 +539,9 @@ class StripePayment(SQLModel, table=True):
     (Stripe peut renvoyer le même événement à cause d'un retry réseau).
 
     - `user_id` : qui a payé.
-    - `product_id` : id du `CatalogProduct` (catégorie "Sylvins"/"Lueurs") acheté.
-    - `sylvins_amount` : nombre de Sylvins à créditer sur le pot PAID.
-    - `lueurs_amount` : nombre de Lueurs à créditer.
+    - `product_id` : id du `CatalogProduct` (catégorie "Aureons"/"Eclats") acheté.
+    - `sylvins_amount` : nombre de Aureons à créditer sur le pot PAID.
+    - `lueurs_amount` : nombre de Eclats à créditer.
     - `amount_cents` / `currency` : montant brut de la transaction (pour audit).
     - `status` : `"pending"` à la création, `"paid"` après webhook, `"failed"`
       si Stripe rapporte un échec.
@@ -563,7 +563,7 @@ class StripePayout(SQLModel, table=True):
     """Journal des retraits streamer vers Stripe Connect.
 
     - `id` = `transfer_id` Stripe, unique et suffisant pour l'audit.
-    - `earnings_paid_amount` garde le montant débité en Sylvins retirable.
+    - `earnings_paid_amount` garde le montant débité en Aureons retirable.
     - `amount_cents` garde le net réellement transféré au compte Connect.
     """
 
@@ -604,14 +604,14 @@ class DirectMessage(SQLModel, table=True):
 
 class WalletLedger(SQLModel, table=True):
     """Journal append-only de chaque mouvement sur les pots wallet d'un
-    user (Lueurs / Sylvins promo / Sylvins paid / earnings promo /
+    user (Eclats / Aureons promo / Aureons paid / earnings promo /
     earnings paid).
 
     Une ligne par mouvement, écrite dans la même transaction que la
     modification du `UserProfile` correspondant. Permet :
 
-    1. **Auditer** une plainte "j'ai perdu mes Lueurs" : on retrouve la
-       chronologie exacte (10 Lueurs au daily, +120 à l'Oracle, -120
+    1. **Auditer** une plainte "j'ai perdu mes Eclats" : on retrouve la
+       chronologie exacte (10 Eclats au daily, +120 à l'Oracle, -120
        achat boutique, etc.) et on identifie le bug ou la fraude.
     2. **Restaurer** un solde perdu en rejouant ou en compensant.
     3. **Détecter** des anomalies : un débit sans contrepartie d'item
@@ -666,18 +666,18 @@ class ContestAwardLedger(SQLModel, table=True):
 
 
 class ShopOrder(SQLModel, table=True):
-    """Commandes boutique payées en Lueurs (ou autre monnaie interne).
+    """Commandes boutique payées en Eclats (ou autre monnaie interne).
 
     Crée un enregistrement persistent pour chaque achat fait dans
-    `/boutique` avec des Lueurs, afin que :
+    `/boutique` avec des Eclats, afin que :
 
     1. Le user retrouve son historique d'achats même après vidage du
        cache navigateur (avant cette table, les "orders" étaient en
        localStorage et disparaissaient à chaque clear, donnant
-       l'impression d'avoir "perdu" ses Lueurs sans rien acheter en
+       l'impression d'avoir "perdu" ses Eclats sans rien acheter en
        échange).
     2. L'item acheté soit livré atomiquement à l'inventaire dans la
-       même transaction que le débit des Lueurs (impossible d'avoir un
+       même transaction que le débit des Eclats (impossible d'avoir un
        débit sans livraison ou inversement).
 
     `status` ∈ {"paid", "refunded"}. On ne fait pas encore de refund
@@ -689,7 +689,7 @@ class ShopOrder(SQLModel, table=True):
     quantity: int = Field(default=1)
     unit_price: int
     total_price: int
-    currency: str = Field(default="Lueurs")
+    currency: str = Field(default="Eclats")
     status: str = Field(default="paid", index=True)
     created_at: str = Field(default_factory=_now_iso, index=True)
 
@@ -741,7 +741,7 @@ class FamiliarSwitchLedger(SQLModel, table=True):
     1. Auditer la règle "1er switch gratuit, suivants payants" :
        en comptant les lignes pour un user on sait combien de switchs il
        a déjà faits.
-    2. Tracer la consommation Sylvins liée aux switchs (la ligne pointe
+    2. Tracer la consommation Aureons liée aux switchs (la ligne pointe
        sur la `WalletLedger` correspondante via `reference_id`).
     3. Détecter de l'abus (trop de switchs très rapprochés = sans doute
        un bug client qui spam le bouton).
@@ -785,11 +785,11 @@ class FamiliarXPLedger(SQLModel, table=True):
 
 
 class FamiliarGiftLedger(SQLModel, table=True):
-    """Journal des offrandes de Sylvins faites au familier d'un membre.
+    """Journal des offrandes de Aureons faites au familier d'un membre.
 
     Sépare le suivi "social" (qui a offert à qui) des journaux purement
     comptables (`WalletLedger`) et XP (`FamiliarXPLedger`). Sert à notifier
-    le destinataire ("X a offert N Sylvins à ton familier") et à lui
+    le destinataire ("X a offert N Aureons à ton familier") et à lui
     proposer d'offrir en retour. Une ligne par offrande.
 
     `sender_name` est un instantané du pseudo au moment de l'offrande

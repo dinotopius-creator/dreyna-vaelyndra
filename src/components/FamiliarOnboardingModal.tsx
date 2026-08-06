@@ -195,7 +195,7 @@ export function FamiliarOnboardingModal({ userId, open, onChosen }: Props) {
                           locked={true}
                           onSelect={() => {
                             notify(
-                              `${f.name} est un familier ancestral, disponible depuis la boutique du familier (${f.priceSylvins} Sylvins).`,
+                              `${f.name} est un familier ancestral, disponible depuis la boutique du familier (${f.priceAureons} Aureons).`,
                             );
                           }}
                         />
@@ -222,7 +222,7 @@ export function FamiliarOnboardingModal({ userId, open, onChosen }: Props) {
                 </button>
                 <p className="text-center text-[11px] text-ivory/50">
                   Tu pourras changer plus tard depuis la page Mon Familier
-                  (1er changement gratuit, puis 300 Sylvins). Ta progression
+                  (1er changement gratuit, puis 300 Aureons). Ta progression
                   suivra ton nouveau familier.
                 </p>
               </div>
@@ -314,7 +314,7 @@ function FamiliarChoiceCard({
       <FamiliarStatsPreview baseStats={familiar.baseStats} />
       {locked && (
         <span className="mt-1 rounded-full bg-night-900/80 px-2 py-0.5 text-[10px] uppercase tracking-wider text-gold-300/80">
-          {familiar.priceSylvins} Sylvins
+          {familiar.priceAureons} Aureons
         </span>
       )}
     </button>

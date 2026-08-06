@@ -603,7 +603,7 @@ export function CommunityImmersiveFeed({
                           </p>
                           <p className="mt-1 leading-6">
                             Le top 5 reçoit une mise en avant sociale et les 3 premiers cumulent des récompenses
-                            de Lueurs selon le classement hebdomadaire.
+                            de Eclats selon le classement hebdomadaire.
                           </p>
                         </div>
                       </div>

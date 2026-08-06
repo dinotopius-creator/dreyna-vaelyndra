@@ -176,7 +176,7 @@ export function AdminUserPanel({
     if (!isArchitect) {
       if (pot !== "lueurs" && pot !== "sylvins_promo") {
         notify(
-          "Cette action doit être validée par l'Architecte. Utilise une demande de lueurs ou de Sylvins promo.",
+          "Cette action doit être validée par l'Architecte. Utilise une demande de lueurs ou de Aureons promo.",
           "error",
         );
         return;
@@ -584,9 +584,9 @@ export function AdminUserPanel({
           <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-5">
             {(
               [
-                ["lueurs", "Lueurs", detail.lueurs],
-                ["sylvins_promo", "Sylvins promo", detail.sylvinsPromo],
-                ["sylvins_paid", "Sylvins payés", detail.sylvinsPaid],
+                ["lueurs", "Eclats", detail.lueurs],
+                ["sylvins_promo", "Aureons promo", detail.sylvinsPromo],
+                ["sylvins_paid", "Aureons payés", detail.sylvinsPaid],
                 ["earnings_promo", "Earnings promo", detail.earningsPromo],
                 ["earnings_paid", "Earnings payés", detail.earningsPaid],
               ] as const

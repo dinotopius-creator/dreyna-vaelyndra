@@ -44,7 +44,7 @@ export interface FamiliarCatalogItem {
   color: string;
   tagline: string;
   description: string;
-  priceSylvins: number;
+  priceAureons: number;
   baseStats: Record<string, number>;
 }
 
@@ -114,7 +114,7 @@ export interface FamiliarCollection {
   owned: OwnedFamiliar[];
   switchCount: number;
   nextSwitchFree: boolean;
-  switchPriceSylvins: number;
+  switchPriceAureons: number;
 }
 
 export async function fetchFamiliarsCatalog(): Promise<FamiliarCatalogItem[]> {
@@ -155,7 +155,7 @@ export interface FamiliarEnclosureActionResult {
   foodFound: number;
   heartGained: number | null;
   lueursRewarded: number;
-  profileLueurs: number;
+  profileEclats: number;
   cooldownRemainingSeconds: number;
   message: string;
 }
@@ -262,7 +262,7 @@ export async function giftFamiliar(
   );
 }
 
-/** Une offrande Sylvins reçue par le familier de l'utilisateur courant. */
+/** Une offrande Aureons reçue par le familier de l'utilisateur courant. */
 export interface ReceivedFamiliarGift {
   id: number;
   senderId: string;
@@ -308,9 +308,9 @@ export const STAT_LABELS: Record<
     help: "Pendant tes lives, ton familier réagit plus fort aux cadeaux et aux cœurs (sauts, particules, glow). L'écran du live est plus vivant pour tes viewers.",
   },
   harvest: {
-    label: "Récolte de Lueurs",
+    label: "Récolte de Eclats",
     emoji: "🌙",
-    help: "Mini bonus pourcentuel sur ta moisson quotidienne de Lueurs (le daily-claim). Plus la stat est haute, plus tu grattes de Lueurs par jour.",
+    help: "Mini bonus pourcentuel sur ta moisson quotidienne de Eclats (le daily-claim). Plus la stat est haute, plus tu grattes de Eclats par jour.",
   },
   affinity: {
     label: "Affinité Sylvaine",

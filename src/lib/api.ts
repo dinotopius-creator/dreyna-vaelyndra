@@ -208,7 +208,7 @@ export interface CommunityActivityRewardDto {
   weekStartIso: string;
   userId: string;
   rank: number;
-  rewardLueurs: number;
+  rewardEclats: number;
   awardedAt: string;
 }
 
@@ -274,7 +274,7 @@ export interface DrawingContestStatusDto {
   active: boolean;
   now: string;
   timeRemainingMs: number;
-  rewardLueurs: number;
+  rewardEclats: number;
   rewardFood: number;
   announcementPostId: string;
   entries: DrawingContestEntryDto[];
@@ -288,7 +288,7 @@ export interface DrawingContestSettlementDto {
   alreadyAwarded: boolean;
   winner: DrawingContestEntryDto | null;
   awardedAt: string | null;
-  rewardLueurs: number;
+  rewardEclats: number;
   rewardFood: number;
 }
 
@@ -329,8 +329,8 @@ export interface OracleStatusDto {
 
 export interface OraclePlayDto extends OracleStatusDto {
   reward: OracleRewardDto;
-  profileLueurs: number;
-  profileSylvinsPromo: number;
+  profileEclats: number;
+  profileAureonsPromo: number;
 }
 
 export async function apiGetOracleStatus(
@@ -364,7 +364,7 @@ export async function apiPlayOracle(input: {
  * - `inventory` / `equipped` : items possédés / équipés (ids opaque string)
  * - `lueurs` : monnaie gratuite (daily claim, events)
  *
- * Sylvins (monnaie premium) — split anti-fraude :
+ * Aureons (monnaie premium) — split anti-fraude :
  * - `sylvinsPaid` : solde acheté en € via Stripe (seul pot retirable)
  * - `sylvinsPromo` : solde gratuit (admin top-up, events, cadeaux reçus
  *   depuis un pot promo). Dépensable mais non retirable.
@@ -803,9 +803,9 @@ export async function apiApplyWalletDelta(
      */
     sylvins?: number;
     sylvins_earnings?: number;
-    /** Crédit/débit explicite du pot PAID Sylvins (retirable). */
+    /** Crédit/débit explicite du pot PAID Aureons (retirable). */
     sylvins_paid?: number;
-    /** Crédit/débit explicite du pot PROMO Sylvins (non retirable). */
+    /** Crédit/débit explicite du pot PROMO Aureons (non retirable). */
     sylvins_promo?: number;
     /** Crédit/débit explicite des earnings PAID streamer. */
     earnings_paid?: number;
@@ -821,21 +821,21 @@ export async function apiApplyWalletDelta(
 }
 
 /**
- * Achat boutique atomique payé en Lueurs.
+ * Achat boutique atomique payé en Eclats.
  *
  * Le serveur fait, en une seule transaction :
- *   - vérifie le solde Lueurs,
+ *   - vérifie le solde Eclats,
  *   - débite `price`,
  *   - ajoute `itemId` à l'inventaire,
  *   - écrit une ligne `ShopOrder` (history persistant côté DB),
- *   - écrit une ligne `WalletLedger` (audit du débit Lueurs).
+ *   - écrit une ligne `WalletLedger` (audit du débit Eclats).
  *
  * Sans cet endpoint, le frontend faisait :
  *   `apiApplyWalletDelta({ lueurs: -price })` puis `dispatch addOrder`
  *   en LOCAL → la commande disparaissait au vidage du cache
- *   navigateur, donnant l'impression d'avoir "perdu" des Lueurs.
+ *   navigateur, donnant l'impression d'avoir "perdu" des Eclats.
  */
-export async function apiShopPurchaseLueurs(
+export async function apiShopPurchaseEclats(
   userId: string,
   body: { item_id: string; price: number },
 ): Promise<UserProfileDto> {
@@ -853,7 +853,7 @@ export interface GiftTransferDto {
 }
 
 /**
- * Transfert atomique de Sylvins (cadeau live). Le serveur consomme le pot
+ * Transfert atomique de Aureons (cadeau live). Le serveur consomme le pot
  * PROMO du sender en priorité et crédite le receiver sur les pots miroirs
  * (promo→promo, paid→paid) : impossible de blanchir un solde promo en
  * cashable via un complice.
@@ -902,7 +902,7 @@ export interface GiftItemDto {
  * Le serveur :
  *   - vérifie que l'item est bien dans la wishlist du receiver,
  *   - vérifie que le receiver ne possède pas déjà l'item,
- *   - débite le sender (PROMO d'abord pour les Sylvins),
+ *   - débite le sender (PROMO d'abord pour les Aureons),
  *   - ajoute l'item à l'inventaire du receiver + le retire de sa wishlist.
  * Atomique.
  */
@@ -929,7 +929,7 @@ export async function apiGiftItem(input: {
   )) as GiftItemDto;
 }
 
-export async function apiGiftSylvins(input: {
+export async function apiGiftAureons(input: {
   senderId: string;
   receiverId: string;
   amount: number;
@@ -973,7 +973,7 @@ export interface StreamerLeaderboardEntryDto {
   userId: string;
   username: string;
   avatarImageUrl: string;
-  totalSylvins: number;
+  totalAureons: number;
   creature: CreatureDto | null;
   role: string;
   /** PR M — grade affiché à côté du nom dans le classement. */
@@ -990,11 +990,11 @@ export interface StreamerLeaderboardDto {
 export interface BFFEntryDto {
   streamer: StreamerMiniDto;
   donor: StreamerMiniDto;
-  totalSylvins: number;
+  totalAureons: number;
 }
 
 /**
- * Classement hebdomadaire des streamers par Sylvins reçus.
+ * Classement hebdomadaire des streamers par Aureons reçus.
  * - `week=this` (défaut) : semaine ISO en cours, mise à jour temps réel
  *   (chaque cadeau écrit une ligne de ledger côté backend).
  * - `week=last` : semaine précédente, figée.
@@ -1051,7 +1051,7 @@ export interface CommunityTopFanDto {
   username: string;
   handle?: string | null;
   avatarImageUrl: string;
-  totalSylvinsGiven: number;
+  totalAureonsGiven: number;
 }
 
 export async function apiGetCommunityStats(): Promise<CommunityStatsOverviewDto | null> {

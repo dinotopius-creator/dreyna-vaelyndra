@@ -1,6 +1,6 @@
 """Endpoints Stripe : Checkout Session + webhook de confirmation.
 
-Flux achat de Sylvins :
+Flux achat de Aureons :
 
 1. Le client cliquue "Payer" sur un pack `prod-sylvins-*` → appel
    `POST /stripe/checkout/sylvins` avec `{product_id}`.
@@ -25,7 +25,7 @@ Flux achat de Sylvins :
 Sécurité :
 - La valeur de `sylvins_amount` est **recalculée côté backend** à partir
   du `CatalogProduct`, jamais prise depuis le frontend. Impossible pour un
-  client malveillant de demander un produit à 1€ et recevoir 10 000 Sylvins.
+  client malveillant de demander un produit à 1€ et recevoir 10 000 Aureons.
 - La signature du webhook est vérifiée avec `STRIPE_WEBHOOK_SECRET` → on
   refuse tout appel non signé par Stripe.
 - `metadata.user_id` doit correspondre à la session authentifiée au moment
@@ -317,38 +317,38 @@ def withdraw_streamer_earnings(
     )
 
 
-class CheckoutSylvinsIn(BaseModel):
+class CheckoutAureonsIn(BaseModel):
     product_id: str
 
 
-class CheckoutSylvinsOut(BaseModel):
+class CheckoutAureonsOut(BaseModel):
     url: str
     session_id: str
 
 
-@router.post("/checkout/sylvins", response_model=CheckoutSylvinsOut)
+@router.post("/checkout/sylvins", response_model=CheckoutAureonsOut)
 def create_sylvins_checkout(
-    payload: CheckoutSylvinsIn,
+    payload: CheckoutAureonsIn,
     user: UserProfile = Depends(require_auth),
     session: Session = Depends(_session_dep),
-) -> CheckoutSylvinsOut:
-    """Crée une session Stripe Checkout pour un pack de Sylvins ou Lueurs."""
+) -> CheckoutAureonsOut:
+    """Crée une session Stripe Checkout pour un pack de Aureons ou Eclats."""
     stripe.api_key = _stripe_secret()
 
     product = session.get(CatalogProduct, payload.product_id)
     if product is None:
         raise HTTPException(status_code=404, detail="Produit introuvable.")
-    is_sylvins_pack = product.category == "Sylvins"
-    is_lueurs_pack = product.category == "Lueurs"
+    is_sylvins_pack = product.category == "Aureons"
+    is_lueurs_pack = product.category == "Eclats"
     if not is_sylvins_pack and not is_lueurs_pack:
         raise HTTPException(
             status_code=400,
-            detail="Seuls les packs de Sylvins ou de Lueurs sont encaissables via Stripe.",
+            detail="Seuls les packs de Aureons ou de Eclats sont encaissables via Stripe.",
         )
     credited_amount = (
         int(product.sylvins or 0) if is_sylvins_pack else int(product.lueurs or 0)
     )
-    credited_label = "Sylvins" if is_sylvins_pack else "Lueurs"
+    credited_label = "Aureons" if is_sylvins_pack else "Eclats"
     if credited_amount <= 0:
         raise HTTPException(
             status_code=400,
@@ -440,7 +440,7 @@ def create_sylvins_checkout(
         amount_cents,
     )
 
-    return CheckoutSylvinsOut(url=checkout.url, session_id=checkout.id)
+    return CheckoutAureonsOut(url=checkout.url, session_id=checkout.id)
 
 
 @router.post("/webhook", include_in_schema=False)
@@ -524,7 +524,7 @@ def _sg(obj: Any, key: str) -> Any:
 def _apply_paid_checkout(
     session: Session, checkout_id: str, stripe_object: Any
 ) -> None:
-    """Crédite les Sylvins correspondants à une session Stripe payée.
+    """Crédite les Aureons correspondants à une session Stripe payée.
 
     `stripe_object` est typé `Any` car Stripe renvoie un `StripeObject`
     (pas un `dict`) qui n'a pas `.get()` ; on passe par `_sg()`.
@@ -597,11 +597,11 @@ def _apply_paid_checkout(
     #
     #    Important : on ne commit PAS encore. Si on committait ici puis
     #    qu'un crash survient avant le commit final (ligne 369), la ligne
-    #    `StripePayment` resterait en `paid` mais les Sylvins ne seraient
+    #    `StripePayment` resterait en `paid` mais les Aureons ne seraient
     #    jamais crédités → la CAS suivante verrait `rowcount == 0` et
     #    sortirait via la branche idempotence : crédit perdu.
     #    En gardant un seul commit à la fin, l'UPDATE de status et
-    #    l'incrément des Sylvins partent dans la même transaction. Les
+    #    l'incrément des Aureons partent dans la même transaction. Les
     #    `session.get()` ci-dessous voient l'UPDATE non encore committé
     #    via les sémantiques read-your-own-writes (Postgres + SQLite).
     record: Optional[StripePayment] = session.get(StripePayment, checkout_id)

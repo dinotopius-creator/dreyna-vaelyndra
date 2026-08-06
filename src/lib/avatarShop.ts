@@ -1,7 +1,7 @@
 /**
  * Catalogue boutique avatar — items cosmétiques achetables avec les bourses
- * internes (Lueurs / Sylvins), par opposition à la boutique marchande
- * (packs Sylvins payés en €).
+ * internes (Eclats / Aureons), par opposition à la boutique marchande
+ * (packs Aureons payés en €).
  *
  * Trois familles :
  *
@@ -96,7 +96,7 @@ export const EQUIP_SLOT = {
  * page est celui de ce tableau.
  */
 export const SHOP_CATALOG: ShopItem[] = [
-  // --- Styles supplémentaires (débloquables en Lueurs) ---------------
+  // --- Styles supplémentaires (débloquables en Eclats) ---------------
   {
     id: "style-pixel-art",
     category: "style",
@@ -227,7 +227,7 @@ export const SHOP_CATALOG: ShopItem[] = [
     price: 40,
     styleId: "adventurer-neutral",
   },
-  // --- Fonds premium (Lueurs / Sylvins) ------------------------------
+  // --- Fonds premium (Eclats / Aureons) ------------------------------
   {
     id: "bg-royal-gold",
     category: "background",

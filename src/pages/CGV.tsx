@@ -21,9 +21,9 @@ export function CGV() {
       <p>Le Royaume propose deux catégories de produits :</p>
       <ol>
         <li>
-          <strong>Biens numériques — Sylvins de PulseForge</strong> : monnaie
+          <strong>Biens numériques — Aureons de PulseForge</strong> : monnaie
           virtuelle interne utilisable pour offrir des cadeaux animés pendant
-          les lives, débloquer des badges ou des accès VIP. Les Sylvins sont
+          les lives, débloquer des badges ou des accès VIP. Les Aureons sont
           crédités au compte du Client immédiatement après validation du
           paiement.
         </li>
@@ -86,9 +86,9 @@ export function CGV() {
         automatiquement annulée.
       </p>
 
-      <h2>5. Livraison des Sylvins (bien numérique)</h2>
+      <h2>5. Livraison des Aureons (bien numérique)</h2>
       <p>
-        Les Sylvins sont crédités sur le compte du Client{" "}
+        Les Aureons sont crédités sur le compte du Client{" "}
         <strong>immédiatement après validation du paiement</strong>,
         généralement en moins de quelques secondes. En cas d'incident
         technique retardant la livraison au-delà de 24 heures, le Client est
@@ -125,18 +125,18 @@ export function CGV() {
         compter de la réception du bien.
       </p>
 
-      <h2>8. Absence de droit de rétractation (Sylvins)</h2>
+      <h2>8. Absence de droit de rétractation (Aureons)</h2>
       <p>
         Conformément à l'article L221-28 13° du Code de la consommation, la
         fourniture de contenus numériques non fournis sur un support matériel
         dont l'exécution a commencé après accord préalable exprès du
         consommateur et renoncement exprès à son droit de rétractation n'ouvre
-        pas droit à rétractation. En validant l'achat de Sylvins, le Client :
+        pas droit à rétractation. En validant l'achat de Aureons, le Client :
       </p>
       <ul>
         <li>
           accepte expressément que l'exécution commence immédiatement (crédit
-          des Sylvins sur son compte),
+          des Aureons sur son compte),
         </li>
         <li>renonce expressément à son droit de rétractation.</li>
       </ul>
@@ -161,12 +161,12 @@ export function CGV() {
         délivrance du bien neuf.
       </blockquote>
 
-      <h2>10. Remboursement des Sylvins</h2>
+      <h2>10. Remboursement des Aureons</h2>
       <p>
-        En cas d'erreur technique (double débit, Sylvins non crédités, cadeau
+        En cas d'erreur technique (double débit, Aureons non crédités, cadeau
         envoyé involontairement), le Client peut demander un remboursement ou
         un nouvel avoir en contactant le support sous 30 jours. Hors ces cas,
-        les Sylvins ne sont ni remboursables, ni échangeables, ni transférables.
+        les Aureons ne sont ni remboursables, ni échangeables, ni transférables.
       </p>
 
       <h2>11. Réclamations et médiation</h2>

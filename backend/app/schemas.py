@@ -103,7 +103,7 @@ class CommunityActivityRewardOut(BaseModel):
     weekStartIso: str
     userId: str
     rank: int
-    rewardLueurs: int
+    rewardEclats: int
     awardedAt: str
 
 
@@ -154,7 +154,7 @@ class DrawingContestStatusOut(BaseModel):
     active: bool = False
     now: str
     timeRemainingMs: int = 0
-    rewardLueurs: int = 0
+    rewardEclats: int = 0
     rewardFood: int = 0
     announcementPostId: str
     entries: List[DrawingContestEntryOut] = []
@@ -168,7 +168,7 @@ class DrawingContestSettlementOut(BaseModel):
     alreadyAwarded: bool = False
     winner: Optional[DrawingContestEntryOut] = None
     awardedAt: Optional[str] = None
-    rewardLueurs: int = 0
+    rewardEclats: int = 0
     rewardFood: int = 0
 
 
@@ -211,8 +211,8 @@ class OraclePlayOut(BaseModel):
     playsLeftToday: int
     maxDailyPlays: int = 3
     reward: OracleRewardOut
-    profileLueurs: int
-    profileSylvinsPromo: int
+    profileEclats: int
+    profileAureonsPromo: int
     recentHistory: List[OracleHistoryEntryOut] = []
 
 
@@ -337,7 +337,7 @@ class WalletDelta(BaseModel):
     Les valeurs peuvent être négatives (débit). Le serveur refuse les soldes
     négatifs finaux (HTTP 400).
 
-    Sylvins split (anti-fraude, cf. `UserProfile`) :
+    Aureons split (anti-fraude, cf. `UserProfile`) :
 
     - `sylvins_paid` / `earnings_paid` : pots **réellement payés en €**
       (webhook Stripe). Seuls ces pots alimentent les retraits streamer.
@@ -384,7 +384,7 @@ class GiftItem(BaseModel):
 
 
 class GiftTransfer(BaseModel):
-    """Transfert atomique de Sylvins du pot sender vers les earnings receiver.
+    """Transfert atomique de Aureons du pot sender vers les earnings receiver.
 
     Respecte le split paid/promo : consomme d'abord le pot PROMO du sender
     (si suffisant) puis PAID. Crédite les earnings du receiver dans le pot
@@ -504,7 +504,7 @@ class DailyClaimOut(BaseModel):
     granted: int
     already_claimed: bool = False
     profile: UserProfileOut
-    # Bonus apporté par la stat `harvest` (Récolte de Lueurs) du familier
+    # Bonus apporté par la stat `harvest` (Récolte de Eclats) du familier
     # actif. 0 si pas de familier ou stat à 0.
     harvest_bonus: int = 0
 
@@ -628,7 +628,7 @@ class StreamerLeaderboardEntryOut(BaseModel):
     username: str
     handle: Optional[str] = None
     avatarImageUrl: str
-    totalSylvins: int
+    totalAureons: int
     creature: Optional[CreatureOut] = None
     role: str = "user"
     grade: Optional["StreamerGradeOut"] = None
@@ -644,4 +644,4 @@ class StreamerLeaderboardOut(BaseModel):
 class BFFEntryOut(BaseModel):
     streamer: StreamerMiniOut
     donor: StreamerMiniOut
-    totalSylvins: int
+    totalAureons: int

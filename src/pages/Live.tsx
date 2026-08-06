@@ -917,7 +917,7 @@ function BroadcasterControls() {
                   Activées pendant le live
                 </span>
                 <span className="rounded-full border border-ivory/10 bg-night-950/55 px-3 py-1">
-                  Cadeaux en Sylvins
+                  Cadeaux en Aureons
                 </span>
                 <span className="rounded-full border border-ivory/10 bg-night-950/55 px-3 py-1">
                   Animation visible sur scène
@@ -1557,7 +1557,7 @@ export function Live() {
   const [giftTick, setGiftTick] = useState(0);
   const [lastGiftColor, setLastGiftColor] = useState<string | null>(null);
   const [heartTick, setHeartTick] = useState(0);
-  // Agrégat des Sylvins offerts au broadcaster courant pendant la
+  // Agrégat des Aureons offerts au broadcaster courant pendant la
   // séance en cours, clé par senderId. Alimenté UNIQUEMENT par les
   // vrais cadeaux reçus via le canal `gift-event` du WebRTC — plus
   // aucune donnée fictive (cf. demande Alexandre : "je ne veux pas de
@@ -1902,7 +1902,7 @@ export function Live() {
   // À la réception (chez tous les viewers + le host), on déclenche :
   //  1. le vol du cadeau (animé par rarété, cf. GiftFlight.tsx) ;
   //  2. le son procédural correspondant ;
-  //  3. la mise à jour du top soutien (cumul des Sylvins par sender) ;
+  //  3. la mise à jour du top soutien (cumul des Aureons par sender) ;
   //  4. l'annonce dans le chat ("🎁 X a offert Y").
   // C'est cette réception qui anime tout : l'émetteur reçoit le même
   // event en écho local (cf. publishGiftEvent), donc il voit aussi
@@ -1941,7 +1941,7 @@ export function Live() {
       // 2. Son procédural par rarété.
       playGiftSound(gift.rarity);
 
-      // 3. Top soutien temps réel : on cumule les Sylvins par sender.
+      // 3. Top soutien temps réel : on cumule les Aureons par sender.
       setTributes((prev) => {
         const current = prev[event.senderId];
         return {
@@ -1960,7 +1960,7 @@ export function Live() {
       // gift-event est lui-même déjà broadcasté, donc tout le monde
       // affichera la même annonce indépendamment.
       pushSystemAnnouncement(
-        `🎁 ${event.senderName} a offert ${gift.name} · +${gift.price} Sylvins`,
+        `🎁 ${event.senderName} a offert ${gift.name} · +${gift.price} Aureons`,
       );
     });
     return unsubscribe;

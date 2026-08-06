@@ -7,7 +7,7 @@ export const COMMUNITY_DRAWING_CONTEST = {
   title: "Concours de dessin terminé",
   startsAt: "2026-06-18T00:00:00Z",
   endsAt: "2026-06-19T00:00:00Z",
-  rewardLueurs: 1000,
+  rewardEclats: 1000,
   rewardFood: 6,
   notificationId: "official-event:drawing-contest",
   announcementPostId: "official-event:drawing-contest-post",

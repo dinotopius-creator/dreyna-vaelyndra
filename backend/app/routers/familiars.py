@@ -184,7 +184,7 @@ class FamiliarCatalogItemOut(BaseModel):
     color: str
     tagline: str
     description: str
-    priceSylvins: int
+    priceAureons: int
     baseStats: dict
 
 
@@ -256,7 +256,7 @@ class FamiliarEnclosureActionOut(BaseModel):
     foodFound: int = 0
     heartGained: Optional[int] = None
     lueursRewarded: int = 0
-    profileLueurs: int = 0
+    profileEclats: int = 0
     cooldownRemainingSeconds: int = 0
     message: str
 
@@ -269,7 +269,7 @@ class FamiliarCollectionOut(BaseModel):
     owned: List[OwnedFamiliarOut]
     switchCount: int
     nextSwitchFree: bool
-    switchPriceSylvins: int
+    switchPriceAureons: int
 
 
 class BuyFamiliarPayload(BaseModel):
@@ -315,7 +315,7 @@ def _catalog_item_out(definition) -> FamiliarCatalogItemOut:
         color=definition["color"],
         tagline=definition["tagline"],
         description=definition["description"],
-        priceSylvins=definition["price_sylvins"],
+        priceAureons=definition["price_sylvins"],
         baseStats=dict(definition["base_stats"]),
     )
 
@@ -476,7 +476,7 @@ def _switch_count(session: Session, user_id: str) -> int:
 
 
 def _consume_sylvins(p: UserProfile, amount: int) -> tuple[int, int]:
-    """Débite `amount` Sylvins, PROMO d'abord puis PAID.
+    """Débite `amount` Aureons, PROMO d'abord puis PAID.
 
     Retourne (`take_promo`, `take_paid`) effectivement débités. Lève
     `HTTPException(400)` si le solde total est insuffisant. Appel à
@@ -488,7 +488,7 @@ def _consume_sylvins(p: UserProfile, amount: int) -> tuple[int, int]:
     if total < amount:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Solde Sylvins insuffisant.",
+            detail="Solde Aureons insuffisant.",
         )
     remaining = amount
     take_promo = min(remaining, max(0, p.sylvins))
@@ -555,7 +555,7 @@ def _collection_out(session: Session, user_id: str) -> FamiliarCollectionOut:
         owned=[_owned_out(r) for r in owned],
         switchCount=switch_count,
         nextSwitchFree=switch_count == 0,
-        switchPriceSylvins=SWITCH_PRICE_SYLVINS,
+        switchPriceAureons=SWITCH_PRICE_SYLVINS,
     )
 
 
@@ -616,7 +616,7 @@ def clean_familiar_enclosure(
             familiar=_owned_out(active),
             affection=_affection_out(active),
             cooldownRemainingSeconds=remaining,
-            profileLueurs=p.lueurs,
+            profileEclats=p.lueurs,
             message="L'enclos est déjà propre. Revenez un peu plus tard.",
         )
 
@@ -639,7 +639,7 @@ def clean_familiar_enclosure(
         affection=_affection_out(active),
         foodFound=food_found,
         cooldownRemainingSeconds=_cleaning_cooldown_remaining(active),
-        profileLueurs=p.lueurs,
+        profileEclats=p.lueurs,
         message=message,
     )
 
@@ -652,7 +652,7 @@ def feed_active_familiar(
     user_id: str,
     session: Session = Depends(_session_dep),
 ) -> FamiliarEnclosureActionOut:
-    """Nourrit le familier actif et crédite les Lueurs au changement de coeur."""
+    """Nourrit le familier actif et crédite les Eclats au changement de coeur."""
     p = session.get(UserProfile, user_id)
     if not p:
         raise HTTPException(status_code=404, detail="Profil introuvable.")
@@ -719,7 +719,7 @@ def feed_active_familiar(
         affection=affection,
         heartGained=heart_gained,
         lueursRewarded=lueurs_rewarded,
-        profileLueurs=p.lueurs,
+        profileEclats=p.lueurs,
         message=message,
     )
 
@@ -767,7 +767,7 @@ def buy_familiar_cosmetic(
         if p.lueurs < price:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Solde Lueurs insuffisant.",
+                detail="Solde Eclats insuffisant.",
             )
         p.lueurs -= price
         session.add(
@@ -921,7 +921,7 @@ def onboard_familiar(
     Refusé si l'utilisateur possède déjà un familier (il doit passer par
     `buy` ou `switch` pour en obtenir un autre). Premier `to_familiar`
     GRATUIT pour les 4 familiers `tier=free` ; pour un premium en
-    onboarding, on facture normalement le prix Sylvins.
+    onboarding, on facture normalement le prix Aureons.
     """
     p = session.get(UserProfile, user_id)
     if not p:
@@ -982,12 +982,12 @@ def buy_familiar(
     payload: BuyFamiliarPayload,
     session: Session = Depends(_session_dep),
 ) -> FamiliarCollectionOut:
-    """Achat d'un familier premium avec des Sylvins.
+    """Achat d'un familier premium avec des Aureons.
 
     Atomique :
-      1. Vérifie le solde Sylvins (promo + paid)
+      1. Vérifie le solde Aureons (promo + paid)
       2. Refuse si déjà possédé
-      3. Débite Sylvins (PROMO d'abord, PAID en débordement)
+      3. Débite Aureons (PROMO d'abord, PAID en débordement)
       4. Ajoute le familier à la collection (inactif par défaut)
       5. Écrit `WalletLedger` (-cost, `familier:buy:{id}`)
 
@@ -1066,7 +1066,7 @@ def switch_familiar(
       (`new.xp = max(new.xp, old.xp)` — on garde le meilleur pour ne
       jamais perdre de progression).
     - Atomique : verrouille, transfère XP, désactive l'ancien, active
-      le nouveau, débite Sylvins, écrit `FamiliarSwitchLedger` +
+      le nouveau, débite Aureons, écrit `FamiliarSwitchLedger` +
       éventuel `WalletLedger`.
     """
     p = session.get(UserProfile, user_id)
@@ -1167,7 +1167,7 @@ def rename_active_familiar(
     """Rename (surnom) du familier actif. `None` ou `""` retire le surnom.
 
     Première attribution de surnom GRATUITE. Tout changement ultérieur vers
-    un nouveau surnom non vide coûte `RENAME_PRICE_SYLVINS` Sylvins.
+    un nouveau surnom non vide coûte `RENAME_PRICE_SYLVINS` Aureons.
     """
     p = session.get(UserProfile, user_id)
     if not p:
@@ -1230,7 +1230,7 @@ def rename_specific_familiar(
     """Rename surnom pour un familier précis (par son `UserFamiliar.id`).
 
     Même règle : première attribution gratuite, changements ultérieurs
-    vers un surnom non vide coûtent `RENAME_PRICE_SYLVINS` Sylvins.
+    vers un surnom non vide coûtent `RENAME_PRICE_SYLVINS` Aureons.
     """
     p = session.get(UserProfile, user_id)
     if not p:
@@ -1290,9 +1290,9 @@ def gift_familiar(
     payload: GiftFamiliarPayload,
     session: Session = Depends(_session_dep),
 ) -> GiftFamiliarOut:
-    """Offrir des Sylvins au familier actif d'un autre utilisateur.
+    """Offrir des Aureons au familier actif d'un autre utilisateur.
 
-    Le sender paie `amount` Sylvins (PROMO puis PAID). Le familier actif
+    Le sender paie `amount` Aureons (PROMO puis PAID). Le familier actif
     du receiver gagne `amount` XP (ratio 1:1, capé 1000 XP/jour). Le
     sender gagne aussi de l'XP sur son propre familier (amount // 3,
     capé 200 XP/jour).
@@ -1337,7 +1337,7 @@ def gift_familiar(
         session, payload.senderId, payload.amount, reference_id
     )
 
-    # Trace sociale pour notifier le destinataire ("X a offert N Sylvins à
+    # Trace sociale pour notifier le destinataire ("X a offert N Aureons à
     # ton familier") et lui proposer d'offrir en retour.
     session.add(
         FamiliarGiftLedger(
@@ -1393,10 +1393,10 @@ def list_received_familiar_gifts(
     limit: int = 50,
     session: Session = Depends(_session_dep),
 ) -> List[ReceivedFamiliarGiftOut]:
-    """Liste les offrandes Sylvins reçues par le familier du membre.
+    """Liste les offrandes Aureons reçues par le familier du membre.
 
     Trié du plus récent au plus ancien. Le client poll cet endpoint pour
-    générer les notifications "X a offert N Sylvins à ton familier".
+    générer les notifications "X a offert N Aureons à ton familier".
     """
     capped = max(1, min(limit, 100))
     rows = session.exec(

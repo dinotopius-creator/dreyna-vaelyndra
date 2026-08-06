@@ -524,9 +524,9 @@ function ProductsAdmin() {
           "https://images.unsplash.com/photo-1470813740244-df37b8c1edcb?w=900&auto=format&fit=crop&q=80",
         category: form.category,
         sylvins:
-          form.category === "Sylvins" ? Number(form.currencyAmount) : null,
+          form.category === "Aureons" ? Number(form.currencyAmount) : null,
         lueurs:
-          form.category === "Lueurs" ? Number(form.currencyAmount) : null,
+          form.category === "Eclats" ? Number(form.currencyAmount) : null,
         rating: 5,
         stock: Number(form.stock),
         tags: [],
@@ -608,20 +608,20 @@ function ProductsAdmin() {
             })
           }
         >
-          <option>Lueurs</option>
+          <option>Eclats</option>
           <option>Aureons</option>
           <option>Merch</option>
           <option>Digital</option>
           <option>VIP</option>
           <option>Exclusif</option>
         </select>
-        {(form.category === "Lueurs" || form.category === "Sylvins") && (
+        {(form.category === "Eclats" || form.category === "Aureons") && (
           <input
             type="number"
             className="glass-input"
             placeholder={
-              form.category === "Lueurs"
-                ? "Lueurs créditées"
+              form.category === "Eclats"
+                ? "Eclats créditées"
                 : "Aureons crédités"
             }
             value={form.currencyAmount}
@@ -658,7 +658,7 @@ function ProductsAdmin() {
               <p className="text-sm text-ivory/70">
                 {p.price}€{" "}
                 {p.lueurs
-                  ? `· ${p.lueurs.toLocaleString("fr-FR")} Lueurs`
+                  ? `· ${p.lueurs.toLocaleString("fr-FR")} Eclats`
                   : p.sylvins
                     ? `· ${p.sylvins.toLocaleString("fr-FR")} Aureons`
                     : ""}

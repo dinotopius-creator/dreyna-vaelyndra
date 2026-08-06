@@ -113,7 +113,7 @@ export function OfflineBanner() {
               Tu es en mode hors-ligne (localStorage).
             </strong>{" "}
             Certaines fonctionnalités sont désactivées : changement de mot de
-            passe, photo de profil, Lueurs quotidiennes, admin.
+            passe, photo de profil, Eclats quotidiennes, admin.
             Reconnecte-toi pour tout débloquer.
           </p>
         </div>
