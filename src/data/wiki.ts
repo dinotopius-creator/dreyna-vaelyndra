@@ -269,8 +269,9 @@ export const WIKI_ARTICLES: WikiArticle[] = [
     audience: "Tous",
     status: "available",
     route: "/live",
+    route: "/live",
     summary:
-      "PulseForge affiche plusieurs classements : streamers par Aureons reçus, duos BFF et activité communautaire.",
+      "PulseForge affiche plusieurs classements : streamers par Aureons re�us, duos BFF et activit� communautaire.",
     steps: [
       "Ouvrez Live pour voir le classement live et le module BFF.",
       "Le classement streamer hebdomadaire est basé sur les Aureons reçus pendant la semaine.",
@@ -486,3 +487,4 @@ export function getWikiArticle(slug: string | undefined): WikiArticle | null {
   if (!slug) return null;
   return WIKI_ARTICLES_BY_SLUG[slug] ?? null;
 }
+
