@@ -105,13 +105,13 @@ export const WIKI_ARTICLES: WikiArticle[] = [
       "Ouvrez Avatar depuis votre espace Moi.",
       "Choisissez le corps, le visage, les cheveux, les couleurs et l'aperçu 360 degrés.",
       "Dans la boutique avatar, débloquez des styles, fonds, scènes, tenues 3D, accessoires 3D et parures.",
-      "Les items peuvent être payés en Lueurs ou en Aureons selon leur rareté.",
+      "Les items peuvent être payés en Lueurs ou en Sylvins selon leur rareté.",
       "Équipez un item possédé pour l'appliquer au profil ; un seul item actif est gardé par slot.",
       "Dans le monde 3D, les tenues, accessoires et parures 3D peuvent apparaître ; les scènes restent réservées au profil.",
     ],
     tips: [
       "Lueurs = monnaie gratuite/non premium, utile pour beaucoup d'achats cosmétiques.",
-      "Aureons = monnaie premium, utilisée pour les cadeaux live et certains items plus rares.",
+      "Sylvins = monnaie premium, utilisée pour les cadeaux live et certains items plus rares.",
       "Vérifiez le rendu en mobile : le portrait est souvent vu dans le chat, les lives et la communauté.",
     ],
     commonIssues: [
@@ -133,7 +133,7 @@ export const WIKI_ARTICLES: WikiArticle[] = [
       "Ouvrez Familier depuis Moi ou allez sur /familier.",
       "Choisissez votre premier familier si l'éveil est demandé.",
       "Consultez son niveau, son palier d'évolution, sa progression XP et ses statistiques.",
-      "Changez de familier depuis votre collection ; le premier changement est gratuit, les suivants peuvent coûter des Aureons.",
+      "Changez de familier depuis votre collection ; le premier changement est gratuit, les suivants peuvent coûter des Sylvins.",
       "Donnez un surnom à votre familier si vous voulez le personnaliser.",
       "La boutique /familiers/boutique permet d'obtenir d'autres familiers quand ils sont disponibles.",
     ],
@@ -196,7 +196,7 @@ export const WIKI_ARTICLES: WikiArticle[] = [
     ],
     tips: [
       "Les catégories de live disponibles sont : " + liveCategorySteps.join(" "),
-      "Les cadeaux live coûtent des Aureons et déclenchent des effets visibles pour la communauté.",
+      "Les cadeaux live coûtent des Sylvins et déclenchent des effets visibles pour la communauté.",
       "Sur mobile, gardez le clavier fermé quand vous regardez une scène plein écran pour profiter de toute la hauteur.",
     ],
     commonIssues: [
@@ -226,7 +226,7 @@ export const WIKI_ARTICLES: WikiArticle[] = [
       "Un bon titre explique ce que les spectateurs vont vivre, pas seulement que vous êtes en live.",
       "Parlez régulièrement aux nouveaux arrivants : le chat est le cœur du live.",
       "Préparez votre profil, votre avatar et votre familier avant un rendez-vous important.",
-      "Les cadeaux en Aureons contribuent au classement streamer et à l'XP de grade selon les règles serveur.",
+      "Les cadeaux en Sylvins contribuent au classement streamer et à l'XP de grade selon les règles serveur.",
     ],
     commonIssues: [
       "Si le live coupe en changeant de source, relancez les permissions et évitez d'ouvrir deux captures en meme temps.",
@@ -269,18 +269,17 @@ export const WIKI_ARTICLES: WikiArticle[] = [
     audience: "Tous",
     status: "available",
     route: "/live",
-    route: "/live",
     summary:
-      "PulseForge affiche plusieurs classements : streamers par Aureons re�us, duos BFF et activit� communautaire.",
+      "PulseForge affiche plusieurs classements : streamers par Aureons reçus, duos BFF et activité communautaire.",
     steps: [
       "Ouvrez Live pour voir le classement live et le module BFF.",
-      "Le classement streamer hebdomadaire est basé sur les Aureons reçus pendant la semaine.",
+      "Le classement streamer hebdomadaire est basé sur les Sylvins reçus pendant la semaine.",
       "Le module BFF associe chaque streamer à son plus gros soutien selon les données disponibles.",
       "Dans Communauté, le classement d'activité utilise posts, commentaires et réactions.",
       "Les récompenses communautaires peuvent accorder des Lueurs quand la synchronisation serveur est déclenchée.",
     ],
     tips: [
-      "Recevoir des Aureons en cadeau augmente la visibilité streamer et l'XP de grade.",
+      "Recevoir des Sylvins en cadeau augmente la visibilité streamer et l'XP de grade.",
       "Poster et commenter régulièrement aide dans l'activité communautaire.",
       "Les classements affichent les données renvoyées par le backend, pas des valeurs inventées côté front.",
     ],
@@ -319,16 +318,16 @@ export const WIKI_ARTICLES: WikiArticle[] = [
   },
   {
     slug: "dons-offrandes",
-    title: "Dons, offrandes, Lueurs et Aureons",
+    title: "Dons, offrandes, Lueurs et Sylvins",
     category: "Économie",
     audience: "Tous",
     status: "available",
     route: "/boutique",
     summary:
-      "Lueurs et Aureons servent à acheter, offrir et soutenir. Les Lueurs sont la monnaie gratuite/non premium ; les Aureons sont la monnaie premium.",
+      "Lueurs et Sylvins servent à acheter, offrir et soutenir. Les Lueurs sont la monnaie gratuite/non premium ; les Sylvins sont la monnaie premium.",
     steps: [
       "Achetez ou obtenez des Lueurs selon les offres disponibles dans la boutique et les récompenses quotidiennes.",
-      "Achetez des Aureons en euros via la boutique quand vous voulez offrir des cadeaux live ou certains items premium.",
+      "Achetez des Sylvins en euros via la boutique quand vous voulez offrir des cadeaux live ou certains items premium.",
       "Dans un live, ouvrez les offrandes pour envoyer un cadeau animé au streamer.",
       "Sur un profil membre, utilisez les offrandes au familier si le panneau est visible.",
       "Depuis une wishlist, vous pouvez offrir un item cosmétique que le membre souhaite recevoir.",
@@ -336,8 +335,8 @@ export const WIKI_ARTICLES: WikiArticle[] = [
     ],
     tips: [
       "Les achats en Lueurs ne donnent pas d'XP streamer lorsqu'ils sont offerts en item ; le code évite les abus entre comptes.",
-      "Les cadeaux en Aureons peuvent contribuer à l'XP streamer et à certains classements.",
-      "Les Aureons reçus par un streamer sont séparés entre pots promotionnels et payants pour limiter les abus.",
+      "Les cadeaux en Sylvins peuvent contribuer à l'XP streamer et à certains classements.",
+      "Les Sylvins reçus par un streamer sont séparés entre pots promotionnels et payants pour limiter les abus.",
     ],
     commonIssues: [
       "Si le solde est insuffisant, rechargez la boutique ou vérifiez votre portefeuille dans Moi.",
@@ -417,7 +416,7 @@ export const WIKI_ARTICLES: WikiArticle[] = [
       "Envoyer une offrande : ouvrez les cadeaux dans un live ou le panneau d'offrande familier sur un profil.",
       "Devenir streamer : connectez-vous, ouvrez Mon live, choisissez titre/catégorie et autorisez caméra/micro si besoin.",
       "Rejoindre la communauté : ouvrez Communauté, publiez, commentez ou répondez aux membres.",
-      "Comprendre le classement : les streamers sont classés par Aureons reçus ; l'activité communauté dépend des posts, commentaires et réactions.",
+      "Comprendre le classement : les streamers sont classés par Sylvins reçus ; l'activité communauté dépend des posts, commentaires et réactions.",
       "Page qui ne charge pas : vérifiez la connexion, rechargez, puis reconnectez-vous si la page est protégée.",
     ],
     tips: [
@@ -487,4 +486,3 @@ export function getWikiArticle(slug: string | undefined): WikiArticle | null {
   if (!slug) return null;
   return WIKI_ARTICLES_BY_SLUG[slug] ?? null;
 }
-
