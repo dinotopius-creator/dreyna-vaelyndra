@@ -6,7 +6,7 @@
  * Contexte : avant PR #62, un login qui échouait en 401 retombait en
  * silence sur le fallback localStorage ; l'utilisateur se croyait
  * connecté mais toutes les features backend (pdp, mdp, lueurs,
- * chroniques, 2FA) échouaient sans explication. On refuse maintenant
+ * 2FA) échouaient sans explication. On refuse maintenant
  * le fallback sur 401, mais certains sessions legacy peuvent exister
  * dans le cache utilisateur (ex. une vieille clé localStorage d'un
  * compte qui avait été connecté hors-ligne avant la migration). Ce
@@ -113,7 +113,7 @@ export function OfflineBanner() {
               Tu es en mode hors-ligne (localStorage).
             </strong>{" "}
             Certaines fonctionnalités sont désactivées : changement de mot de
-            passe, photo de profil, Lueurs quotidiennes, chroniques, admin.
+            passe, photo de profil, Lueurs quotidiennes, admin.
             Reconnecte-toi pour tout débloquer.
           </p>
         </div>
@@ -154,3 +154,4 @@ export function OfflineBanner() {
     </div>
   );
 }
+
