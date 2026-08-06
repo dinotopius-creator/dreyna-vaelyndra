@@ -27,7 +27,7 @@ export function Messages() {
       <SectionHeading
         eyebrow="Messagerie"
         title="Mes conversations"
-        subtitle="Discussions privées avec les autres membres de Vaelyndra."
+        subtitle="Discussions privées avec les autres membres de PulseForge."
       />
 
       {conversations.length === 0 ? (

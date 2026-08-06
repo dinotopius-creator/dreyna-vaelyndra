@@ -10,7 +10,7 @@ export function CGV() {
     >
       <p>
         Les présentes Conditions Générales de Vente (« CGV ») régissent les
-        ventes réalisées sur le site <strong>Vaelyndra</strong> entre la
+        ventes réalisées sur le site <strong>PulseForge</strong> entre la
         directrice de la publication (ci-après <em>« le Vendeur »</em>) et
         tout visiteur majeur, ou membre âgé de 16 ans au minimum avec
         l'autorisation de son représentant légal (ci-après{" "}
@@ -21,7 +21,7 @@ export function CGV() {
       <p>Le Royaume propose deux catégories de produits :</p>
       <ol>
         <li>
-          <strong>Biens numériques — Sylvins de Vaelyndra</strong> : monnaie
+          <strong>Biens numériques — Sylvins de PulseForge</strong> : monnaie
           virtuelle interne utilisable pour offrir des cadeaux animés pendant
           les lives, débloquer des badges ou des accès VIP. Les Sylvins sont
           crédités au compte du Client immédiatement après validation du
@@ -29,7 +29,7 @@ export function CGV() {
         </li>
         <li>
           <strong>Biens physiques</strong> : textiles (t-shirts, sweats) et
-          goodies officiels de Vaelyndra, expédiés à l'adresse communiquée
+          goodies officiels de PulseForge, expédiés à l'adresse communiquée
           par le Client.
         </li>
       </ol>

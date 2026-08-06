@@ -192,7 +192,7 @@ export function AdminUserPanel({
         });
         setDelta("");
         setReason("");
-        notify("Demande envoyée à l'Architecte Vaelyndra pour validation.", "success");
+        notify("Demande envoyée à l'Architecte PulseForge pour validation.", "success");
         onChange?.();
       } catch (err) {
         notify(
@@ -232,7 +232,7 @@ export function AdminUserPanel({
   async function handleRoleChange() {
     if (!detail || roleDraft === detail.role) return;
     if (!isArchitect) {
-      notify("Seul l'Architecte Vaelyndra peut modifier les rôles.", "error");
+      notify("Seul l'Architecte PulseForge peut modifier les rôles.", "error");
       setRoleDraft(detail.role);
       return;
     }
@@ -442,7 +442,7 @@ export function AdminUserPanel({
   async function handleGrantLegend() {
     if (
       !window.confirm(
-        `Sacrer ${targetUsername} Légende de Vaelyndra ?\n\n` +
+        `Sacrer ${targetUsername} Légende de PulseForge ?\n\n` +
           "Son badge 👑 Légende sera affiché partout (chat, profil, Cour, boutique). " +
           "Un DM de félicitations officiel sera envoyé automatiquement de la part de Dreyna.",
       )
@@ -456,7 +456,7 @@ export function AdminUserPanel({
     // un message manuel de secours.
     await applyGradeOverride(
       "legende-vaelyndra",
-      `${targetUsername} sacré·e Légende de Vaelyndra.`,
+      `${targetUsername} sacré·e Légende de PulseForge.`,
     );
   }
 
@@ -485,7 +485,7 @@ export function AdminUserPanel({
       // confirme explicitement pour éviter l'envoi accidentel.
       if (
         !window.confirm(
-          `Sacrer ${targetUsername} Légende de Vaelyndra ?\n\n` +
+          `Sacrer ${targetUsername} Légende de PulseForge ?\n\n` +
             "Son badge 👑 Légende sera affiché partout (chat, profil, Cour, boutique). " +
             "Un DM de félicitations officiel sera envoyé automatiquement de la part de Dreyna.",
         )
@@ -656,7 +656,7 @@ export function AdminUserPanel({
           <Crown className="h-4 w-4 text-gold-300" /> Grade spirituel
         </h3>
         <p className="text-[11px] leading-relaxed text-ivory/60">
-          Le grade <strong>👑 Légende de Vaelyndra</strong> n'est
+          Le grade <strong>👑 Légende de PulseForge</strong> n'est
           <em> jamais</em> obtenu via XP : c'est un sacre que tu accordes
           manuellement à un·e créateur·rice qui t'a marqué. Un DM automatique de
           félicitations sera envoyé de la part de Dreyna. Les autres grades sont
@@ -698,7 +698,7 @@ export function AdminUserPanel({
               disabled={loading}
             >
               <Crown className="mr-1 inline h-4 w-4" /> Sacrer Légende de
-              Vaelyndra
+              PulseForge
             </button>
           )}
         </div>

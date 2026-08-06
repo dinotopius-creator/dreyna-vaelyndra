@@ -1,5 +1,5 @@
 /**
- * Client HTTP pour les endpoints `/stripe/*` du backend Vaelyndra.
+ * Client HTTP pour les endpoints `/stripe/*` du backend PulseForge.
  *
  * Flux attendu :
  * 1. Le client appelle `apiCreateCurrencyCheckout(productId)` avec l'id d'un

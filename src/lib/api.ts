@@ -1,5 +1,5 @@
 /**
- * Client HTTP minimal pour l'API Vaelyndra (posts / commentaires / réactions).
+ * Client HTTP minimal pour l'API PulseForge (posts / commentaires / réactions).
  *
  * Base URL configurable via `VITE_API_URL` au build. À défaut on tape le
  * backend Fly.io de prod — ce qui permet au site déployé sur devinapps.com

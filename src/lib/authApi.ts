@@ -1,5 +1,5 @@
 /**
- * Client HTTP pour les endpoints `/auth/*` de l'API Vaelyndra.
+ * Client HTTP pour les endpoints `/auth/*` de l'API PulseForge.
  *
  * Tous les appels envoient `credentials: "include"` pour que le cookie
  * `vaelyndra_session` (HttpOnly, SameSite=Lax) soit transmis de

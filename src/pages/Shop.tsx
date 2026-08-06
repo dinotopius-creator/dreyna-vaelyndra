@@ -42,7 +42,7 @@ export function Shop() {
     <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16">
       <SectionHeading
         eyebrow="Boutique Royale"
-        title={<>Les trésors de <span className="text-mystic">Vaelyndra</span></>}
+        title={<>Les trésors de <span className="text-mystic">PulseForge</span></>}
         subtitle="Packs de Lueurs, Sylvins, merch fantasy, tenues numériques et accès VIP. Les monnaies achetées en euros passent par Stripe."
       />
 

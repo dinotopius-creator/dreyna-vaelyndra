@@ -44,7 +44,7 @@ export function LiveHub() {
             La salle des <span className="text-mystic">lives</span>
           </>
         }
-        subtitle="Retrouvez tous les directs en cours, les classements et les streamers qui font vibrer Vaelyndra."
+        subtitle="Retrouvez tous les directs en cours, les classements et les streamers qui font vibrer PulseForge."
       />
 
       <div className="mt-6 grid gap-3 sm:grid-cols-3">
@@ -123,7 +123,7 @@ export function LiveHub() {
                   </h2>
                   <p className="mt-3 max-w-2xl text-sm text-ivory/75">
                     {featured.description ||
-                      `Rejoignez ${featured.username} dans son live Vaelyndra.`}
+                      `Rejoignez ${featured.username} dans son live PulseForge.`}
                   </p>
                   <div className="mt-5 flex flex-col items-start gap-3 text-sm text-ivory/80 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
                     <span className="inline-flex items-center gap-2">

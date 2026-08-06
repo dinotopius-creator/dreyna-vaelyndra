@@ -368,7 +368,7 @@ function TwitchEmbed({ channel }: { channel: string }) {
  * "Partage d'écran" à un mobile qui ne pourra pas l'exécuter.
  *
  * Pas de `useState` ici : les capacités du navigateur sont stables pendant
- * la durée de vie de la page (pas de SSR dans Vaelyndra, c'est du Vite SPA),
+ * la durée de vie de la page (pas de SSR dans PulseForge, c'est du Vite SPA),
  * donc un simple test synchrone suffit.
  */
 function isScreenShareSupported(): boolean {
@@ -436,7 +436,7 @@ function isIosWebkitMobile(): boolean {
 /**
  * Panneau d'aide pour les users iPhone / iPad : explique le parcours
  * "streamer depuis mon appareil Apple" via Twitch Mobile → embed
- * automatique sur Vaelyndra. Sur iOS/iPadOS, le partage d'écran web n'est
+ * automatique sur PulseForge. Sur iOS/iPadOS, le partage d'écran web n'est
  * pas possible (Apple bloque `getDisplayMedia` sur tous les navigateurs
  * iPad/iPhone, y compris Chrome et Firefox qui sont obligés d'utiliser
  * WebKit), donc l'app Twitch est le chemin officiel.
@@ -487,7 +487,7 @@ function IosStreamingHelp({
         <div className="space-y-3 border-t border-ivory/10 px-4 py-4 text-xs text-ivory/70">
           <p>
             Sur iPhone et iPad, le partage d'écran direct via navigateur n'est
-            pas supporté (décision d'Apple, rien à voir avec Vaelyndra — toutes
+            pas supporté (décision d'Apple, rien à voir avec PulseForge — toutes
             les apps de navigateur sur iPad passent obligatoirement par le
             moteur WebKit, qui bloque <code>getDisplayMedia</code>). Le chemin
             officiel pour streamer tes jeux ou apps&nbsp;:
@@ -516,13 +516,13 @@ function IosStreamingHelp({
             </li>
             {isQueen ? (
               <li>
-                Sur Vaelyndra, choisis le mode <strong>OBS + Twitch</strong>{" "}
+                Sur PulseForge, choisis le mode <strong>OBS + Twitch</strong>{" "}
                 ci-dessus, colle ton nom de chaîne, clique "Annoncer le live
-                Twitch". Vaelyndra embed automatiquement ton flux Twitch.
+                Twitch". PulseForge embed automatiquement ton flux Twitch.
               </li>
             ) : (
               <li>
-                Sur Vaelyndra, demande à un <strong>admin/animateur</strong>{" "}
+                Sur PulseForge, demande à un <strong>admin/animateur</strong>{" "}
                 d'activer le mode Twitch pour ton compte (bientôt accessible à
                 tous les streamers certifiés — le mode est pour l'instant en
                 beta réservée).
@@ -615,13 +615,13 @@ function BroadcasterControls() {
   // Le mode "twitch" est désormais accessible à tous les streamers (pas
   // seulement aux reines — cf. PR #81). Un utilisateur mobile qui streame
   // via OBS sur sa Switch/PC ou via l'app Twitch mobile a aussi besoin de
-  // ce mode — il embed le player Twitch sur la page Vaelyndra au lieu de
+  // ce mode — il embed le player Twitch sur la page PulseForge au lieu de
   // tenter un WebRTC impossible. On ne force donc plus de rétrogradation
   // vers "screen" pour les non-reines.
   //
   // En revanche on garde une redirection spécifique mobile : si un user
   // arrive avec `mode = "screen"` en localStorage (par ex. il avait choisi
-  // "Partage d'écran" sur PC puis a rouvert Vaelyndra depuis son Samsung),
+  // "Partage d'écran" sur PC puis a rouvert PulseForge depuis son Samsung),
   // `getDisplayMedia` n'existe pas / plante silencieusement. Sans ce
   // fallback, il cliquerait "Passer en direct" et rien ne se passerait
   // (= « mon téléphone ne peut pas streamer »). On bascule alors sur le
@@ -827,7 +827,7 @@ function BroadcasterControls() {
               onChange={(e) => updateConfig({ title: e.target.value })}
               placeholder={
                 isQueen
-                  ? "Nuit Étoilée de Vaelyndra"
+                  ? "Nuit Étoilée de PulseForge"
                   : "Donnez un titre à votre live"
               }
               className="input-royal"
@@ -991,7 +991,7 @@ function BroadcasterControls() {
                 <p className="mt-1 text-xs text-ivory/60">
                   {screenEffectiveSupported
                     ? nativeScreenShareSupported
-                      ? "Autorise Android à capturer ton écran. Le relais vidéo natif est en cours de raccordement à Vaelyndra Live."
+                      ? "Autorise Android à capturer ton écran. Le relais vidéo natif est en cours de raccordement à PulseForge Live."
                       : "Stream ton écran (jeu, appli, navigateur…) directement depuis ton PC."
                     : isMobile
                       ? "Le partage d'écran n'est pas dispo sur téléphone — choisis « Caméra » juste au-dessus (ça marche sur Samsung, iPhone et toutes les tablettes)."
@@ -1172,7 +1172,7 @@ function BroadcasterControls() {
             {isLive && config.mode === "android-screen" && (
               <p className="text-xs text-ivory/55">
                 Android maintient ton partage d'écran via le service natif. Si
-                l'appareil refuse la capture, Vaelyndra affichera une erreur
+                l'appareil refuse la capture, PulseForge affichera une erreur
                 claire au lieu de laisser le live figé.
               </p>
             )}
@@ -1210,7 +1210,7 @@ function BroadcasterControls() {
                   type="button"
                   onClick={openOverlayPopout}
                   className="btn-ghost"
-                  title="Ouvrir le chat Vaelyndra dans une fenêtre séparée"
+                  title="Ouvrir le chat PulseForge dans une fenêtre séparée"
                 >
                   <ExternalLink className="h-4 w-4" />
                   Overlay chat
@@ -2442,8 +2442,8 @@ export function Live() {
     viewingMeta?.description?.trim() ||
     (amBroadcaster ? config.description?.trim() : "") ||
     (broadcasterProfile
-      ? `Avec ${broadcasterProfile.username} · depuis l'archipel de Vaelyndra`
-      : "Depuis l'archipel de Vaelyndra");
+      ? `Avec ${broadcasterProfile.username} · depuis l'archipel de PulseForge`
+      : "Depuis l'archipel de PulseForge");
 
   // Bloc d'infos du live : badge "En direct" + catégorie + titre +
   // description + "avec [streamer]". Rendu à deux endroits différents
@@ -2560,7 +2560,7 @@ export function Live() {
         subtitle={
           broadcasterProfile
             ? `Vous regardez ${broadcasterProfile.username}. Chaque membre peut lancer son propre live.`
-            : "Quand le rideau s'ouvre, Vaelyndra s'anime. Chat en temps réel et rituels partagés."
+            : "Quand le rideau s'ouvre, PulseForge s'anime. Chat en temps réel et rituels partagés."
         }
       />
 

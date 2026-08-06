@@ -37,7 +37,7 @@ export function BlogList() {
     <div className="mx-auto max-w-7xl px-6 py-16">
       <SectionHeading
         eyebrow="Le Grimoire"
-        title={<>Chroniques de <span className="text-mystic">Vaelyndra</span></>}
+        title={<>Chroniques de <span className="text-mystic">PulseForge</span></>}
         subtitle="Lore, annonces, lifestyle et voix de la communauté — le royaume vit ici, page après page."
       />
 

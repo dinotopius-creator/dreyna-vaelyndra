@@ -75,7 +75,7 @@ const WORLD_BOOT_STEPS = [
   "Chargement de votre avatar...",
   "Préparation de l'univers...",
   "Synchronisation du vocal...",
-  "Entrée dans Vaelyndra...",
+  "Entrée dans PulseForge...",
 ];
 
 interface District {
@@ -1805,7 +1805,7 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
           eyebrow="Mondes"
           title={
             <>
-              La place <span className="text-mystic">virtuelle</span> de Vaelyndra
+              La place <span className="text-mystic">virtuelle</span> de PulseForge
             </>
           }
           subtitle="Un hub social vivant où les membres se déplacent avec leur familier, repèrent les lives en direct et rejoignent les événements du royaume."
@@ -2019,7 +2019,7 @@ export function Worlds({ dedicatedMode = false }: WorldsProps) {
                       <Sparkles className="h-9 w-9 animate-pulse text-gold-200" />
                     </div>
                     <p className="mt-5 text-[11px] uppercase tracking-[0.28em] text-gold-200/75">
-                      Mode jeu Vaelyndra
+                      Mode jeu PulseForge
                     </p>
                     <h3 className="mt-2 font-display text-3xl text-gold-100">
                       Entrée dans le monde

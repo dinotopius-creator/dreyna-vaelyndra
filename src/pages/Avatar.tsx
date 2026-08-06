@@ -1,7 +1,7 @@
 /**
  * Page `/avatar` — studio d'avatar 3D local.
  *
- * On persiste maintenant une configuration `vaelyndra3d:` compacte :
+ * On persiste maintenant une configuration `PulseForge3d:` compacte :
  * silhouette, visage, cheveux et couleurs. Le rendu 3D est reconstruit
  * côté front et une vignette SVG est aussi générée pour les zones qui
  * consomment encore une image simple (chat, petites cartes, listes).
@@ -54,7 +54,7 @@ export function Avatar() {
     return (
       <div className="mx-auto max-w-3xl px-6 py-20 text-center">
         <p className="text-ivory/70">
-          Connectez-vous pour composer votre avatar de Vaelyndra.
+          Connectez-vous pour composer votre avatar de PulseForge.
         </p>
         <Link
           to="/connexion"
@@ -120,7 +120,7 @@ export function Avatar() {
       <SectionHeading
         eyebrow="Atelier d'avatar"
         title="Composez votre double magique"
-        subtitle="Créez votre avatar 3D debout, faites-le pivoter à 360°, puis scellez-le sur votre compte. Vos tenues et accessoires 3D s’y greffent ensuite partout sur Vaelyndra."
+        subtitle="Créez votre avatar 3D debout, faites-le pivoter à 360°, puis scellez-le sur votre compte. Vos tenues et accessoires 3D s’y greffent ensuite partout sur PulseForge."
       />
 
       <div className="mt-8 rounded-[28px] border border-gold-400/20 bg-[linear-gradient(135deg,rgba(15,23,42,0.92),rgba(40,20,67,0.92))] p-4 shadow-[0_24px_70px_rgba(0,0,0,0.28)] sm:p-6">

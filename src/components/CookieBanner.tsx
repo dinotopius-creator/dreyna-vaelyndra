@@ -60,7 +60,7 @@ export function CookieBanner() {
                 Un parchemin pour se souvenir de toi
               </p>
               <p className="mt-1 text-ivory/75">
-                Vaelyndra garde en mémoire locale ta session, tes préférences
+                PulseForge garde en mémoire locale ta session, tes préférences
                 et ton panier, pour que l'expérience reste fluide. Aucun
                 cookie de mesure d'audience ni de publicité n'est déposé. Plus
                 de détails dans notre{" "}

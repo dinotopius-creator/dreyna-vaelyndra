@@ -73,7 +73,7 @@ export function EasterEggs() {
             <p className="mt-4 font-serif text-lg italic text-ivory/80">
               « Par la lumière des étoiles, par la couronne d'aube,<br />
               je jure fidélité à la reine Dreyna,<br />
-              gardienne de Vaelyndra. »
+              gardienne de PulseForge. »
             </p>
             <p className="mt-6 text-xs text-ivory/50">
               Votre nom est désormais inscrit dans les archives secrètes.

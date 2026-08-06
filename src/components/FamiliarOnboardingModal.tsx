@@ -119,7 +119,7 @@ export function FamiliarOnboardingModal({ userId, open, onChosen }: Props) {
               Choisis ton familier
             </h2>
             <p className="mt-2 text-center text-sm text-ivory/70">
-              Chaque membre de Vaelyndra reçoit un compagnon de chemin. Il
+              Chaque membre de PulseForge reçoit un compagnon de chemin. Il
               grandira avec toi, gagnera de l'XP au fil de tes posts, lives
               et soutiens, et te suivra partout dans le royaume.
             </p>

@@ -140,7 +140,7 @@ export function ReportButton({
                   Signalement
                 </p>
                 <h3 className="mt-1 font-display text-xl text-gold-200">
-                  {targetLabel || "Contenu sur Vaelyndra"}
+                  {targetLabel || "Contenu sur PulseForge"}
                 </h3>
               </div>
               <button

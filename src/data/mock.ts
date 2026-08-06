@@ -19,7 +19,7 @@ export const DREYNA_PROFILE = {
   avatar: dreynaPhoto,
   role: "elf" as const,
   joinedAt: "2021-03-21T00:00:00Z",
-  bio: "Animatrice de Vaelyndra.",
+  bio: "Animatrice de PulseForge.",
   socials: {},
   titles: [],
   stats: {
@@ -90,11 +90,11 @@ export const INITIAL_ARTICLES: Article[] = [
   {
     id: "art-1",
     slug: "naissance-vaelyndra",
-    title: "La naissance du royaume de Vaelyndra",
+    title: "La naissance du royaume de PulseForge",
     excerpt:
       "Il était une fois, sous le voile argenté des étoiles, la fondation d'un royaume oublié...",
     content:
-      "Les anciens chants racontent qu'avant l'aube des âges, les elfes de lumière façonnèrent Vaelyndra à partir du souffle des étoiles. Leur reine, née d'un rayon de lune, fut appelée **Dreyna**. Elle tissa les frontières du royaume de ses propres mains, traçant les runes sacrées sur l'écorce des Arbres-Monde.\n\nAujourd'hui, Vaelyndra est un sanctuaire vivant, à la fois terre, rêve et souvenir. Chaque membre de la communauté en est un gardien.",
+      "Les anciens chants racontent qu'avant l'aube des âges, les elfes de lumière façonnèrent PulseForge à partir du souffle des étoiles. Leur reine, née d'un rayon de lune, fut appelée **Dreyna**. Elle tissa les frontières du royaume de ses propres mains, traçant les runes sacrées sur l'écorce des Arbres-Monde.\n\nAujourd'hui, PulseForge est un sanctuaire vivant, à la fois terre, rêve et souvenir. Chaque membre de la communauté en est un gardien.",
     category: "Lore",
     cover:
       "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1600&auto=format&fit=crop&q=80",
@@ -141,7 +141,7 @@ export const INITIAL_ARTICLES: Article[] = [
     excerpt:
       "Rituel d'ouverture, lecture d'un chapitre inédit du lore, Q&A et surprises.",
     content:
-      "Allumez une bougie, préparez une tasse de tisane d'argent — vendredi, nous célébrons la Nuit Étoilée en live. Arrivez 10 minutes avant le début pour prononcer ensemble le serment d'entrée dans Vaelyndra.",
+      "Allumez une bougie, préparez une tasse de tisane d'argent — vendredi, nous célébrons la Nuit Étoilée en live. Arrivez 10 minutes avant le début pour prononcer ensemble le serment d'entrée dans PulseForge.",
     category: "Annonces",
     cover:
       "https://images.unsplash.com/photo-1518709594023-6eab9bab7b23?w=1600&auto=format&fit=crop&q=80",
@@ -157,7 +157,7 @@ export const INITIAL_ARTICLES: Article[] = [
     slug: "top-10-fans-avril",
     title: "Les 10 étoiles du mois : la cour d'Avril",
     excerpt:
-      "Découvrez les 10 membres qui ont fait rayonner Vaelyndra ce mois-ci.",
+      "Découvrez les 10 membres qui ont fait rayonner PulseForge ce mois-ci.",
     content:
       "Merci à vous tous pour votre dévouement. Voici la Cour d'Avril : Lyria, Caelum, Sylas, Aëris, Thalia, Elior, Nyx, Orion, Mira, Soren. Chacun recevra un badge exclusif et une invitation privée au prochain live.",
     category: "Communauté",
@@ -210,7 +210,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     name: "Pack Avatar · Elennor",
     tagline: "Tenue numérique exclusive",
     description:
-      "Tenue, coiffe et accessoires animés pour votre avatar Vaelyndra — signés par la cour.",
+      "Tenue, coiffe et accessoires animés pour votre avatar PulseForge — signés par la cour.",
 
     price: 19,
     currency: "€",
@@ -224,7 +224,7 @@ export const INITIAL_PRODUCTS: Product[] = [
   },
   {
     id: "prod-grimoire",
-    name: "Grimoire de Vaelyndra",
+    name: "Grimoire de PulseForge",
     tagline: "Le livre officiel du lore",
     description:
       "200 pages reliées à la main, illustrées de runes et d'enluminures. L'histoire complète du royaume.",
@@ -333,7 +333,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     name: "Relique d'Elennor",
     tagline: "8 000 Sylvins + 2 000 bonus",
     description:
-      "10 000 Sylvins au total (8 000 + 2 000 offerts). Pour les princes et princesses de Vaelyndra — débloque automatiquement le badge Mécène Royal.",
+      "10 000 Sylvins au total (8 000 + 2 000 offerts). Pour les princes et princesses de PulseForge — débloque automatiquement le badge Mécène Royal.",
     price: 99.99,
     currency: "€",
     image: "/sylvin-coin-icon.png",
@@ -509,7 +509,7 @@ export const SEED_CHAT: ChatMessage[] = [
  * Pool de messages factices utilisés pour simuler une activité de chat
  * pendant qu'un streamer teste son live ou attend ses viewers.
  *
- * Gardé volontairement neutre : pas de référence à Vaelyndra, Dreyna
+ * Gardé volontairement neutre : pas de référence à PulseForge, Dreyna
  * ni à l'univers elfique. Ces messages s'affichent sur tous les lives
  * du réseau ; ils restent donc génériques, bienveillants et professionnels.
  */
@@ -622,7 +622,7 @@ export const GIFT_CATALOGUE: Gift[] = [
   },
   {
     id: "gift-chateau",
-    name: "Château de Vaelyndra",
+    name: "Château de PulseForge",
     price: 5000,
     icon: "/gifts/chateau.svg",
     rarity: "mythique",

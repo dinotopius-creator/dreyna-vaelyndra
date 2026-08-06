@@ -40,7 +40,7 @@ const liveCategorySteps = LIVE_CATEGORIES.map(
 export const WIKI_ARTICLES: WikiArticle[] = [
   {
     slug: "bien-commencer",
-    title: "Bien commencer sur Vaelyndra",
+    title: "Bien commencer sur PulseForge",
     category: "Premiers pas",
     audience: "Nouveaux",
     status: "available",
@@ -270,7 +270,7 @@ export const WIKI_ARTICLES: WikiArticle[] = [
     status: "available",
     route: "/live",
     summary:
-      "Vaelyndra affiche plusieurs classements : streamers par Sylvins reçus, duos BFF et activité communautaire.",
+      "PulseForge affiche plusieurs classements : streamers par Sylvins reçus, duos BFF et activité communautaire.",
     steps: [
       "Ouvrez Live pour voir le classement live et le module BFF.",
       "Le classement streamer hebdomadaire est basé sur les Sylvins reçus pendant la semaine.",
@@ -307,7 +307,7 @@ export const WIKI_ARTICLES: WikiArticle[] = [
     ],
     tips: [
       "Les grades automatiques viennent de l'XP streamer calculée par le backend.",
-      "Légende de Vaelyndra est indiquée comme admin-only dans le code : ce n'est pas un grade obtenu automatiquement par XP.",
+      "Légende de PulseForge est indiquée comme admin-only dans le code : ce n'est pas un grade obtenu automatiquement par XP.",
       "Un admin peut forcer un grade ; dans ce cas la progression naturelle est marquée comme override.",
     ],
     commonIssues: [
@@ -379,7 +379,7 @@ export const WIKI_ARTICLES: WikiArticle[] = [
     status: "available",
     route: "/compte",
     summary:
-      "Les règles essentielles pour utiliser Vaelyndra proprement : respect, confidentialité, modération et protection du compte.",
+      "Les règles essentielles pour utiliser PulseForge proprement : respect, confidentialité, modération et protection du compte.",
     steps: [
       "Respectez les autres membres dans les lives, le monde 3D, les messages et la communauté.",
       "Ne partagez pas d'informations sensibles dans le chat ou les messages.",
