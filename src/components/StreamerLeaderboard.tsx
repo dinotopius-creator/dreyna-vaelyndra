@@ -1,5 +1,5 @@
 /**
- * Classement hebdomadaire des streamers par Sylvins reçus.
+ * Classement hebdomadaire des streamers par Aureons reçus.
  *
  * Architecture :
  * - Source de vérité = backend (`/streamers/leaderboard`). On poll toutes
@@ -194,7 +194,7 @@ export function StreamerLeaderboard({ refreshTick }: Props) {
           completeLabel={period === "last" ? "Classement terminé" : "Classement en attente"}
           helper={
             period === "this"
-              ? "Le classement évolue avec les Sylvins reçus pendant les lives de la semaine en cours."
+              ? "Le classement évolue avec les Aureons reçus pendant les lives de la semaine en cours."
               : "Cette semaine est clôturée : le classement reste figé pour consultation."
           }
           compact
