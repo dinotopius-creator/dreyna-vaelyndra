@@ -82,7 +82,7 @@ export function BoutiqueFamiliars() {
     const sorted = [...catalog].sort((a, b) => {
       // Free d'abord, puis premium, puis par prix croissant à l'intérieur.
       if (a.tier !== b.tier) return a.tier === "free" ? -1 : 1;
-      return a.priceSylvins - b.priceSylvins;
+      return a.priceAureons - b.priceAureons;
     });
     if (filter === "all") return sorted;
     return sorted.filter((f) => f.rarity === filter);
@@ -97,16 +97,16 @@ export function BoutiqueFamiliars() {
       return;
     }
     if (ownedIds.has(item.id)) return;
-    if (item.tier === "premium" && sylvinsTotal < item.priceSylvins) {
+    if (item.tier === "premium" && sylvinsTotal < item.priceAureons) {
       notify(
-        `Solde insuffisant : ${item.priceSylvins} Aureons requis, tu en as ${sylvinsTotal}.`,
+        `Solde insuffisant : ${item.priceAureons} Aureons requis, tu en as ${sylvinsTotal}.`,
         "error",
       );
       return;
     }
     const ok = window.confirm(
       item.tier === "premium"
-        ? `Acquérir ${item.name} pour ${item.priceSylvins} Aureons ?\n\nIl rejoindra ta collection. Tu pourras l'activer depuis la page Mon Familier (1er switch gratuit, puis 300 Aureons).`
+        ? `Acquérir ${item.name} pour ${item.priceAureons} Aureons ?\n\nIl rejoindra ta collection. Tu pourras l'activer depuis la page Mon Familier (1er switch gratuit, puis 300 Aureons).`
         : `Ajouter ${item.name} à ta collection (gratuit) ?`,
     );
     if (!ok) return;
@@ -197,7 +197,7 @@ export function BoutiqueFamiliars() {
               active={active}
               pending={buying === item.id}
               canAfford={
-                item.tier === "free" || sylvinsTotal >= item.priceSylvins
+                item.tier === "free" || sylvinsTotal >= item.priceAureons
               }
               onBuy={() => purchase(item)}
             />
@@ -324,7 +324,7 @@ function BoutiqueCard({
           {item.tier === "premium" ? (
             <>
               <span className="text-gold-200">
-                {item.priceSylvins.toLocaleString("fr-FR")}
+                {item.priceAureons.toLocaleString("fr-FR")}
               </span>{" "}
               <span className="text-[11px] uppercase tracking-widest text-ivory/50">
                 Aureons

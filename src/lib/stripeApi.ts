@@ -3,7 +3,7 @@
  *
  * Flux attendu :
  * 1. Le client appelle `apiCreateCurrencyCheckout(productId)` avec l'id d'un
- *    `CatalogProduct` de catégorie "Sylvins" ou "Lueurs".
+ *    `CatalogProduct` de catégorie "Aureons" ou "Eclats".
  * 2. Le backend crée une Stripe Checkout Session et renvoie son `url`.
  * 3. Le frontend redirige `window.location.href = url` vers Stripe.
  * 4. Après paiement, Stripe redirige vers `/compte?payment=success`. Le
@@ -36,7 +36,7 @@ export interface StripePayoutDto {
   profile: UserProfileDto;
 }
 
-export async function apiCreateSylvinsCheckout(
+export async function apiCreateAureonsCheckout(
   productId: string,
 ): Promise<CheckoutCurrencyOut> {
   return apiCreateCurrencyCheckout(productId);

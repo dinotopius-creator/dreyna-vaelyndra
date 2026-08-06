@@ -2,7 +2,7 @@
  * Module BFF (Best Friend Forever) — pour chaque streamer top, son plus
  * gros donateur de la semaine.
  *
- * Visuel : petite pile de duos "Streamer ❤️ Donateur · X Sylvins", le tout
+ * Visuel : petite pile de duos "Streamer ❤️ Donateur · X Aureons", le tout
  * cliquable vers les deux profils. Polling aligné sur le leaderboard (2 s
  * côté semaine en cours) pour que le duo se réarrange si un donateur est
  * dépassé en direct.
@@ -110,7 +110,7 @@ export function BFFModule({
                 </span>
                 <span className="inline-flex items-center gap-1 rounded-full border border-gold-400/30 bg-night-900/50 px-2 py-0.5 text-[10px] font-regal tracking-[0.16em] text-gold-100">
                   <Sparkles className="h-3 w-3" />
-                  {formatNumber(e.totalSylvins)} offerts
+                  {formatNumber(e.totalAureons)} offerts
                 </span>
               </div>
               <div className="flex items-center gap-2">

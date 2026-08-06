@@ -59,7 +59,7 @@ from .familiars import _active_row  # noqa: E402
 # PR M — XP offert à l'auteur quand son post est publié. Volontairement bas
 # (10 XP = 10 % d'un palier de base) pour éviter qu'un spam de posts vides
 # ne propulse un compte dans les grades supérieurs. Le gros du XP vient des
-# Sylvins reçus (=engagement) et des nouveaux liens d'âme.
+# Aureons reçus (=engagement) et des nouveaux liens d'âme.
 XP_PER_POST = 10
 COMMUNITY_REWARD_BY_RANK = {1: 600, 2: 450, 3: 300}
 DRAWING_CONTEST = {
@@ -310,7 +310,7 @@ def _serialize_reward(row: CommunityActivityReward) -> CommunityActivityRewardOu
         weekStartIso=row.week_start_iso,
         userId=row.user_id,
         rank=row.rank,
-        rewardLueurs=row.reward_lueurs,
+        rewardEclats=row.reward_lueurs,
         awardedAt=row.awarded_at,
     )
 
@@ -561,7 +561,7 @@ def _drawing_contest_status(session: Session) -> DrawingContestStatusOut:
             0,
             int((DRAWING_CONTEST["ends_at"] - now).total_seconds() * 1000),
         ),
-        rewardLueurs=DRAWING_CONTEST["reward_lueurs"],
+        rewardEclats=DRAWING_CONTEST["reward_lueurs"],
         rewardFood=DRAWING_CONTEST["reward_food"],
         announcementPostId="official-event:drawing-contest-post",
         entries=entries,
@@ -578,7 +578,7 @@ def _award_drawing_contest(session: Session) -> DrawingContestSettlementOut:
             active=status.active,
             alreadyAwarded=status.winnerAwarded,
             winner=None,
-            rewardLueurs=status.rewardLueurs,
+            rewardEclats=status.rewardEclats,
             rewardFood=status.rewardFood,
         )
     if status.active:
@@ -587,7 +587,7 @@ def _award_drawing_contest(session: Session) -> DrawingContestSettlementOut:
             active=True,
             alreadyAwarded=status.winnerAwarded,
             winner=status.topEntry,
-            rewardLueurs=status.rewardLueurs,
+            rewardEclats=status.rewardEclats,
             rewardFood=status.rewardFood,
         )
 
@@ -604,7 +604,7 @@ def _award_drawing_contest(session: Session) -> DrawingContestSettlementOut:
             alreadyAwarded=True,
             winner=status.topEntry,
             awardedAt=existing.awarded_at,
-            rewardLueurs=existing.lueurs_rewarded,
+            rewardEclats=existing.lueurs_rewarded,
             rewardFood=existing.food_rewarded,
         )
 
@@ -615,7 +615,7 @@ def _award_drawing_contest(session: Session) -> DrawingContestSettlementOut:
             active=False,
             alreadyAwarded=False,
             winner=status.topEntry,
-            rewardLueurs=status.rewardLueurs,
+            rewardEclats=status.rewardEclats,
             rewardFood=status.rewardFood,
         )
 
@@ -658,7 +658,7 @@ def _award_drawing_contest(session: Session) -> DrawingContestSettlementOut:
         alreadyAwarded=True,
         winner=settled.topEntry,
         awardedAt=awarded_at,
-        rewardLueurs=DRAWING_CONTEST["reward_lueurs"],
+        rewardEclats=DRAWING_CONTEST["reward_lueurs"],
         rewardFood=DRAWING_CONTEST["reward_food"] if active_familiar is not None else 0,
     )
 

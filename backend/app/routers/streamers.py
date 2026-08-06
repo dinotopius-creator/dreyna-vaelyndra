@@ -1,7 +1,7 @@
 """Endpoints du module Communauté : classement des streamers + BFF.
 
 Les deux modules s'appuient sur la table `GiftLedger` (cf. `models.py`) :
-chaque cadeau Sylvins envoyé via `POST /users/{id}/gift-sylvins` y laisse
+chaque cadeau Aureons envoyé via `POST /users/{id}/gift-sylvins` y laisse
 une ligne. Le classement et les BFF sont calculés à la volée par agrégation
 sur la plage `[week_start, week_start + 7j)`.
 
@@ -125,7 +125,7 @@ def streamer_leaderboard(
     response: Response = None,
     session: Session = Depends(_session_dep),
 ) -> StreamerLeaderboardOut:
-    """Classement des streamers par Sylvins reçus sur la semaine demandée.
+    """Classement des streamers par Aureons reçus sur la semaine demandée.
 
     - `week=this` (défaut) : semaine ISO en cours, mise à jour instantanée
       dès qu'un don est enregistré (lecture directe sur le ledger).
@@ -181,7 +181,7 @@ def streamer_leaderboard(
                 username=p.username,
                 handle=p.handle,
                 avatarImageUrl=p.avatar_image_url,
-                totalSylvins=total,
+                totalAureons=total,
                 creature=_creature_dto(p.creature_id),
                 role=p.role or "user",
                 grade=_grade_out_for(p),
@@ -284,7 +284,7 @@ def streamers_bff(
             BFFEntryOut(
                 streamer=_mini(receiver_id),
                 donor=_mini(sender_id),
-                totalSylvins=amount,
+                totalAureons=amount,
             )
         )
     return out

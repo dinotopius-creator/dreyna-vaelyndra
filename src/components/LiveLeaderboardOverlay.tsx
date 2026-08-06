@@ -1,12 +1,12 @@
 /**
- * Top 3 Sylvins du live en surimpression (coin haut-gauche du cadre vidéo).
+ * Top 3 Aureons du live en surimpression (coin haut-gauche du cadre vidéo).
  *
  * La cour voit en temps réel qui soutient le plus le streamer pendant la
  * séance. Le rang se recompose dès qu'un cadeau arrive ; le passage d'un
  * position à l'autre est animé (cadeau = "couronnement").
  *
  * Le composant est 100% visuel : le parent lui passe la liste agrégée des
- * Sylvins donnés pendant la séance en cours (reset au changement de
+ * Aureons donnés pendant la séance en cours (reset au changement de
  * broadcaster via un `key={broadcasterId}` côté parent).
  */
 import { useMemo } from "react";
@@ -14,7 +14,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Crown, Trophy, Sparkles } from "lucide-react";
 
 /**
- * Une contribution agrégée : un utilisateur + le total Sylvins offerts
+ * Une contribution agrégée : un utilisateur + le total Aureons offerts
  * pendant la séance en cours.
  */
 export interface TributeEntry {
@@ -58,7 +58,7 @@ export function LiveLeaderboardOverlay({
   variant = "overlay",
 }: Props) {
   // On trie et on coupe à 3. Les totaux nuls sont exclus (jusqu'à ce
-  // qu'il y en ait vraiment un, pas d'affichage "0 Sylvins").
+  // qu'il y en ait vraiment un, pas d'affichage "0 Aureons").
   const top3 = useMemo(
     () =>
       [...entries]
@@ -88,7 +88,7 @@ export function LiveLeaderboardOverlay({
       <div className={headerClass}>Top soutiens</div>
       {top3.length === 0 && variant === "panel" && (
         <p className="text-xs text-ivory/55">
-          Personne n'a encore offert de Sylvins sur ce live. Sois le premier ✨
+          Personne n'a encore offert de Aureons sur ce live. Sois le premier ✨
         </p>
       )}
       <AnimatePresence initial={false}>
@@ -118,7 +118,7 @@ export function LiveLeaderboardOverlay({
                 {entry.name}
               </span>
               <span className="ml-1 tabular-nums text-ivory/90">
-                {formatSylvins(entry.total)}
+                {formatAureons(entry.total)}
               </span>
             </motion.div>
           );
@@ -130,10 +130,10 @@ export function LiveLeaderboardOverlay({
 
 /**
  * Format compact pour le chip : 1 234 / 12,3k / 1,2M. Les formatters
- * existants (`formatSylvins` de `lib/sylvins.ts`) retournent "X S" —
+ * existants (`formatAureons` de `lib/sylvins.ts`) retournent "X S" —
  * trop verbeux ici. On garde juste le nombre + suffixe k/M.
  */
-function formatSylvins(n: number) {
+function formatAureons(n: number) {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
   return n.toString();

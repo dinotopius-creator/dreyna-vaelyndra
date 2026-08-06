@@ -269,14 +269,14 @@ export const INITIAL_PRODUCTS: Product[] = [
   },
   {
     id: "prod-sylvins-100",
-    name: "Pochée de Sylvins",
-    tagline: "100 Sylvins — le premier pas",
+    name: "Pochée de Aureons",
+    tagline: "100 Aureons — le premier pas",
     description:
-      "100 Sylvins crédités immédiatement sur ton compte. Parfait pour offrir tes premiers cadeaux animés pendant les lives.",
+      "100 Aureons crédités immédiatement sur ton compte. Parfait pour offrir tes premiers cadeaux animés pendant les lives.",
     price: 1.99,
     currency: "€",
     image: "/sylvin-coin-icon.png",
-    category: "Sylvins",
+    category: "Aureons",
     rating: 5,
     stock: 9999,
     tags: ["sylvins", "monnaie virtuelle"],
@@ -284,14 +284,14 @@ export const INITIAL_PRODUCTS: Product[] = [
   },
   {
     id: "prod-sylvins-500",
-    name: "Bourse de Sylvins",
-    tagline: "500 Sylvins + 50 bonus",
+    name: "Bourse de Aureons",
+    tagline: "500 Aureons + 50 bonus",
     description:
-      "550 Sylvins au total (500 + 50 offerts). Le pack le plus populaire de la cour pour soutenir Dreyna en live.",
+      "550 Aureons au total (500 + 50 offerts). Le pack le plus populaire de la cour pour soutenir Dreyna en live.",
     price: 8.99,
     currency: "€",
     image: "/sylvin-coin-icon.png",
-    category: "Sylvins",
+    category: "Aureons",
     rating: 4.9,
     stock: 9999,
     tags: ["sylvins", "monnaie virtuelle", "populaire"],
@@ -301,13 +301,13 @@ export const INITIAL_PRODUCTS: Product[] = [
   {
     id: "prod-sylvins-1200",
     name: "Coffre Verdoyant",
-    tagline: "1 200 Sylvins + 200 bonus",
+    tagline: "1 200 Aureons + 200 bonus",
     description:
-      "1 400 Sylvins au total (1 200 + 200 offerts). Pour les chevaliers réguliers de la cour.",
+      "1 400 Aureons au total (1 200 + 200 offerts). Pour les chevaliers réguliers de la cour.",
     price: 19.99,
     currency: "€",
     image: "/sylvin-coin-icon.png",
-    category: "Sylvins",
+    category: "Aureons",
     rating: 4.9,
     stock: 9999,
     tags: ["sylvins", "monnaie virtuelle"],
@@ -316,13 +316,13 @@ export const INITIAL_PRODUCTS: Product[] = [
   {
     id: "prod-sylvins-3000",
     name: "Arche Sylvestre",
-    tagline: "3 000 Sylvins + 600 bonus",
+    tagline: "3 000 Aureons + 600 bonus",
     description:
-      "3 600 Sylvins au total (3 000 + 600 offerts). Pour les ducs et duchesses de la cour royale.",
+      "3 600 Aureons au total (3 000 + 600 offerts). Pour les ducs et duchesses de la cour royale.",
     price: 44.99,
     currency: "€",
     image: "/sylvin-coin-icon.png",
-    category: "Sylvins",
+    category: "Aureons",
     rating: 4.95,
     stock: 9999,
     tags: ["sylvins", "monnaie virtuelle"],
@@ -331,13 +331,13 @@ export const INITIAL_PRODUCTS: Product[] = [
   {
     id: "prod-sylvins-8000",
     name: "Relique d'Elennor",
-    tagline: "8 000 Sylvins + 2 000 bonus",
+    tagline: "8 000 Aureons + 2 000 bonus",
     description:
-      "10 000 Sylvins au total (8 000 + 2 000 offerts). Pour les princes et princesses de PulseForge — débloque automatiquement le badge Mécène Royal.",
+      "10 000 Aureons au total (8 000 + 2 000 offerts). Pour les princes et princesses de PulseForge — débloque automatiquement le badge Mécène Royal.",
     price: 99.99,
     currency: "€",
     image: "/sylvin-coin-icon.png",
-    category: "Sylvins",
+    category: "Aureons",
     rating: 5,
     stock: 9999,
     tags: ["sylvins", "monnaie virtuelle", "mécène"],
@@ -345,14 +345,14 @@ export const INITIAL_PRODUCTS: Product[] = [
   },
   {
     id: "prod-lueurs-fiole",
-    name: "Étincelle de Lueurs",
-    tagline: "500 Lueurs · recharge découverte",
+    name: "Étincelle de Eclats",
+    tagline: "500 Eclats · recharge découverte",
     description:
-      "500 Lueurs créditées sur ton compte pour débloquer les premiers items gratuits plus vite.",
+      "500 Eclats créditées sur ton compte pour débloquer les premiers items gratuits plus vite.",
     price: 1.49,
     currency: "€",
     image: "/lueurs-fiole.svg",
-    category: "Lueurs",
+    category: "Eclats",
     rating: 4.8,
     stock: 9999,
     tags: ["lueurs", "monnaie virtuelle", "découverte"],
@@ -360,14 +360,14 @@ export const INITIAL_PRODUCTS: Product[] = [
   },
   {
     id: "prod-lueurs-grimoire",
-    name: "Bourse de Lueurs",
-    tagline: "1 200 Lueurs · meilleur départ",
+    name: "Bourse de Eclats",
+    tagline: "1 200 Eclats · meilleur départ",
     description:
-      "1 200 Lueurs pour acheter plusieurs cosmétiques non premium sans attendre les récompenses quotidiennes.",
+      "1 200 Eclats pour acheter plusieurs cosmétiques non premium sans attendre les récompenses quotidiennes.",
     price: 2.99,
     currency: "€",
     image: "/lueurs-grimoire.svg",
-    category: "Lueurs",
+    category: "Eclats",
     rating: 4.9,
     stock: 9999,
     tags: ["lueurs", "monnaie virtuelle", "populaire"],
@@ -376,14 +376,14 @@ export const INITIAL_PRODUCTS: Product[] = [
   },
   {
     id: "prod-lueurs-banniere",
-    name: "Coffret de Lueurs",
-    tagline: "3 000 Lueurs · collection avatar",
+    name: "Coffret de Eclats",
+    tagline: "3 000 Eclats · collection avatar",
     description:
-      "Un gros pack de Lueurs pensé pour composer une tenue avatar complète en monnaie non premium.",
+      "Un gros pack de Eclats pensé pour composer une tenue avatar complète en monnaie non premium.",
     price: 6.99,
     currency: "€",
     image: "/lueurs-banniere.svg",
-    category: "Lueurs",
+    category: "Eclats",
     rating: 5,
     stock: 9999,
     tags: ["lueurs", "monnaie virtuelle", "avatar"],
@@ -391,14 +391,14 @@ export const INITIAL_PRODUCTS: Product[] = [
   },
   {
     id: "prod-lueurs-relique",
-    name: "Trésor de Lueurs",
-    tagline: "7 500 Lueurs · réserve royale",
+    name: "Trésor de Eclats",
+    tagline: "7 500 Eclats · réserve royale",
     description:
-      "La réserve la plus rentable en Lueurs, moins chère que les Sylvins et adaptée aux achats cosmétiques non premium.",
+      "La réserve la plus rentable en Eclats, moins chère que les Aureons et adaptée aux achats cosmétiques non premium.",
     price: 14.99,
     currency: "€",
     image: "/lueurs-relique.svg",
-    category: "Lueurs",
+    category: "Eclats",
     rating: 5,
     stock: 9999,
     tags: ["lueurs", "monnaie virtuelle", "réserve"],
@@ -551,7 +551,7 @@ export const EASTER_EGG_HINTS = [
 ];
 
 /**
- * Catalogue de cadeaux Sylvins envoyables en live. Les prix sont en Sylvins ;
+ * Catalogue de cadeaux Aureons envoyables en live. Les prix sont en Aureons ;
  * le streamer reçoit l'intégralité du montant, la conversion en € se fait
  * au retrait (voir `src/lib/sylvins.ts`).
  */

@@ -17,12 +17,12 @@ ici, dans le code, et est versionnée comme du code normal.
 
 Catalogue :
 - 4 familiers GRATUITS (un de chaque ambiance, parité visuelle assurée)
-- 5 familiers PREMIUM (achat en Sylvins, prix 800 → 3000)
+- 5 familiers PREMIUM (achat en Aureons, prix 800 → 3000)
 
 Stats : intentionnellement légères pour ne PAS être pay-to-win.
 - `aura` (cosmétique pur, halos de réactions sociales)
 - `energy` (énergie live : amplitude des animations pendant le stream)
-- `harvest` (bonus discret sur le daily-claim Lueurs, capé à +20 %)
+- `harvest` (bonus discret sur le daily-claim Eclats, capé à +20 %)
 - `affinity` (cosmétique premium : effets de particules supplémentaires)
 - `charisma` (intensité visuelle des réactions sociales)
 
@@ -69,7 +69,7 @@ class FamiliarDef(TypedDict):
     color: str
     description: str
     tagline: str
-    # Coût en Sylvins pour l'achat. 0 pour les gratuits.
+    # Coût en Aureons pour l'achat. 0 pour les gratuits.
     price_sylvins: int
     # Stats de base au niveau 1 (cf. `compute_familiar_stats`).
     base_stats: FamiliarStats
@@ -117,13 +117,13 @@ FAMILIARS: List[FamiliarDef] = [
     },
     {
         "id": "hibou-des-lueurs",
-        "name": "Hibou des Lueurs",
+        "name": "Hibou des Eclats",
         "tier": "free",
         "rarity": "commun",
         "icon": "🦉",
         "color": "#a78bfa",
         "tagline": "Veilleur silencieux",
-        "description": "Hibou crépusculaire au plumage parsemé de Lueurs. Il guide les insomniaques de Vaelyndra.",
+        "description": "Hibou crépusculaire au plumage parsemé de Eclats. Il guide les insomniaques de Vaelyndra.",
         "price_sylvins": 0,
         "base_stats": {
             "aura": 24,
@@ -289,7 +289,7 @@ FAMILIAR_COSMETICS: List[FamiliarCosmeticDef] = [
         "price": 160,
         "icon": "●",
         "color": "#fbbf24",
-        "accent": "Lueurs",
+        "accent": "Eclats",
     },
     {
         "id": "color-rose-brume",
@@ -301,7 +301,7 @@ FAMILIAR_COSMETICS: List[FamiliarCosmeticDef] = [
         "price": 240,
         "icon": "●",
         "color": "#fb7185",
-        "accent": "Lueurs",
+        "accent": "Eclats",
     },
     {
         "id": "color-aurore-sylvaine",
@@ -313,7 +313,7 @@ FAMILIAR_COSMETICS: List[FamiliarCosmeticDef] = [
         "price": 95,
         "icon": "●",
         "color": "#34d399",
-        "accent": "Sylvins",
+        "accent": "Aureons",
     },
     {
         "id": "color-nuit-royale",
@@ -325,7 +325,7 @@ FAMILIAR_COSMETICS: List[FamiliarCosmeticDef] = [
         "price": 140,
         "icon": "●",
         "color": "#8b5cf6",
-        "accent": "Sylvins",
+        "accent": "Aureons",
     },
     {
         "id": "hair-touffe-lune",
@@ -337,7 +337,7 @@ FAMILIAR_COSMETICS: List[FamiliarCosmeticDef] = [
         "price": 180,
         "icon": "〰",
         "color": "#fde68a",
-        "accent": "Lueurs",
+        "accent": "Eclats",
     },
     {
         "id": "hair-plume-rose",
@@ -349,7 +349,7 @@ FAMILIAR_COSMETICS: List[FamiliarCosmeticDef] = [
         "price": 320,
         "icon": "⌁",
         "color": "#f9a8d4",
-        "accent": "Lueurs",
+        "accent": "Eclats",
     },
     {
         "id": "hair-crete-celeste",
@@ -361,7 +361,7 @@ FAMILIAR_COSMETICS: List[FamiliarCosmeticDef] = [
         "price": 105,
         "icon": "⟡",
         "color": "#93c5fd",
-        "accent": "Sylvins",
+        "accent": "Aureons",
     },
     {
         "id": "accessory-noeud-dore",
@@ -373,7 +373,7 @@ FAMILIAR_COSMETICS: List[FamiliarCosmeticDef] = [
         "price": 220,
         "icon": "∞",
         "color": "#facc15",
-        "accent": "Lueurs",
+        "accent": "Eclats",
     },
     {
         "id": "accessory-mini-couronne",
@@ -385,7 +385,7 @@ FAMILIAR_COSMETICS: List[FamiliarCosmeticDef] = [
         "price": 150,
         "icon": "♛",
         "color": "#f8d477",
-        "accent": "Sylvins",
+        "accent": "Aureons",
     },
     {
         "id": "frame-simple",
@@ -409,7 +409,7 @@ FAMILIAR_COSMETICS: List[FamiliarCosmeticDef] = [
         "price": 420,
         "icon": "✿",
         "color": "#86efac",
-        "accent": "Lueurs",
+        "accent": "Eclats",
     },
     {
         "id": "frame-lunaire",
@@ -421,7 +421,7 @@ FAMILIAR_COSMETICS: List[FamiliarCosmeticDef] = [
         "price": 520,
         "icon": "☾",
         "color": "#93c5fd",
-        "accent": "Lueurs",
+        "accent": "Eclats",
     },
     {
         "id": "frame-royal",
@@ -433,7 +433,7 @@ FAMILIAR_COSMETICS: List[FamiliarCosmeticDef] = [
         "price": 175,
         "icon": "♢",
         "color": "#f8d477",
-        "accent": "Sylvins",
+        "accent": "Aureons",
     },
     {
         "id": "effect-paillettes",
@@ -445,7 +445,7 @@ FAMILIAR_COSMETICS: List[FamiliarCosmeticDef] = [
         "price": 480,
         "icon": "✧",
         "color": "#fde68a",
-        "accent": "Lueurs",
+        "accent": "Eclats",
     },
     {
         "id": "effect-aura-ancienne",
@@ -457,7 +457,7 @@ FAMILIAR_COSMETICS: List[FamiliarCosmeticDef] = [
         "price": 220,
         "icon": "✺",
         "color": "#c4b5fd",
-        "accent": "Sylvins",
+        "accent": "Aureons",
     },
 ]
 
@@ -498,7 +498,7 @@ def evolution_for_level(level: int) -> dict:
 
 
 # Switch payant : le premier changement est gratuit (cf. logique côté
-# router), les suivants coûtent un montant fixe en Sylvins (PROMO ou PAID,
+# router), les suivants coûtent un montant fixe en Aureons (PROMO ou PAID,
 # débit prioritairement PROMO).
 SWITCH_PRICE_SYLVINS = 300
 RENAME_PRICE_SYLVINS = 10
@@ -581,21 +581,21 @@ SOCIAL_XP_RULES: Dict[str, Dict[str, int]] = {
     "live:started": {"amount": 50, "daily_cap": 50},
 }
 
-# Cadeau Sylvins reçu : XP = amount * 1, capé 1000 XP/jour (gros donateurs
+# Cadeau Aureons reçu : XP = amount * 1, capé 1000 XP/jour (gros donateurs
 # autorisés). Pas de ligne dans SOCIAL_XP_RULES car le montant est dynamique.
 GIFT_RECEIVED_DAILY_CAP = 1000
 GIFT_SENT_DAILY_CAP = 200
 
 
 def gift_received_xp(amount_sylvins: int) -> int:
-    """XP gagné côté receiver pour un gift Sylvins ou item."""
+    """XP gagné côté receiver pour un gift Aureons ou item."""
     return max(0, int(amount_sylvins))
 
 
 def gift_sent_xp(amount_sylvins: int) -> int:
     """XP gagné côté sender pour avoir offert. Encourage la générosité.
 
-    1 XP tous les 3 Sylvins offerts (arrondi inférieur).
+    1 XP tous les 3 Aureons offerts (arrondi inférieur).
     """
     return max(0, int(amount_sylvins) // 3)
 

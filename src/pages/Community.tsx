@@ -385,7 +385,7 @@ export function Community() {
         if (!myReward) return;
         await refreshProfile();
         notify(
-          `Classement communautaire : +${myReward.rewardLueurs} Lueurs créditées.`,
+          `Classement communautaire : +${myReward.rewardEclats} Eclats créditées.`,
         );
       })
       .catch(() => {
@@ -406,7 +406,7 @@ export function Community() {
         if (cancelled || !result.winner) return;
         setContestSettlement(result);
         setContestAwardedNotice(
-          `${result.winner.authorName} gagne le concours #concoursdessin : +${result.rewardLueurs} lueurs et +${result.rewardFood} nourritures familier.`,
+          `${result.winner.authorName} gagne le concours #concoursdessin : +${result.rewardEclats} lueurs et +${result.rewardFood} nourritures familier.`,
         );
         if (user?.id === result.winner.authorId) {
           void refreshProfile();
@@ -1719,12 +1719,12 @@ export function Community() {
                   Oracle des Runes
                 </h3>
                 <p className="mt-2 text-sm text-ivory/72">
-                  Un mini-jeu mystique avec 3 tentatives par jour, des Lueurs
+                  Un mini-jeu mystique avec 3 tentatives par jour, des Eclats
                   fréquentes et 1 Sylvin presque introuvable.
                 </p>
                 <div className="mt-4 flex items-center gap-2 text-xs text-gold-300/90">
                   <span className="rounded-full border border-sky-400/25 bg-sky-500/10 px-2.5 py-1">
-                    Lueurs fréquentes
+                    Eclats fréquentes
                   </span>
                   <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2.5 py-1">
                     1 Sylvin très rare
@@ -1772,12 +1772,12 @@ export function Community() {
                     className="rounded-xl border border-gold-400/20 bg-night-900/45 px-2 py-2 text-ivory/80"
                   >
                     <p className="font-display text-gold-200">Top {rank}</p>
-                    <p>{COMMUNITY_REWARD_BY_RANK[rank]} Lueurs</p>
+                    <p>{COMMUNITY_REWARD_BY_RANK[rank]} Eclats</p>
                   </div>
                 ))}
               </div>
               <p className="mt-2 text-[11px] leading-5 text-ivory/55">
-                Le backend distribue ces Lueurs après clôture de la semaine précédente.
+                Le backend distribue ces Eclats après clôture de la semaine précédente.
               </p>
             </div>
             <ul className="mt-4 space-y-3">

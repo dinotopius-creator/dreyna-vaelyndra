@@ -81,7 +81,7 @@ from ..schemas import (
 
 
 # PR M — XP gagné par type d'activité pour les deux flux accordés dans ce
-# fichier (réception de Sylvins via gift + nouveau follower). Le troisième flux
+# fichier (réception de Aureons via gift + nouveau follower). Le troisième flux
 # XP (post créé) vit dans `routers/posts.py` avec sa propre constante
 # `XP_PER_POST`, au plus près de la route qui le déclenche — ne pas dupliquer
 # ici pour éviter qu'un mainteneur change la valeur dans users.py et croie
@@ -111,7 +111,7 @@ def _clean_profile_text(value: str, *, field: str, max_graphemes: int) -> str:
 router = APIRouter(prefix="/users", tags=["users"])
 
 
-# Récompense quotidienne : 50 Lueurs / jour (cooldown 20 h pour lisser l'heure
+# Récompense quotidienne : 50 Eclats / jour (cooldown 20 h pour lisser l'heure
 # de connexion — comme la plupart des jeux mobiles).
 DAILY_REWARD_LUEURS = 50
 DAILY_COOLDOWN = timedelta(hours=20)
@@ -959,7 +959,7 @@ def gift_sylvins(
     payload: GiftTransfer,
     session: Session = Depends(_session_dep),
 ) -> GiftTransferOut:
-    """Transfère atomiquement `amount` Sylvins du sender au receiver.
+    """Transfère atomiquement `amount` Aureons du sender au receiver.
 
     - Consomme le pot PROMO du sender d'abord (évite de gaspiller le pot
       retirable), puis déborde sur PAID.
@@ -986,14 +986,14 @@ def gift_sylvins(
     if sender.sylvins + sender.sylvins_paid < amount:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Solde Sylvins insuffisant.",
+            detail="Solde Aureons insuffisant.",
         )
 
     # Ordre de consommation : PROMO d'abord (préserve le pot retirable).
     # `max(0, …)` : même garde-fou défensif que `_apply_legacy_sylvins_delta`,
     # au cas où `sender.sylvins` serait négatif suite à une race condition ou
     # un chemin futur. Sans ce garde-fou, un pot PROMO à -5 siphonnerait 5
-    # Sylvins supplémentaires depuis le pot PAID retirable et créditerait le
+    # Aureons supplémentaires depuis le pot PAID retirable et créditerait le
     # receiver en `earnings_paid` au lieu d'`earnings_promo` — exactement le
     # blanchiment que le split est censé empêcher.
     take_promo = min(amount, max(0, sender.sylvins))
@@ -1069,7 +1069,7 @@ def gift_item(
     - L'item doit être dans la wishlist du receiver (anti-triche : on ne peut
       pas offrir un item arbitraire en contournant l'UI).
     - Le receiver ne doit pas déjà posséder l'item.
-    - En Sylvins, consomme PROMO d'abord puis PAID (même logique que
+    - En Aureons, consomme PROMO d'abord puis PAID (même logique que
       `gift-sylvins` — impossible de blanchir un solde promo en cashable en
       passant par un achat croisé).
     - Atomique : soit tout passe (débit + inventaire + retrait wishlist),
@@ -1108,14 +1108,14 @@ def gift_item(
         if sender.lueurs < payload.price:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Solde Lueurs insuffisant.",
+                detail="Solde Eclats insuffisant.",
             )
         sender.lueurs -= payload.price
     else:  # sylvins
         if sender.sylvins + sender.sylvins_paid < payload.price:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Solde Sylvins insuffisant.",
+                detail="Solde Aureons insuffisant.",
             )
         take_promo = min(payload.price, max(0, sender.sylvins))
         take_paid = payload.price - take_promo
@@ -1127,7 +1127,7 @@ def gift_item(
     receiver.inventory_json = json.dumps(inventory)
     _store_wishlist(receiver, [x for x in wishlist if x != payload.item_id])
     # PR M — XP accordé au receiver uniquement si le cadeau a été payé en
-    # Sylvins (monnaie premium). Les achats en Lueurs (monnaie gratuite
+    # Aureons (monnaie premium). Les achats en Eclats (monnaie gratuite
     # via daily claim) ne donnent PAS d'XP, sinon deux comptes complices
     # pourraient se faire grimper en grade gratuitement en s'offrant des
     # items en boucle.
@@ -1168,13 +1168,13 @@ def gift_item(
 # --- Shop atomic purchase -------------------------------------------------
 
 
-class ShopPurchaseLueursPayload(BaseModel):
-    """Achat boutique payé en Lueurs.
+class ShopPurchaseEclatsPayload(BaseModel):
+    """Achat boutique payé en Eclats.
 
     Le serveur tranche tout en une transaction :
-      1. Vérifie que le solde Lueurs est ≥ `price`.
+      1. Vérifie que le solde Eclats est ≥ `price`.
       2. Refuse si l'item est déjà dans l'inventaire du user.
-      3. Débite `price` Lueurs.
+      3. Débite `price` Eclats.
       4. Ajoute `item_id` à l'inventaire.
       5. Écrit une ligne `ShopOrder` (status="paid").
       6. Écrit une ligne `WalletLedger` (delta=-price, raison="shop:…").
@@ -1192,20 +1192,20 @@ class ShopPurchaseLueursPayload(BaseModel):
 @router.post("/{user_id}/shop/purchase-lueurs", response_model=UserProfileOut)
 def purchase_with_lueurs(
     user_id: str,
-    payload: ShopPurchaseLueursPayload,
+    payload: ShopPurchaseEclatsPayload,
     session: Session = Depends(_session_dep),
 ) -> UserProfileOut:
-    """Achat atomique boutique en Lueurs.
+    """Achat atomique boutique en Eclats.
 
     Avant cette endpoint, le frontend faisait :
       - `apiApplyWalletDelta({ lueurs: -price })` (débite serveur)
       - `dispatch addOrder` (ajoute order en LOCAL state)
     → Si le user vidait son cache navigateur, l'order local
     disparaissait et l'item n'était jamais dans son inventaire DB,
-    donnant l'impression que les Lueurs s'étaient "perdues".
+    donnant l'impression que les Eclats s'étaient "perdues".
 
     On atomise les deux étapes côté serveur pour qu'on ait toujours :
-    débit Lueurs ⇔ ligne `ShopOrder` ⇔ item dans `inventory_json`.
+    débit Eclats ⇔ ligne `ShopOrder` ⇔ item dans `inventory_json`.
     """
     p = session.get(UserProfile, user_id)
     if not p:
@@ -1213,7 +1213,7 @@ def purchase_with_lueurs(
     if p.lueurs < payload.price:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Solde Lueurs insuffisant.",
+            detail="Solde Eclats insuffisant.",
         )
     inventory = json.loads(p.inventory_json or "[]")
     if payload.item_id in inventory:
@@ -1237,7 +1237,7 @@ def purchase_with_lueurs(
             quantity=1,
             unit_price=payload.price,
             total_price=payload.price,
-            currency="Lueurs",
+            currency="Eclats",
             status="paid",
         )
     )
@@ -1272,7 +1272,7 @@ def daily_claim(
                 granted=0, already_claimed=True, profile=_to_out(p, session)
             )
     # Bonus de moisson : la stat `harvest` du familier actif (0..99)
-    # ajoute jusqu'à ~24 Lueurs supplémentaires (harvest // 4).
+    # ajoute jusqu'à ~24 Eclats supplémentaires (harvest // 4).
     harvest_bonus = 0
     active = session.exec(
         select(UserFamiliar)

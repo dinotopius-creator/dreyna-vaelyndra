@@ -84,15 +84,15 @@ export interface Product {
   tagline: string;
   description: string;
   price: number;
-  currency: "€" | "Lueurs";
+  currency: "€" | "Eclats";
   image: string;
-  category: "Merch" | "Digital" | "VIP" | "Exclusif" | "Sylvins" | "Lueurs";
+  category: "Merch" | "Digital" | "VIP" | "Exclusif" | "Aureons" | "Eclats";
   /**
-   * Amount of Sylvins (virtual currency) granted when this product is purchased.
-   * Only set on products of category "Sylvins".
+   * Amount of Aureons (virtual currency) granted when this product is purchased.
+   * Only set on products of category "Aureons".
    */
   sylvins?: number;
-  /** Amount of Lueurs granted when this euro product is purchased. */
+  /** Amount of Eclats granted when this euro product is purchased. */
   lueurs?: number;
   rating: number;
   stock: number;
@@ -192,7 +192,7 @@ export type GiftRarity =
 export interface Gift {
   id: string;
   name: string;
-  /** Coût en Sylvins (retiré du wallet du viewer et crédité au streamer). */
+  /** Coût en Aureons (retiré du wallet du viewer et crédité au streamer). */
   price: number;
   /** Chemin vers l'icône SVG (public/gifts/xxx.svg). */
   icon: string;
@@ -201,9 +201,9 @@ export interface Gift {
 }
 
 /**
- * Portefeuille Sylvins d'un membre.
- * - `balance` : Sylvins achetés que le membre peut dépenser en cadeaux.
- * - `earnings` : Sylvins reçus en cadeaux (solde streamer, convertible en €).
+ * Portefeuille Aureons d'un membre.
+ * - `balance` : Aureons achetés que le membre peut dépenser en cadeaux.
+ * - `earnings` : Aureons reçus en cadeaux (solde streamer, convertible en €).
  * - `history` : trace des cadeaux envoyés/reçus (tronquée aux 50 plus récents
  *   pour ne pas exploser le localStorage).
  * - `giftsSentCount` / `giftsReceivedCount` : compteurs cumulatifs complets

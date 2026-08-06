@@ -961,7 +961,7 @@ export function Compte() {
             <Field label="Créature" value={user.creatureId ?? "—"} />
             <Field label="Dans le royaume depuis" value={joinedAt} />
             <Field
-              label="Lueurs"
+              label="Eclats"
               value={backendMe?.lueurs ?? "—"}
             />
             <Field

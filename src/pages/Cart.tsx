@@ -29,15 +29,15 @@ export function Cart() {
   const currencyPacksInCart = cart.filter((c) => {
     const p = products.find((pp) => pp.id === c.productId);
     return (
-      (p?.category === "Sylvins" && (p?.sylvins ?? 0) > 0) ||
-      (p?.category === "Lueurs" && (p?.lueurs ?? 0) > 0)
+      (p?.category === "Aureons" && (p?.sylvins ?? 0) > 0) ||
+      (p?.category === "Eclats" && (p?.lueurs ?? 0) > 0)
     );
   });
   const otherInCart = cart.filter((c) => {
     const p = products.find((pp) => pp.id === c.productId);
     return !(
-      (p?.category === "Sylvins" && (p?.sylvins ?? 0) > 0) ||
-      (p?.category === "Lueurs" && (p?.lueurs ?? 0) > 0)
+      (p?.category === "Aureons" && (p?.sylvins ?? 0) > 0) ||
+      (p?.category === "Eclats" && (p?.lueurs ?? 0) > 0)
     );
   });
 
@@ -106,7 +106,7 @@ export function Cart() {
       let sylvinsGained = 0;
       for (const c of cart) {
         const prod = products.find((p) => p.id === c.productId);
-        if (prod?.category === "Sylvins" && prod.sylvins) {
+        if (prod?.category === "Aureons" && prod.sylvins) {
           sylvinsGained += prod.sylvins * c.quantity;
         }
       }
@@ -128,7 +128,7 @@ export function Cart() {
       });
       if (sylvinsGained > 0) {
         dispatch({
-          type: "creditSylvins",
+          type: "creditAureons",
           userId: user.id,
           amount: sylvinsGained,
         });
@@ -265,7 +265,7 @@ export function Cart() {
             </button>
             <p className="mt-3 text-center text-xs text-ivory/40">
               {currencyPacksInCart.length > 0
-                ? "Paiement sécurisé via Stripe. Les Lueurs ou Aureons sont crédités sur ton compte après confirmation."
+                ? "Paiement sécurisé via Stripe. Les Eclats ou Aureons sont crédités sur ton compte après confirmation."
                 : "Paiement simulé. Prêt à brancher Stripe en production."}
             </p>
           </aside>

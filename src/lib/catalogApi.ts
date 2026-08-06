@@ -44,7 +44,7 @@ async function authRequest<T>(
 // --- Serialization backend <-> frontend ------------------------------------
 //
 // Le backend renvoie `sylvins: null` (Python `None`) quand le produit n'est
-// pas de catégorie "Sylvins". En TypeScript on modélise ça par l'absence de
+// pas de catégorie "Aureons". En TypeScript on modélise ça par l'absence de
 // la clé. De même, `currency` est toujours "€" côté front (literal type)
 // alors que côté backend c'est juste une string.
 

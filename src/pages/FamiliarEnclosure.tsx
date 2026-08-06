@@ -131,7 +131,7 @@ export function FamiliarEnclosure() {
   const [actionLoading, setActionLoading] = useState<"clean" | "feed" | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [cooldownRemaining, setCooldownRemaining] = useState(0);
-  const [displayedLueurs, setDisplayedLueurs] = useState(() => profile?.lueurs ?? 0);
+  const [displayedEclats, setDisplayedEclats] = useState(() => profile?.lueurs ?? 0);
   const [heartPulse, setHeartPulse] = useState<number | null>(null);
   const [guideOpen, setGuideOpen] = useState(false);
   const [feedBurstId, setFeedBurstId] = useState(0);
@@ -139,7 +139,7 @@ export function FamiliarEnclosure() {
   const [speechTick, setSpeechTick] = useState(0);
 
   useEffect(() => {
-    setDisplayedLueurs(profile?.lueurs ?? 0);
+    setDisplayedEclats(profile?.lueurs ?? 0);
   }, [profile?.lueurs]);
 
   useEffect(() => {
@@ -248,7 +248,7 @@ export function FamiliarEnclosure() {
       const result = await feedActiveFamiliar(user.id);
       setActive(result.familiar);
       setAffection(result.affection);
-      setDisplayedLueurs(result.profileLueurs);
+      setDisplayedEclats(result.profileEclats);
       setFeedback(result.message);
       playFeedSound();
       setFeedBurstId((current) => current + 1);
@@ -339,7 +339,7 @@ export function FamiliarEnclosure() {
           </h1>
         </div>
         <div className="rounded-full border border-gold-300/25 bg-gold-500/10 px-3 py-2 text-xs uppercase tracking-[0.18em] text-gold-100">
-          {displayedLueurs.toLocaleString("fr-FR")} Lueurs
+          {displayedEclats.toLocaleString("fr-FR")} Eclats
         </div>
       </div>
 

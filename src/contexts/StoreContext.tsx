@@ -57,7 +57,7 @@ interface StoreState {
    */
   deletedArticleIds: string[];
   /**
-   * Per-user Sylvins wallets (balance, streamer earnings, gift history).
+   * Per-user Aureons wallets (balance, streamer earnings, gift history).
    */
   wallets: Record<string, Wallet>;
 }
@@ -104,7 +104,7 @@ type Action =
       toId: string;
       toName: string;
     }
-  | { type: "creditSylvins"; userId: string; amount: number }
+  | { type: "creditAureons"; userId: string; amount: number }
   | {
       /**
        * Synchronise le wallet local depuis la source de vérité serveur
@@ -112,7 +112,7 @@ type Action =
        * paiement Stripe (qui crédite uniquement côté backend), la balance
        * affichée dans /moi, /panier et le GiftPanel resterait à 0 jusqu'à
        * ce que l'utilisateur dépense quelque chose. Idem au login : un
-       * compte chargé d'achats antérieurs n'affichait jamais ses Sylvins.
+       * compte chargé d'achats antérieurs n'affichait jamais ses Aureons.
        */
       type: "syncWalletFromServer";
       userId: string;
@@ -353,7 +353,7 @@ function reducer(state: StoreState, action: Action): StoreState {
         },
       };
     }
-    case "creditSylvins": {
+    case "creditAureons": {
       const wallet = getWallet(state.wallets, action.userId);
       return {
         ...state,
@@ -461,7 +461,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return init;
       const parsed = JSON.parse(raw) as Partial<StoreState>;
-      // Merge any new mock products (e.g. newly added Sylvins packs) into the
+      // Merge any new mock products (e.g. newly added Aureons packs) into the
       // stored catalogue so existing users automatically get them without
       // losing their own admin-created products. Mock products that the admin
       // explicitly deleted are tracked in `deletedMockProductIds` so they are
@@ -706,9 +706,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Source de vérité du wallet : `backendMe` (`/auth/me`). Sans ce sync, la
-  // balance locale (`state.wallets[user.id]`) ne reçoit jamais les Sylvins
+  // balance locale (`state.wallets[user.id]`) ne reçoit jamais les Aureons
   // crédités côté serveur (achats Stripe via webhook, top-ups admin, gains
-  // streamer). Résultat : "Solde à dépenser : 0 Sylvins" même après un
+  // streamer). Résultat : "Solde à dépenser : 0 Aureons" même après un
   // paiement réussi. On dispatche dès que les pots changent côté serveur.
   useEffect(() => {
     if (!user?.id || !backendMe) return;

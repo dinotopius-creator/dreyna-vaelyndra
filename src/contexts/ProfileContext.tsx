@@ -1,5 +1,5 @@
 /**
- * Contexte du profil serveur (avatar 3D, inventaire, bourses Lueurs/Sylvins).
+ * Contexte du profil serveur (avatar 3D, inventaire, bourses Eclats/Aureons).
  *
  * On sépare volontairement du AuthContext qui reste purement local (users +
  * session) pour éviter de casser l'existant. Dès qu'un utilisateur se
@@ -361,7 +361,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   useEffect(() => {
-    // Rafraîchit en fond toutes les 60 s pour capter les crédits Lueurs/Sylvins
+    // Rafraîchit en fond toutes les 60 s pour capter les crédits Eclats/Aureons
     // servis par d'autres devices (achats Stripe, daily claim…).
     if (!user) return;
     const id = setInterval(async () => {

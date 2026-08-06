@@ -1,6 +1,6 @@
 /**
  * Boutique avatar — catalogue d'items cosmétiques achetables avec les
- * bourses internes (Lueurs / Aureons).
+ * bourses internes (Eclats / Aureons).
  */
 import { useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
@@ -66,7 +66,7 @@ function slotForCategory(category: ShopCategory): string | null {
 }
 
 function itemPriceLabel(item: ShopItem) {
-  return `${item.price} ${item.currency === "lueurs" ? "Lueurs" : "Aureons"}`;
+  return `${item.price} ${item.currency === "lueurs" ? "Eclats" : "Aureons"}`;
 }
 
 export function AvatarShop() {
@@ -141,7 +141,7 @@ export function AvatarShop() {
     if (balance < item.price) {
       notify(
         item.currency === "lueurs"
-          ? "Pas assez de Lueurs. Revenez collecter ou réclamer votre récompense."
+          ? "Pas assez de Eclats. Revenez collecter ou réclamer votre récompense."
           : "Pas assez de Aureons. Un pack boutique peut compléter votre solde.",
         "error",
       );
@@ -371,7 +371,7 @@ export function AvatarShop() {
               <span className="block text-base font-semibold text-emerald-200">
                 {profile.lueurs}
               </span>
-              Lueurs
+              Eclats
             </div>
             <div className="rounded-xl bg-gold-500/10 px-3 py-2">
               <span className="block text-base font-semibold text-gold-200">

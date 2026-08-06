@@ -1,4 +1,4 @@
-"""Mini-jeu Oracle des Runes : gains journaliers Lueurs / Sylvins."""
+"""Mini-jeu Oracle des Runes : gains journaliers Eclats / Aureons."""
 from __future__ import annotations
 
 import logging
@@ -204,7 +204,7 @@ def play_oracle(
     )
     session.add(entry)
     session.add(profile)
-    # Trace WalletLedger pour audit (cf. plainte "j'ai perdu mes Lueurs"
+    # Trace WalletLedger pour audit (cf. plainte "j'ai perdu mes Eclats"
     # → on doit pouvoir auditer chaque crédit). Import différé pour
     # éviter le cycle oracle ↔ models au boot.
     from ..models import WalletLedger
@@ -254,7 +254,7 @@ def play_oracle(
         playsLeftToday=plays_left,
         maxDailyPlays=MAX_DAILY_PLAYS,
         reward=reward,
-        profileLueurs=profile.lueurs,
-        profileSylvinsPromo=profile.sylvins,
+        profileEclats=profile.lueurs,
+        profileAureonsPromo=profile.sylvins,
         recentHistory=_recent_history(session, payload.user_id),
     )

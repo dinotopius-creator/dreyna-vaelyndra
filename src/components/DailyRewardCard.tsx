@@ -57,9 +57,9 @@ export function DailyRewardCard({ className }: { className?: string }) {
         const bonus = res.harvest_bonus ?? 0;
         const suffix =
           bonus > 0
-            ? ` (dont +${bonus} grâce à ta Récolte de Lueurs 🌙)`
+            ? ` (dont +${bonus} grâce à ta Récolte de Eclats 🌙)`
             : "";
-        notify(`+${res.granted} Lueurs ajoutés à ta bourse ✨${suffix}`);
+        notify(`+${res.granted} Eclats ajoutés à ta bourse ✨${suffix}`);
       }
     } catch {
       notify("Impossible de réclamer la récompense. Réessayez.", "error");
@@ -83,11 +83,11 @@ export function DailyRewardCard({ className }: { className?: string }) {
           <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
             ✦ Récompense quotidienne
           </p>
-          <h4 className="font-display text-lg text-ivory">+50 Lueurs / jour</h4>
+          <h4 className="font-display text-lg text-ivory">+50 Eclats / jour</h4>
         </div>
       </div>
       <p className="text-[12px] text-ivory/60">
-        Revenez chaque jour pour faire grossir votre bourse de Lueurs. Elles
+        Revenez chaque jour pour faire grossir votre bourse de Eclats. Elles
         servent à débloquer styles et fonds dans la boutique avatar.
       </p>
       {canClaim ? (
@@ -98,7 +98,7 @@ export function DailyRewardCard({ className }: { className?: string }) {
           className="inline-flex items-center justify-center gap-2 self-start rounded-full bg-gold-shine px-4 py-2 font-regal text-[11px] tracking-[0.22em] text-night-900 transition hover:brightness-110 disabled:opacity-60"
         >
           <Sparkles className="h-4 w-4" />
-          {busy ? "Réclame…" : "Réclamer +50 Lueurs"}
+          {busy ? "Réclame…" : "Réclamer +50 Eclats"}
         </button>
       ) : (
         <div className="inline-flex items-center gap-2 self-start rounded-full border border-royal-500/30 bg-night-950/60 px-4 py-2 font-regal text-[11px] tracking-[0.22em] text-ivory/65">

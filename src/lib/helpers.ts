@@ -75,8 +75,8 @@ export function formatRelative(iso: string) {
 }
 
 export function formatPrice(amount: number, currency = "€") {
-  if (currency === "Lueurs") {
-    return `${new Intl.NumberFormat("fr-FR").format(Math.round(amount))} Lueurs`;
+  if (currency === "Eclats") {
+    return `${new Intl.NumberFormat("fr-FR").format(Math.round(amount))} Eclats`;
   }
   return `${amount.toFixed(2).replace(".", ",")} ${currency}`;
 }

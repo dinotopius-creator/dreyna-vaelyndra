@@ -30,7 +30,7 @@ export function CGU() {
           autorisés, avec mise en avant graduelle des plus actifs dans la rubrique
           « Top lives » et progression automatique dans les 6 grades de streamer,</li>
         <li>
-          l'achat de <strong>Sylvins de PulseForge</strong> (monnaie virtuelle
+          l'achat de <strong>Aureons de PulseForge</strong> (monnaie virtuelle
           interne) permettant d'offrir des cadeaux animés en direct,
         </li>
         <li>
@@ -94,9 +94,9 @@ export function CGU() {
         ni aucune garantie de durée.
       </p>
 
-      <h2>5. Monnaie virtuelle « Sylvins de PulseForge »</h2>
+      <h2>5. Monnaie virtuelle « Aureons de PulseForge »</h2>
       <p>
-        Les Sylvins sont une monnaie <strong>strictement virtuelle</strong>,
+        Les Aureons sont une monnaie <strong>strictement virtuelle</strong>,
         utilisable uniquement à l'intérieur du Royaume pour offrir des
         cadeaux animés pendant les lives, débloquer des badges ou des salons
         VIP. Ils :
@@ -108,7 +108,7 @@ export function CGU() {
         <li>sont perdus en cas de fermeture volontaire du compte par le membre.</li>
       </ul>
       <p>
-        Les modalités d'achat et de remboursement des Sylvins sont détaillées
+        Les modalités d'achat et de remboursement des Aureons sont détaillées
         dans les <Link to="/cgv">Conditions Générales de Vente</Link>.
       </p>
 
@@ -118,7 +118,7 @@ export function CGU() {
         sans délai, modérer, masquer ou supprimer tout contenu contrevenant aux présentes
         CGU, suspendre ou résilier un compte, couper un live, retirer la
         possibilité de diffuser, ou bannir définitivement un membre. Les
-        Sylvins non consommés sont perdus en cas de bannissement pour faute
+        Aureons non consommés sont perdus en cas de bannissement pour faute
         grave (fraude, harcèlement, contenu illicite).
       </p>
       <p>

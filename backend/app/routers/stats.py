@@ -32,7 +32,7 @@ def overview(session: Session = Depends(_session_dep)) -> dict:
     - `liveCount` : nombre de lives actifs (toutes sessions enregistrées).
       Le filtre "heartbeat frais" est volontairement omis ici : on veut
       un chiffre stable côté marketing.
-    - `currenciesCount` : statique (Lueurs + Sylvins).
+    - `currenciesCount` : statique (Eclats + Aureons).
     - `gradesCount` : statique (6 grades streamers).
     """
     members = session.exec(select(func.count(UserProfile.id))).one() or 0
@@ -84,7 +84,7 @@ def top_fans(
                 "username": p.username,
                 "handle": p.handle,
                 "avatarImageUrl": p.avatar_image_url or "",
-                "totalSylvinsGiven": int(total or 0),
+                "totalAureonsGiven": int(total or 0),
             }
         )
     return out

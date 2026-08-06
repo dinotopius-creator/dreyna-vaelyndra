@@ -12,8 +12,8 @@ import type { Product } from "../types";
 type CategoryFilter = "Tous" | Product["category"];
 const CATEGORIES: CategoryFilter[] = [
   "Tous",
-  "Lueurs",
-  "Sylvins",
+  "Eclats",
+  "Aureons",
   "Merch",
   "Digital",
   "VIP",
@@ -43,7 +43,7 @@ export function Shop() {
       <SectionHeading
         eyebrow="Boutique Royale"
         title={<>Les trésors de <span className="text-mystic">PulseForge</span></>}
-        subtitle="Packs de Lueurs, Sylvins, merch fantasy, tenues numériques et accès VIP. Les monnaies achetées en euros passent par Stripe."
+        subtitle="Packs de Eclats, Aureons, merch fantasy, tenues numériques et accès VIP. Les monnaies achetées en euros passent par Stripe."
       />
 
       {featured && (
@@ -76,8 +76,8 @@ export function Shop() {
               <p className="mt-4 rounded-2xl border border-gold-400/25 bg-night-950/50 px-4 py-3 text-sm text-gold-100">
                 Crédit immédiat après paiement :{" "}
                 {featured.lueurs
-                  ? `${featured.lueurs.toLocaleString("fr-FR")} Lueurs`
-                  : `${featured.sylvins?.toLocaleString("fr-FR")} Sylvins`}
+                  ? `${featured.lueurs.toLocaleString("fr-FR")} Eclats`
+                  : `${featured.sylvins?.toLocaleString("fr-FR")} Aureons`}
               </p>
             )}
             <div className="mt-6 flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -158,8 +158,8 @@ export function Shop() {
                   Crédit :{" "}
                   <span className="text-gold-200">
                     {p.lueurs
-                      ? `${p.lueurs.toLocaleString("fr-FR")} Lueurs`
-                      : `${p.sylvins?.toLocaleString("fr-FR")} Sylvins`}
+                      ? `${p.lueurs.toLocaleString("fr-FR")} Eclats`
+                      : `${p.sylvins?.toLocaleString("fr-FR")} Aureons`}
                   </span>
                 </p>
               )}

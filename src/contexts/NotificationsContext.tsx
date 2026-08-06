@@ -794,7 +794,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     });
   }, [pushNotification, user]);
 
-  // Offrandes Sylvins reçues sur le familier : pas dérivables des posts,
+  // Offrandes Aureons reçues sur le familier : pas dérivables des posts,
   // on poll un endpoint dédié. La dédup passe par `seenEventIdsRef`
   // (réamorcé depuis les notifications persistées) : une offrande déjà
   // notifiée lors d'une session précédente ne re-notifie pas, mais une
@@ -836,7 +836,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           id,
           kind: "familiar_gift",
           title: "Offrande à ton familier 🎁",
-          body: `${gift.senderName} a offert ${gift.amount} Sylvins à ton familier (+${gift.xpGranted} XP).`,
+          body: `${gift.senderName} a offert ${gift.amount} Aureons à ton familier (+${gift.xpGranted} XP).`,
           url: profileUrl,
           entityType: "profile",
           entityId: gift.senderId,

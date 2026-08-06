@@ -255,7 +255,7 @@ export function StreamerLeaderboard({ refreshTick }: Props) {
                   className={`mt-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-regal tracking-[0.18em] ${style.chip}`}
                 >
                   <Sparkles className="h-3 w-3" />
-                  {formatNumber(entry.totalSylvins)}
+                  {formatNumber(entry.totalAureons)}
                 </span>
                 <div
                   className={`mt-2 w-full ${pedestalH} rounded-t-xl border-x border-t border-gold-400/20 bg-gradient-to-t from-gold-500/15 via-gold-500/5 to-transparent`}
@@ -313,7 +313,7 @@ export function StreamerLeaderboard({ refreshTick }: Props) {
                   </div>
                   <span className="inline-flex items-center gap-1 shrink-0 rounded-full border border-gold-400/30 bg-night-900/50 px-2 py-0.5 text-[10px] font-regal tracking-[0.16em] text-gold-100">
                     <Sparkles className="h-3 w-3" />
-                    {formatNumber(entry.totalSylvins)}
+                    {formatNumber(entry.totalAureons)}
                   </span>
                 </Link>
               </motion.li>
