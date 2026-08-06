@@ -270,7 +270,7 @@ export const WIKI_ARTICLES: WikiArticle[] = [
     status: "available",
     route: "/live",
     summary:
-      "PulseForge affiche plusieurs classements : streamers par Sylvins reçus, duos BFF et activité communautaire.",
+      "PulseForge affiche plusieurs classements : streamers par Aureons reçus, duos BFF et activité communautaire.",
     steps: [
       "Ouvrez Live pour voir le classement live et le module BFF.",
       "Le classement streamer hebdomadaire est basé sur les Sylvins reçus pendant la semaine.",
