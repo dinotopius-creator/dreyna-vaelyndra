@@ -12,7 +12,7 @@ import { formatDate } from "../lib/helpers";
 
 const ACTION_LABELS: Record<string, string> = {
   grant_lueurs: "Don de lueurs",
-  grant_sylvins: "Don de Sylvins promo",
+  grant_sylvins: "Don de Aureons promo",
   grant_item: "Don d'objet",
 };
 
@@ -94,7 +94,7 @@ export function AdminRequestsTab() {
             Demandes administratives
           </h2>
           <p className="mt-1 text-sm text-ivory/60">
-            Les dons de lueurs, Sylvins ou objets passent par une validation
+            Les dons de lueurs, Aureons ou objets passent par une validation
             Architecte avant d'être appliqués.
           </p>
         </div>
@@ -135,7 +135,7 @@ export function AdminRequestsTab() {
                   {request.actionType === "grant_item"
                     ? `Objet : ${request.itemId}`
                     : `${request.amount.toLocaleString("fr-FR")} ${
-                        request.currency === "lueurs" ? "lueurs" : "Sylvins"
+                        request.currency === "lueurs" ? "lueurs" : "Aureons"
                       }`}
                 </p>
                 <p className="mt-2 whitespace-pre-wrap text-sm text-ivory/70">

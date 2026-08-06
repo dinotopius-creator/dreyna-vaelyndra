@@ -73,9 +73,9 @@ export function Cart() {
       })[0];
       // On avertit dans 3 cas où le montant facturé par Stripe sera
       // inférieur au total affiché dans le panier :
-      //  1) Il y a AUSSI des items non-Sylvins (ils ne partiront pas
+      //  1) Il y a AUSSI des items non-Aureons (ils ne partiront pas
       //     sur Stripe → restent en panier après paiement).
-      //  2) Il y a plusieurs packs Sylvins différents (on n'en
+      //  2) Il y a plusieurs packs Aureons différents (on n'en
       //     encaisse qu'un, le plus cher).
       //  3) Un seul pack de monnaie mais avec une quantité > 1 : le
       //     backend force `quantity: 1` dans la session Stripe (cf.
@@ -101,7 +101,7 @@ export function Cart() {
 
     setProcessing(true);
     setTimeout(() => {
-      // Total des Sylvins à créditer au wallet du membre pour les packs de
+      // Total des Aureons à créditer au wallet du membre pour les packs de
       // monnaie virtuelle présents dans le panier.
       let sylvinsGained = 0;
       for (const c of cart) {
@@ -135,7 +135,7 @@ export function Cart() {
       }
       notify(
         sylvinsGained > 0
-          ? `✨ Commande scellée — ${sylvinsGained.toLocaleString("fr-FR")} Sylvins crédités !`
+          ? `✨ Commande scellée — ${sylvinsGained.toLocaleString("fr-FR")} Aureons crédités !`
           : "✨ Paiement simulé — votre commande est scellée !",
       );
       setProcessing(false);
@@ -265,7 +265,7 @@ export function Cart() {
             </button>
             <p className="mt-3 text-center text-xs text-ivory/40">
               {currencyPacksInCart.length > 0
-                ? "Paiement sécurisé via Stripe. Les Lueurs ou Sylvins sont crédités sur ton compte après confirmation."
+                ? "Paiement sécurisé via Stripe. Les Lueurs ou Aureons sont crédités sur ton compte après confirmation."
                 : "Paiement simulé. Prêt à brancher Stripe en production."}
             </p>
           </aside>
