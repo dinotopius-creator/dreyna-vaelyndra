@@ -1,5 +1,5 @@
 /**
- * Contexte du profil serveur (avatar 3D, inventaire, bourses Lueurs/Sylvins).
+ * Contexte du profil serveur (avatar 3D, inventaire, bourses Eclats/Aureons).
  *
  * On sépare volontairement du AuthContext qui reste purement local (users +
  * session) pour éviter de casser l'existant. Dès qu'un utilisateur se
@@ -38,6 +38,7 @@ import {
   type UserProfileDto,
 } from "../lib/api";
 import { CATALOG_BY_ID, EQUIP_SLOT } from "../lib/avatarShop";
+import { PREMIUM_AVATAR_PACK } from "../data/premiumAvatarPack";
 import { useAuth } from "./AuthContext";
 
 interface ProfileCtx {
@@ -126,7 +127,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         fresh = await apiUpsertProfile({
           id: user.id,
           username: user.username,
-          avatarImageUrl: user.avatar,
+          avatarImageUrl:
+            user.avatar || PREMIUM_AVATAR_PACK.vrmModels[0]?.path || "",
           creatureId: user.creatureId,
         });
       }
@@ -222,6 +224,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       price: number;
     }): Promise<UserProfileDto | null> => {
       if (!user) return null;
+      if (profile?.inventory?.includes(input.itemId)) return profile;
       // L'achat est en deux appels (débit de bourse puis ajout inventaire) :
       // faute d'endpoint atomique côté backend, on applique le pattern "saga"
       // avec une transaction compensatoire si l'étape 2 échoue, pour éviter
@@ -244,11 +247,17 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         });
         const purchasedItem = CATALOG_BY_ID[input.itemId];
         if (
+          purchasedItem?.category === "frame" ||
+          purchasedItem?.category === "scene" ||
           purchasedItem?.category === "outfit3d" ||
           purchasedItem?.category === "accessory3d"
         ) {
           const slot =
-            purchasedItem.category === "outfit3d"
+            purchasedItem.category === "frame"
+              ? EQUIP_SLOT.Frame
+              : purchasedItem.category === "scene"
+                ? EQUIP_SLOT.Scene
+                : purchasedItem.category === "outfit3d"
               ? EQUIP_SLOT.Outfit3D
               : EQUIP_SLOT.Accessory3D;
           const equipped = await apiUpdateInventory(user.id, {
@@ -278,7 +287,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         throw err;
       }
     },
-    [user],
+    [profile, user],
   );
 
   const setEquipped = useCallback(
@@ -287,6 +296,9 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       itemId: string | null,
     ): Promise<UserProfileDto | null> => {
       if (!user || !profile) return null;
+      if (itemId && !(profile.inventory ?? []).includes(itemId)) {
+        throw new Error("Impossible d'equiper un item non possede.");
+      }
       const next = { ...(profile.equipped ?? {}) };
       if (itemId) next[slot] = itemId;
       else delete next[slot];
@@ -349,7 +361,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   useEffect(() => {
-    // Rafraîchit en fond toutes les 60 s pour capter les crédits Lueurs/Sylvins
+    // Rafraîchit en fond toutes les 60 s pour capter les crédits Eclats/Aureons
     // servis par d'autres devices (achats Stripe, daily claim…).
     if (!user) return;
     const id = setInterval(async () => {

@@ -1,7 +1,7 @@
 """Endpoints du module Communauté : classement des streamers + BFF.
 
 Les deux modules s'appuient sur la table `GiftLedger` (cf. `models.py`) :
-chaque cadeau Sylvins envoyé via `POST /users/{id}/gift-sylvins` y laisse
+chaque cadeau Aureons envoyé via `POST /users/{id}/gift-sylvins` y laisse
 une ligne. Le classement et les BFF sont calculés à la volée par agrégation
 sur la plage `[week_start, week_start + 7j)`.
 
@@ -19,7 +19,7 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 from typing import List, Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy import func
 from sqlmodel import Session, select
 
@@ -31,6 +31,7 @@ from ..grades import (
     progress_in_current_grade,
 )
 from ..models import GiftLedger, UserProfile
+from ..ranking_eligibility import is_public_ranking_member
 from ..schemas import (
     BFFEntryOut,
     CreatureOut,
@@ -121,9 +122,10 @@ def _pick_week_start(week: str) -> tuple[date, date]:
 def streamer_leaderboard(
     week: Literal["this", "last"] = Query("this"),
     limit: int = Query(50, ge=1, le=100),
+    response: Response = None,
     session: Session = Depends(_session_dep),
 ) -> StreamerLeaderboardOut:
-    """Classement des streamers par Sylvins reçus sur la semaine demandée.
+    """Classement des streamers par Aureons reçus sur la semaine demandée.
 
     - `week=this` (défaut) : semaine ISO en cours, mise à jour instantanée
       dès qu'un don est enregistré (lecture directe sur le ledger).
@@ -134,6 +136,8 @@ def streamer_leaderboard(
     sans aucun don sur la période ne sont pas inclus (performance :
     seulement les receivers présents dans le ledger de la semaine).
     """
+    if response is not None:
+        response.headers["Cache-Control"] = "no-store, max-age=0"
     start, _ = _pick_week_start(week)
     end = start + timedelta(days=7)
 
@@ -146,7 +150,6 @@ def streamer_leaderboard(
         .where(GiftLedger.week_start_iso == start.isoformat())
         .group_by(GiftLedger.receiver_id)
         .order_by(func.sum(GiftLedger.amount).desc())
-        .limit(limit)
     )
     rows = session.exec(stmt).all()
 
@@ -159,25 +162,18 @@ def streamer_leaderboard(
         ).all()
         profiles = {p.id: p for p in profile_rows}
 
-    entries: list[StreamerLeaderboardEntryOut] = []
-    for rank, (receiver_id, total) in enumerate(rows, start=1):
+    eligible_rows: list[tuple[str, int]] = []
+    for receiver_id, total in rows:
         p = profiles.get(receiver_id)
-        if p is None:
-            # Le receiver a été supprimé — on garde la ligne avec un nom
-            # de fallback pour ne pas casser le classement.
-            entries.append(
-                StreamerLeaderboardEntryOut(
-                    rank=rank,
-                    userId=receiver_id,
-                    username="(compte supprimé)",
-                    avatarImageUrl="",
-                    totalSylvins=int(total or 0),
-                    creature=None,
-                    role="user",
-                    grade=None,
-                )
-            )
+        if not is_public_ranking_member(p):
             continue
+        eligible_rows.append((receiver_id, int(total or 0)))
+        if len(eligible_rows) >= limit:
+            break
+
+    entries: list[StreamerLeaderboardEntryOut] = []
+    for rank, (receiver_id, total) in enumerate(eligible_rows, start=1):
+        p = profiles[receiver_id]
         entries.append(
             StreamerLeaderboardEntryOut(
                 rank=rank,
@@ -185,7 +181,7 @@ def streamer_leaderboard(
                 username=p.username,
                 handle=p.handle,
                 avatarImageUrl=p.avatar_image_url,
-                totalSylvins=int(total or 0),
+                totalAureons=total,
                 creature=_creature_dto(p.creature_id),
                 role=p.role or "user",
                 grade=_grade_out_for(p),
@@ -206,22 +202,24 @@ def streamer_leaderboard(
 
 @router.get("/bff", response_model=List[BFFEntryOut])
 def streamers_bff(
-    week: Literal["this", "last", "all"] = Query("all"),
+    week: Literal["this", "last", "all"] = Query("this"),
     limit: int = Query(20, ge=1, le=100),
+    response: Response = None,
     session: Session = Depends(_session_dep),
 ) -> List[BFFEntryOut]:
     """Liste les duos BFF : pour chaque streamer top, son plus gros donateur.
 
-    - `week=all` (défaut) : BFF calculé sur l'intégralité de l'historique,
-      pour une relation stable et meaningful ("best friend forever" →
-      tout-temps par défaut).
-    - `week=this|last` : BFF réduit à la semaine demandée (utile pour
-      afficher un duo contextuel sur la "Cette semaine" du classement).
+    - `week=this` (défaut) : BFF hebdomadaire en temps réel, remis à zéro
+      chaque lundi avec le classement live.
+    - `week=last` : BFF de la semaine précédente, figé.
+    - `week=all` : BFF calculé sur l'intégralité de l'historique.
 
     Retourne jusqu'à `limit` duos, triés par montant donné (décroissant).
     Chaque streamer apparaît au plus une fois (son plus gros donateur
     uniquement).
     """
+    if response is not None:
+        response.headers["Cache-Control"] = "no-store, max-age=0"
     # 1. Agrégation (receiver, sender) → somme donnée.
     stmt = select(
         GiftLedger.receiver_id,
@@ -235,9 +233,24 @@ def streamers_bff(
 
     rows = session.exec(stmt).all()
 
-    # 2. Pour chaque receiver, garder le couple (sender, total) maximal.
+    user_ids: set[str] = set()
+    for receiver_id, sender_id, _total in rows:
+        user_ids.add(receiver_id)
+        user_ids.add(sender_id)
+    profile_rows = session.exec(
+        select(UserProfile).where(UserProfile.id.in_(list(user_ids)))
+    ).all()
+    profiles = {p.id: p for p in profile_rows}
+
+    # 2. Pour chaque receiver eligible, garder le couple (sender, total)
+    # maximal. Les classements publics ne montrent ni staff ni comptes
+    # internes, meme quand ils ont beaucoup donne ou recu.
     best_by_receiver: dict[str, tuple[str, int]] = {}
     for receiver_id, sender_id, total in rows:
+        if not is_public_ranking_member(profiles.get(receiver_id)):
+            continue
+        if not is_public_ranking_member(profiles.get(sender_id)):
+            continue
         amount = int(total or 0)
         current = best_by_receiver.get(receiver_id)
         if current is None or amount > current[1]:
@@ -253,28 +266,8 @@ def streamers_bff(
         reverse=True,
     )[:limit]
 
-    # 4. Hydrate les profils en 1 seule requête.
-    user_ids: set[str] = set()
-    for receiver_id, (sender_id, _amount) in pairs:
-        user_ids.add(receiver_id)
-        user_ids.add(sender_id)
-    profile_rows = session.exec(
-        select(UserProfile).where(UserProfile.id.in_(list(user_ids)))
-    ).all()
-    profiles = {p.id: p for p in profile_rows}
-
     def _mini(user_id: str) -> dict:
-        p = profiles.get(user_id)
-        if p is None:
-            return {
-                "id": user_id,
-                "username": "(compte supprimé)",
-                "handle": None,
-                "avatarImageUrl": "",
-                "creature": None,
-                "role": "user",
-                "grade": None,
-            }
+        p = profiles[user_id]
         return {
             "id": p.id,
             "username": p.username,
@@ -291,7 +284,7 @@ def streamers_bff(
             BFFEntryOut(
                 streamer=_mini(receiver_id),
                 donor=_mini(sender_id),
-                totalSylvins=amount,
+                totalAureons=amount,
             )
         )
     return out

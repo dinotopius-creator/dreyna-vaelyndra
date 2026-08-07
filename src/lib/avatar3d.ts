@@ -2,26 +2,44 @@ export const AVATAR_3D_PREFIX = "vaelyndra3d:";
 
 export type Avatar3DBodyType = "femme" | "homme";
 export type Avatar3DFaceShape = "soft" | "sharp";
-export type Avatar3DHairStyle = "bob" | "wave" | "fade" | "braids";
+export type Avatar3DHairStyle =
+  | "bob"
+  | "wave"
+  | "fade"
+  | "braids"
+  | "ponytail"
+  | "afro"
+  | "pixie";
+export type Avatar3DBaseModel = "procedural-premium" | "premium-humanoid" | "humanoid-v3" | "humanoid-v4";
+export type Avatar3DExpression = "soft-smile" | "neutral" | "confident";
+export type Avatar3DSystem = "legacy" | "premium-v2";
 
 export interface Avatar3DConfig {
-  version: 1;
+  version: 1 | 2 | 3 | 4;
+  system?: Avatar3DSystem;
   bodyType: Avatar3DBodyType;
   faceShape: Avatar3DFaceShape;
   hairStyle: Avatar3DHairStyle;
   skinTone: string;
   hairColor: string;
   eyeColor: string;
+  baseModel?: Avatar3DBaseModel;
+  expression?: Avatar3DExpression;
+  bodyTone?: string;
 }
 
 export const DEFAULT_AVATAR_3D_CONFIG: Avatar3DConfig = {
-  version: 1,
+  version: 4,
+  system: "premium-v2",
   bodyType: "femme",
   faceShape: "soft",
   hairStyle: "wave",
   skinTone: "#f2d1bf",
   hairColor: "#2d160f",
   eyeColor: "#7fd8ff",
+  baseModel: "humanoid-v4",
+  expression: "soft-smile",
+  bodyTone: "#8b5cf6",
 };
 
 export const AVATAR_3D_SKIN_TONES = [
@@ -33,11 +51,21 @@ export const AVATAR_3D_SKIN_TONES = [
 
 export const AVATAR_3D_HAIR_COLORS = [
   "#1c0f0d",
+  "#2b1b10",
   "#5b331f",
   "#a56a3a",
+  "#d1a46b",
+  "#f5d8a8",
+  "#9d2235",
+  "#e7679f",
+  "#d946ef",
   "#cfd8ff",
   "#8b5cf6",
+  "#2563eb",
+  "#14b8a6",
   "#0f766e",
+  "#84cc16",
+  "#d4d4d8",
 ] as const;
 
 export const AVATAR_3D_EYE_COLORS = [
@@ -54,7 +82,18 @@ export function isAvatar3DUrl(input: string | null | undefined): boolean {
 
 export function buildAvatar3DUrl(config: Avatar3DConfig): string {
   const payload = btoa(
-    unescape(encodeURIComponent(JSON.stringify({ ...config, version: 1 }))),
+    unescape(
+      encodeURIComponent(
+        JSON.stringify({
+          ...config,
+          version: 4,
+          system: config.system ?? "premium-v2",
+          baseModel: config.baseModel ?? "humanoid-v4",
+          expression: config.expression ?? "soft-smile",
+          bodyTone: config.bodyTone ?? DEFAULT_AVATAR_3D_CONFIG.bodyTone,
+        }),
+      ),
+    ),
   );
   return `${AVATAR_3D_PREFIX}${payload}`;
 }
@@ -69,20 +108,38 @@ export function decodeAvatar3DUrl(
     const parsed = JSON.parse(
       decodeURIComponent(escape(atob(raw))),
     ) as Partial<Avatar3DConfig>;
-    if (parsed.version !== 1) return null;
+    if (parsed.version !== 1 && parsed.version !== 2 && parsed.version !== 3 && parsed.version !== 4)
+      return null;
     return {
-      version: 1,
+      version: parsed.version,
+      system: parsed.system === "legacy" ? "legacy" : "premium-v2",
       bodyType: parsed.bodyType === "homme" ? "homme" : "femme",
       faceShape: parsed.faceShape === "sharp" ? "sharp" : "soft",
       hairStyle:
         parsed.hairStyle === "bob" ||
         parsed.hairStyle === "fade" ||
-        parsed.hairStyle === "braids"
+        parsed.hairStyle === "braids" ||
+        parsed.hairStyle === "ponytail" ||
+        parsed.hairStyle === "afro" ||
+        parsed.hairStyle === "pixie"
           ? parsed.hairStyle
           : "wave",
       skinTone: typeof parsed.skinTone === "string" ? parsed.skinTone : DEFAULT_AVATAR_3D_CONFIG.skinTone,
       hairColor: typeof parsed.hairColor === "string" ? parsed.hairColor : DEFAULT_AVATAR_3D_CONFIG.hairColor,
       eyeColor: typeof parsed.eyeColor === "string" ? parsed.eyeColor : DEFAULT_AVATAR_3D_CONFIG.eyeColor,
+      baseModel:
+        parsed.baseModel === "procedural-premium"
+          ? "procedural-premium"
+          : parsed.baseModel === "premium-humanoid"
+            ? "premium-humanoid"
+            : parsed.baseModel === "humanoid-v3"
+              ? "humanoid-v3"
+              : "humanoid-v4",
+      expression:
+        parsed.expression === "neutral" || parsed.expression === "confident"
+          ? parsed.expression
+          : "soft-smile",
+      bodyTone: typeof parsed.bodyTone === "string" ? parsed.bodyTone : DEFAULT_AVATAR_3D_CONFIG.bodyTone,
     };
   } catch {
     return null;
@@ -90,18 +147,46 @@ export function decodeAvatar3DUrl(
 }
 
 export function buildAvatar3DPosterDataUrl(config: Avatar3DConfig): string {
-  const shoulders = config.bodyType === "homme" ? 82 : 74;
-  const torso = config.bodyType === "homme" ? "#4338ca" : "#9d174d";
-  const cape = config.bodyType === "homme" ? "#312e81" : "#6d28d9";
-  const jaw = config.faceShape === "sharp" ? "14" : "21";
-  const hairTop = config.hairStyle === "fade" ? 42 : 28;
-  const hairSides = config.hairStyle === "bob" ? 10 : config.hairStyle === "braids" ? 4 : 14;
+  const shoulders = config.bodyType === "homme" ? 84 : 76;
+  const torso = config.bodyTone ?? (config.bodyType === "homme" ? "#4f46e5" : "#db2777");
+  const cape = config.bodyType === "homme" ? "#1d4ed8" : "#7c3aed";
+  const jaw = config.faceShape === "sharp" ? "14" : "20";
+  const mouth = config.expression === "confident"
+    ? "M116 131c8 9 16 12 24 12 8 0 16-3 24-12"
+    : config.expression === "neutral"
+      ? "M118 131c6 2 14 3 20 3 6 0 14-1 20-3"
+      : "M117 129c7 10 14 14 23 14 9 0 16-4 23-14";
+  const hairTop =
+    config.hairStyle === "fade"
+      ? 42
+      : config.hairStyle === "pixie"
+        ? 34
+        : config.hairStyle === "afro"
+          ? 20
+          : 28;
+  const hairSides =
+    config.hairStyle === "bob"
+      ? 10
+      : config.hairStyle === "braids"
+        ? 4
+        : config.hairStyle === "pixie"
+          ? 8
+          : config.hairStyle === "afro"
+            ? 0
+            : 14;
   const extraHair =
     config.hairStyle === "wave"
       ? `<path d="M72 118c6 14 18 24 33 30 2-23 7-43 16-60-22 3-39 13-49 30Z" fill="${config.hairColor}" opacity="0.95" />`
       : config.hairStyle === "braids"
         ? `<rect x="76" y="118" width="10" height="48" rx="5" fill="${config.hairColor}" />
            <rect x="170" y="118" width="10" height="48" rx="5" fill="${config.hairColor}" />`
+        : config.hairStyle === "ponytail"
+          ? `<rect x="108" y="66" width="40" height="26" rx="12" fill="${config.hairColor}" />
+             <rect x="118" y="84" width="20" height="62" rx="10" fill="${config.hairColor}" />`
+          : config.hairStyle === "afro"
+            ? `<circle cx="128" cy="82" r="56" fill="${config.hairColor}" opacity="0.98" />`
+            : config.hairStyle === "pixie"
+              ? `<path d="M78 82c12-24 32-38 57-38 20 0 39 7 52 24-19 0-32 2-42 8-17 10-36 14-67 6Z" fill="${config.hairColor}" opacity="0.95" />`
         : "";
   const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
@@ -121,9 +206,9 @@ export function buildAvatar3DPosterDataUrl(config: Avatar3DConfig): string {
       ${extraHair}
       <circle cx="109" cy="106" r="5" fill="${config.eyeColor}"/>
       <circle cx="147" cy="106" r="5" fill="${config.eyeColor}"/>
-      <path d="M121 128c4 4 10 6 14 6 4 0 10-2 14-6" stroke="#5c2d24" stroke-width="4" stroke-linecap="round" fill="none"/>
+      <path d="${mouth}" stroke="#5c2d24" stroke-width="4" stroke-linecap="round" fill="none"/>
       <path d="M128 99c3 8 4 15 3 22" stroke="#a86a50" stroke-width="3" stroke-linecap="round"/>
-      <path d="M95 82c7-9 18-14 33-14 17 0 31 6 40 17" stroke="${config.hairColor}" stroke-width="${jaw}" stroke-linecap="round" opacity="0.82"/>
+      <path d="M95 82c7-9 18-14 33-14 17 0 31 6 40 17" stroke="${config.hairColor}" stroke-width="${jaw}" stroke-linecap="round" opacity="0.9"/>
     </svg>
   `.trim();
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;

@@ -85,7 +85,7 @@ export function LiveObsChatOverlay() {
       <div className="flex h-[calc(100vh-2rem)] flex-col justify-end">
         <div className="mb-3 flex w-fit items-center gap-2 rounded-full border border-gold-300/25 bg-night-950/55 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-gold-100 backdrop-blur-md">
           <MessageCircle className="h-3.5 w-3.5" />
-          Chat Vaelyndra
+          Chat PulseForge
           <span
             className={
               status === "ready"

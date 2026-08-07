@@ -24,6 +24,9 @@ class Post(SQLModel, table=True):
     content: str
     image_url: Optional[str] = None
     video_url: Optional[str] = None
+    video_thumbnail_url: Optional[str] = None
+    post_type: str = Field(default="standard", index=True, max_length=32)
+    official_label: Optional[str] = Field(default=None, max_length=64)
     created_at: str = Field(default_factory=_now_iso, index=True)
 
 
@@ -34,7 +37,15 @@ class Comment(SQLModel, table=True):
     author_name: str
     author_avatar: str
     content: str
+    parent_id: Optional[str] = Field(default=None, index=True)
+    reply_to_author_id: Optional[str] = Field(default=None, index=True)
+    reply_to_author_name: Optional[str] = Field(default=None)
     created_at: str = Field(default_factory=_now_iso)
+
+
+class CommentLike(SQLModel, table=True):
+    comment_id: str = Field(foreign_key="comment.id", primary_key=True)
+    user_id: str = Field(primary_key=True)
 
 
 class Reaction(SQLModel, table=True):
@@ -50,7 +61,7 @@ class Reaction(SQLModel, table=True):
 class CommunityActivityReward(SQLModel, table=True):
     """Récompense hebdo du classement communauté.
 
-    Une ligne = un gain de Lueurs déjà attribué pour une semaine donnée.
+    Une ligne = un gain de Eclats déjà attribué pour une semaine donnée.
     Sert de garde-fou idempotent : si le cron/endpoint de sync est rejoué,
     on ne recrédite jamais deux fois les mêmes gagnants.
     """
@@ -95,6 +106,17 @@ class WorldPresence(SQLModel, table=True):
     pos_x: int = Field(default=50)
     pos_y: int = Field(default=50)
     voice_enabled: bool = Field(default=False)
+    voice_channel_id: Optional[str] = Field(default=None, max_length=128)
+    private_voice_partner_id: Optional[str] = Field(default=None, max_length=128)
+    voice_invite_from_user_id: Optional[str] = Field(default=None, max_length=128)
+    voice_invite_to_user_id: Optional[str] = Field(default=None, max_length=128)
+    voice_invite_created_at: Optional[str] = None
+    interaction_kind: Optional[str] = Field(default=None, max_length=32)
+    interaction_from_user_id: Optional[str] = Field(default=None, max_length=128)
+    interaction_from_username: Optional[str] = Field(default=None, max_length=64)
+    interaction_partner_user_id: Optional[str] = Field(default=None, max_length=128)
+    interaction_expires_at: Optional[str] = None
+    last_interaction_sent_at: Optional[str] = None
     last_seen_at: str = Field(default_factory=_now_iso, index=True)
 
 
@@ -107,8 +129,8 @@ class UserProfile(SQLModel, table=True):
     - `inventory` est une liste d'ids d'items possédés, encodée en JSON. Les
       items équipés sont dans `equipped` (dict slot → itemId).
     - `lueurs` est la monnaie gratuite (daily claim, récompenses). Les
-      Sylvins (monnaie premium) sont **séparés en deux pots** pour empêcher
-      l'auto-fraude (fondateur qui se crédite gratuitement des Sylvins et
+      Aureons (monnaie premium) sont **séparés en deux pots** pour empêcher
+      l'auto-fraude (fondateur qui se crédite gratuitement des Aureons et
       les retire en vrai argent) :
 
       - `sylvins_paid` = solde acheté avec du vrai € via Stripe. Seul pot
@@ -144,6 +166,7 @@ class UserProfile(SQLModel, table=True):
     # pré-PR S soit migré au prochain démarrage du backend.
     handle: Optional[str] = Field(default=None, index=True, max_length=20)
     handle_updated_at: Optional[str] = None
+    bio: str = Field(default="", max_length=500)
     avatar_image_url: str = ""
     avatar_url: Optional[str] = None
     # JSON sérialisé (list[str] et dict[str, str]) — SQLite ne gère pas les
@@ -229,6 +252,34 @@ class AdminAuditLog(SQLModel, table=True):
     action: str = Field(index=True)
     details_json: str = Field(default="{}")
     created_at: str = Field(default_factory=_now_iso, index=True)
+
+
+class AdminRequest(SQLModel, table=True):
+    """Demande staff pour toute action sensible economie/inventaire.
+
+    Les administratrices peuvent creer ces demandes, mais seul le role
+    `architect` peut les valider/refuser. Le statut rend l'action idempotente :
+    une demande traitee ne peut pas etre appliquee une seconde fois.
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    requester_id: str = Field(index=True)
+    requester_username: str
+    requester_role: str = Field(index=True)
+    target_id: str = Field(index=True)
+    target_username: str
+    action_type: str = Field(index=True, max_length=48)
+    currency: Optional[str] = Field(default=None, max_length=24)
+    amount: int = Field(default=0)
+    item_id: Optional[str] = Field(default=None, max_length=128)
+    reason: str
+    context: str = Field(default="autre", max_length=64)
+    status: str = Field(default="pending", index=True, max_length=24)
+    reviewer_id: Optional[str] = Field(default=None, index=True)
+    reviewer_username: Optional[str] = None
+    reviewer_comment: Optional[str] = None
+    created_at: str = Field(default_factory=_now_iso, index=True)
+    reviewed_at: Optional[str] = None
 
 
 class Report(SQLModel, table=True):
@@ -407,10 +458,12 @@ class CatalogProduct(SQLModel, table=True):
     # Toujours "€" en v1 ; on garde la colonne pour compat future.
     currency: str = Field(default="€")
     image: str = ""
-    # "Merch" | "Digital" | "VIP" | "Exclusif" | "Sylvins"
+    # "Merch" | "Digital" | "VIP" | "Exclusif" | "Aureons"
     category: str = Field(default="Merch", index=True)
-    # Null sauf pour les packs Sylvins (montant crédité à l'achat).
+    # Null sauf pour les packs Aureons (montant crédité à l'achat).
     sylvins: Optional[int] = None
+    # Null sauf pour les packs Eclats vendus en euros.
+    lueurs: Optional[int] = None
     rating: float = Field(default=5.0)
     stock: int = Field(default=0)
     featured: bool = Field(default=False, index=True)
@@ -448,7 +501,7 @@ class CatalogArticle(SQLModel, table=True):
 
 
 class GiftLedger(SQLModel, table=True):
-    """Journal append-only de chaque cadeau Sylvins envoyé.
+    """Journal append-only de chaque cadeau Aureons envoyé.
 
     Alimente :
       - Classement hebdo des streamers (agrégé par `receiver_id` sur une
@@ -486,8 +539,9 @@ class StripePayment(SQLModel, table=True):
     (Stripe peut renvoyer le même événement à cause d'un retry réseau).
 
     - `user_id` : qui a payé.
-    - `product_id` : id du `CatalogProduct` (catégorie "Sylvins") acheté.
-    - `sylvins_amount` : nombre de Sylvins à créditer sur le pot PAID.
+    - `product_id` : id du `CatalogProduct` (catégorie "Aureons"/"Eclats") acheté.
+    - `sylvins_amount` : nombre de Aureons à créditer sur le pot PAID.
+    - `lueurs_amount` : nombre de Eclats à créditer.
     - `amount_cents` / `currency` : montant brut de la transaction (pour audit).
     - `status` : `"pending"` à la création, `"paid"` après webhook, `"failed"`
       si Stripe rapporte un échec.
@@ -497,6 +551,7 @@ class StripePayment(SQLModel, table=True):
     user_id: str = Field(index=True)
     product_id: str = Field(index=True)
     sylvins_amount: int
+    lueurs_amount: int = Field(default=0)
     amount_cents: int
     currency: str = "eur"
     status: str = Field(default="pending", index=True)
@@ -508,7 +563,7 @@ class StripePayout(SQLModel, table=True):
     """Journal des retraits streamer vers Stripe Connect.
 
     - `id` = `transfer_id` Stripe, unique et suffisant pour l'audit.
-    - `earnings_paid_amount` garde le montant débité en Sylvins retirable.
+    - `earnings_paid_amount` garde le montant débité en Aureons retirable.
     - `amount_cents` garde le net réellement transféré au compte Connect.
     """
 
@@ -539,18 +594,24 @@ class DirectMessage(SQLModel, table=True):
     content: str
     created_at: str = Field(default_factory=_now_iso, index=True)
     read_at: Optional[str] = Field(default=None, index=True)
+    # Liste JSON sérialisée de `MessageAttachment` (base64). Nullable :
+    # historique = messages texte seul. Stocké côté serveur pour que le
+    # destinataire reçoive bien l'image au lieu d'un fallback texte
+    # `📎 nom.jpeg` (ce qui était l'ancien comportement basé sur un
+    # cache localStorage côté émetteur uniquement).
+    attachments_json: Optional[str] = Field(default=None)
 
 
 class WalletLedger(SQLModel, table=True):
     """Journal append-only de chaque mouvement sur les pots wallet d'un
-    user (Lueurs / Sylvins promo / Sylvins paid / earnings promo /
+    user (Eclats / Aureons promo / Aureons paid / earnings promo /
     earnings paid).
 
     Une ligne par mouvement, écrite dans la même transaction que la
     modification du `UserProfile` correspondant. Permet :
 
-    1. **Auditer** une plainte "j'ai perdu mes Lueurs" : on retrouve la
-       chronologie exacte (10 Lueurs au daily, +120 à l'Oracle, -120
+    1. **Auditer** une plainte "j'ai perdu mes Eclats" : on retrouve la
+       chronologie exacte (10 Eclats au daily, +120 à l'Oracle, -120
        achat boutique, etc.) et on identifie le bug ou la fraude.
     2. **Restaurer** un solde perdu en rejouant ou en compensant.
     3. **Détecter** des anomalies : un débit sans contrepartie d'item
@@ -586,19 +647,37 @@ class WalletLedger(SQLModel, table=True):
     created_at: str = Field(default_factory=_now_iso, index=True)
 
 
+class ContestAwardLedger(SQLModel, table=True):
+    """Journal des récompenses distribuées par un concours officiel.
+
+    La paire `(contest_id, user_id)` doit rester unique pour empêcher une
+    double attribution si le endpoint de clôture est appelé plusieurs fois
+    ou si plusieurs membres déclenchent la synchronisation en même temps.
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    contest_id: str = Field(index=True)
+    user_id: str = Field(index=True)
+    post_id: str = Field(index=True)
+    post_likes: int = Field(default=0)
+    lueurs_rewarded: int = Field(default=0)
+    food_rewarded: int = Field(default=0)
+    awarded_at: str = Field(default_factory=_now_iso, index=True)
+
+
 class ShopOrder(SQLModel, table=True):
-    """Commandes boutique payées en Lueurs (ou autre monnaie interne).
+    """Commandes boutique payées en Eclats (ou autre monnaie interne).
 
     Crée un enregistrement persistent pour chaque achat fait dans
-    `/boutique` avec des Lueurs, afin que :
+    `/boutique` avec des Eclats, afin que :
 
     1. Le user retrouve son historique d'achats même après vidage du
        cache navigateur (avant cette table, les "orders" étaient en
        localStorage et disparaissaient à chaque clear, donnant
-       l'impression d'avoir "perdu" ses Lueurs sans rien acheter en
+       l'impression d'avoir "perdu" ses Eclats sans rien acheter en
        échange).
     2. L'item acheté soit livré atomiquement à l'inventaire dans la
-       même transaction que le débit des Lueurs (impossible d'avoir un
+       même transaction que le débit des Eclats (impossible d'avoir un
        débit sans livraison ou inversement).
 
     `status` ∈ {"paid", "refunded"}. On ne fait pas encore de refund
@@ -610,7 +689,7 @@ class ShopOrder(SQLModel, table=True):
     quantity: int = Field(default=1)
     unit_price: int
     total_price: int
-    currency: str = Field(default="Lueurs")
+    currency: str = Field(default="Eclats")
     status: str = Field(default="paid", index=True)
     created_at: str = Field(default_factory=_now_iso, index=True)
 
@@ -641,6 +720,15 @@ class UserFamiliar(SQLModel, table=True):
     familiar_id: str = Field(index=True)
     xp: int = Field(default=0)
     nickname: Optional[str] = Field(default=None, max_length=40)
+    # Personnalisation propre au familier possede. JSON serialise:
+    # - cosmetic_inventory_json: list[str] des cosmetiques debloques
+    # - cosmetic_equipped_json: dict[slot, cosmeticId] des items equipes
+    cosmetic_inventory_json: str = Field(default="[]")
+    cosmetic_equipped_json: str = Field(default="{}")
+    food_stock: int = Field(default=0)
+    affection_feedings: int = Field(default=0)
+    affection_rewarded_hearts_json: str = Field(default="[]")
+    enclosure_last_cleaned_at: Optional[str] = Field(default=None)
     is_active: bool = Field(default=False, index=True)
     acquired_at: str = Field(default_factory=_now_iso, index=True)
     last_active_at: Optional[str] = Field(default=None)
@@ -653,7 +741,7 @@ class FamiliarSwitchLedger(SQLModel, table=True):
     1. Auditer la règle "1er switch gratuit, suivants payants" :
        en comptant les lignes pour un user on sait combien de switchs il
        a déjà faits.
-    2. Tracer la consommation Sylvins liée aux switchs (la ligne pointe
+    2. Tracer la consommation Aureons liée aux switchs (la ligne pointe
        sur la `WalletLedger` correspondante via `reference_id`).
     3. Détecter de l'abus (trop de switchs très rapprochés = sans doute
        un bug client qui spam le bouton).
@@ -692,5 +780,29 @@ class FamiliarXPLedger(SQLModel, table=True):
     delta_xp: int
     xp_after: int
     reason: str = Field(default="", index=True)
+    reference_id: Optional[str] = Field(default=None, index=True)
+    created_at: str = Field(default_factory=_now_iso, index=True)
+
+
+class FamiliarGiftLedger(SQLModel, table=True):
+    """Journal des offrandes de Aureons faites au familier d'un membre.
+
+    Sépare le suivi "social" (qui a offert à qui) des journaux purement
+    comptables (`WalletLedger`) et XP (`FamiliarXPLedger`). Sert à notifier
+    le destinataire ("X a offert N Aureons à ton familier") et à lui
+    proposer d'offrir en retour. Une ligne par offrande.
+
+    `sender_name` est un instantané du pseudo au moment de l'offrande
+    (fallback d'affichage si le profil n'est plus résolvable) ;
+    `receiver_familiar_id` pointe le `UserFamiliar` qui a encaissé l'XP.
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    sender_id: str = Field(index=True)
+    sender_name: str = Field(default="", max_length=80)
+    receiver_id: str = Field(index=True)
+    receiver_familiar_id: int = Field(index=True)
+    amount: int
+    xp_granted: int = Field(default=0)
     reference_id: Optional[str] = Field(default=None, index=True)
     created_at: str = Field(default_factory=_now_iso, index=True)

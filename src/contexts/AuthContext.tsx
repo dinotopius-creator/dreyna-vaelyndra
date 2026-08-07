@@ -1,5 +1,5 @@
 /**
- * Contexte d'authentification Vaelyndra.
+ * Contexte d'authentification PulseForge.
  *
  * Source de vérité : **le backend FastAPI** (endpoints `/auth/*`, cookie
  * HttpOnly `vaelyndra_session`). Le `users` local (localStorage) est
@@ -36,6 +36,7 @@ import {
 } from "react";
 import type { User } from "../types";
 import { DREYNA_PROFILE } from "../data/mock";
+import { PREMIUM_AVATAR_PACK } from "../data/premiumAvatarPack";
 import { ApiError, apiUpdateAvatar, apiUpsertProfile } from "../lib/api";
 import {
   authLogin,
@@ -164,7 +165,7 @@ const ROI_DES_ZEMS: StoredUser = {
   avatar: "https://api.dicebear.com/7.x/personas/svg?seed=RoiDesZems",
   role: "queen",
   joinedAt: "2024-01-01T00:00:00Z",
-  bio: "Gardien du trésor du royaume — admin de Vaelyndra.",
+  bio: "Gardien du trésor du royaume — admin de PulseForge.",
   creatureId: "dragon",
   passwordHash: legacyHash("zemsdiamant"),
 };
@@ -221,7 +222,7 @@ function seedUsers(): StoredUser[] {
 
 /** Transforme un `AuthMe` backend en `StoredUser` local (pour sync cache). */
 function normalizeRole(role: string): StoredUser["role"] {
-  if (role === "admin" || role === "queen") return "queen";
+  if (role === "architect" || role === "admin" || role === "queen") return "queen";
   if (role === "knight") return "knight";
   return "elf";
 }
@@ -234,10 +235,13 @@ function backendToStored(me: AuthMe): StoredUser {
     // startup n'est pas passé sur les profils pré-PR S.
     handle: me.handle ?? undefined,
     email: me.email ?? `${me.id}@vaelyndra.realm`,
-    avatar: me.avatar_image_url || `https://i.pravatar.cc/150?u=${me.id}`,
+    avatar:
+      me.avatar_image_url ||
+      PREMIUM_AVATAR_PACK.vrmModels[0]?.path ||
+      `https://i.pravatar.cc/150?u=${me.id}`,
     role: normalizeRole(me.role),
     joinedAt: me.created_at,
-    bio: "",
+    bio: me.bio ?? "",
     creatureId: me.creature_id ?? undefined,
     passwordHash: "__backend__",
   };
@@ -290,8 +294,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 // PR S — propage le handle fraîchement renvoyé par le backend.
                 handle: me.handle ?? u.handle,
                 email: me.email ?? u.email,
-                avatar: me.avatar_image_url || u.avatar,
+                avatar:
+                  me.avatar_image_url ||
+                  PREMIUM_AVATAR_PACK.vrmModels[0]?.path ||
+                  u.avatar,
                 role: normalizeRole(me.role),
+                bio: me.bio ?? u.bio,
                 creatureId: me.creature_id ?? u.creatureId,
               }
             : u,
@@ -608,8 +616,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const updateProfile = useCallback(
     async (patch: { username?: string; avatar?: string; bio?: string }) => {
       if (!userId) return { ok: false, error: "Non connecté." };
-      if (patch.username !== undefined && patch.username.trim().length < 2)
+      if (patch.username !== undefined && Array.from(patch.username.trim()).length < 2)
         return { ok: false, error: "Ton pseudo est trop court." };
+      if (patch.username !== undefined && Array.from(patch.username.trim()).length > 64)
+        return { ok: false, error: "Ton pseudo est trop long." };
+      if (patch.bio !== undefined && Array.from(patch.bio.trim()).length > 500)
+        return { ok: false, error: "Ta bio est trop longue." };
       if (patch.avatar !== undefined && patch.avatar.length > 200_000)
         return {
           ok: false,
@@ -621,6 +633,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // `/auth/me`.
       const trimmedUsername =
         patch.username !== undefined ? patch.username.trim() : undefined;
+      const trimmedBio = patch.bio !== undefined ? patch.bio.trim() : undefined;
       const trimmedAvatar =
         patch.avatar !== undefined && patch.avatar.trim().length > 0
           ? patch.avatar.trim()
@@ -637,7 +650,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       let savedUsername = false;
       let savedAvatar = false;
 
-      if (trimmedUsername !== undefined) {
+      if (trimmedUsername !== undefined || trimmedBio !== undefined) {
         try {
           // `upsert_user` met à jour le username même si le profil existe
           // déjà ; il n'écrase pas `avatar_image_url` s'il est non-vide,
@@ -645,8 +658,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // le rendu RPM.
           await apiUpsertProfile({
             id: userId,
-            username: trimmedUsername,
+            username: trimmedUsername ?? user?.username ?? "Membre",
             avatarImageUrl: trimmedAvatar ?? "",
+            bio: trimmedBio,
           });
           savedUsername = true;
         } catch (err) {
@@ -672,7 +686,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                   ? {
                       ...u,
                       username: trimmedUsername ?? u.username,
-                      bio: patch.bio !== undefined ? patch.bio : u.bio,
+                      bio: trimmedBio !== undefined ? trimmedBio : u.bio,
                     }
                   : u,
               ),
@@ -695,7 +709,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             ...u,
             username: trimmedUsername ?? u.username,
             avatar: savedAvatar && trimmedAvatar ? trimmedAvatar : u.avatar,
-            bio: patch.bio !== undefined ? patch.bio : u.bio,
+            bio: trimmedBio !== undefined ? trimmedBio : u.bio,
           };
         }),
       );
@@ -714,7 +728,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       return { ok: true };
     },
-    [userId, syncBackendUser, syncProfileAvatar],
+    [user?.username, userId, syncBackendUser, syncProfileAvatar],
   );
 
   const value = useMemo<AuthCtx>(
@@ -731,7 +745,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         bio: u.bio,
         creatureId: u.creatureId,
       })),
-      isQueen: user?.role === "queen",
+      isQueen: user?.role === "queen" || backendMe?.role === "architect",
       initializing,
       backendMe,
       login,

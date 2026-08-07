@@ -1,11 +1,11 @@
 /**
- * Classement hebdomadaire des streamers par Sylvins reçus.
+ * Classement hebdomadaire des streamers par Aureons reçus.
  *
  * Architecture :
  * - Source de vérité = backend (`/streamers/leaderboard`). On poll toutes
- *   les 10 s pour rester en ~quasi-temps-réel sans ouvrir une vraie
+ *   les 2 s pour rester en temps réel sans ouvrir une vraie
  *   WebSocket (cohérent avec le pattern `ProfileContext` de PR 1).
- * - Polling "this" = court (10 s). Polling "last" = désactivé (snapshot
+ * - Polling "this" = court (2 s). Polling "last" = désactivé (snapshot
  *   figé côté backend, pas la peine de retaper).
  * - Le parent peut passer un `refreshTick` pour forcer un refetch immédiat
  *   après un gift envoyé (mise à jour "instantanée" perçue).
@@ -17,17 +17,19 @@
  * - Animations Framer Motion `layout` pour interpoler les changements de
  *   rang au fil des dons (effet "rise").
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { Crown, Sparkles, Trophy } from "lucide-react";
+import { ShieldCheck, Sparkles, Trophy } from "lucide-react";
 import {
   apiGetStreamerLeaderboard,
   type StreamerLeaderboardEntryDto,
 } from "../lib/api";
 import { formatNumber } from "../lib/helpers";
-import { CreatureBadge, RoleBadge } from "./UserBadges";
+import { formatWeekShort } from "../lib/weeklyRanking";
+import { CreatureBadge } from "./UserBadges";
 import StreamerGradeBadge from "./StreamerGradeBadge";
+import { WeeklyRankingCountdown } from "./WeeklyRankingCountdown";
 
 type Period = "this" | "last";
 
@@ -71,7 +73,7 @@ const PODIUM_STYLES: Array<{
   },
 ];
 
-const POLL_MS_THIS = 10_000; // temps réel « doux » pour la semaine courante
+const POLL_MS_THIS = 2_000; // classement live : mise à jour très rapide
 const POLL_MS_LAST = 0; // snapshot figé — pas de polling
 
 export function StreamerLeaderboard({ refreshTick }: Props) {
@@ -80,33 +82,63 @@ export function StreamerLeaderboard({ refreshTick }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [weekStart, setWeekStart] = useState<string>("");
+  const lastGoodByPeriodRef = useRef<
+    Partial<Record<Period, { entries: StreamerLeaderboardEntryDto[]; weekStart: string }>>
+  >({});
 
   const fetchNow = useCallback(async (target: Period) => {
     try {
       const data = await apiGetStreamerLeaderboard(target, 50);
-      setEntries(data.entries);
+      const nextEntries = data.entries ?? [];
+      if (nextEntries.length > 0) {
+        lastGoodByPeriodRef.current[target] = {
+          entries: nextEntries,
+          weekStart: data.weekStart,
+        };
+      }
+      setEntries(nextEntries);
       setWeekStart(data.weekStart);
       setError(null);
     } catch (err) {
       console.warn("Classement streamers indisponible", err);
-      setError("Classement indisponible pour l'instant.");
+      const fallback = lastGoodByPeriodRef.current[target];
+      if (fallback) {
+        setEntries(fallback.entries);
+        setWeekStart(fallback.weekStart);
+        setError(null);
+      } else {
+        setError("Classement indisponible pour l'instant.");
+      }
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    setLoading(true);
-    void fetchNow(period);
+    const initialFetch = window.setTimeout(() => {
+      setLoading(true);
+      void fetchNow(period);
+    }, 0);
     const interval = period === "this" ? POLL_MS_THIS : POLL_MS_LAST;
-    if (!interval) return;
+    if (!interval) {
+      return () => window.clearTimeout(initialFetch);
+    }
     const id = window.setInterval(() => void fetchNow(period), interval);
-    return () => window.clearInterval(id);
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") void fetchNow(period);
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.clearTimeout(initialFetch);
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, [period, fetchNow]);
 
   useEffect(() => {
     if (refreshTick === undefined) return;
-    void fetchNow(period);
+    const id = window.setTimeout(() => void fetchNow(period), 0);
+    return () => window.clearTimeout(id);
   }, [refreshTick, period, fetchNow]);
 
   const [podium, rest] = useMemo(() => {
@@ -126,6 +158,10 @@ export function StreamerLeaderboard({ refreshTick }: Props) {
           </span>
         )}
       </header>
+      <p className="mt-2 flex items-center gap-1.5 text-xs text-ivory/55">
+        <ShieldCheck className="h-3.5 w-3.5 text-emerald-200/80" />
+        Classement réservé aux membres de la communauté.
+      </p>
 
       <div
         className="mt-3 inline-flex rounded-full border border-gold-400/30 bg-night-900/60 p-1"
@@ -150,6 +186,21 @@ export function StreamerLeaderboard({ refreshTick }: Props) {
         ))}
       </div>
 
+      <div className="mt-4">
+        <WeeklyRankingCountdown
+          weekStartIso={weekStart}
+          active={period === "this"}
+          label="Fin du classement dans"
+          completeLabel={period === "last" ? "Classement terminé" : "Classement en attente"}
+          helper={
+            period === "this"
+              ? "Le classement évolue avec les Aureons reçus pendant les lives de la semaine en cours."
+              : "Cette semaine est clôturée : le classement reste figé pour consultation."
+          }
+          compact
+        />
+      </div>
+
       {loading && entries.length === 0 && (
         <p className="mt-6 text-center text-sm text-ivory/55">
           Convocation de la cour...
@@ -161,7 +212,7 @@ export function StreamerLeaderboard({ refreshTick }: Props) {
 
       {/* Podium Top 1/2/3 */}
       {podium.length > 0 && (
-        <ol className="mt-5 grid grid-cols-3 items-end gap-2">
+        <ol className="mt-5 grid grid-cols-3 items-end gap-2 rounded-3xl border border-gold-400/15 bg-gradient-to-b from-gold-500/10 via-night-900/20 to-night-950/40 p-3">
           {[1, 0, 2].map((idx) => {
             const entry = podium[idx];
             if (!entry) return <li key={`ghost-${idx}`} />;
@@ -204,7 +255,7 @@ export function StreamerLeaderboard({ refreshTick }: Props) {
                   className={`mt-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-regal tracking-[0.18em] ${style.chip}`}
                 >
                   <Sparkles className="h-3 w-3" />
-                  {formatNumber(entry.totalSylvins)}
+                  {formatNumber(entry.totalAureons)}
                 </span>
                 <div
                   className={`mt-2 w-full ${pedestalH} rounded-t-xl border-x border-t border-gold-400/20 bg-gradient-to-t from-gold-500/15 via-gold-500/5 to-transparent`}
@@ -231,9 +282,9 @@ export function StreamerLeaderboard({ refreshTick }: Props) {
               >
                 <Link
                   to={`/u/${entry.userId}`}
-                  className="flex items-center gap-3 rounded-lg border border-transparent bg-night-900/30 px-2 py-1.5 text-sm transition hover:border-gold-400/40 hover:bg-night-900/60"
+                  className="flex items-center gap-3 rounded-2xl border border-white/5 bg-night-900/35 px-2.5 py-2 text-sm transition hover:border-gold-400/40 hover:bg-night-900/65"
                 >
-                  <span className="w-7 shrink-0 text-center font-display text-xs text-ivory/55">
+                  <span className="w-8 shrink-0 rounded-full border border-gold-400/20 bg-gold-500/10 py-1 text-center font-display text-xs text-gold-100/80">
                     #{entry.rank}
                   </span>
                   <img
@@ -247,9 +298,6 @@ export function StreamerLeaderboard({ refreshTick }: Props) {
                       <p className="truncate font-display text-xs text-ivory/90">
                         {entry.username}
                       </p>
-                      {entry.role === "admin" && (
-                        <Crown className="h-3 w-3 shrink-0 text-gold-300" />
-                      )}
                     </div>
                     <div className="mt-0.5 flex flex-wrap items-center gap-1">
                       {entry.creature && (
@@ -258,9 +306,6 @@ export function StreamerLeaderboard({ refreshTick }: Props) {
                           size="sm"
                         />
                       )}
-                      {entry.role === "animator" && (
-                        <RoleBadge role={entry.role} size="sm" />
-                      )}
                       {entry.grade && (
                         <StreamerGradeBadge grade={entry.grade} size="sm" />
                       )}
@@ -268,7 +313,7 @@ export function StreamerLeaderboard({ refreshTick }: Props) {
                   </div>
                   <span className="inline-flex items-center gap-1 shrink-0 rounded-full border border-gold-400/30 bg-night-900/50 px-2 py-0.5 text-[10px] font-regal tracking-[0.16em] text-gold-100">
                     <Sparkles className="h-3 w-3" />
-                    {formatNumber(entry.totalSylvins)}
+                    {formatNumber(entry.totalAureons)}
                   </span>
                 </Link>
               </motion.li>
@@ -290,16 +335,3 @@ export function StreamerLeaderboard({ refreshTick }: Props) {
 
 const FALLBACK_AVATAR =
   "https://api.dicebear.com/7.x/shapes/svg?seed=vaelyndra";
-
-function formatWeekShort(iso: string): string {
-  try {
-    const d = new Date(`${iso}T00:00:00Z`);
-    return d.toLocaleDateString("fr-FR", {
-      day: "2-digit",
-      month: "short",
-      timeZone: "UTC",
-    });
-  } catch {
-    return iso;
-  }
-}

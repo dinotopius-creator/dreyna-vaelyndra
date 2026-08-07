@@ -44,7 +44,7 @@ async function authRequest<T>(
 // --- Serialization backend <-> frontend ------------------------------------
 //
 // Le backend renvoie `sylvins: null` (Python `None`) quand le produit n'est
-// pas de catégorie "Sylvins". En TypeScript on modélise ça par l'absence de
+// pas de catégorie "Aureons". En TypeScript on modélise ça par l'absence de
 // la clé. De même, `currency` est toujours "€" côté front (literal type)
 // alors que côté backend c'est juste une string.
 
@@ -58,6 +58,7 @@ interface BackendProduct {
   image: string;
   category: string;
   sylvins: number | null;
+  lueurs: number | null;
   rating: number;
   stock: number;
   featured: boolean;
@@ -81,6 +82,9 @@ function toProduct(p: BackendProduct): Product {
   };
   if (p.sylvins !== null && p.sylvins !== undefined) {
     out.sylvins = p.sylvins;
+  }
+  if (p.lueurs !== null && p.lueurs !== undefined) {
+    out.lueurs = p.lueurs;
   }
   return out;
 }
@@ -214,6 +218,7 @@ export interface ProductInput {
   image?: string;
   category?: string;
   sylvins?: number | null;
+  lueurs?: number | null;
   rating?: number;
   stock?: number;
   featured?: boolean;
@@ -223,7 +228,11 @@ export interface ProductInput {
 export async function createProductRemote(
   input: ProductInput,
 ): Promise<Product> {
-  const body = { ...input, sylvins: input.sylvins ?? null };
+  const body = {
+    ...input,
+    sylvins: input.sylvins ?? null,
+    lueurs: input.lueurs ?? null,
+  };
   const p = (await authRequest<BackendProduct>("/admin/catalog/products", {
     method: "POST",
     body: JSON.stringify(body),

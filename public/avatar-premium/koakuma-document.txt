@@ -1,0 +1,81 @@
+━━━━━━━━━━━━━━━━━━
+■【VRoid衣装】小悪魔コーデセット
+■ https://7a04m.booth.pm/items/5218359
+━━━━━━━━━━━━━━━━━━
+
+DLいただきありがとうございます！
+こちらはBOOTHにて配布中の
+「【VRoid衣装】小悪魔コーデセット」の説明ファイルとなります。
+
+製作者：七百屋 なおしま（@7a04m）
+制作バージョン：VRoid Studio 正式版 ver1.23.2
+
+━━━━━━━━━━━━━━━━━━
+■利用規約
+━━━━━━━━━━━━━━━━━━
+
+お手数ですが、BOOTH商品ページもしくはトップページからご確認ください。
+
+
+━━━━━━━━━━━━━━━━━━
+■対応バージョン
+━━━━━━━━━━━━━━━━━━
+
+VRoid Studio 正式版 [v1.11.0]以降
+※ボディスーツ型紙を使用しているため、実装済みのバージョンにのみ対応
+
+
+━━━━━━━━━━━━━━━━━━
+■データについて
+━━━━━━━━━━━━━━━━━━
+
+※ファイル名などについている「7a_」は「七百屋」アイテムの目印につけています。
+　邪魔な場合は消してしまってOK！
+
+
+■【00_共通（黒）_Common-Black】フォルダ
+├ 衣装パーツのうち、カラーバリエーションのない部分です。
+│
+├ ボトムス
+│ 02_7a_Koakuma-Bottoms_BK.vroidcustomitem
+│
+├ 上半身インナー
+│ 03_7a_Koakuma-Vantage.vroidcustomitem
+│
+├ 下半身インナー
+│ 04_7a_Koakuma-Under.vroidcustomitem
+│
+└ レッグウェア
+　 05_7a_Koakuma-Socks_BK.vroidcustomitem
+
+
+■【01_黒x紫_Black-Purple】【02_黒xピンク_Black-Pink】フォルダ
+├ カラーバリエーションのある部位が入ったフォルダ郡です。
+│
+├ トップス
+│ 01_7a_Koakuma-Tops_BKx◯◯.vroidcustomitem
+│
+└ 靴
+　 06_7a_koakuma-Boots_BKx◯◯.vroidcustomitem
+
+
+━━━━━━━━━━━━━━━━━━
+■テクスチャデータのダウンロード
+━━━━━━━━━━━━━━━━━━
+
+■ クリップスタジオペイント形式（元データ）
+　 https://drive.google.com/file/d/1cwVp0KkA2je8ukNGQT7g_7WLjfCBfwVs/view?usp=sharing
+
+■ PSD形式
+　 https://drive.google.com/file/d/1YWIdff3sa64qW9Tnxrgw3KO_zp3UVEK5/view?usp=sharing
+　 ※クリスタ形式から変換したため、元データが完全に再現できていない可能性があります
+
+
+━━━━━━━━━━━━━━━━━━
+■連絡先
+━━━━━━━━━━━━━━━━━━
+不具合・質問・ご意見などありましたらお気軽にご連絡ください。
+
+Twitter：@7a04m
+E-Mail：704m.yuki@gmail.com
+

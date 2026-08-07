@@ -8,6 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from slowapi.errors import RateLimitExceeded
 from sqlmodel import select
 
@@ -17,6 +18,7 @@ _validation_log.setLevel(logging.INFO)
 from .auth.rate_limit import limiter
 from .auth.routes import router as auth_router
 from .db import get_session, init_db
+from .media_storage import MEDIA_ROOT
 from .handles import slugify_handle, suggest_unique_handle
 from .models import UserProfile
 from .routers import (
@@ -28,6 +30,7 @@ from .routers import (
     oracle,
     posts,
     reports,
+    stats,
     streamers,
     stripe_router,
     users,
@@ -35,6 +38,9 @@ from .routers import (
 )
 
 app = FastAPI(title="Vaelyndra API", version="0.1.0")
+# MEDIA_ROOT vit sur le volume persistant `/data` en prod (cf. media_storage)
+# afin que les images uploadées survivent aux redéploiements.
+app.mount("/media", StaticFiles(directory=str(MEDIA_ROOT)), name="media")
 
 # Rate limiter (slowapi) — partagé entre tous les routeurs sensibles.
 app.state.limiter = limiter
@@ -108,14 +114,14 @@ app.add_middleware(
 
 
 # --- Comptes officiels ----------------------------------------------------
-# PR A : transfert du rôle admin de Dreyna vers `Le roi des zems💎`, et
+# PR A : seul `Le roi des zems💎` reste staff (architect). Dreyna et Kamestars sont membres normaux.
 # création des deux nouvelles animatrices officielles (badge 🎭 sans droits).
 # Les pseudos sont conservés à l'identique (cf. validation utilisateur).
 OFFICIAL_ACCOUNTS: list[dict[str, str]] = [
     {
         "id": "user-dreyna",
         "username": "Dreyna",
-        "role": "animator",
+        "role": "user",
         # Dreyna existe déjà ; pas d'avatar par défaut ici, on ne veut pas
         # écraser sa photo déjà configurée si elle en a une.
         "avatar_image_url": "",
@@ -128,7 +134,7 @@ OFFICIAL_ACCOUNTS: list[dict[str, str]] = [
     {
         "id": "user-kamestars",
         "username": "Kamestars LV",
-        "role": "animator",
+        "role": "user",
         "avatar_image_url": "https://api.dicebear.com/7.x/lorelei/svg?seed=Kamestars",
         "creature_id": "fee",
         "email": "kamestars@vaelyndra.realm",
@@ -137,7 +143,7 @@ OFFICIAL_ACCOUNTS: list[dict[str, str]] = [
     {
         "id": "user-roi-des-zems",
         "username": "Le roi des zems💎",
-        "role": "admin",
+        "role": "architect",
         "avatar_image_url": "https://api.dicebear.com/7.x/personas/svg?seed=RoiDesZems",
         "creature_id": "dragon",
         "email": "dinotopius@gmail.com",
@@ -156,12 +162,12 @@ def _seed_official_accounts() -> None:
     with get_session() as session:
         official_ids = {a["id"] for a in OFFICIAL_ACCOUNTS}
 
-        # 1. Tout user actuellement marqué "admin" mais qui n'est plus dans
+        # 1. Tout user actuellement marqué "admin" / "architect" mais qui n'est plus dans
         #    la liste officielle est rétrogradé à "user". Garantit qu'il ne
         #    reste qu'un seul admin après migration (cf. transfert de
         #    Dreyna vers `Le roi des zems💎`).
         stale_admins = session.exec(
-            select(UserProfile).where(UserProfile.role == "admin")
+            select(UserProfile).where(UserProfile.role.in_(["admin", "architect"]))
         ).all()
         for p in stale_admins:
             if p.id not in official_ids:
@@ -298,6 +304,7 @@ app.include_router(users.router)
 app.include_router(users.creatures_router)
 app.include_router(users.admin_grades_router)
 app.include_router(streamers.router)
+app.include_router(stats.router)
 app.include_router(auth_router)
 app.include_router(admin.router)
 app.include_router(reports.router)

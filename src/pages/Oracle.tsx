@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Crown,
   Gem,
   MoonStar,
+  RefreshCw,
   Sparkles,
   Stars,
   Wand2,
@@ -60,6 +61,7 @@ export function Oracle() {
   const { notify } = useToast();
   const [status, setStatus] = useState<OracleStatusDto | null>(null);
   const [loading, setLoading] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
   const [playingKey, setPlayingKey] = useState<string | null>(null);
   const [lastReward, setLastReward] = useState<OracleRewardDto | null>(null);
   // Tick toutes les secondes pour rafraîchir le compte-à-rebours jusqu'au
@@ -70,86 +72,139 @@ export function Oracle() {
     return () => window.clearInterval(id);
   }, []);
 
-  useEffect(() => {
-    if (!user) {
-      setStatus(null);
-      setLastReward(null);
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
-    void apiGetOracleStatus(user.id)
-      .then((next) => {
-        if (cancelled) return;
+  const fetchStatus = useCallback(
+    async (userId: string, opts: { silent?: boolean } = {}) => {
+      if (!opts.silent) setLoading(true);
+      try {
+        const next = await apiGetOracleStatus(userId);
         setStatus(next);
+        setStatusError(null);
         setLastReward(next.recentHistory[0]?.reward ?? null);
-      })
-      .catch((err) => {
+        return next;
+      } catch (err) {
+        console.warn("[Oracle] fetch status failed", err);
+        const msg =
+          err instanceof ApiError && err.status === 404
+            ? "Ton profil n'est pas encore synchronisé avec l'Oracle. Reconnecte-toi."
+            : "Impossible de charger ton rituel pour le moment.";
+        setStatusError(msg);
+        if (!opts.silent) notify(msg, "error");
+        return null;
+      } finally {
+        if (!opts.silent) setLoading(false);
+      }
+    },
+    [notify],
+  );
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    const id = window.setTimeout(() => {
+      void fetchStatus(user.id).then(() => {
         if (cancelled) return;
-        console.warn(err);
-        notify("Impossible de charger ton rituel pour le moment.", "error");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
       });
+    }, 0);
     return () => {
       cancelled = true;
+      window.clearTimeout(id);
     };
-  }, [notify, user]);
+  }, [fetchStatus, user]);
+
+  const displayStatus = user ? status : null;
+  const displayLastReward = user ? lastReward : null;
+  const displayStatusError = user ? statusError : null;
+
+  // Refetch quand l'onglet redevient visible (l'utilisateur revient sur la
+  // page après plusieurs minutes/heures → on récupère un éventuel nouveau
+  // quota si on a passé minuit UTC depuis).
+  useEffect(() => {
+    if (!user) return;
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void fetchStatus(user.id, { silent: true });
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", onVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", onVisibility);
+    };
+  }, [fetchStatus, user]);
 
   const rewardSummary = useMemo(() => {
-    if (!lastReward) return null;
-    if (lastReward.currency === "none") return "Le voile n’a rien livré cette fois.";
-    if (lastReward.currency === "sylvins") return "Le jackpot rare est tombé.";
-    return `Gain crédité : ${lastReward.amount} lueurs.`;
-  }, [lastReward]);
+    if (!displayLastReward) return null;
+    if (displayLastReward.currency === "none") return "Le voile n’a rien livré cette fois.";
+    if (displayLastReward.currency === "sylvins") return "Le jackpot rare est tombé.";
+    return `Gain crédité : ${displayLastReward.amount} lueurs.`;
+  }, [displayLastReward]);
+
+  // Calcule un fallback côté client : minuit UTC du lendemain. Sert quand
+  // le backend n'a pas (encore) renvoyé `nextResetAt`, pour qu'on ait
+  // toujours un compte-à-rebours utile et non un blanc.
+  const fallbackNextResetMs = useMemo(() => {
+    const d = new Date(now);
+    return Date.UTC(
+      d.getUTCFullYear(),
+      d.getUTCMonth(),
+      d.getUTCDate() + 1,
+      0,
+      0,
+      0,
+      0,
+    );
+  }, [now]);
 
   // Compte-à-rebours jusqu'au prochain réveil des rituels (minuit UTC).
-  // Quand le serveur renvoie un `nextResetAt` dans le passé (la machine du
-  // user a son horloge en avance, ou on a chargé la page juste avant
-  // minuit UTC et passé l'heure), on retombe sur "bientôt" pour éviter
-  // d'afficher un négatif. Quand il en reste, on auto-refresh à l'arrivée
-  // à 0 pour récupérer le nouveau quota côté serveur.
-  const resetCountdown = useMemo(() => {
-    if (!status?.nextResetAt) return null;
-    const reset = Date.parse(status.nextResetAt);
-    if (Number.isNaN(reset)) return null;
-    const remaining = Math.max(0, reset - now);
+  // Si le serveur n'a pas renvoyé `nextResetAt` (status null, erreur…),
+  // on tombe sur le calcul local pour que l'utilisateur voie quand même
+  // l'horloge tourner et ne reste pas avec un écran muet.
+  const resetCountdown = (() => {
+    let resetMs: number | null = null;
+    if (displayStatus?.nextResetAt) {
+      const parsed = Date.parse(displayStatus.nextResetAt);
+      if (!Number.isNaN(parsed)) resetMs = parsed;
+    }
+    if (resetMs === null) resetMs = fallbackNextResetMs;
+    const remaining = Math.max(0, resetMs - now);
     const totalSeconds = Math.floor(remaining / 1000);
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
     const seconds = totalSeconds % 60;
     const pad = (n: number) => n.toString().padStart(2, "0");
+    const localReset = new Date(resetMs);
     return {
       remaining,
+      resetMs,
       label: `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`,
+      localTimeLabel: localReset.toLocaleTimeString("fr-FR", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
     };
-  }, [status?.nextResetAt, now]);
+  })();
 
-  // Quand le compte-à-rebours tombe à zéro, on resync le statut serveur
-  // pour récupérer les 3 nouvelles tentatives. On guard sur `playsLeftToday`
-  // à 0 pour ne pas spammer l'endpoint quand l'user a encore des tentatives.
+  // Quand le compte-à-rebours tombe à zéro et que l'user n'a plus de
+  // tentatives, on resync UNE FOIS le statut serveur pour récupérer les 3
+  // nouvelles tentatives. On utilise un ref pour éviter de spammer
+  // l'endpoint (l'effet refire chaque seconde tant que remaining===0).
+  const lastResetFetchRef = useRef<number>(0);
   useEffect(() => {
     if (!user) return;
-    if (!resetCountdown) return;
     if (resetCountdown.remaining > 0) return;
-    if ((status?.playsLeftToday ?? 0) > 0) return;
-    let cancelled = false;
-    void apiGetOracleStatus(user.id).then((next) => {
-      if (cancelled) return;
-      setStatus(next);
-    }).catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [resetCountdown, status?.playsLeftToday, user]);
+    if ((displayStatus?.playsLeftToday ?? 0) > 0) return;
+    if (now - lastResetFetchRef.current < 30_000) return;
+    lastResetFetchRef.current = now;
+    void fetchStatus(user.id, { silent: true });
+  }, [resetCountdown.remaining, displayStatus?.playsLeftToday, user, fetchStatus, now]);
 
   async function play(runeKey: string) {
     if (!user) {
       notify("Connecte-toi pour tenter le rituel.", "info");
       return;
     }
-    if (!status?.canPlay) {
+    if (!displayStatus?.canPlay) {
       notify("Tes tentatives du jour sont déjà épuisées.", "info");
       return;
     }
@@ -195,7 +250,7 @@ export function Oracle() {
             Oracle des <span className="text-mystic">Runes</span>
           </>
         }
-        subtitle="Trois runes. Trois tentatives par jour. Les Lueurs tombent souvent, le Sylvin n'arrive presque jamais."
+        subtitle="Trois runes. Trois tentatives par jour. Les Eclats tombent souvent, le Sylvin n'arrive presque jamais."
       />
 
       <div className="mt-10 grid gap-8 lg:grid-cols-[1.15fr,0.85fr]">
@@ -220,7 +275,7 @@ export function Oracle() {
                   Tentatives
                 </p>
                 <p className="mt-1 font-display text-2xl text-gold-100">
-                  {user ? status?.playsLeftToday ?? "..." : "3"} / 3
+                  {user ? displayStatus?.playsLeftToday ?? "..." : "3"} / 3
                 </p>
                 {resetCountdown && (
                   <p className="mt-1 text-[10px] uppercase tracking-[0.18em] text-gold-300/70">
@@ -233,7 +288,7 @@ export function Oracle() {
             <div className="relative mt-8 grid gap-4 md:grid-cols-3">
               {RUNES.map((rune, index) => {
                 const Icon = rune.icon;
-                const disabled = !user || !status?.canPlay || !!playingKey;
+                const disabled = !user || !displayStatus?.canPlay || !!playingKey;
                 const active = playingKey === rune.key;
                 return (
                   <motion.button
@@ -319,11 +374,11 @@ export function Oracle() {
               </div>
               <div
                 className={`mt-4 rounded-2xl border px-4 py-4 text-sm ${
-                  lastReward ? TONE_STYLES[lastReward.tone] : TONE_STYLES.void
+                  displayLastReward ? TONE_STYLES[displayLastReward.tone] : TONE_STYLES.void
                 }`}
               >
                 <p className="font-medium">
-                  {lastReward?.label ?? "Aucun rituel lance pour le moment."}
+                  {displayLastReward?.label ?? "Aucun rituel lance pour le moment."}
                 </p>
                 <p className="mt-2 text-xs opacity-85">
                   {rewardSummary ??
@@ -362,27 +417,49 @@ export function Oracle() {
                 <p className="text-xs uppercase tracking-[0.25em] text-gold-300/85">
                   Etat du jour
                 </p>
-                <p className="mt-2 font-display text-2xl text-gold-100">
-                  {loading ? "..." : status?.playsLeftToday ?? 0} tentative
-                  {(status?.playsLeftToday ?? 0) > 1 ? "s" : ""} restante
-                  {(status?.playsLeftToday ?? 0) > 1 ? "s" : ""}
-                </p>
-                <p className="mt-2 text-sm text-ivory/70">
-                  {status?.canPlay
-                    ? "Le portail est encore ouvert pour toi aujourd'hui."
-                    : "Tes runes du jour sont déjà toutes utilisées."}
-                </p>
-                {resetCountdown && (
-                  <div className="mt-3 rounded-xl border border-gold-400/25 bg-night-950/60 px-3 py-2">
-                    <p className="text-[10px] uppercase tracking-[0.22em] text-gold-300/85">
-                      {status?.canPlay
-                        ? "Prochain reset complet"
-                        : "Prochain rituel dans"}
+                {loading && !status ? (
+                  <p className="mt-2 font-display text-2xl text-gold-100">…</p>
+                ) : displayStatusError && !displayStatus ? (
+                  <>
+                    <p className="mt-2 text-sm text-rose-200/90">{displayStatusError}</p>
+                    <button
+                      type="button"
+                      onClick={() => void fetchStatus(user.id)}
+                      className="mt-3 inline-flex items-center gap-2 rounded-xl border border-gold-400/40 bg-gold-500/10 px-3 py-1.5 text-xs text-gold-100 hover:bg-gold-500/20"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" /> Réessayer
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p className="mt-2 font-display text-2xl text-gold-100">
+                      {displayStatus?.playsLeftToday ?? 0} / {displayStatus?.maxDailyPlays ?? 3}
+                      <span className="ml-2 text-sm font-normal text-ivory/65">
+                        tentative
+                        {(displayStatus?.playsLeftToday ?? 0) > 1 ? "s" : ""} restante
+                        {(displayStatus?.playsLeftToday ?? 0) > 1 ? "s" : ""}
+                      </span>
                     </p>
-                    <p className="mt-1 font-mono text-xl text-gold-100">
-                      {resetCountdown.label}
+                    <p className="mt-2 text-sm text-ivory/70">
+                      {displayStatus?.canPlay
+                        ? "Le portail est encore ouvert pour toi aujourd'hui."
+                        : "Tes 3 runes du jour sont déjà utilisées. Elles se rechargent automatiquement à minuit UTC."}
                     </p>
-                  </div>
+                    <div className="mt-3 rounded-xl border border-gold-400/25 bg-night-950/60 px-3 py-2">
+                      <p className="text-[10px] uppercase tracking-[0.22em] text-gold-300/85">
+                        {displayStatus?.canPlay
+                          ? "Prochain reset complet dans"
+                          : "Prochain rituel dans"}
+                      </p>
+                      <p className="mt-1 font-mono text-xl text-gold-100">
+                        {resetCountdown.label}
+                      </p>
+                      <p className="mt-1 text-[11px] text-ivory/55">
+                        Réveil à minuit UTC (≈ {resetCountdown.localTimeLabel}{" "}
+                        heure locale)
+                      </p>
+                    </div>
+                  </>
                 )}
               </div>
             )}
@@ -393,10 +470,10 @@ export function Oracle() {
               Historique recent
             </h3>
             <ul className="mt-4 space-y-3">
-              {(status?.recentHistory ?? []).map((entry) => (
+              {(displayStatus?.recentHistory ?? []).map((entry) => (
                 <HistoryRow key={entry.id} entry={entry} />
               ))}
-              {(status?.recentHistory ?? []).length === 0 && (
+              {(displayStatus?.recentHistory ?? []).length === 0 && (
                 <li className="rounded-2xl border border-dashed border-royal-500/25 px-4 py-5 text-sm text-ivory/55">
                   Aucun tirage enregistre pour ce membre.
                 </li>

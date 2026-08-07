@@ -53,7 +53,19 @@ export function MagicParticles({
   density?: number;
 }) {
   const [ready, setReady] = useState(false);
+  const [lightMode, setLightMode] = useState(false);
   const reactId = useId();
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const media = window.matchMedia(
+      "(max-width: 640px), (pointer: coarse), (prefers-reduced-motion: reduce)",
+    );
+    const sync = () => setLightMode(media.matches);
+    sync();
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
+  }, []);
 
   useEffect(() => {
     initParticlesEngine(async (engine) => {
@@ -69,11 +81,36 @@ export function MagicParticles({
       className={className}
       options={{
         ...options,
+        fpsLimit: lightMode ? 30 : 60,
+        detectRetina: !lightMode,
+        interactivity: {
+          events: {
+            onHover: { enable: !lightMode, mode: "bubble" },
+            resize: { enable: true },
+          },
+          modes: options.interactivity?.modes,
+        },
         particles: {
           ...options.particles!,
           number: {
-            value: Math.round(55 * density),
+            value: Math.max(12, Math.round(55 * density * (lightMode ? 0.35 : 1))),
             density: { enable: true },
+          },
+          opacity: {
+            value: { min: 0.16, max: lightMode ? 0.4 : 0.8 },
+            animation: {
+              enable: !lightMode,
+              speed: lightMode ? 0 : 0.6,
+              sync: false,
+            },
+          },
+          move: {
+            enable: true,
+            speed: lightMode ? { min: 0.05, max: 0.24 } : { min: 0.1, max: 0.6 },
+            direction: "none",
+            outModes: { default: "out" },
+            random: true,
+            straight: false,
           },
         },
       }}

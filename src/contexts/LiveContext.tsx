@@ -14,12 +14,7 @@ import { useStore } from "./StoreContext";
 import { useAuth } from "./AuthContext";
 import { getIceServers, getPeerOptions } from "../lib/peerConfig";
 import {
-  cacheNativeBroadcastToken,
-  getCachedNativeBroadcastToken,
-  getNativeScreenShareStatus,
   isNativeAndroidApp,
-  markNativeScreenShareAuthGrace,
-  startNativeScreenShare,
   stopNativeScreenShare,
 } from "../lib/nativeScreenShare";
 import type {
@@ -36,7 +31,6 @@ import {
 import {
   apiListLive,
   apiAddNativeViewerIce,
-  apiCreateNativeBroadcastToken,
   apiCreateNativeLiveOffer,
   apiGetNativeLiveOffer,
   apiHeartbeatNativeViewer,
@@ -46,6 +40,10 @@ import {
   type NativeIceCandidate,
 } from "../lib/liveApi";
 import { publishCrossWindowLiveChat } from "../lib/liveChatBus";
+import {
+  createLiveAvatarStream,
+  type LiveAvatarStreamHandle,
+} from "../lib/liveAvatarStream";
 
 /**
  * Contexte dédié aux lives (queen + cour). Multi-utilisateur.
@@ -191,6 +189,89 @@ async function captureDisplayStream(): Promise<MediaStream> {
       audio: false,
     });
   }
+}
+
+function isPermissionDeniedError(err: unknown): boolean {
+  return (
+    err instanceof Error &&
+    (err.name === "NotAllowedError" || err.name === "PermissionDeniedError")
+  );
+}
+
+function isMobileMediaBrowser(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent || "";
+  return /Android|iPhone|iPad|iPod|Mobile|SamsungBrowser/i.test(ua);
+}
+
+function buildCameraConstraints(
+  facingMode: CameraFacing,
+  options?: {
+    deviceId?: string | null;
+    preferExactDevice?: boolean;
+    allowExactFacing?: boolean;
+  },
+): MediaTrackConstraints {
+  const deviceId = options?.deviceId?.trim() || "";
+  const allowExactFacing = options?.allowExactFacing === true;
+  const mobile = isMobileMediaBrowser();
+  const base: MediaTrackConstraints = {
+    width: mobile ? { ideal: 960, max: 1280 } : { ideal: 1280, max: 1920 },
+    height: mobile ? { ideal: 540, max: 720 } : { ideal: 720, max: 1080 },
+    frameRate: mobile ? { ideal: 24, max: 30 } : { ideal: 30, max: 30 },
+  };
+  if (deviceId && options?.preferExactDevice) {
+    return {
+      ...base,
+      deviceId: { exact: deviceId },
+    };
+  }
+  if (deviceId) {
+    return {
+      ...base,
+      deviceId: { ideal: deviceId },
+      facingMode: { ideal: facingMode },
+    };
+  }
+  return {
+    ...base,
+    facingMode: allowExactFacing ? { exact: facingMode } : { ideal: facingMode },
+  };
+}
+
+function describeCameraAccessError(
+  err: unknown,
+  fallback: "start" | "switch",
+): string {
+  if (isPermissionDeniedError(err)) {
+    return fallback === "switch"
+      ? "Autorise à nouveau la caméra pour changer d'objectif."
+      : "Autorise l'accès à la caméra et au micro pour lancer ton live.";
+  }
+  if (err instanceof Error) {
+    if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") {
+      return "Aucune caméra compatible n'a été détectée sur cet appareil.";
+    }
+    if (err.name === "NotReadableError" || err.name === "TrackStartError") {
+      return "La caméra est déjà utilisée par une autre application. Ferme-la puis réessaie.";
+    }
+    if (
+      err.name === "OverconstrainedError" ||
+      err.name === "ConstraintNotSatisfiedError"
+    ) {
+      return fallback === "switch"
+        ? "Cette caméra ne peut pas être ouverte avec les réglages demandés. PulseForge repasse sur un mode compatible."
+        : "Cet appareil refuse les réglages vidéo demandés. Réessaie depuis un navigateur à jour.";
+    }
+    return `${
+      fallback === "switch"
+        ? "Impossible de changer de caméra"
+        : "Impossible d'accéder à la caméra"
+    } : ${err.message}`;
+  }
+  return fallback === "switch"
+    ? "Impossible de changer de caméra."
+    : "Impossible d'accéder à la caméra.";
 }
 
 function readConfig(): LiveConfig {
@@ -349,6 +430,18 @@ function clearResumeMarker() {
   }
 }
 
+async function listVideoInputDevices() {
+  if (
+    typeof navigator === "undefined" ||
+    !navigator.mediaDevices ||
+    typeof navigator.mediaDevices.enumerateDevices !== "function"
+  ) {
+    return [];
+  }
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  return devices.filter((device) => device.kind === "videoinput");
+}
+
 function toNativeIceCandidate(candidate: RTCIceCandidate): NativeIceCandidate {
   const json = candidate.toJSON();
   return {
@@ -362,6 +455,9 @@ interface LiveCtx {
   /** Config du live du user connecté (son propre broadcast). */
   config: LiveConfig;
   updateConfig: (patch: Partial<LiveConfig>) => void;
+  saveLiveMetadata: (
+    patch: Partial<Pick<LiveConfig, "title" | "description" | "category">>,
+  ) => Promise<void>;
   /** Registre public des lives en cours (tous users). */
   liveRegistry: Record<string, LiveRegistryEntry>;
   /**
@@ -387,6 +483,18 @@ interface LiveCtx {
   switchCamera: () => Promise<void>;
   /** Côté host : orientation actuelle de la caméra (user = frontale). */
   cameraFacing: CameraFacing;
+  /**
+   * Côté host : true quand la caméra est volontairement coupée et qu'on
+   * diffuse à la place un flux d'avatar (canvas captureStream).
+   * Les viewers continuent à voir quelque chose (avatar + pseudo) sans
+   * coupure ni reconnexion. L'audio n'est pas affecté.
+   */
+  cameraHidden: boolean;
+  /**
+   * Côté host : bascule entre "caméra ouverte" et "caméra masquée par
+   * l'avatar". No-op hors du mode caméra.
+   */
+  toggleCameraHidden: () => Promise<void>;
   /** Côté host : arrêter mon live. */
   stopLive: () => void;
   /**
@@ -404,7 +512,12 @@ interface LiveCtx {
   /** Dernière erreur éventuelle (à afficher en toast). */
   lastError: string | null;
   /** Métadonnées du live actuellement regardé (titre/description/etc). */
-  viewingMeta: { title: string; description: string; mode: LiveMode } | null;
+  viewingMeta: {
+    title: string;
+    description: string;
+    category: LiveCategoryId;
+    mode: LiveMode;
+  } | null;
   /**
    * Publie un message de chat sur le live courant.
    *
@@ -478,9 +591,26 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   const [isConnecting, setIsConnecting] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
   const [cameraFacing, setCameraFacing] = useState<CameraFacing>("user");
+  /**
+   * Host : caméra volontairement coupée, on diffuse à la place le canvas
+   * avatar. `cameraHiddenRef` est utilisé dans les callbacks asynchrones
+   * pour éviter les valeurs périmées.
+   */
+  const [cameraHidden, setCameraHidden] = useState(false);
+  const cameraHiddenRef = useRef(false);
+  cameraHiddenRef.current = cameraHidden;
+  /** Handle vers le flux canvas-avatar courant (pour le stopper). */
+  const avatarStreamRef = useRef<LiveAvatarStreamHandle | null>(null);
+  /**
+   * Track vidéo "réelle" caméra mise en pause par le toggle. On la garde
+   * stoppée (libère la caméra OS), et on en réacquiert une nouvelle quand
+   * l'utilisateur ré-active la caméra.
+   */
+  const switchingCameraHiddenRef = useRef(false);
   const [viewingMeta, setViewingMeta] = useState<{
     title: string;
     description: string;
+    category: LiveCategoryId;
     mode: LiveMode;
   } | null>(null);
   // Marker de reprise de live (post-refresh). Initialisé à partir de
@@ -505,6 +635,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   // au push "live-meta" initial (titre/description) et à la diffusion
   // des messages de chat en temps réel.
   const hostDataConnectionsRef = useRef<Set<DataConnection>>(new Set());
+  const allowPageUnloadRef = useRef(true);
   // Viewer : sa DataConnection vers le host courant. Utilisée pour
   // envoyer ses propres messages de chat au host (qui les rediffuse).
   const viewerDataConnRef = useRef<DataConnection | null>(null);
@@ -533,6 +664,14 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   // MediaStream concurrents et la première fuite (tracks jamais
   // `stop()`-ées → caméra/micro restent actifs en tâche de fond).
   const switchingCameraRef = useRef(false);
+  const stoppingLiveRef = useRef(false);
+  // Verrou pour la recuperation silencieuse declenchee par un "ended"
+  // (notamment iOS Safari quand l'user retourne son ecran : le track
+  // camera est brievement coupe par le navigateur). On evite plusieurs
+  // tentatives concurrentes qui creeraient des MediaStream fantomes.
+  const silentRecoveryRef = useRef(false);
+  const liveStartTokenRef = useRef(0);
+  const cameraDeviceIdRef = useRef<string | null>(null);
   // Ref miroir sur le flux local pour que `cleanup` puisse toujours couper
   // les tracks même quand il est appelé depuis un callback qui a capturé
   // l'ancienne valeur de state (ex. listener "ended" ou erreur peer).
@@ -554,6 +693,15 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   usersRef.current = users;
   const liveRegistryRef = useRef(liveRegistry);
   liveRegistryRef.current = liveRegistry;
+
+  const bumpLiveStartToken = useCallback(() => {
+    liveStartTokenRef.current += 1;
+    return liveStartTokenRef.current;
+  }, []);
+
+  const isLiveStartTokenCurrent = useCallback((token: number) => {
+    return liveStartTokenRef.current === token;
+  }, []);
 
   useEffect(() => {
     try {
@@ -632,6 +780,87 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       });
     },
     [],
+  );
+
+  const saveLiveMetadata = useCallback(
+    async (
+      patch: Partial<Pick<LiveConfig, "title" | "description" | "category">>,
+    ) => {
+      const me = userRef.current;
+      const nextTitle =
+        patch.title !== undefined ? patch.title : configRef.current.title;
+      const nextDescription =
+        patch.description !== undefined
+          ? patch.description
+          : configRef.current.description;
+      const nextCategory =
+        patch.category !== undefined
+          ? normalizeLiveCategory(patch.category)
+          : configRef.current.category;
+
+      setConfig((current) => ({
+        ...current,
+        ...patch,
+        category: nextCategory,
+      }));
+
+      hostDataConnectionsRef.current.forEach((dataConn) => {
+        if (!dataConn.open) return;
+        try {
+          dataConn.send({
+            type: "live-meta",
+            title: nextTitle,
+            description: nextDescription,
+            category: nextCategory,
+            mode: configRef.current.mode,
+          });
+        } catch {
+          // ignore
+        }
+      });
+
+      if (!me || configRef.current.status !== "live") return;
+
+      const now = new Date().toISOString();
+      updateRegistry((registry) => {
+        const existing = registry[me.id];
+        if (!existing) return registry;
+        return {
+          ...registry,
+          [me.id]: {
+            ...existing,
+            title: nextTitle.trim() || `${me.username} en direct`,
+            description: nextDescription.trim(),
+            category: nextCategory,
+            lastHeartbeat: now,
+          },
+        };
+      });
+
+      const marker = readResumeMarker();
+      if (marker && marker.userId === me.id) {
+        writeResumeMarker({
+          ...marker,
+          title: nextTitle,
+          description: nextDescription,
+          category: nextCategory,
+          savedAt: now,
+        });
+      }
+
+      try {
+        await apiLiveHeartbeat({
+          title: nextTitle,
+          description: nextDescription,
+          category: nextCategory,
+          mode: configRef.current.mode,
+          twitchChannel: configRef.current.twitchChannel,
+        });
+      } catch (err) {
+        console.warn("live metadata sync failed", err);
+      }
+    },
+    [updateRegistry],
   );
 
   /**
@@ -967,8 +1196,39 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     [deliverGiftLocally],
   );
 
+  const restartOutboundCallForViewer = useCallback((viewerPeerId: string) => {
+    const peer = hostPeerRef.current;
+    const active = localStreamRef.current;
+    if (!peer || !active) return null;
+    const previous = hostViewerCallsRef.current.get(viewerPeerId);
+    if (previous) {
+      try {
+        previous.close();
+      } catch {
+        // ignore
+      }
+      hostViewerCallsRef.current.delete(viewerPeerId);
+      hostConnectionsRef.current.delete(previous);
+    }
+    const outbound = peer.call(viewerPeerId, active);
+    if (!outbound) return null;
+    hostViewerCallsRef.current.set(viewerPeerId, outbound);
+    hostConnectionsRef.current.add(outbound);
+    const release = () => {
+      if (hostViewerCallsRef.current.get(viewerPeerId) === outbound) {
+        hostViewerCallsRef.current.delete(viewerPeerId);
+      }
+      hostConnectionsRef.current.delete(outbound);
+    };
+    outbound.on("close", release);
+    outbound.on("error", release);
+    return outbound;
+  }, []);
+
   /** Ferme UNIQUEMENT les ressources côté host (peer hôte + stream local). */
   const stopHosting = useCallback((options?: { stopNative?: boolean }) => {
+    bumpLiveStartToken();
+    switchingCameraRef.current = false;
     if (options?.stopNative) {
       stopNativeScreenShare();
     }
@@ -1007,8 +1267,20 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       activeStream.getTracks().forEach((t) => t.stop());
     }
     localStreamRef.current = null;
+    cameraDeviceIdRef.current = null;
     setLocalStream(null);
-  }, []);
+    // Si un flux avatar tournait encore (caméra masquée), on le libère.
+    if (avatarStreamRef.current) {
+      try {
+        avatarStreamRef.current.stop();
+      } catch {
+        // ignore
+      }
+      avatarStreamRef.current = null;
+    }
+    setCameraHidden(false);
+    cameraHiddenRef.current = false;
+  }, [bumpLiveStartToken]);
 
   /** Ferme UNIQUEMENT les ressources côté viewer (peer + remoteStream). */
   const stopViewing = useCallback(() => {
@@ -1048,10 +1320,18 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   }, [stopHosting, stopViewing]);
 
   const stopLive = useCallback(() => {
+    if (stoppingLiveRef.current) return;
+    stoppingLiveRef.current = true;
     const me = userRef.current;
+    allowPageUnloadRef.current = true;
     // IMPORTANT : ne ferme QUE le côté host, pour ne pas casser le stream
     // qu'on est en train de regarder sur un autre user (viewerPeerRef).
-    stopHosting({ stopNative: true });
+    try {
+      stopHosting({ stopNative: true });
+    } catch (error) {
+      console.error("stopLive cleanup failed", error);
+      setLastError("Le live est en cours d'arrêt. Réessaie dans quelques secondes.");
+    }
     setConfig((c) => ({ ...c, status: "idle", startedAt: null }));
     // Clic volontaire sur "stopper le live" → plus de reprise possible.
     clearResumeMarker();
@@ -1065,17 +1345,21 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       });
       // Notifie le backend pour que les autres users voient disparaître
       // ce live immédiatement (sans attendre le TTL heartbeat 90 s).
-      apiStopLive().catch(() => {
+      apiStopLive().catch((error) => {
+        console.warn("apiStopLive failed after local live cleanup", error);
         // Si l'appel échoue, le serveur finira par supprimer l'entrée
         // une fois que le heartbeat expirera côté backend (90 s).
       });
     }
+    window.setTimeout(() => {
+      stoppingLiveRef.current = false;
+    }, 900);
   }, [stopHosting, updateRegistry]);
 
   const pauseLiveForRecovery = useCallback(
     (
       mode: Extract<LiveMode, "screen" | "camera">,
-      message = "Le flux a ete interrompu. Ton live reste annonce : relance le partage pour reprendre.",
+      message = "Le flux a été interrompu. Ton live reste annoncé : relance le partage pour reprendre.",
     ) => {
       const me = userRef.current;
       if (!me) return;
@@ -1184,6 +1468,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     async (
       stream: MediaStream,
       mode: Extract<LiveMode, "screen" | "camera">,
+      startToken: number,
     ) => {
       const me = userRef.current;
       if (!me) {
@@ -1196,7 +1481,10 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         // Garde-fou anti race-condition : si le host a stoppé le partage ou
         // quitté la page pendant l'import dynamique, `stopLive()` a déjà tourné
         // et `localStreamRef.current` ne pointe plus sur notre stream.
-        if (localStreamRef.current !== stream) {
+        if (
+          localStreamRef.current !== stream ||
+          !isLiveStartTokenCurrent(startToken)
+        ) {
           stream.getTracks().forEach((t) => t.stop());
           return;
         }
@@ -1205,8 +1493,24 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         hostPeerRef.current = peer;
         isHostingChatRef.current = true;
         let peerOpened = false;
+        let hostReconnectTimer: number | null = null;
+        const clearHostReconnectTimer = () => {
+          if (hostReconnectTimer !== null) {
+            window.clearTimeout(hostReconnectTimer);
+            hostReconnectTimer = null;
+          }
+        };
 
         peer.on("open", () => {
+          if (!isLiveStartTokenCurrent(startToken)) {
+            try {
+              peer.destroy();
+            } catch {
+              // ignore
+            }
+            return;
+          }
+          clearHostReconnectTimer();
           peerOpened = true;
           const startedAt = new Date().toISOString();
           setConfig((c) => ({
@@ -1249,10 +1553,12 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         });
 
         peer.on("error", (err: Error & { type?: string }) => {
+          if (!isLiveStartTokenCurrent(startToken)) return;
           if (!peerOpened) {
+            clearHostReconnectTimer();
             const friendly =
               err.type === "unavailable-id"
-                ? "Un live Vaelyndra est déjà actif à ton nom ailleurs. Ferme l'autre onglet."
+                ? "Un live PulseForge est déjà actif à ton nom ailleurs. Ferme l'autre onglet."
                 : `Impossible de démarrer le relais live : ${err.message || err.type || "erreur inconnue"}`;
             pauseLiveForRecovery(mode, friendly);
             return;
@@ -1261,22 +1567,42 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         });
 
         peer.on("disconnected", () => {
+          if (!isLiveStartTokenCurrent(startToken)) return;
           if (peerOpened) {
             setLastError(
-              "La connexion au serveur de relais a été perdue. Relance un live quand tu es prêt.",
+              "Connexion live instable : PulseForge tente de reconnecter le relais automatiquement.",
             );
             try {
               peer.reconnect();
+              clearHostReconnectTimer();
+              hostReconnectTimer = window.setTimeout(() => {
+                if (!isLiveStartTokenCurrent(startToken)) return;
+                if (!hostPeerRef.current || hostPeerRef.current.destroyed) return;
+                if (!hostPeerRef.current.disconnected) return;
+                pauseLiveForRecovery(
+                  mode,
+                  "Le relais live a décroché trop longtemps. Ton live reste annoncé : relance le partage pour reprendre.",
+                );
+              }, 12_000);
             } catch {
+              clearHostReconnectTimer();
               pauseLiveForRecovery(
                 mode,
-                "Le relais live a decroche. Ton live reste annonce : relance le partage pour reprendre.",
+                "Le relais live a décroché. Ton live reste annoncé : relance le partage pour reprendre.",
               );
             }
           }
         });
 
         peer.on("call", (incoming) => {
+          if (!isLiveStartTokenCurrent(startToken)) {
+            try {
+              incoming.close();
+            } catch {
+              // ignore
+            }
+            return;
+          }
           // Un viewer nous appelle — on lui envoie toujours le flux actif
           // (`localStreamRef.current`, pas la capture locale `stream`). Ça
           // garantit qu'un `switchCamera` qui recrée le stream sert la
@@ -1295,32 +1621,14 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         });
 
         peer.on("connection", (dataConn) => {
-          const startCallForViewer = (viewerPeerId: string) => {
-            const active = localStreamRef.current;
-            if (!active) return;
-            const previous = hostViewerCallsRef.current.get(viewerPeerId);
-            if (previous) {
-              try {
-                previous.close();
-              } catch {
-                // ignore
-              }
-              hostViewerCallsRef.current.delete(viewerPeerId);
-              hostConnectionsRef.current.delete(previous);
+          if (!isLiveStartTokenCurrent(startToken)) {
+            try {
+              dataConn.close();
+            } catch {
+              // ignore
             }
-            const outbound = peer.call(viewerPeerId, active);
-            if (!outbound) return;
-            hostViewerCallsRef.current.set(viewerPeerId, outbound);
-            hostConnectionsRef.current.add(outbound);
-            const release = () => {
-              if (hostViewerCallsRef.current.get(viewerPeerId) === outbound) {
-                hostViewerCallsRef.current.delete(viewerPeerId);
-              }
-              hostConnectionsRef.current.delete(outbound);
-            };
-            outbound.on("close", release);
-            outbound.on("error", release);
-          };
+            return;
+          }
 
           // Chaque viewer ouvre une DataConnection vers le host.
           //
@@ -1337,6 +1645,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
                 type: "live-meta",
                 title: configRef.current.title,
                 description: configRef.current.description,
+                category: configRef.current.category,
                 mode,
               });
               dataConn.send({
@@ -1346,7 +1655,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             } catch {
               // ignore
             }
-            startCallForViewer(dataConn.peer);
+            restartOutboundCallForViewer(dataConn.peer);
           });
           dataConn.on("data", (payload) => {
             // Réception d'un message de chat venant d'un viewer : on le
@@ -1415,7 +1724,13 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         return;
       }
     },
-    [pauseLiveForRecovery, updateRegistry, cameraFacing],
+    [
+      pauseLiveForRecovery,
+      updateRegistry,
+      cameraFacing,
+      isLiveStartTokenCurrent,
+      restartOutboundCallForViewer,
+    ],
   );
 
   const startScreenShare = useCallback(async () => {
@@ -1432,90 +1747,16 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     // navigateur actif sans moyen de le couper depuis l'app.
     if (hostPeerRef.current || localStreamRef.current) return;
     setLastError(null);
+    const startToken = bumpLiveStartToken();
     if (
       typeof navigator === "undefined" ||
       !navigator.mediaDevices ||
       typeof navigator.mediaDevices.getDisplayMedia !== "function"
     ) {
       if (isNativeAndroidApp()) {
-        try {
-          markNativeScreenShareAuthGrace();
-          const startedAt = new Date().toISOString();
-          const title =
-            configRef.current.title.trim() || `${me.username} en direct`;
-          const description = configRef.current.description.trim();
-          const category = configRef.current.category;
-          let broadcastToken = getCachedNativeBroadcastToken();
-          try {
-            const nativeToken = await apiCreateNativeBroadcastToken();
-            broadcastToken = nativeToken.token;
-            cacheNativeBroadcastToken({
-              token: nativeToken.token,
-              expiresAt: nativeToken.expires_at,
-            });
-          } catch (tokenError) {
-            if (!broadcastToken) throw tokenError;
-          }
-          apiLiveHeartbeat({
-            title,
-            description,
-            category,
-            mode: "android-screen",
-            twitchChannel: "",
-          }).catch(() => {
-            // Si Android vient de basculer hors WebView et que le cookie web
-            // saute, le service natif maintient le live via son bearer token.
-          });
-          await startNativeScreenShare({
-            broadcastToken,
-            title,
-            category,
-          });
-          const nativeStatus = await getNativeScreenShareStatus();
-          setConfig((c) => ({
-            ...c,
-            status: "live",
-            mode: "android-screen",
-            startedAt: nativeStatus.startedAt ?? startedAt,
-          }));
-          updateRegistry((r) => ({
-            ...r,
-            [me.id]: {
-              userId: me.id,
-              username: me.username,
-              avatar: me.avatar,
-              title,
-              description,
-              mode: "android-screen",
-              category,
-              twitchChannel: "",
-              startedAt: nativeStatus.startedAt ?? startedAt,
-              lastHeartbeat: new Date().toISOString(),
-            },
-          }));
-          const marker: LiveResumeMarker = {
-            userId: me.id,
-            mode: "android-screen",
-            facing: cameraFacing,
-            title: configRef.current.title,
-            description: configRef.current.description,
-            category,
-            twitchChannel: "",
-            savedAt: startedAt,
-          };
-          writeResumeMarker(marker);
-          setResumableLive(marker);
-          setLastError(
-            "Partage d'ecran Android lance. Ton live reste actif meme si tu passes sur une autre application.",
-          );
-        } catch (err) {
-          if (err instanceof Error && err.message !== "screen_capture_denied") {
-            const message = err.message.includes("Authentification requise")
-              ? "Vaelyndra a perdu l'auth web pendant le basculement Android. Reste connecte et relance le partage."
-              : `Partage d'ecran Android interrompu : ${err.message}`;
-            setLastError(message);
-          }
-        }
+        setLastError(
+          "Le partage d'écran mobile est désactivé pour cette version Play Store. Utilise le mode caméra pour lancer ton live Android.",
+        );
         return;
       }
       // iOS Safari (<= 18) et la plupart des navigateurs Android n'exposent
@@ -1530,9 +1771,17 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     try {
       displayStream = await captureDisplayStream();
     } catch (err) {
-      if (err instanceof Error && err.name !== "NotAllowedError") {
+      if (err instanceof Error && err.name === "NotAllowedError") {
+        setLastError(
+          "Partage d'écran annulé. Si tu es sur Android ou iPhone, utilise le mode caméra quand le navigateur ne prend pas en charge cette fonction.",
+        );
+      } else if (err instanceof Error) {
         setLastError(`Impossible d'accéder à l'écran : ${err.message}`);
       }
+      return;
+    }
+    if (!isLiveStartTokenCurrent(startToken)) {
+      displayStream.getTracks().forEach((track) => track.stop());
       return;
     }
 
@@ -1551,7 +1800,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         if (localStreamRef.current === stream) {
           pauseLiveForRecovery(
             "screen",
-            "Le partage d'ecran a ete interrompu. Ton live reste annonce : relance le partage pour reprendre.",
+            "Le partage d'écran a été interrompu. Ton live reste annoncé : relance le partage pour reprendre.",
           );
         }
       });
@@ -1581,7 +1830,10 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       // Le stream de référence peut avoir été nettoyé pendant que le prompt
       // micro était ouvert (stopLive, unmount…). Dans ce cas on range
       // proprement les tracks micro qu'on vient d'obtenir.
-      if (localStreamRef.current !== stream) {
+      if (
+        localStreamRef.current !== stream ||
+        !isLiveStartTokenCurrent(startToken)
+      ) {
         micStream.getTracks().forEach((track) => track.stop());
       } else {
         micStream.getAudioTracks().forEach((track) => {
@@ -1600,9 +1852,212 @@ export function LiveProvider({ children }: { children: ReactNode }) {
 
     // Si le stream a été nettoyé pendant la demande micro, on n'attache
     // rien aux peers.
-    if (localStreamRef.current !== stream) return;
-    await attachStreamToPeer(stream, "screen");
-  }, [attachStreamToPeer, pauseLiveForRecovery, updateRegistry, cameraFacing]);
+    if (
+      localStreamRef.current !== stream ||
+      !isLiveStartTokenCurrent(startToken)
+    ) {
+      return;
+    }
+    await attachStreamToPeer(stream, "screen", startToken);
+  }, [
+    attachStreamToPeer,
+    pauseLiveForRecovery,
+    updateRegistry,
+    cameraFacing,
+    bumpLiveStartToken,
+    isLiveStartTokenCurrent,
+  ]);
+
+  /**
+   * Recuperation silencieuse de la camera apres un evenement "ended"
+   * inattendu. Cas typique : iOS Safari coupe brievement le track camera
+   * quand l'user retourne son ecran (changement d'orientation) ou bascule
+   * une autre app au premier plan puis revient. Avant cette fonction le
+   * live etait force en mode pause/reprise manuelle, ce qui est tres
+   * brutal pour un simple flip d'ecran. On tente d'abord de re-acquerir
+   * silencieusement la camera (meme facingMode) et de remplacer les
+   * tracks sur les viewers en cours via `replaceTrack` — sans nouvelle
+   * offre SDP, donc invisible pour les viewers. On ne retombe sur le
+   * mode pause/reprise que si la re-acquisition echoue (autorisation
+   * revoquee, materiel deconnecte, etc.).
+   *
+   * Renvoie true si la reprise silencieuse a reussi, false sinon.
+   */
+  const attemptSilentCameraRecovery = useCallback(async (): Promise<boolean> => {
+    const previous = localStreamRef.current;
+    if (!previous) return false;
+    if (configRef.current.mode !== "camera") return false;
+    if (silentRecoveryRef.current) return false;
+    if (
+      typeof navigator === "undefined" ||
+      !navigator.mediaDevices ||
+      typeof navigator.mediaDevices.getUserMedia !== "function"
+    ) {
+      return false;
+    }
+    silentRecoveryRef.current = true;
+    let nextStreamRaw: MediaStream | null = null;
+    try {
+      const facing: CameraFacing = cameraFacing;
+      try {
+        const videoDevices = await listVideoInputDevices();
+        const preferredDevice = videoDevices.find((device) =>
+          facing === "environment"
+            ? /back|rear|environment|triple|ultra/i.test(device.label)
+            : /front|user|facetime/i.test(device.label),
+        );
+        nextStreamRaw = await navigator.mediaDevices.getUserMedia({
+          video: buildCameraConstraints(facing, {
+            deviceId: preferredDevice?.deviceId ?? null,
+          }),
+          // Sur iOS Safari, redemander un track audio briefly volerait le
+          // micro a la session en cours. On garde l'audio existant et on
+          // ne reacquiert que la video.
+          audio: false,
+        });
+      } catch (err) {
+        console.warn("silent camera recovery: getUserMedia failed", err);
+        return false;
+      }
+
+      // Le live a pu etre arrete (stopLive) pendant le `await`. Si oui on
+      // jette le nouveau stream sans rien recoller.
+      if (localStreamRef.current !== previous) {
+        nextStreamRaw.getTracks().forEach((t) => t.stop());
+        return false;
+      }
+
+      const newVideoTrack = nextStreamRaw.getVideoTracks()[0];
+      if (!newVideoTrack) {
+        nextStreamRaw.getTracks().forEach((t) => t.stop());
+        return false;
+      }
+
+      const previousAudioTrack = previous.getAudioTracks()[0];
+      const viewersToRestart = new Set<string>();
+      await Promise.all(
+        Array.from(hostConnectionsRef.current).map(async (call) => {
+          const senders = call.peerConnection?.getSenders() ?? [];
+          let replacedVideo = false;
+          for (const sender of senders) {
+            if (sender.track?.kind === "video") {
+              try {
+                await sender.replaceTrack(newVideoTrack);
+                replacedVideo = true;
+              } catch {
+                viewersToRestart.add(call.peer);
+              }
+            }
+          }
+          if (!replacedVideo && senders.length > 0) {
+            viewersToRestart.add(call.peer);
+          }
+        }),
+      );
+
+      const merged = new MediaStream([
+        newVideoTrack,
+        ...(previousAudioTrack ? [previousAudioTrack] : []),
+      ]);
+
+      cameraDeviceIdRef.current =
+        newVideoTrack.getSettings().deviceId ?? null;
+      localStreamRef.current = merged;
+      setLocalStream(merged);
+
+      // Sur la prochaine "ended" inattendue on retentera la meme procedure
+      // (avec plusieurs tentatives + attente de la visibilite du document).
+      newVideoTrack.addEventListener("ended", () => {
+        if (localStreamRef.current !== merged) return;
+        void (async () => {
+          const recovered = await attemptSilentCameraRecoveryResilient();
+          if (!recovered) {
+            pauseLiveForRecovery(
+              "camera",
+              "La caméra a été interrompue. Ton live reste annoncé : relance la caméra pour reprendre.",
+            );
+          }
+        })();
+      });
+
+      viewersToRestart.forEach((viewerPeerId) => {
+        restartOutboundCallForViewer(viewerPeerId);
+      });
+
+      // Stoppe l'ancien track video apres avoir bascule, pour eviter de
+      // declencher un "ended" sur l'ancien stream qui re-rentrerait dans
+      // ce meme code path.
+      previous.getVideoTracks().forEach((track) => track.stop());
+
+      return true;
+    } finally {
+      // Jette les tracks audio inutilises du nouveau stream brut (on a
+      // garde l'audio existant). Sans ca le micro reste alloue cote OS.
+      if (nextStreamRaw) {
+        nextStreamRaw.getAudioTracks().forEach((track) => track.stop());
+      }
+      silentRecoveryRef.current = false;
+    }
+  }, [cameraFacing, pauseLiveForRecovery, restartOutboundCallForViewer]);
+
+  /**
+   * Wrapper resilient autour de `attemptSilentCameraRecovery` :
+   *
+   * - Attend que le document soit visible avant la 1ere tentative
+   *   (sur iOS Safari la page passe brievement en hidden pendant une
+   *   rotation ou un retour d'arriere-plan, et getUserMedia echoue dans
+   *   cet etat).
+   * - Boucle jusqu'a 8 tentatives espacees de 500 ms (~4 s au total).
+   *   Cela suffit largement a couvrir la duree d'une rotation iOS Safari
+   *   ou d'un retour d'arriere-plan, sans coller un spinner visible.
+   * - Stoppe immediatement si le live a ete arrete (localStream parti) ou
+   *   si une autre recuperation a deja reussi.
+   *
+   * Objectif fonctionnel : sur iPhone/iPad Safari, un changement
+   * d'orientation NE doit PAS faire apparaitre la banniere
+   * "Reprendre ton live ?". On reussit la reprise silencieuse meme si
+   * elle prend quelques secondes.
+   */
+  const attemptSilentCameraRecoveryResilient = useCallback(async (): Promise<boolean> => {
+    const stillHostingCamera = () =>
+      configRef.current.mode === "camera" && !!localStreamRef.current;
+
+    // Attend la visibilite du document (avec timeout safety).
+    if (typeof document !== "undefined" && document.hidden) {
+      await new Promise<void>((resolve) => {
+        let done = false;
+        const finish = () => {
+          if (done) return;
+          done = true;
+          document.removeEventListener("visibilitychange", onChange);
+          resolve();
+        };
+        const onChange = () => {
+          if (!document.hidden) finish();
+        };
+        document.addEventListener("visibilitychange", onChange);
+        // Filet de securite : meme si la visibilite ne revient pas (cas
+        // tres rare), on debloquera la suite apres 3 secondes.
+        setTimeout(finish, 3000);
+      });
+    }
+
+    const MAX_ATTEMPTS = 8;
+    const DELAY_MS = 500;
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      if (!stillHostingCamera()) return false;
+      // Si une track video est encore "live", inutile de tenter (le live
+      // a deja recupere via un autre chemin, par ex. un autre listener).
+      const currentVideo = localStreamRef.current?.getVideoTracks()[0];
+      if (currentVideo && currentVideo.readyState === "live") {
+        return true;
+      }
+      const ok = await attemptSilentCameraRecovery();
+      if (ok) return true;
+      await new Promise((r) => setTimeout(r, DELAY_MS));
+    }
+    return false;
+  }, [attemptSilentCameraRecovery]);
 
   const startCameraShare = useCallback(
     async (facingMode: CameraFacing = "user") => {
@@ -1613,6 +2068,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       }
       if (hostPeerRef.current || localStreamRef.current) return;
       setLastError(null);
+      const startToken = bumpLiveStartToken();
       if (
         typeof navigator === "undefined" ||
         !navigator.mediaDevices ||
@@ -1623,46 +2079,63 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       }
       let stream: MediaStream;
       try {
+        const videoDevices = await listVideoInputDevices();
+        const preferredDevice = videoDevices.find((device) =>
+          facingMode === "environment"
+            ? /back|rear|environment|triple|ultra/i.test(device.label)
+            : /front|user|facetime/i.test(device.label),
+        );
         stream = await navigator.mediaDevices.getUserMedia({
-          // `facingMode` est un hint : sur desktop (webcam unique), le
-          // navigateur ignore et prend la seule caméra dispo.
-          video: {
-            facingMode: { ideal: facingMode },
-            frameRate: { ideal: 30 },
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-          },
+          video: buildCameraConstraints(facingMode, {
+            deviceId: preferredDevice?.deviceId ?? null,
+          }),
           audio: {
             echoCancellation: true,
             noiseSuppression: true,
+            autoGainControl: true,
           },
         });
       } catch (err) {
-        if (err instanceof Error && err.name !== "NotAllowedError") {
-          setLastError(`Impossible d'accéder à la caméra : ${err.message}`);
-        } else if (err instanceof Error) {
-          setLastError(
-            "Autorise l'accès à la caméra et au micro pour lancer ton live.",
-          );
-        }
+        setLastError(describeCameraAccessError(err, "start"));
+        return;
+      }
+      if (!isLiveStartTokenCurrent(startToken)) {
+        stream.getTracks().forEach((track) => track.stop());
         return;
       }
       setCameraFacing(facingMode);
+      cameraDeviceIdRef.current =
+        stream.getVideoTracks()[0]?.getSettings().deviceId ?? null;
       stream.getVideoTracks().forEach((track) => {
         track.addEventListener("ended", () => {
-          if (localStreamRef.current === stream) {
-            pauseLiveForRecovery(
-              "camera",
-              "La camera a ete interrompue. Ton live reste annonce : relance la camera pour reprendre.",
-            );
-          }
+          if (localStreamRef.current !== stream) return;
+          // Cas typique iOS Safari : rotation/orientation, retour
+          // d'arriere-plan, etc. On tente d'abord une reprise silencieuse
+          // (re-getUserMedia + replaceTrack) avant de degrader vers la
+          // banniere "Le flux a ete interrompu" qui force l'user a
+          // recliquer pour reprendre.
+          void (async () => {
+            const recovered = await attemptSilentCameraRecoveryResilient();
+            if (!recovered) {
+              pauseLiveForRecovery(
+                "camera",
+                "La caméra a été interrompue. Ton live reste annoncé : relance la caméra pour reprendre.",
+              );
+            }
+          })();
         });
       });
       localStreamRef.current = stream;
       setLocalStream(stream);
-      await attachStreamToPeer(stream, "camera");
+      await attachStreamToPeer(stream, "camera", startToken);
     },
-    [attachStreamToPeer, pauseLiveForRecovery],
+    [
+      attachStreamToPeer,
+      pauseLiveForRecovery,
+      bumpLiveStartToken,
+      isLiveStartTokenCurrent,
+      attemptSilentCameraRecoveryResilient,
+    ],
   );
 
   /**
@@ -1687,27 +2160,28 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       return;
     }
     switchingCameraRef.current = true;
+    let next: MediaStream | null = null;
     try {
       const nextFacing: CameraFacing =
         cameraFacing === "user" ? "environment" : "user";
-      let next: MediaStream;
       try {
+        const videoDevices = await listVideoInputDevices();
+        const currentDeviceId =
+          current.getVideoTracks()[0]?.getSettings().deviceId ??
+          cameraDeviceIdRef.current;
+        const alternateDevice =
+          videoDevices.find((device) => device.deviceId !== currentDeviceId) ??
+          null;
         next = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: { ideal: nextFacing },
-            frameRate: { ideal: 30 },
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-          },
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-          },
+          video: buildCameraConstraints(nextFacing, {
+            deviceId: alternateDevice?.deviceId ?? null,
+            preferExactDevice: !isMobileMediaBrowser(),
+            allowExactFacing: !isMobileMediaBrowser(),
+          }),
+          audio: false,
         });
       } catch (err) {
-        if (err instanceof Error) {
-          setLastError(`Impossible de changer de caméra : ${err.message}`);
-        }
+        setLastError(describeCameraAccessError(err, "switch"));
         return;
       }
 
@@ -1719,7 +2193,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       }
 
       const newVideoTrack = next.getVideoTracks()[0];
-      const newAudioTrack = next.getAudioTracks()[0];
+      const currentAudioTrack = current.getAudioTracks()[0];
       if (!newVideoTrack) {
         next.getTracks().forEach((t) => t.stop());
         return;
@@ -1728,38 +2202,251 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       // Remplace les tracks sur toutes les MediaConnection viewers en cours.
       // `replaceTrack` est préféré à la renégociation complète : pas de
       // re-offer SDP, pas de coupure visible côté viewers.
-      hostConnectionsRef.current.forEach((call) => {
-        const senders = call.peerConnection?.getSenders() ?? [];
-        for (const sender of senders) {
-          if (sender.track?.kind === "video") {
-            sender.replaceTrack(newVideoTrack).catch(() => {
-              /* ignore — la connexion peut être en cours de fermeture */
-            });
-          } else if (sender.track?.kind === "audio" && newAudioTrack) {
-            sender.replaceTrack(newAudioTrack).catch(() => {
-              /* ignore */
-            });
+      const viewersToRestart = new Set<string>();
+      await Promise.all(
+        Array.from(hostConnectionsRef.current).map(async (call) => {
+          const senders = call.peerConnection?.getSenders() ?? [];
+          let replacedVideo = false;
+          for (const sender of senders) {
+            if (sender.track?.kind === "video") {
+              try {
+                await sender.replaceTrack(newVideoTrack);
+                replacedVideo = true;
+              } catch {
+                viewersToRestart.add(call.peer);
+              }
+            } else if (sender.track?.kind === "audio" && currentAudioTrack) {
+              try {
+                await sender.replaceTrack(currentAudioTrack);
+              } catch {
+                // on garde l'audio existant si le sender est en cours de fermeture
+              }
+            }
           }
-        }
-      });
+          if (!replacedVideo && senders.length > 0) {
+            viewersToRestart.add(call.peer);
+          }
+        }),
+      );
 
-      // Stoppe l'ancien stream (tracks) puis publie le nouveau côté host.
-      current.getTracks().forEach((t) => t.stop());
-      newVideoTrack.addEventListener("ended", () => {
-        if (localStreamRef.current === next) {
-          pauseLiveForRecovery(
-            "camera",
-            "La camera a ete interrompue. Ton live reste annonce : relance la camera pour reprendre.",
-          );
-        }
+      const nextStream = new MediaStream([
+        newVideoTrack,
+        ...current.getAudioTracks(),
+      ]);
+      viewersToRestart.forEach((viewerPeerId) => {
+        restartOutboundCallForViewer(viewerPeerId);
       });
-      localStreamRef.current = next;
-      setLocalStream(next);
+      newVideoTrack.addEventListener("ended", () => {
+        if (localStreamRef.current !== nextStream) return;
+        void (async () => {
+          const recovered = await attemptSilentCameraRecoveryResilient();
+          if (!recovered) {
+            pauseLiveForRecovery(
+              "camera",
+              "La caméra a été interrompue. Ton live reste annoncé : relance la caméra pour reprendre.",
+            );
+          }
+        })();
+      });
+      // Bascule le flux actif AVANT de stopper l'ancienne camera. Sinon le
+      // listener `ended` de l'ancienne track croit a une vraie interruption
+      // et force a tort le live en mode reprise.
+      cameraDeviceIdRef.current = newVideoTrack.getSettings().deviceId ?? null;
+      localStreamRef.current = nextStream;
+      setLocalStream(nextStream);
       setCameraFacing(nextFacing);
+      current.getVideoTracks().forEach((track) => track.stop());
     } finally {
+      next?.getAudioTracks().forEach((track) => track.stop());
       switchingCameraRef.current = false;
     }
-  }, [cameraFacing, pauseLiveForRecovery]);
+  }, [
+    cameraFacing,
+    pauseLiveForRecovery,
+    restartOutboundCallForViewer,
+    attemptSilentCameraRecoveryResilient,
+  ]);
+
+  /**
+   * Côté host (mode caméra) : bascule entre caméra ouverte et caméra
+   * masquée par l'avatar.
+   *
+   * - Quand on masque : on stoppe la track caméra OS, on génère un flux
+   *   vidéo à partir du canvas avatar (`createLiveAvatarStream`), et on
+   *   `replaceTrack` sur tous les viewers. L'audio reste branché.
+   * - Quand on ré-affiche : on stoppe le flux canvas et on rouvre la
+   *   caméra (`getUserMedia` avec le même facing). Si l'utilisateur a
+   *   révoqué l'accès caméra entre temps, on retombe sur la bannière
+   *   pause/reprise classique.
+   *
+   * Côté viewer c'est invisible : pas de re-offer SDP, juste un swap
+   * de track. Le live reste annoncé pendant toute l'opération.
+   */
+  const toggleCameraHidden = useCallback(async (): Promise<void> => {
+    if (configRef.current.mode !== "camera") return;
+    const current = localStreamRef.current;
+    if (!current) return;
+    if (switchingCameraHiddenRef.current) return;
+    switchingCameraHiddenRef.current = true;
+
+    const swapVideoTrackOnPeers = async (
+      newVideoTrack: MediaStreamTrack,
+    ): Promise<Set<string>> => {
+      const viewersToRestart = new Set<string>();
+      await Promise.all(
+        Array.from(hostConnectionsRef.current).map(async (call) => {
+          const senders = call.peerConnection?.getSenders() ?? [];
+          let replaced = false;
+          for (const sender of senders) {
+            if (sender.track?.kind === "video") {
+              try {
+                await sender.replaceTrack(newVideoTrack);
+                replaced = true;
+              } catch {
+                viewersToRestart.add(call.peer);
+              }
+            }
+          }
+          if (!replaced && senders.length > 0) {
+            viewersToRestart.add(call.peer);
+          }
+        }),
+      );
+      return viewersToRestart;
+    };
+
+    try {
+      if (!cameraHiddenRef.current) {
+        // === Masquer la caméra → bascule sur l'avatar ===
+        const me = userRef.current;
+        let avatarHandle: LiveAvatarStreamHandle;
+        try {
+          avatarHandle = await createLiveAvatarStream({
+            avatarUrl: me?.avatar ?? null,
+            username: me?.username ?? "PulseForge",
+          });
+        } catch {
+          setLastError(
+            "Impossible de générer le flux d'avatar pour masquer la caméra.",
+          );
+          return;
+        }
+        // Le live a pu être arrêté pendant l'await — on ne touche à rien.
+        if (localStreamRef.current !== current) {
+          avatarHandle.stop();
+          return;
+        }
+        const avatarVideoTrack = avatarHandle.stream.getVideoTracks()[0];
+        if (!avatarVideoTrack) {
+          avatarHandle.stop();
+          return;
+        }
+        const viewersToRestart = await swapVideoTrackOnPeers(avatarVideoTrack);
+        // Si le live a été stoppé pendant la swap, on jette tout.
+        if (localStreamRef.current !== current) {
+          avatarHandle.stop();
+          return;
+        }
+        const nextStream = new MediaStream([
+          avatarVideoTrack,
+          ...current.getAudioTracks(),
+        ]);
+        viewersToRestart.forEach((viewerPeerId) => {
+          restartOutboundCallForViewer(viewerPeerId);
+        });
+        localStreamRef.current = nextStream;
+        setLocalStream(nextStream);
+        avatarStreamRef.current = avatarHandle;
+        setCameraHidden(true);
+        cameraHiddenRef.current = true;
+        // On stoppe la vraie track caméra : libère la LED + permet à iOS
+        // Safari de ne pas montrer l'indicateur "caméra utilisée".
+        current.getVideoTracks().forEach((track) => track.stop());
+      } else {
+        // === Ré-afficher la caméra → re-getUserMedia ===
+        if (
+          typeof navigator === "undefined" ||
+          !navigator.mediaDevices ||
+          typeof navigator.mediaDevices.getUserMedia !== "function"
+        ) {
+          return;
+        }
+        let next: MediaStream;
+        try {
+          next = await navigator.mediaDevices.getUserMedia({
+            video: buildCameraConstraints(cameraFacing, {
+              deviceId: cameraDeviceIdRef.current,
+              preferExactDevice: !isMobileMediaBrowser(),
+              allowExactFacing: !isMobileMediaBrowser(),
+            }),
+            audio: false,
+          });
+        } catch (err) {
+          setLastError(describeCameraAccessError(err, "start"));
+          return;
+        }
+        // Live arrêté pendant l'await → on jette tout.
+        if (localStreamRef.current !== current) {
+          next.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        const newVideoTrack = next.getVideoTracks()[0];
+        if (!newVideoTrack) {
+          next.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        const viewersToRestart = await swapVideoTrackOnPeers(newVideoTrack);
+        if (localStreamRef.current !== current) {
+          newVideoTrack.stop();
+          return;
+        }
+        const nextStream = new MediaStream([
+          newVideoTrack,
+          ...current.getAudioTracks(),
+        ]);
+        viewersToRestart.forEach((viewerPeerId) => {
+          restartOutboundCallForViewer(viewerPeerId);
+        });
+        // Listener `ended` standard : si la nouvelle caméra est coupée
+        // inopinément, on tente la reprise silencieuse résiliente.
+        newVideoTrack.addEventListener("ended", () => {
+          if (localStreamRef.current !== nextStream) return;
+          if (cameraHiddenRef.current) return;
+          void (async () => {
+            const recovered = await attemptSilentCameraRecoveryResilient();
+            if (!recovered) {
+              pauseLiveForRecovery(
+                "camera",
+                "La caméra a été interrompue. Ton live reste annoncé : relance la caméra pour reprendre.",
+              );
+            }
+          })();
+        });
+        cameraDeviceIdRef.current =
+          newVideoTrack.getSettings().deviceId ?? cameraDeviceIdRef.current;
+        localStreamRef.current = nextStream;
+        setLocalStream(nextStream);
+        // Coupe le canvas avatar.
+        if (avatarStreamRef.current) {
+          try {
+            avatarStreamRef.current.stop();
+          } catch {
+            // ignore
+          }
+          avatarStreamRef.current = null;
+        }
+        setCameraHidden(false);
+        cameraHiddenRef.current = false;
+      }
+    } finally {
+      switchingCameraHiddenRef.current = false;
+    }
+  }, [
+    cameraFacing,
+    pauseLiveForRecovery,
+    restartOutboundCallForViewer,
+    attemptSilentCameraRecoveryResilient,
+  ]);
 
   /**
    * Côté viewer : tente activement de rejoindre le live d'un broadcaster
@@ -1945,6 +2632,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
               }
               if (cancelled) return;
               setRemoteStream(null);
+              setIsConnecting(false);
             });
             call.on("error", () => {
               if (viewerMediaCallRef.current === call) {
@@ -2010,6 +2698,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
                 const meta = payload as {
                   title?: string;
                   description?: string;
+                  category?: string;
                   mode?: LiveMode;
                 };
                 setViewingMeta({
@@ -2018,6 +2707,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
                     typeof meta.description === "string"
                       ? meta.description
                       : "",
+                  category: normalizeLiveCategory(meta.category),
                   mode:
                     meta.mode === "twitch" ||
                     meta.mode === "screen" ||
@@ -2067,6 +2757,15 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             }
             console.warn("PeerJS viewer error", err);
             setIsConnecting(false);
+          });
+          viewerPeer.on("disconnected", () => {
+            if (cancelled) return;
+            setIsConnecting(true);
+            try {
+              viewerPeer.reconnect();
+            } catch {
+              setIsConnecting(false);
+            }
           });
         } catch (err) {
           if (!cancelled) {
@@ -2121,15 +2820,25 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Volontairement aucun handler `beforeunload` / `pagehide` : un simple
-  // refresh de la page (F5, pull-to-refresh mobile) ne doit PAS tuer le
-  // live du broadcaster, c'était le bug #54 signalé. Le backend purge
-  // automatiquement les entrées orphelines via le TTL heartbeat (90 s
-  // côté serveur), ce qui couvre la fermeture définitive d'onglet sans
-  // pénaliser les refresh volontaires. Le broadcaster peut restaurer
-  // son live en relançant le partage d'écran après refresh — l'entrée
-  // serveur reste vivante entre-temps, donc les viewers voient
-  // "Reconnexion…" au lieu de "Live terminé".
+  // On empêche désormais le refresh / la fermeture involontaires tant que
+  // le live est actif. Sans ce garde-fou navigateur, certains contextes
+  // mobile/desktop peuvent déclencher un reload non désiré et forcer une
+  // reprise du live. Ici, seul un arrêt volontaire du live ré-autorise
+  // l'unload silencieux de la page.
+  useEffect(() => {
+    allowPageUnloadRef.current = config.status !== "live";
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (allowPageUnloadRef.current) return undefined;
+      if (configRef.current.status !== "live") return undefined;
+      event.preventDefault();
+      event.returnValue = "";
+      return "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", onBeforeUnload);
+    };
+  }, [config.status]);
 
   // Heartbeat : l'onglet qui diffuse rafraîchit `lastHeartbeat` toutes les
   // 30s. Combiné au filtrage dans `readRegistry` (seuil 90s), ça élimine
@@ -2390,21 +3099,40 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       await startScreenShare();
       return;
     }
+    if (marker.mode === "android-screen") {
+      setConfig((c) => ({
+        ...c,
+        mode: "camera",
+      }));
+      setResumableLive({
+        ...marker,
+        mode: "camera",
+      });
+      setLastError(
+        "Le partage d'écran mobile reste désactivé pour cette version. PulseForge repasse sur la caméra pour garder ton live stable.",
+      );
+      setCameraFacing(marker.facing);
+      await startCameraShare(marker.facing);
+      return;
+    }
     // camera
     setCameraFacing(marker.facing);
     await startCameraShare(marker.facing);
-  }, [announceTwitchLive, startScreenShare, startCameraShare]);
+  }, [announceTwitchLive, startScreenShare, startCameraShare, updateRegistry]);
 
   const value = useMemo<LiveCtx>(
     () => ({
       config,
       updateConfig,
+      saveLiveMetadata,
       liveRegistry,
       announceTwitchLive,
       startScreenShare,
       startCameraShare,
       switchCamera,
       cameraFacing,
+      cameraHidden,
+      toggleCameraHidden,
       stopLive,
       joinAsViewer,
       remoteStream,
@@ -2424,12 +3152,15 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     [
       config,
       updateConfig,
+      saveLiveMetadata,
       liveRegistry,
       announceTwitchLive,
       startScreenShare,
       startCameraShare,
       switchCamera,
       cameraFacing,
+      cameraHidden,
+      toggleCameraHidden,
       stopLive,
       joinAsViewer,
       remoteStream,

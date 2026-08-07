@@ -1,5 +1,5 @@
 /**
- * Client HTTP pour les endpoints `/auth/*` de l'API Vaelyndra.
+ * Client HTTP pour les endpoints `/auth/*` de l'API PulseForge.
  *
  * Tous les appels envoient `credentials: "include"` pour que le cookie
  * `vaelyndra_session` (HttpOnly, SameSite=Lax) soit transmis de
@@ -43,6 +43,7 @@ export interface AuthMe {
   handle: string | null;
   /** PR S — ISO du dernier changement de handle (cooldown 30 j). */
   handle_updated_at: string | null;
+  bio?: string;
   avatar_image_url: string;
   avatar_url: string | null;
   creature_id: string | null;

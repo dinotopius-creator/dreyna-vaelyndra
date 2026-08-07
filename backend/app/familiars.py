@@ -17,12 +17,12 @@ ici, dans le code, et est versionnée comme du code normal.
 
 Catalogue :
 - 4 familiers GRATUITS (un de chaque ambiance, parité visuelle assurée)
-- 5 familiers PREMIUM (achat en Sylvins, prix 800 → 3000)
+- 5 familiers PREMIUM (achat en Aureons, prix 800 → 3000)
 
 Stats : intentionnellement légères pour ne PAS être pay-to-win.
 - `aura` (cosmétique pur, halos de réactions sociales)
 - `energy` (énergie live : amplitude des animations pendant le stream)
-- `harvest` (bonus discret sur le daily-claim Lueurs, capé à +20 %)
+- `harvest` (bonus discret sur le daily-claim Eclats, capé à +20 %)
 - `affinity` (cosmétique premium : effets de particules supplémentaires)
 - `charisma` (intensité visuelle des réactions sociales)
 
@@ -32,11 +32,13 @@ l'effet visuel pour éviter le pay-to-win.
 """
 from __future__ import annotations
 
-from typing import Dict, List, Literal, TypedDict
+from typing import Dict, List, Literal, Optional, TypedDict
 
 
 FamiliarRarity = Literal["commun", "rare", "epique", "legendaire", "mythique"]
 FamiliarTier = Literal["free", "premium"]
+FamiliarCosmeticSlot = Literal["color", "face", "hair", "accessory", "frame", "effect"]
+FamiliarCosmeticCurrency = Literal["free", "lueurs", "sylvins"]
 
 
 class FamiliarStats(TypedDict):
@@ -67,10 +69,30 @@ class FamiliarDef(TypedDict):
     color: str
     description: str
     tagline: str
-    # Coût en Sylvins pour l'achat. 0 pour les gratuits.
+    # Coût en Aureons pour l'achat. 0 pour les gratuits.
     price_sylvins: int
     # Stats de base au niveau 1 (cf. `compute_familiar_stats`).
     base_stats: FamiliarStats
+
+
+class FamiliarCosmeticDef(TypedDict, total=False):
+    """Cosmetique equipe sur un familier.
+
+    Le catalogue reste code-side comme les familiers: les achats sont valides
+    cote serveur et les clients ne peuvent pas injecter un prix arbitraire.
+    """
+
+    id: str
+    slot: FamiliarCosmeticSlot
+    name: str
+    description: str
+    rarity: FamiliarRarity
+    currency: FamiliarCosmeticCurrency
+    price: int
+    icon: str
+    color: str
+    accent: str
+    compatible_familiars: Optional[List[str]]
 
 
 FAMILIARS: List[FamiliarDef] = [
@@ -95,13 +117,13 @@ FAMILIARS: List[FamiliarDef] = [
     },
     {
         "id": "hibou-des-lueurs",
-        "name": "Hibou des Lueurs",
+        "name": "Hibou des Eclats",
         "tier": "free",
         "rarity": "commun",
         "icon": "🦉",
         "color": "#a78bfa",
         "tagline": "Veilleur silencieux",
-        "description": "Hibou crépusculaire au plumage parsemé de Lueurs. Il guide les insomniaques de Vaelyndra.",
+        "description": "Hibou crépusculaire au plumage parsemé de Eclats. Il guide les insomniaques de Vaelyndra.",
         "price_sylvins": 0,
         "base_stats": {
             "aura": 24,
@@ -244,6 +266,216 @@ FAMILIARS: List[FamiliarDef] = [
 FAMILIARS_BY_ID: Dict[str, FamiliarDef] = {f["id"]: f for f in FAMILIARS}
 
 
+FAMILIAR_COSMETICS: List[FamiliarCosmeticDef] = [
+    {
+        "id": "color-origin",
+        "slot": "color",
+        "name": "Couleur d'origine",
+        "description": "La teinte naturelle du familier.",
+        "rarity": "commun",
+        "currency": "free",
+        "price": 0,
+        "icon": "○",
+        "color": "",
+        "accent": "Teinte de base",
+    },
+    {
+        "id": "color-miel-lunaire",
+        "slot": "color",
+        "name": "Miel lunaire",
+        "description": "Un pelage chaud, doux et lumineux.",
+        "rarity": "commun",
+        "currency": "lueurs",
+        "price": 160,
+        "icon": "●",
+        "color": "#fbbf24",
+        "accent": "Eclats",
+    },
+    {
+        "id": "color-rose-brume",
+        "slot": "color",
+        "name": "Rose de brume",
+        "description": "Une nuance tendre pour les compagnons calmes.",
+        "rarity": "rare",
+        "currency": "lueurs",
+        "price": 240,
+        "icon": "●",
+        "color": "#fb7185",
+        "accent": "Eclats",
+    },
+    {
+        "id": "color-aurore-sylvaine",
+        "slot": "color",
+        "name": "Aurore sylvaine",
+        "description": "Une couleur premium avec reflets verts et cyan.",
+        "rarity": "epique",
+        "currency": "sylvins",
+        "price": 95,
+        "icon": "●",
+        "color": "#34d399",
+        "accent": "Aureons",
+    },
+    {
+        "id": "color-nuit-royale",
+        "slot": "color",
+        "name": "Nuit royale",
+        "description": "Un pelage sombre rehausse d'un halo violet.",
+        "rarity": "legendaire",
+        "currency": "sylvins",
+        "price": 140,
+        "icon": "●",
+        "color": "#8b5cf6",
+        "accent": "Aureons",
+    },
+    {
+        "id": "hair-touffe-lune",
+        "slot": "hair",
+        "name": "Touffe de lune",
+        "description": "Petite meche claire au-dessus de la tete.",
+        "rarity": "commun",
+        "currency": "lueurs",
+        "price": 180,
+        "icon": "〰",
+        "color": "#fde68a",
+        "accent": "Eclats",
+    },
+    {
+        "id": "hair-plume-rose",
+        "slot": "hair",
+        "name": "Plume rose",
+        "description": "Une plume douce posee comme une houppette.",
+        "rarity": "rare",
+        "currency": "lueurs",
+        "price": 320,
+        "icon": "⌁",
+        "color": "#f9a8d4",
+        "accent": "Eclats",
+    },
+    {
+        "id": "hair-crete-celeste",
+        "slot": "hair",
+        "name": "Crete celeste",
+        "description": "Touffe premium lumineuse pour familier rare.",
+        "rarity": "epique",
+        "currency": "sylvins",
+        "price": 105,
+        "icon": "⟡",
+        "color": "#93c5fd",
+        "accent": "Aureons",
+    },
+    {
+        "id": "accessory-noeud-dore",
+        "slot": "accessory",
+        "name": "Noeud dore",
+        "description": "Petit noeud ceremonial, visible sur le portrait.",
+        "rarity": "commun",
+        "currency": "lueurs",
+        "price": 220,
+        "icon": "∞",
+        "color": "#facc15",
+        "accent": "Eclats",
+    },
+    {
+        "id": "accessory-mini-couronne",
+        "slot": "accessory",
+        "name": "Mini-couronne",
+        "description": "Accessoire premium pour un familier de prestige.",
+        "rarity": "legendaire",
+        "currency": "sylvins",
+        "price": 150,
+        "icon": "♛",
+        "color": "#f8d477",
+        "accent": "Aureons",
+    },
+    {
+        "id": "frame-simple",
+        "slot": "frame",
+        "name": "Cadre simple",
+        "description": "Cadre discret autour du portrait.",
+        "rarity": "commun",
+        "currency": "free",
+        "price": 0,
+        "icon": "□",
+        "color": "#ffffff",
+        "accent": "Base",
+    },
+    {
+        "id": "frame-fleurs",
+        "slot": "frame",
+        "name": "Cadre fleuri",
+        "description": "Bordure douce inspiree des clairieres.",
+        "rarity": "rare",
+        "currency": "lueurs",
+        "price": 420,
+        "icon": "✿",
+        "color": "#86efac",
+        "accent": "Eclats",
+    },
+    {
+        "id": "frame-lunaire",
+        "slot": "frame",
+        "name": "Cadre lunaire",
+        "description": "Anneau bleute pour portraits nocturnes.",
+        "rarity": "rare",
+        "currency": "lueurs",
+        "price": 520,
+        "icon": "☾",
+        "color": "#93c5fd",
+        "accent": "Eclats",
+    },
+    {
+        "id": "frame-royal",
+        "slot": "frame",
+        "name": "Cadre royal",
+        "description": "Cadre premium dore pour familier iconique.",
+        "rarity": "legendaire",
+        "currency": "sylvins",
+        "price": 175,
+        "icon": "♢",
+        "color": "#f8d477",
+        "accent": "Aureons",
+    },
+    {
+        "id": "effect-paillettes",
+        "slot": "effect",
+        "name": "Paillettes de lueurs",
+        "description": "Effet leger autour du portrait du familier.",
+        "rarity": "rare",
+        "currency": "lueurs",
+        "price": 480,
+        "icon": "✧",
+        "color": "#fde68a",
+        "accent": "Eclats",
+    },
+    {
+        "id": "effect-aura-ancienne",
+        "slot": "effect",
+        "name": "Aura ancienne",
+        "description": "Halo premium plus intense autour du compagnon.",
+        "rarity": "mythique",
+        "currency": "sylvins",
+        "price": 220,
+        "icon": "✺",
+        "color": "#c4b5fd",
+        "accent": "Aureons",
+    },
+]
+
+FAMILIAR_COSMETICS_BY_ID: Dict[str, FamiliarCosmeticDef] = {
+    c["id"]: c for c in FAMILIAR_COSMETICS
+}
+
+DEFAULT_FAMILIAR_COSMETIC_IDS = [
+    c["id"] for c in FAMILIAR_COSMETICS if c["currency"] == "free"
+]
+
+
+def get_familiar_cosmetic(cosmetic_id: str | None) -> FamiliarCosmeticDef | None:
+    if not cosmetic_id:
+        return None
+    return FAMILIAR_COSMETICS_BY_ID.get(cosmetic_id)
+
+
 # Paliers d'évolution (apparence + animations + effets). Le familier garde son
 # id, son nom et sa rareté ; seuls les visuels changent selon le palier.
 EVOLUTION_TIERS = [
@@ -266,7 +498,7 @@ def evolution_for_level(level: int) -> dict:
 
 
 # Switch payant : le premier changement est gratuit (cf. logique côté
-# router), les suivants coûtent un montant fixe en Sylvins (PROMO ou PAID,
+# router), les suivants coûtent un montant fixe en Aureons (PROMO ou PAID,
 # débit prioritairement PROMO).
 SWITCH_PRICE_SYLVINS = 300
 RENAME_PRICE_SYLVINS = 10
@@ -349,21 +581,21 @@ SOCIAL_XP_RULES: Dict[str, Dict[str, int]] = {
     "live:started": {"amount": 50, "daily_cap": 50},
 }
 
-# Cadeau Sylvins reçu : XP = amount * 1, capé 1000 XP/jour (gros donateurs
+# Cadeau Aureons reçu : XP = amount * 1, capé 1000 XP/jour (gros donateurs
 # autorisés). Pas de ligne dans SOCIAL_XP_RULES car le montant est dynamique.
 GIFT_RECEIVED_DAILY_CAP = 1000
 GIFT_SENT_DAILY_CAP = 200
 
 
 def gift_received_xp(amount_sylvins: int) -> int:
-    """XP gagné côté receiver pour un gift Sylvins ou item."""
+    """XP gagné côté receiver pour un gift Aureons ou item."""
     return max(0, int(amount_sylvins))
 
 
 def gift_sent_xp(amount_sylvins: int) -> int:
     """XP gagné côté sender pour avoir offert. Encourage la générosité.
 
-    1 XP tous les 3 Sylvins offerts (arrondi inférieur).
+    1 XP tous les 3 Aureons offerts (arrondi inférieur).
     """
     return max(0, int(amount_sylvins) // 3)
 

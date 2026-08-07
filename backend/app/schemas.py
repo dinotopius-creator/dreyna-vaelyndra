@@ -29,10 +29,26 @@ class PostCreate(AuthorIn):
     content: str = Field(..., min_length=1, max_length=2000)
     image_url: Optional[str] = Field(default=None, max_length=1024)
     video_url: Optional[str] = Field(default=None, max_length=1024)
+    video_thumbnail_url: Optional[str] = Field(default=None, max_length=1024)
+
+
+class PostUpdate(BaseModel):
+    user_id: str = Field(..., min_length=1, max_length=128)
+    content: Optional[str] = Field(default=None, min_length=1, max_length=2000)
+    image_url: Optional[str] = Field(default=None, max_length=1024)
+    video_url: Optional[str] = Field(default=None, max_length=1024)
+    video_thumbnail_url: Optional[str] = Field(default=None, max_length=1024)
 
 
 class CommentCreate(AuthorIn):
     content: str = Field(..., min_length=1, max_length=1000)
+    parent_id: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    reply_to_author_id: Optional[str] = Field(
+        default=None, min_length=1, max_length=128
+    )
+    reply_to_author_name: Optional[str] = Field(
+        default=None, min_length=1, max_length=128
+    )
 
 
 class ReactionToggle(BaseModel):
@@ -47,8 +63,13 @@ class CommentOut(BaseModel):
     # PR S — `@handle` résolu depuis l'auteur au serialize, pas snapshot.
     # `None` si l'auteur n'a pas encore de profil ou de handle.
     authorHandle: Optional[str] = None
+    authorGrade: Optional["StreamerGradeOut"] = None
     authorAvatar: str
     content: str
+    parentId: Optional[str] = None
+    replyToAuthorId: Optional[str] = None
+    replyToAuthorName: Optional[str] = None
+    replyToAuthorHandle: Optional[str] = None
     createdAt: str
     likes: List[str] = []
 
@@ -58,20 +79,31 @@ class PostOut(BaseModel):
     authorId: str
     authorName: str
     authorHandle: Optional[str] = None
+    authorGrade: Optional["StreamerGradeOut"] = None
     authorAvatar: str
     content: str
     imageUrl: Optional[str] = None
     videoUrl: Optional[str] = None
+    videoThumbnailUrl: Optional[str] = None
+    postType: str = "standard"
+    officialLabel: Optional[str] = None
     createdAt: str
     reactions: Dict[str, List[str]] = {}
     comments: List[CommentOut] = []
+
+
+class PostImageUploadOut(BaseModel):
+    imageUrl: str
+    filename: str
+    contentType: str
+    size: int
 
 
 class CommunityActivityRewardOut(BaseModel):
     weekStartIso: str
     userId: str
     rank: int
-    rewardLueurs: int
+    rewardEclats: int
     awardedAt: str
 
 
@@ -85,6 +117,7 @@ class CommunityActivityEntryOut(BaseModel):
     id: str
     username: str
     handle: Optional[str] = None
+    grade: Optional["StreamerGradeOut"] = None
     avatarImageUrl: str = ""
     postCount: int = 0
     commentCount: int = 0
@@ -96,6 +129,47 @@ class CommunityActivityEntryOut(BaseModel):
 class CommunityActivityLeaderboardOut(BaseModel):
     weekStartIso: str
     entries: List[CommunityActivityEntryOut] = []
+
+
+class DrawingContestEntryOut(BaseModel):
+    id: str
+    authorId: str
+    authorName: str
+    authorHandle: Optional[str] = None
+    authorGrade: Optional["StreamerGradeOut"] = None
+    authorAvatar: str
+    content: str
+    imageUrl: Optional[str] = None
+    createdAt: str
+    likeCount: int = 0
+    participantRank: int = 0
+    eligible: bool = False
+
+
+class DrawingContestStatusOut(BaseModel):
+    contestId: str
+    hashtag: str
+    startsAt: str
+    endsAt: str
+    active: bool = False
+    now: str
+    timeRemainingMs: int = 0
+    rewardEclats: int = 0
+    rewardFood: int = 0
+    announcementPostId: str
+    entries: List[DrawingContestEntryOut] = []
+    topEntry: Optional[DrawingContestEntryOut] = None
+    winnerAwarded: bool = False
+
+
+class DrawingContestSettlementOut(BaseModel):
+    contestId: str
+    active: bool
+    alreadyAwarded: bool = False
+    winner: Optional[DrawingContestEntryOut] = None
+    awardedAt: Optional[str] = None
+    rewardEclats: int = 0
+    rewardFood: int = 0
 
 
 class OraclePlayIn(BaseModel):
@@ -137,8 +211,8 @@ class OraclePlayOut(BaseModel):
     playsLeftToday: int
     maxDailyPlays: int = 3
     reward: OracleRewardOut
-    profileLueurs: int
-    profileSylvinsPromo: int
+    profileEclats: int
+    profileAureonsPromo: int
     recentHistory: List[OracleHistoryEntryOut] = []
 
 
@@ -157,6 +231,7 @@ class UserProfileUpsert(BaseModel):
 
     id: str = Field(..., min_length=1, max_length=128)
     username: str = Field(..., min_length=1, max_length=64)
+    bio: Optional[str] = Field(default=None, max_length=500)
     # Peut être :
     # - une URL courte (DiceBear, CDN, image hébergée)
     # - un data URI base64 généré par l'écran /moi après import local
@@ -220,6 +295,9 @@ class ActiveFamiliarSummary(BaseModel):
     evolutionId: str
     evolutionName: str
     nickname: Optional[str] = None
+    cosmeticInventory: List[str] = []
+    cosmeticEquipped: Dict[str, str] = {}
+    cosmetics: Dict[str, dict] = {}
     # Caractéristiques effectives (cf. backend/app/familiars.py).
     # Câblées sur le site : `harvest` bonifie le daily-claim,
     # `energy` densifie les réactions live, `aura` / `charisma` /
@@ -259,7 +337,7 @@ class WalletDelta(BaseModel):
     Les valeurs peuvent être négatives (débit). Le serveur refuse les soldes
     négatifs finaux (HTTP 400).
 
-    Sylvins split (anti-fraude, cf. `UserProfile`) :
+    Aureons split (anti-fraude, cf. `UserProfile`) :
 
     - `sylvins_paid` / `earnings_paid` : pots **réellement payés en €**
       (webhook Stripe). Seuls ces pots alimentent les retraits streamer.
@@ -306,7 +384,7 @@ class GiftItem(BaseModel):
 
 
 class GiftTransfer(BaseModel):
-    """Transfert atomique de Sylvins du pot sender vers les earnings receiver.
+    """Transfert atomique de Aureons du pot sender vers les earnings receiver.
 
     Respecte le split paid/promo : consomme d'abord le pot PROMO du sender
     (si suffisant) puis PAID. Crédite les earnings du receiver dans le pot
@@ -355,6 +433,7 @@ class UserProfileOut(BaseModel):
     handle: Optional[str] = None
     handleUpdatedAt: Optional[str] = None
     avatarImageUrl: str
+    bio: str = ""
     avatarUrl: Optional[str] = None
     inventory: List[str] = []
     equipped: Dict[str, str] = {}
@@ -425,7 +504,7 @@ class DailyClaimOut(BaseModel):
     granted: int
     already_claimed: bool = False
     profile: UserProfileOut
-    # Bonus apporté par la stat `harvest` (Récolte de Lueurs) du familier
+    # Bonus apporté par la stat `harvest` (Récolte de Eclats) du familier
     # actif. 0 si pas de familier ou stat à 0.
     harvest_bonus: int = 0
 
@@ -453,18 +532,58 @@ class WorldPresenceHeartbeatIn(BaseModel):
     voiceEnabled: bool = False
 
 
+class WorldAvatarAppearanceOut(BaseModel):
+    """Apparence 3D partageable dans le monde.
+
+    Les scènes de profil sont volontairement exclues : le monde reste un
+    espace commun, pas le décor personnel du profil.
+    """
+
+    avatarUrl: Optional[str] = None
+    outfit3d: Optional[str] = None
+    accessory3d: Optional[str] = None
+    frame: Optional[str] = None
+
+
 class WorldPresenceOut(BaseModel):
     userId: str
     username: str
     handle: Optional[str] = None
     avatarImageUrl: str = ""
     avatarUrl: Optional[str] = None
+    appearance: WorldAvatarAppearanceOut = Field(default_factory=WorldAvatarAppearanceOut)
     role: str = "user"
     district: str = "place"
     posX: int = 50
     posY: int = 50
     voiceEnabled: bool = False
+    voiceChannelId: str = "district:place"
+    privateVoicePartnerId: Optional[str] = None
+    pendingVoiceInviteFromUserId: Optional[str] = None
+    pendingVoiceInviteToUserId: Optional[str] = None
+    interactionKind: Optional[str] = None
+    interactionFromUserId: Optional[str] = None
+    interactionFromUsername: Optional[str] = None
+    interactionPartnerUserId: Optional[str] = None
+    interactionExpiresAt: Optional[str] = None
     lastSeenAt: str
+
+
+class WorldPrivateVoiceRequestIn(BaseModel):
+    targetUserId: str = Field(..., min_length=1, max_length=128)
+
+
+class WorldPrivateVoiceRespondIn(BaseModel):
+    requesterUserId: str = Field(..., min_length=1, max_length=128)
+    accept: bool = False
+
+
+class WorldInteractionSendIn(BaseModel):
+    targetUserId: str = Field(..., min_length=1, max_length=128)
+    kind: str = Field(
+        ...,
+        pattern=r"^(wave|heart|hug|applaud|dance|lueur)$",
+    )
 
 
 class GiftTransferOut(BaseModel):
@@ -509,7 +628,7 @@ class StreamerLeaderboardEntryOut(BaseModel):
     username: str
     handle: Optional[str] = None
     avatarImageUrl: str
-    totalSylvins: int
+    totalAureons: int
     creature: Optional[CreatureOut] = None
     role: str = "user"
     grade: Optional["StreamerGradeOut"] = None
@@ -525,4 +644,4 @@ class StreamerLeaderboardOut(BaseModel):
 class BFFEntryOut(BaseModel):
     streamer: StreamerMiniOut
     donor: StreamerMiniOut
-    totalSylvins: int
+    totalAureons: int

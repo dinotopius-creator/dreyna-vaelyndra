@@ -73,6 +73,50 @@ def _apply_migrations() -> None:
             # l'index partiel créé plus bas.
             ("handle", "TEXT"),
             ("handle_updated_at", "TEXT"),
+            ("bio", "TEXT NOT NULL DEFAULT ''"),
+        ],
+        "directmessage": [
+            # Persistance des pièces jointes (images, PDF) en base64 JSON.
+            # Avant : seul l'émetteur avait l'attachment (localStorage). Le
+            # destinataire voyait juste `📎 nom.jpeg` en texte.
+            ("attachments_json", "TEXT"),
+        ],
+        "worldpresence": [
+            ("voice_channel_id", "TEXT"),
+            ("private_voice_partner_id", "TEXT"),
+            ("voice_invite_from_user_id", "TEXT"),
+            ("voice_invite_to_user_id", "TEXT"),
+            ("voice_invite_created_at", "TEXT"),
+            ("interaction_kind", "TEXT"),
+            ("interaction_from_user_id", "TEXT"),
+            ("interaction_from_username", "TEXT"),
+            ("interaction_partner_user_id", "TEXT"),
+            ("interaction_expires_at", "TEXT"),
+            ("last_interaction_sent_at", "TEXT"),
+        ],
+        "comment": [
+            ("parent_id", "TEXT"),
+            ("reply_to_author_id", "TEXT"),
+            ("reply_to_author_name", "TEXT"),
+        ],
+        "post": [
+            ("post_type", "TEXT NOT NULL DEFAULT 'standard'"),
+            ("official_label", "TEXT"),
+            ("video_thumbnail_url", "TEXT"),
+        ],
+        "catalogproduct": [
+            ("lueurs", "INTEGER"),
+        ],
+        "stripepayment": [
+            ("lueurs_amount", "INTEGER NOT NULL DEFAULT 0"),
+        ],
+        "userfamiliar": [
+            ("cosmetic_inventory_json", "TEXT NOT NULL DEFAULT '[]'"),
+            ("cosmetic_equipped_json", "TEXT NOT NULL DEFAULT '{}'"),
+            ("food_stock", "INTEGER NOT NULL DEFAULT 0"),
+            ("affection_feedings", "INTEGER NOT NULL DEFAULT 0"),
+            ("affection_rewarded_hearts_json", "TEXT NOT NULL DEFAULT '[]'"),
+            ("enclosure_last_cleaned_at", "TEXT"),
         ],
     }
     with engine.begin() as conn:
@@ -119,6 +163,10 @@ def _apply_migrations() -> None:
             "CREATE UNIQUE INDEX IF NOT EXISTS communityreward_week_rank_unique "
             "ON communityactivityreward (week_start_iso, rank)"
         )
+        conn.exec_driver_sql(
+            "CREATE UNIQUE INDEX IF NOT EXISTS contestaward_contest_user_unique "
+            "ON contestawardledger (contest_id, user_id)"
+        )
         # Système de familiers (PR familiers#1).
         # Un seul familier actif par user — index partiel pour bloquer la
         # double activation au niveau SQL (en plus de la garde transaction).
@@ -135,13 +183,21 @@ def _apply_migrations() -> None:
             "CREATE UNIQUE INDEX IF NOT EXISTS worldpresence_world_user_unique "
             "ON worldpresence (world_id, user_id)"
         )
+        conn.exec_driver_sql(
+            "CREATE INDEX IF NOT EXISTS adminrequest_status_created "
+            "ON adminrequest (status, created_at)"
+        )
+        conn.exec_driver_sql(
+            "CREATE INDEX IF NOT EXISTS adminrequest_target_status "
+            "ON adminrequest (target_id, status)"
+        )
 
         # One-shot : reset du wallet de Dreyna (dé-Dreyna-isation du site).
         # Son compte devient un profil normal d'animatrice ; on purge les
-        # Sylvins/Lueurs qui ont pu être accumulés pendant la phase où elle
+        # Aureons/Eclats qui ont pu être accumulés pendant la phase où elle
         # avait un traitement spécial. Idempotent via PRAGMA user_version :
         # tant que la version < 1, on applique et on bump. Les éventuels
-        # Sylvins gagnés après le déploiement sont respectés.
+        # Aureons gagnés après le déploiement sont respectés.
         user_version = conn.exec_driver_sql(
             "PRAGMA user_version"
         ).fetchone()[0]

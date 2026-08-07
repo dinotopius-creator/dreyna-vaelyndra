@@ -9,7 +9,6 @@ import {
   AVATAR_3D_SKIN_TONES,
   buildAvatar3DPosterDataUrl,
   buildAvatar3DUrl,
-  decodeAvatar3DUrl,
   DEFAULT_AVATAR_3D_CONFIG,
   type Avatar3DConfig,
   type Avatar3DBodyType,
@@ -18,7 +17,6 @@ import {
 } from "../lib/avatar3d";
 
 interface Props {
-  initialAvatarUrl?: string | null;
   defaultSeed: string;
   onExport: (input: { avatarUrl: string; avatarImageUrl: string }) => void;
   onClose?: () => void;
@@ -39,6 +37,9 @@ const HAIR_STYLES: { id: Avatar3DHairStyle; label: string; note: string }[] = [
   { id: "bob", label: "Carré runique", note: "Coupe nette et magique" },
   { id: "fade", label: "Fade guerrier", note: "Style court et précis" },
   { id: "braids", label: "Tresses sacrées", note: "Deux tresses avant" },
+  { id: "ponytail", label: "Queue solaire", note: "Attache haute plus mobile" },
+  { id: "afro", label: "Couronne nuage", note: "Volume rond et assume" },
+  { id: "pixie", label: "Pixie lunaire", note: "Coupe courte et vive" },
 ];
 
 const BODY_TYPES: { id: Avatar3DBodyType; label: string }[] = [
@@ -76,7 +77,6 @@ function ColorSwatch({
 }
 
 export function AvatarEditor({
-  initialAvatarUrl,
   defaultSeed,
   onExport,
   onClose,
@@ -86,20 +86,18 @@ export function AvatarEditor({
   equippedOutfit3DId = null,
   equippedAccessory3DId = null,
 }: Props) {
-  const [config, setConfig] = useState<Avatar3DConfig>(() => {
-    const parsed = decodeAvatar3DUrl(initialAvatarUrl);
-    if (parsed) return parsed;
-    return {
-      ...DEFAULT_AVATAR_3D_CONFIG,
-      bodyType: defaultSeed.length % 2 === 0 ? "femme" : "homme",
-      hairStyle:
-        defaultSeed.length % 3 === 0
-          ? "braids"
-          : defaultSeed.length % 3 === 1
-            ? "wave"
+  const [config, setConfig] = useState<Avatar3DConfig>(() => ({
+    ...DEFAULT_AVATAR_3D_CONFIG,
+    bodyType: defaultSeed.length % 2 === 0 ? "femme" : "homme",
+    hairStyle:
+      defaultSeed.length % 3 === 0
+        ? "braids"
+        : defaultSeed.length % 3 === 1
+          ? "wave"
+          : defaultSeed.length % 5 === 0
+            ? "ponytail"
             : "bob",
-    };
-  });
+  }));
 
   function update<K extends keyof Avatar3DConfig>(
     key: K,
@@ -125,14 +123,15 @@ export function AvatarEditor({
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
-            ✦ Studio avatar 3D
+            ✦ Studio avatar humanoïde
           </p>
           <h3 className="mt-1 font-display text-2xl text-gold-200">
-            Sculptez votre présence
+            Sculptez votre présence premium
           </h3>
           <p className="mt-1 max-w-2xl text-sm text-ivory/60">
             Avatar debout, rotation à 360°, rendu live et profil unifié. Les
-            tenues et accessoires 3D de la boutique se greffent ensuite dessus.
+            tenues et accessoires 3D de la boutique se greffent ensuite sur une
+            base humanoïde plus expressive et mieux proportionnée.
           </p>
         </div>
         {onClose && (

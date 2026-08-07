@@ -5,7 +5,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
 import { SectionHeading } from "../components/SectionHeading";
 import { formatPrice, generateId } from "../lib/helpers";
-import { apiCreateSylvinsCheckout } from "../lib/stripeApi";
+import { apiCreateCurrencyCheckout } from "../lib/stripeApi";
 import { useState } from "react";
 
 export function Cart() {
@@ -21,23 +21,29 @@ export function Cart() {
   });
 
   /**
-   * Packs de Sylvins dans le panier (paiement réel via Stripe).
+   * Packs de monnaie dans le panier (paiement réel via Stripe).
    * Les autres catégories (Merch, Digital, VIP, Exclusif) restent sur le
    * chemin historique "sceller la commande en simulé" le temps qu'on
    * bâtisse un flux multi-line-item côté Stripe.
    */
-  const sylvinsInCart = cart.filter((c) => {
+  const currencyPacksInCart = cart.filter((c) => {
     const p = products.find((pp) => pp.id === c.productId);
-    return p?.category === "Sylvins" && (p?.sylvins ?? 0) > 0;
+    return (
+      (p?.category === "Aureons" && (p?.sylvins ?? 0) > 0) ||
+      (p?.category === "Eclats" && (p?.lueurs ?? 0) > 0)
+    );
   });
   const otherInCart = cart.filter((c) => {
     const p = products.find((pp) => pp.id === c.productId);
-    return !(p?.category === "Sylvins");
+    return !(
+      (p?.category === "Aureons" && (p?.sylvins ?? 0) > 0) ||
+      (p?.category === "Eclats" && (p?.lueurs ?? 0) > 0)
+    );
   });
 
-  async function checkoutStripeSylvinsSingle(productId: string) {
+  async function checkoutStripeCurrencySingle(productId: string) {
     try {
-      const out = await apiCreateSylvinsCheckout(productId);
+      const out = await apiCreateCurrencyCheckout(productId);
       // Redirection complete vers Stripe Checkout (Stripe-hosted).
       window.location.href = out.url;
     } catch (err: unknown) {
@@ -54,53 +60,53 @@ export function Cart() {
       return;
     }
 
-    // Si le panier contient au moins un pack Sylvins, on passe par Stripe.
-    // MVP : un seul pack Sylvins à la fois (le plus coûteux si plusieurs).
+    // Si le panier contient au moins un pack de monnaie, on passe par Stripe.
+    // MVP : un seul pack à la fois (le plus coûteux si plusieurs).
     // Les autres items restent en panier après le retour du paiement.
-    if (sylvinsInCart.length > 0) {
+    if (currencyPacksInCart.length > 0) {
       // On redirige sur le pack le plus cher du panier (l'utilisateur
       // peut virer les autres s'il ne veut pas celui-là).
-      const firstSylvin = [...sylvinsInCart].sort((a, b) => {
+      const firstPack = [...currencyPacksInCart].sort((a, b) => {
         const pa = products.find((pp) => pp.id === a.productId);
         const pb = products.find((pp) => pp.id === b.productId);
         return (pb?.price ?? 0) - (pa?.price ?? 0);
       })[0];
       // On avertit dans 3 cas où le montant facturé par Stripe sera
       // inférieur au total affiché dans le panier :
-      //  1) Il y a AUSSI des items non-Sylvins (ils ne partiront pas
+      //  1) Il y a AUSSI des items non-Aureons (ils ne partiront pas
       //     sur Stripe → restent en panier après paiement).
-      //  2) Il y a plusieurs packs Sylvins différents (on n'en
+      //  2) Il y a plusieurs packs Aureons différents (on n'en
       //     encaisse qu'un, le plus cher).
-      //  3) Un seul pack Sylvins mais avec une quantité > 1 : le
+      //  3) Un seul pack de monnaie mais avec une quantité > 1 : le
       //     backend force `quantity: 1` dans la session Stripe (cf.
       //     `backend/app/routers/stripe_router.py` "quantity": 1) → on
       //     ne facture qu'une unité. L'utilisateur doit le savoir.
-      const firstSylvinQty = firstSylvin?.quantity ?? 1;
+      const firstPackQty = firstPack?.quantity ?? 1;
       const needsWarning =
         otherInCart.length > 0 ||
-        sylvinsInCart.length > 1 ||
-        firstSylvinQty > 1;
+        currencyPacksInCart.length > 1 ||
+        firstPackQty > 1;
       if (needsWarning) {
         notify(
-          "Stripe ne gère pour l'instant qu'un pack Sylvins (qté 1) à la fois. " +
+          "Stripe ne gère pour l'instant qu'un pack de monnaie (qté 1) à la fois. " +
             "Le reste du panier (autres packs, quantités > 1, autres objets) " +
             "restera dans ton panier après le paiement.",
           "info",
         );
       }
       setProcessing(true);
-      await checkoutStripeSylvinsSingle(firstSylvin.productId);
+      await checkoutStripeCurrencySingle(firstPack.productId);
       return;
     }
 
     setProcessing(true);
     setTimeout(() => {
-      // Total des Sylvins à créditer au wallet du membre pour les packs de
+      // Total des Aureons à créditer au wallet du membre pour les packs de
       // monnaie virtuelle présents dans le panier.
       let sylvinsGained = 0;
       for (const c of cart) {
         const prod = products.find((p) => p.id === c.productId);
-        if (prod?.category === "Sylvins" && prod.sylvins) {
+        if (prod?.category === "Aureons" && prod.sylvins) {
           sylvinsGained += prod.sylvins * c.quantity;
         }
       }
@@ -122,14 +128,14 @@ export function Cart() {
       });
       if (sylvinsGained > 0) {
         dispatch({
-          type: "creditSylvins",
+          type: "creditAureons",
           userId: user.id,
           amount: sylvinsGained,
         });
       }
       notify(
         sylvinsGained > 0
-          ? `✨ Commande scellée — ${sylvinsGained.toLocaleString("fr-FR")} Sylvins crédités !`
+          ? `✨ Commande scellée — ${sylvinsGained.toLocaleString("fr-FR")} Aureons crédités !`
           : "✨ Paiement simulé — votre commande est scellée !",
       );
       setProcessing(false);
@@ -137,7 +143,7 @@ export function Cart() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-16">
+    <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 sm:py-16">
       <SectionHeading
         eyebrow="Votre panier royal"
         title={<>Objets sacrés à emporter</>}
@@ -161,12 +167,12 @@ export function Cart() {
               !l.product ? null : (
                 <li
                   key={l.productId}
-                  className="card-royal flex gap-4 overflow-hidden p-4"
+                  className="card-royal flex flex-col gap-4 overflow-hidden p-4 sm:flex-row"
                 >
                   <img
                     src={l.product.image}
                     alt={l.product.name}
-                    className="h-28 w-28 rounded-xl object-cover"
+                    className="h-48 w-full rounded-xl object-cover sm:h-28 sm:w-28"
                   />
                   <div className="flex flex-1 flex-col">
                     <div className="flex items-start justify-between gap-4">
@@ -190,7 +196,7 @@ export function Cart() {
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
-                    <div className="mt-auto flex items-center justify-between pt-4">
+                    <div className="mt-auto flex flex-col items-start gap-3 pt-4 sm:flex-row sm:items-center sm:justify-between">
                       <div className="inline-flex items-center gap-2 rounded-full border border-royal-500/30 px-2 py-1">
                         <button
                           onClick={() =>
@@ -230,7 +236,7 @@ export function Cart() {
             )}
           </ul>
 
-          <aside className="card-royal h-fit p-6">
+          <aside className="card-royal h-fit p-6 lg:sticky lg:top-24">
             <h3 className="font-display text-xl text-gold-200">Récapitulatif</h3>
             <div className="mt-4 space-y-2 text-sm text-ivory/75">
               <div className="flex justify-between">
@@ -253,13 +259,13 @@ export function Cart() {
             >
               {processing
                 ? "Sortilège en cours..."
-                : sylvinsInCart.length > 0
+                : currencyPacksInCart.length > 0
                   ? "Payer par carte (Stripe)"
                   : "Payer (simulé)"}
             </button>
             <p className="mt-3 text-center text-xs text-ivory/40">
-              {sylvinsInCart.length > 0
-                ? "Paiement sécurisé via Stripe. Les Sylvins sont crédités sur ton compte après confirmation."
+              {currencyPacksInCart.length > 0
+                ? "Paiement sécurisé via Stripe. Les Eclats ou Aureons sont crédités sur ton compte après confirmation."
                 : "Paiement simulé. Prêt à brancher Stripe en production."}
             </p>
           </aside>

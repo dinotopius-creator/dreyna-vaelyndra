@@ -44,8 +44,32 @@ export interface FamiliarCatalogItem {
   color: string;
   tagline: string;
   description: string;
-  priceSylvins: number;
+  priceAureons: number;
   baseStats: Record<string, number>;
+}
+
+export type FamiliarCosmeticSlot =
+  | "color"
+  | "face"
+  | "hair"
+  | "accessory"
+  | "frame"
+  | "effect";
+
+export type FamiliarCosmeticCurrency = "free" | "lueurs" | "sylvins";
+
+export interface FamiliarCosmeticCatalogItem {
+  id: string;
+  slot: FamiliarCosmeticSlot;
+  name: string;
+  description: string;
+  rarity: string;
+  currency: FamiliarCosmeticCurrency;
+  price: number;
+  icon: string;
+  color: string;
+  accent: string;
+  compatibleFamiliars: string[] | null;
 }
 
 export interface OwnedFamiliar {
@@ -66,6 +90,20 @@ export interface OwnedFamiliar {
   stats: Record<string, number>;
   acquiredAt: string;
   lastActiveAt: string | null;
+  cosmeticInventory: string[];
+  cosmeticEquipped: Partial<Record<FamiliarCosmeticSlot, string>>;
+  cosmetics: Partial<Record<FamiliarCosmeticSlot, FamiliarCosmeticCatalogItem>>;
+  foodStock: number;
+  affectionFeedings: number;
+  affectionHearts: number;
+  affectionMealsIntoHeart: number;
+  affectionMealsForNextHeart: number;
+  affectionMealsUntilNextHeart: number;
+  affectionRewardedHearts: number[];
+  heartRequirements: number[];
+  heartRewards: number[];
+  enclosureLastCleanedAt: string | null;
+  enclosureCooldownRemainingSeconds: number;
 }
 
 export interface FamiliarCollection {
@@ -76,11 +114,19 @@ export interface FamiliarCollection {
   owned: OwnedFamiliar[];
   switchCount: number;
   nextSwitchFree: boolean;
-  switchPriceSylvins: number;
+  switchPriceAureons: number;
 }
 
 export async function fetchFamiliarsCatalog(): Promise<FamiliarCatalogItem[]> {
   return familiarRequest<FamiliarCatalogItem[]>("/familiers/catalog");
+}
+
+export async function fetchFamiliarCosmeticsCatalog(): Promise<
+  FamiliarCosmeticCatalogItem[]
+> {
+  return familiarRequest<FamiliarCosmeticCatalogItem[]>(
+    "/familiers/cosmetics/catalog",
+  );
 }
 
 export async function fetchUserFamiliars(
@@ -88,6 +134,47 @@ export async function fetchUserFamiliars(
 ): Promise<FamiliarCollection> {
   return familiarRequest<FamiliarCollection>(
     `/users/${encodeURIComponent(userId)}/familiers`,
+  );
+}
+
+export interface FamiliarAffectionState {
+  foodStock: number;
+  affectionFeedings: number;
+  affectionHearts: number;
+  affectionMealsIntoHeart: number;
+  affectionMealsForNextHeart: number;
+  affectionMealsUntilNextHeart: number;
+  affectionRewardedHearts: number[];
+  heartRequirements: number[];
+  heartRewards: number[];
+}
+
+export interface FamiliarEnclosureActionResult {
+  familiar: OwnedFamiliar;
+  affection: FamiliarAffectionState;
+  foodFound: number;
+  heartGained: number | null;
+  lueursRewarded: number;
+  profileEclats: number;
+  cooldownRemainingSeconds: number;
+  message: string;
+}
+
+export async function cleanFamiliarEnclosure(
+  userId: string,
+): Promise<FamiliarEnclosureActionResult> {
+  return familiarRequest<FamiliarEnclosureActionResult>(
+    `/users/${encodeURIComponent(userId)}/familiers/enclosure/clean`,
+    { method: "POST" },
+  );
+}
+
+export async function feedActiveFamiliar(
+  userId: string,
+): Promise<FamiliarEnclosureActionResult> {
+  return familiarRequest<FamiliarEnclosureActionResult>(
+    `/users/${encodeURIComponent(userId)}/familiers/enclosure/feed`,
+    { method: "POST" },
   );
 }
 
@@ -123,12 +210,74 @@ export async function switchFamiliar(
 
 export async function setFamiliarNickname(
   userId: string,
-  familiarUserId: number,
+  // L'ancien `familiarUserId` n'est plus utilisé : le backend met à jour
+  // automatiquement le familier actif du user. On garde la signature
+  // (avec le param ignoré) pour ne pas casser les anciens appelants.
+  _familiarUserId: number,
   nickname: string | null,
-): Promise<OwnedFamiliar> {
-  return familiarRequest<OwnedFamiliar>(
-    `/users/${encodeURIComponent(userId)}/familiers/${familiarUserId}/nickname`,
+): Promise<FamiliarCollection> {
+  return familiarRequest<FamiliarCollection>(
+    `/users/${encodeURIComponent(userId)}/familiers/nickname`,
     { method: "POST", body: JSON.stringify({ nickname }) },
+  );
+}
+
+export async function buyFamiliarCosmetic(
+  userId: string,
+  cosmeticId: string,
+): Promise<FamiliarCollection> {
+  return familiarRequest<FamiliarCollection>(
+    `/users/${encodeURIComponent(userId)}/familiers/cosmetics/buy`,
+    { method: "POST", body: JSON.stringify({ cosmeticId }) },
+  );
+}
+
+export async function equipFamiliarCosmetic(
+  userId: string,
+  slot: FamiliarCosmeticSlot,
+  cosmeticId: string | null,
+): Promise<FamiliarCollection> {
+  return familiarRequest<FamiliarCollection>(
+    `/users/${encodeURIComponent(userId)}/familiers/cosmetics/equip`,
+    { method: "POST", body: JSON.stringify({ slot, cosmeticId }) },
+  );
+}
+
+export interface FamiliarGiftResult {
+  xpGranted: number;
+  newLevel: number;
+  newXp: number;
+  familiarName: string;
+  familiarIcon: string;
+}
+
+export async function giftFamiliar(
+  targetUserId: string,
+  senderId: string,
+  amount: number,
+): Promise<FamiliarGiftResult> {
+  return familiarRequest<FamiliarGiftResult>(
+    `/users/${encodeURIComponent(targetUserId)}/familiers/gift`,
+    { method: "POST", body: JSON.stringify({ senderId, amount }) },
+  );
+}
+
+/** Une offrande Aureons reçue par le familier de l'utilisateur courant. */
+export interface ReceivedFamiliarGift {
+  id: number;
+  senderId: string;
+  senderName: string;
+  senderAvatar: string;
+  amount: number;
+  xpGranted: number;
+  createdAt: string;
+}
+
+export async function fetchReceivedFamiliarGifts(
+  userId: string,
+): Promise<ReceivedFamiliarGift[]> {
+  return familiarRequest<ReceivedFamiliarGift[]>(
+    `/users/${encodeURIComponent(userId)}/familiers/gifts/received`,
   );
 }
 
@@ -159,9 +308,9 @@ export const STAT_LABELS: Record<
     help: "Pendant tes lives, ton familier réagit plus fort aux cadeaux et aux cœurs (sauts, particules, glow). L'écran du live est plus vivant pour tes viewers.",
   },
   harvest: {
-    label: "Récolte de Lueurs",
+    label: "Récolte de Eclats",
     emoji: "🌙",
-    help: "Mini bonus pourcentuel sur ta moisson quotidienne de Lueurs (le daily-claim). Plus la stat est haute, plus tu grattes de Lueurs par jour.",
+    help: "Mini bonus pourcentuel sur ta moisson quotidienne de Eclats (le daily-claim). Plus la stat est haute, plus tu grattes de Eclats par jour.",
   },
   affinity: {
     label: "Affinité Sylvaine",

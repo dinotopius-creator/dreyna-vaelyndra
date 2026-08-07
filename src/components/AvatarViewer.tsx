@@ -21,12 +21,11 @@ import {
 import clsx from "clsx";
 import { isFlatImageUrl } from "../lib/dicebear";
 import { CATALOG_BY_ID, type SceneId } from "../lib/avatarShop";
-import { decodeAvatar3DUrl, isAvatar3DUrl } from "../lib/avatar3d";
 import {
-  Avatar3DModel,
-  type AccessoryTheme,
-  type OutfitTheme,
-} from "./Avatar3DModel";
+  buildAvatar3DPosterDataUrl,
+  decodeAvatar3DUrl,
+  isAvatar3DUrl,
+} from "../lib/avatar3d";
 
 /**
  * `<model-viewer>` est un web component chargé dynamiquement via CDN : on
@@ -126,6 +125,7 @@ interface Props {
   equippedSceneId?: string | null;
   equippedOutfit3DId?: string | null;
   equippedAccessory3DId?: string | null;
+  interactive?: boolean;
 }
 
 function FrameOverlay({ itemId }: { itemId: string }) {
@@ -160,6 +160,22 @@ const SCENE_STYLES: Record<SceneId, string> = {
     "avatar-scene avatar-scene--aurora bg-[linear-gradient(125deg,#312e81_0%,#166534_35%,#a21caf_60%,#1e1b4b_100%)]",
   flames:
     "avatar-scene avatar-scene--flames bg-[radial-gradient(ellipse_at_50%_90%,#60a5fa_0%,#2563eb_40%,#1e1b4b_80%)]",
+  "rose-dawn":
+    "avatar-scene bg-[radial-gradient(ellipse_at_50%_78%,#fde68a_0%,transparent_42%),linear-gradient(180deg,#f9a8d4_0%,#fb7185_38%,#7c2d12_100%)]",
+  "jade-temple":
+    "avatar-scene bg-[radial-gradient(ellipse_at_50%_30%,#a7f3d0_0%,transparent_36%),linear-gradient(160deg,#064e3b_0%,#166534_45%,#0f172a_100%)]",
+  "midnight-court":
+    "avatar-scene bg-[radial-gradient(ellipse_at_50%_24%,#fef3c7_0%,transparent_30%),linear-gradient(140deg,#111827_0%,#312e81_45%,#4c1d95_100%)]",
+  "moon-garden":
+    "avatar-scene bg-[radial-gradient(ellipse_at_50%_18%,#e0e7ff_0%,transparent_24%),radial-gradient(ellipse_at_35%_78%,#86efac_0%,transparent_34%),linear-gradient(180deg,#172554_0%,#312e81_48%,#052e16_100%)]",
+  "crystal-studio":
+    "avatar-scene bg-[radial-gradient(ellipse_at_30%_20%,#bae6fd_0%,transparent_34%),radial-gradient(ellipse_at_76%_72%,#f0abfc_0%,transparent_32%),linear-gradient(135deg,#0f172a_0%,#164e63_52%,#581c87_100%)]",
+  "throne-light":
+    "avatar-scene bg-[radial-gradient(ellipse_at_50%_16%,#fef3c7_0%,transparent_34%),linear-gradient(160deg,#451a03_0%,#92400e_48%,#111827_100%)]",
+  "starlit-balcony":
+    "avatar-scene bg-[radial-gradient(ellipse_at_20%_22%,#f8fafc_0%,transparent_10%),radial-gradient(ellipse_at_72%_34%,#c4b5fd_0%,transparent_18%),linear-gradient(180deg,#020617_0%,#1e1b4b_58%,#111827_100%)]",
+  "neon-arcade":
+    "avatar-scene bg-[radial-gradient(ellipse_at_25%_30%,#22d3ee_0%,transparent_35%),radial-gradient(ellipse_at_78%_64%,#fb7185_0%,transparent_32%),linear-gradient(135deg,#020617_0%,#1e1b4b_45%,#0f172a_100%)]",
 };
 
 function SceneBackground({ sceneId }: { sceneId: string }) {
@@ -180,6 +196,7 @@ export function AvatarViewer({
   equippedSceneId,
   equippedOutfit3DId,
   equippedAccessory3DId,
+  interactive = true,
 }: Props) {
   const sceneItem = equippedSceneId ? CATALOG_BY_ID[equippedSceneId] : null;
   const sceneId = sceneItem?.sceneId ?? null;
@@ -215,21 +232,25 @@ export function AvatarViewer({
 
   // Cadrage caméra : RPM exporte un humain debout, on recule et on remonte
   // la cible pour zoomer sur le buste sur le profil.
-  const cameraOrbit = framing === "face" ? "0deg 80deg 1.7m" : "0deg 90deg 3m";
+  const cameraOrbit = framing === "face" ? "0deg 84deg 1.95m" : "0deg 90deg 2.65m";
 
   // Cas principal depuis le retrait de RPM : avatars 2D (SVG DiceBear,
   // PNG, JPG). On rend directement avec un <img> — pas besoin du CE 3D.
   const flat = isFlatImageUrl(src);
   const avatar3dConfig = decodeAvatar3DUrl(src);
-  const outfitTheme =
-    equippedOutfit3DId && CATALOG_BY_ID[equippedOutfit3DId]?.wearableThemeId
-      ? (CATALOG_BY_ID[equippedOutfit3DId]!.wearableThemeId as OutfitTheme)
-      : "base";
-  const accessoryTheme =
-    equippedAccessory3DId && CATALOG_BY_ID[equippedAccessory3DId]?.wearableThemeId
-      ? (CATALOG_BY_ID[equippedAccessory3DId]!.wearableThemeId as AccessoryTheme)
-      : null;
-  if (avatar3dConfig) {
+  const renderConfig = avatar3dConfig
+    ? {
+        ...avatar3dConfig,
+        system: "premium-v2" as const,
+        baseModel: "humanoid-v4" as const,
+      }
+    : null;
+  void equippedOutfit3DId;
+  void equippedAccessory3DId;
+  void autoRotate;
+  void framing;
+  void interactive;
+  if (renderConfig) {
     return (
       <div
         className={clsx(
@@ -239,17 +260,16 @@ export function AvatarViewer({
         )}
       >
         {sceneId && <SceneBackground sceneId={sceneId} />}
-        <Avatar3DModel
-          config={avatar3dConfig}
-          size={size}
-          framing={framing}
-          autoRotate={autoRotate}
-          outfit={outfitTheme}
-          accessory={accessoryTheme}
+        <img
+          src={buildAvatar3DPosterDataUrl(renderConfig)}
+          alt={alt}
           className={clsx(
-            sceneId &&
-              "absolute left-1/2 top-1/2 h-[82%] w-[82%] -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-gold-400/60 shadow-[0_0_18px_rgba(250,204,21,0.35)]",
+            "object-cover",
+            sceneId
+              ? "absolute left-1/2 top-1/2 h-[82%] w-[82%] -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-gold-400/60 shadow-[0_0_18px_rgba(250,204,21,0.35)]"
+              : "relative h-full w-full",
           )}
+          draggable={false}
         />
         {equippedFrameId && <FrameOverlay itemId={equippedFrameId} />}
       </div>
@@ -270,12 +290,7 @@ export function AvatarViewer({
           alt={alt}
           className={clsx(
             "object-cover",
-            sceneId
-              ? // En présence d'une scène, l'avatar devient un médaillon
-                // centré et arrondi : la scène joue le rôle de halo illustré
-                // tout autour. Un ring doré souligne le médaillon.
-                "absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[82%] w-[82%] rounded-full ring-2 ring-gold-400/60 shadow-[0_0_18px_rgba(250,204,21,0.35)]"
-              : "relative h-full w-full",
+            sceneId ? "relative h-full w-full rounded-2xl" : "relative h-full w-full",
           )}
           draggable={false}
         />
@@ -327,7 +342,7 @@ export function AvatarViewer({
         src={src}
         alt={alt}
         poster={fallbackImage ?? undefined}
-        camera-controls
+        camera-controls={interactive ? true : undefined}
         auto-rotate={autoRotate ? "" : undefined}
         auto-rotate-delay="1500"
         shadow-intensity="1"

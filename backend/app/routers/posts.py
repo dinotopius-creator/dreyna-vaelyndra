@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Dict, List
 from urllib.parse import urlparse
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from sqlmodel import Session, select
 
 # Ensemble des identifiants autorisés à modérer n'importe quel contenu du fil
@@ -23,13 +23,19 @@ _QUEEN_IDS = {
 
 from ..db import get_session  # noqa: E402
 from ..familiars_xp import grant_social_xp  # noqa: E402
+from ..media_storage import COMMUNITY_DIR, build_media_url  # noqa: E402
 from ..models import (  # noqa: E402
     Comment,
+    CommentLike,
     CommunityActivityReward,
+    ContestAwardLedger,
     Post,
     Reaction,
+    WalletLedger,
+    UserFamiliar,
     UserProfile,
 )
+from ..ranking_eligibility import is_public_ranking_member  # noqa: E402
 from ..schemas import (  # noqa: E402
     CommentCreate,
     CommunityActivityEntryOut,
@@ -37,18 +43,33 @@ from ..schemas import (  # noqa: E402
     CommentOut,
     CommunityActivityRewardOut,
     CommunityActivityRewardSyncOut,
+    DrawingContestEntryOut,
+    DrawingContestSettlementOut,
+    DrawingContestStatusOut,
     PostCreate,
+    PostImageUploadOut,
     PostOut,
+    PostUpdate,
     ReactionToggle,
 )
+from .users import _grade_out  # noqa: E402
+from .familiars import _active_row  # noqa: E402
 
 
 # PR M — XP offert à l'auteur quand son post est publié. Volontairement bas
 # (10 XP = 10 % d'un palier de base) pour éviter qu'un spam de posts vides
 # ne propulse un compte dans les grades supérieurs. Le gros du XP vient des
-# Sylvins reçus (=engagement) et des nouveaux liens d'âme.
+# Aureons reçus (=engagement) et des nouveaux liens d'âme.
 XP_PER_POST = 10
 COMMUNITY_REWARD_BY_RANK = {1: 600, 2: 450, 3: 300}
+DRAWING_CONTEST = {
+    "contest_id": "drawing-contest-2026-06",
+    "hashtag": "concoursdessin",
+    "starts_at": datetime(2026, 6, 18, tzinfo=UTC),
+    "ends_at": datetime(2026, 6, 19, tzinfo=UTC),
+    "reward_lueurs": 1000,
+    "reward_food": 6,
+}
 MOCK_COMMUNITY_USER_IDS = {
     "user-lyria",
     "user-caelum",
@@ -56,32 +77,6 @@ MOCK_COMMUNITY_USER_IDS = {
     "user-aeris",
     "user-sylas",
     "user-thalia",
-}
-# Rôles à exclure du classement communauté (Top 5 les plus actifs).
-# Un utilisateur avec un rôle staff ou supérieur ne doit jamais apparaître
-# dans le Top 5 communauté, même s'il a beaucoup posté/commenté.
-STAFF_ROLES = {
-    "architect",
-    "architecte",
-    "developer",
-    "dev",
-    "dev_platform",
-    "platform_developer",
-    "super_admin",
-    "owner",
-    "founder",
-    "admin",
-    "administrator",
-    "administrateur",
-    "administratrice",
-    "moderator",
-    "modérateur",
-    "staff",
-    "support",
-    "internal",
-    "manager",
-    "operator",
-    "animator",
 }
 _UNSUPPORTED_IMAGE_PAGE_HOSTS = {
     "instagram.com",
@@ -92,6 +87,20 @@ _UNSUPPORTED_IMAGE_PAGE_HOSTS = {
     "x.com",
     "facebook.com",
 }
+_COMMUNITY_IMAGE_CONTENT_TYPES = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+}
+_COMMUNITY_VIDEO_CONTENT_TYPES = {
+    "video/mp4": ".mp4",
+    "video/webm": ".webm",
+    "video/quicktime": ".mov",
+    "video/ogg": ".ogg",
+}
+_MAX_COMMUNITY_IMAGE_BYTES = 8 * 1024 * 1024
+_MAX_COMMUNITY_VIDEO_BYTES = 60 * 1024 * 1024
 
 
 def _is_queen(user_id: str) -> bool:
@@ -103,7 +112,7 @@ def _is_queen(user_id: str) -> bool:
 # posts/commentaires d'autres utilisateurs). `queen` est conservé pour la
 # rétro-compatibilité avec les comptes seedés avant PR R ; `admin` est le
 # rôle actuel dans le panneau d'administration.
-_MOD_ROLES = {"admin", "queen"}
+_MOD_ROLES = {"architect", "admin", "queen"}
 
 
 def _is_moderator(session: Session, user_id: str) -> bool:
@@ -127,6 +136,88 @@ def _session_dep():
 
 def _generate_id(prefix: str) -> str:
     return f"{prefix}-{uuid.uuid4().hex[:12]}"
+
+
+def _normalize_hashtag(raw: str) -> str:
+    value = raw.strip().lower().replace("#", "")
+    replacements = {
+        "ç": "c",
+        "à": "a",
+        "â": "a",
+        "ä": "a",
+        "é": "e",
+        "è": "e",
+        "ê": "e",
+        "ë": "e",
+        "î": "i",
+        "ï": "i",
+        "ô": "o",
+        "ö": "o",
+        "ù": "u",
+        "û": "u",
+        "ü": "u",
+        "ñ": "n",
+    }
+    for src, dst in replacements.items():
+        value = value.replace(src, dst)
+    return "".join(ch for ch in value if ch.isalnum() or ch == "_")
+
+
+def _extract_hashtags(content: str) -> list[str]:
+    import re
+
+    tags: list[str] = []
+    for match in re.finditer(
+        r"(^|[^A-Za-z0-9_])#([A-Za-z0-9_À-ÖØ-öø-ÿ-]{2,80})", content or "",
+    ):
+        slug = _normalize_hashtag(match.group(2) or "")
+        if slug and slug not in tags:
+            tags.append(slug)
+    return tags
+
+
+def _contest_like_count(post: Post) -> int:
+    unique: set[str] = set()
+    for ids in post.reactions.values():
+        for user_id in ids:
+            if user_id:
+                unique.add(user_id)
+    return len(unique)
+
+
+def _is_drawing_contest_entry(post: Post) -> bool:
+    created = _parse_iso(post.created_at)
+    if created is None:
+        return False
+    if not post.image_url:
+        return False
+    if created < DRAWING_CONTEST["starts_at"] or created >= DRAWING_CONTEST["ends_at"]:
+        return False
+    return DRAWING_CONTEST["hashtag"] in _extract_hashtags(post.content or "")
+
+
+def _serialize_contest_entry(
+    post: Post,
+    likes: int,
+    rank: int,
+    eligible: bool,
+    author_handle: str | None = None,
+    author_grade: object | None = None,
+) -> DrawingContestEntryOut:
+    return DrawingContestEntryOut(
+        id=post.id,
+        authorId=post.author_id,
+        authorName=post.author_name,
+        authorHandle=author_handle,
+        authorGrade=author_grade,
+        authorAvatar=post.author_avatar,
+        content=post.content,
+        imageUrl=post.image_url,
+        createdAt=post.created_at,
+        likeCount=likes,
+        participantRank=rank,
+        eligible=eligible,
+    )
 
 
 def _sanitize_avatar(raw: str) -> str:
@@ -164,7 +255,7 @@ def _sanitize_post_image_url(raw: str | None) -> str | None:
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         raise HTTPException(
             status_code=422,
-            detail="image_url doit etre une URL http(s) d'image valide.",
+            detail="image_url doit être une URL http(s) d'image valide.",
         )
 
     hostname = parsed.netloc.lower()
@@ -174,11 +265,17 @@ def _sanitize_post_image_url(raw: str | None) -> str | None:
         raise HTTPException(
             status_code=422,
             detail=(
-                "image_url doit etre une image directe, pas un lien de post "
+                "image_url doit être une image directe, pas un lien de post "
                 "Instagram/TikTok/YouTube."
             ),
         )
     return value
+
+
+def _build_uploaded_media_url(request: Request, filename: str) -> str:
+    # build_media_url force le schéma HTTPS en prod (le proxy Fly parle HTTP à
+    # l'app, donc request.url_for renverrait un http:// bloqué en mixed-content).
+    return build_media_url(request, f"community/{filename}")
 
 
 def _parse_iso(raw: str | None) -> datetime | None:
@@ -200,31 +297,38 @@ def _week_start(date: datetime | None = None) -> datetime:
     )
 
 
+def _is_community_ranking_eligible(profile: UserProfile) -> bool:
+    """Le Top 5 communauté est réservé aux membres sans permissions staff."""
+    return (
+        profile.id not in MOCK_COMMUNITY_USER_IDS
+        and is_public_ranking_member(profile)
+    )
+
+
 def _serialize_reward(row: CommunityActivityReward) -> CommunityActivityRewardOut:
     return CommunityActivityRewardOut(
         weekStartIso=row.week_start_iso,
         userId=row.user_id,
         rank=row.rank,
-        rewardLueurs=row.reward_lueurs,
+        rewardEclats=row.reward_lueurs,
         awardedAt=row.awarded_at,
     )
 
 
 def _community_activity_rows(
     session: Session,
-    week_start: datetime,
+    week_start: datetime | None,
 ) -> list[dict]:
-    week_end = week_start + timedelta(days=7)
-    week_start_iso = week_start.isoformat()
-    week_end_iso = week_end.isoformat()
+    week_start_iso = ""
+    week_end_iso = ""
+    if week_start is not None:
+        week_end = week_start + timedelta(days=7)
+        week_start_iso = week_start.isoformat()
+        week_end_iso = week_end.isoformat()
     profiles = {
         p.id: p
         for p in session.exec(select(UserProfile)).all()
-        if (
-            p.id not in MOCK_COMMUNITY_USER_IDS
-            and p.banned_at is None
-            and (p.role or "user").lower() not in STAFF_ROLES
-        )
+        if _is_community_ranking_eligible(p)
     }
 
     stats: dict[str, dict] = {}
@@ -241,6 +345,7 @@ def _community_activity_rows(
                 "id": user_id,
                 "username": (profile.username if profile else "") or username or user_id,
                 "handle": profile.handle if profile else None,
+                "grade": _grade_out(profile) if profile else None,
                 "avatarImageUrl": (profile.avatar_image_url if profile else "") or avatar,
                 "postCount": 0,
                 "commentCount": 0,
@@ -253,6 +358,7 @@ def _community_activity_rows(
             if profile is not None:
                 current["username"] = profile.username or current["username"]
                 current["handle"] = profile.handle or current["handle"]
+                current["grade"] = _grade_out(profile)
                 current["avatarImageUrl"] = (
                     profile.avatar_image_url or current["avatarImageUrl"]
                 )
@@ -262,12 +368,12 @@ def _community_activity_rows(
                 current["avatarImageUrl"] = avatar
         return current
 
-    posts = session.exec(
-        select(Post)
-        .where(Post.created_at >= week_start_iso)
-        .where(Post.created_at < week_end_iso)
-        .order_by(Post.created_at.desc())
-    ).all()
+    post_stmt = select(Post).order_by(Post.created_at.desc())
+    if week_start is not None:
+        post_stmt = post_stmt.where(Post.created_at >= week_start_iso).where(
+            Post.created_at < week_end_iso
+        )
+    posts = session.exec(post_stmt).all()
     for post in posts:
         member = ensure_member(post.author_id, post.author_name, post.author_avatar)
         if member is None:
@@ -279,11 +385,12 @@ def _community_activity_rows(
                 member["latestActivity"], created_at.isoformat()
             )
 
-    comments = session.exec(
-        select(Comment)
-        .where(Comment.created_at >= week_start_iso)
-        .where(Comment.created_at < week_end_iso)
-    ).all()
+    comment_stmt = select(Comment)
+    if week_start is not None:
+        comment_stmt = comment_stmt.where(Comment.created_at >= week_start_iso).where(
+            Comment.created_at < week_end_iso
+        )
+    comments = session.exec(comment_stmt).all()
     for comment in comments:
         member = ensure_member(
             comment.author_id, comment.author_name, comment.author_avatar
@@ -297,11 +404,12 @@ def _community_activity_rows(
                 member["latestActivity"], created_at.isoformat()
             )
 
-    reactions = session.exec(
-        select(Reaction)
-        .where(Reaction.created_at >= week_start_iso)
-        .where(Reaction.created_at < week_end_iso)
-    ).all()
+    reaction_stmt = select(Reaction)
+    if week_start is not None:
+        reaction_stmt = reaction_stmt.where(Reaction.created_at >= week_start_iso).where(
+            Reaction.created_at < week_end_iso
+        )
+    reactions = session.exec(reaction_stmt).all()
     for reaction in reactions:
         member = ensure_member(reaction.user_id)
         if member is None:
@@ -328,13 +436,16 @@ def _community_activity_rows(
         )
         rows.append(member)
 
+    fallback_activity_date = week_start or datetime(1970, 1, 1, tzinfo=UTC)
     rows.sort(
         key=lambda row: (
             -row["score"],
             -row["postCount"],
             -row["commentCount"],
             -row["reactionCount"],
-            -int((_parse_iso(row["latestActivity"]) or week_start).timestamp()),
+            -int(
+                (_parse_iso(row["latestActivity"]) or fallback_activity_date).timestamp()
+            ),
             row["username"].lower(),
         )
     )
@@ -346,6 +457,7 @@ def _serialize_activity_entry(row: dict) -> CommunityActivityEntryOut:
         id=row["id"],
         username=row["username"],
         handle=row.get("handle"),
+        grade=row.get("grade"),
         avatarImageUrl=row.get("avatarImageUrl") or "",
         postCount=int(row.get("postCount") or 0),
         commentCount=int(row.get("commentCount") or 0),
@@ -397,6 +509,160 @@ def _sync_previous_week_rewards(
     return week_start_iso, [], []
 
 
+def _drawing_contest_rows(session: Session) -> list[tuple[Post, int]]:
+    rows: list[tuple[Post, int]] = []
+    posts = session.exec(select(Post).order_by(Post.created_at.desc())).all()
+    for post in posts:
+        if not _is_drawing_contest_entry(post):
+            continue
+        author = session.get(UserProfile, post.author_id)
+        if author is None or author.banned_at is not None:
+            continue
+        rows.append((post, _contest_like_count(post)))
+    rows.sort(
+        key=lambda item: (
+            -item[1],
+            (_parse_iso(item[0].created_at) or datetime(1970, 1, 1, tzinfo=UTC)).timestamp(),
+        )
+    )
+    return rows
+
+
+def _drawing_contest_status(session: Session) -> DrawingContestStatusOut:
+    now = datetime.now(UTC)
+    rows = _drawing_contest_rows(session)
+    author_ids = [post.author_id for post, _ in rows]
+    handles = _resolve_handles(session, author_ids)
+    grades = _resolve_grades(session, author_ids)
+    entries = [
+        _serialize_contest_entry(
+            post,
+            likes=likes,
+            rank=index + 1,
+            eligible=True,
+            author_handle=handles.get(post.author_id),
+            author_grade=grades.get(post.author_id),
+        )
+        for index, (post, likes) in enumerate(rows)
+    ]
+    award = session.exec(
+        select(ContestAwardLedger).where(
+            ContestAwardLedger.contest_id == DRAWING_CONTEST["contest_id"]
+        )
+    ).first()
+    return DrawingContestStatusOut(
+        contestId=DRAWING_CONTEST["contest_id"],
+        hashtag=DRAWING_CONTEST["hashtag"],
+        startsAt=DRAWING_CONTEST["starts_at"].isoformat(),
+        endsAt=DRAWING_CONTEST["ends_at"].isoformat(),
+        active=now < DRAWING_CONTEST["ends_at"],
+        now=now.isoformat(),
+        timeRemainingMs=max(
+            0,
+            int((DRAWING_CONTEST["ends_at"] - now).total_seconds() * 1000),
+        ),
+        rewardEclats=DRAWING_CONTEST["reward_lueurs"],
+        rewardFood=DRAWING_CONTEST["reward_food"],
+        announcementPostId="official-event:drawing-contest-post",
+        entries=entries,
+        topEntry=entries[0] if entries else None,
+        winnerAwarded=bool(award),
+    )
+
+
+def _award_drawing_contest(session: Session) -> DrawingContestSettlementOut:
+    status = _drawing_contest_status(session)
+    if status.topEntry is None:
+        return DrawingContestSettlementOut(
+            contestId=status.contestId,
+            active=status.active,
+            alreadyAwarded=status.winnerAwarded,
+            winner=None,
+            rewardEclats=status.rewardEclats,
+            rewardFood=status.rewardFood,
+        )
+    if status.active:
+        return DrawingContestSettlementOut(
+            contestId=status.contestId,
+            active=True,
+            alreadyAwarded=status.winnerAwarded,
+            winner=status.topEntry,
+            rewardEclats=status.rewardEclats,
+            rewardFood=status.rewardFood,
+        )
+
+    existing = session.exec(
+        select(ContestAwardLedger).where(
+            ContestAwardLedger.contest_id == DRAWING_CONTEST["contest_id"],
+            ContestAwardLedger.user_id == status.topEntry.authorId,
+        )
+    ).first()
+    if existing:
+        return DrawingContestSettlementOut(
+            contestId=status.contestId,
+            active=False,
+            alreadyAwarded=True,
+            winner=status.topEntry,
+            awardedAt=existing.awarded_at,
+            rewardEclats=existing.lueurs_rewarded,
+            rewardFood=existing.food_rewarded,
+        )
+
+    winner = session.get(UserProfile, status.topEntry.authorId)
+    if winner is None or winner.banned_at is not None:
+        return DrawingContestSettlementOut(
+            contestId=status.contestId,
+            active=False,
+            alreadyAwarded=False,
+            winner=status.topEntry,
+            rewardEclats=status.rewardEclats,
+            rewardFood=status.rewardFood,
+        )
+
+    active_familiar = _active_row(session, winner.id)
+    awarded_at = _now_iso()
+    winner.lueurs += DRAWING_CONTEST["reward_lueurs"]
+    if active_familiar is not None:
+        active_familiar.food_stock = max(0, int(active_familiar.food_stock or 0)) + DRAWING_CONTEST["reward_food"]
+        session.add(active_familiar)
+    session.add(
+        WalletLedger(
+            user_id=winner.id,
+            pot="lueurs",
+            delta=DRAWING_CONTEST["reward_lueurs"],
+            balance_after=winner.lueurs,
+            reason=f"contest:drawing:{DRAWING_CONTEST['contest_id']}",
+            reference_id=DRAWING_CONTEST["contest_id"],
+        )
+    )
+    session.add(
+        ContestAwardLedger(
+            contest_id=DRAWING_CONTEST["contest_id"],
+            user_id=winner.id,
+            post_id=status.topEntry.id,
+            post_likes=status.topEntry.likeCount,
+            lueurs_rewarded=DRAWING_CONTEST["reward_lueurs"],
+            food_rewarded=DRAWING_CONTEST["reward_food"] if active_familiar is not None else 0,
+            awarded_at=awarded_at,
+        )
+    )
+    session.add(winner)
+    session.commit()
+    session.refresh(winner)
+    if active_familiar is not None:
+        session.refresh(active_familiar)
+    settled = _drawing_contest_status(session)
+    return DrawingContestSettlementOut(
+        contestId=settled.contestId,
+        active=False,
+        alreadyAwarded=True,
+        winner=settled.topEntry,
+        awardedAt=awarded_at,
+        rewardEclats=DRAWING_CONTEST["reward_lueurs"],
+        rewardFood=DRAWING_CONTEST["reward_food"] if active_familiar is not None else 0,
+    )
+
+
 def _resolve_handles(
     session: Session, author_ids: List[str]
 ) -> Dict[str, str]:
@@ -416,22 +682,42 @@ def _resolve_handles(
     return {p.id: p.handle for p in rows if p.handle}
 
 
+def _resolve_grades(
+    session: Session, author_ids: List[str]
+) -> Dict[str, object]:
+    unique_ids = [uid for uid in {aid for aid in author_ids if aid} if uid]
+    if not unique_ids:
+        return {}
+    rows = session.exec(
+        select(UserProfile).where(UserProfile.id.in_(unique_ids))
+    ).all()
+    return {p.id: _grade_out(p) for p in rows}
+
+
 def _serialize_post(
     post: Post,
     reactions: Dict[str, List[str]],
     comments: List[Comment],
     handles: Dict[str, str] | None = None,
+    grades: Dict[str, object] | None = None,
+    comment_likes: Dict[str, List[str]] | None = None,
 ) -> PostOut:
     handles = handles or {}
+    grades = grades or {}
+    comment_likes = comment_likes or {}
     return PostOut(
         id=post.id,
         authorId=post.author_id,
         authorName=post.author_name,
         authorHandle=handles.get(post.author_id),
+        authorGrade=grades.get(post.author_id),
         authorAvatar=post.author_avatar,
         content=post.content,
         imageUrl=post.image_url,
         videoUrl=post.video_url,
+        videoThumbnailUrl=post.video_thumbnail_url,
+        postType=post.post_type or "standard",
+        officialLabel=post.official_label,
         createdAt=post.created_at,
         reactions=reactions,
         comments=[
@@ -440,10 +726,15 @@ def _serialize_post(
                 authorId=c.author_id,
                 authorName=c.author_name,
                 authorHandle=handles.get(c.author_id),
+                authorGrade=grades.get(c.author_id),
                 authorAvatar=c.author_avatar,
                 content=c.content,
+                parentId=c.parent_id,
+                replyToAuthorId=c.reply_to_author_id,
+                replyToAuthorName=c.reply_to_author_name,
+                replyToAuthorHandle=handles.get(c.reply_to_author_id or ""),
                 createdAt=c.created_at,
-                likes=[],
+                likes=comment_likes.get(c.id, []),
             )
             for c in comments
         ],
@@ -478,9 +769,20 @@ def list_posts(session: Session = Depends(_session_dep)) -> List[PostOut]:
 
     # PR S — on résout les handles en 1 requête pour tout l'affichage.
     all_author_ids: List[str] = [p.author_id for p in posts]
+    all_comment_ids: List[str] = []
     for comment_list in comments_by_post.values():
         all_author_ids.extend(c.author_id for c in comment_list)
+        all_comment_ids.extend(c.id for c in comment_list)
     handles = _resolve_handles(session, all_author_ids)
+    grades = _resolve_grades(session, all_author_ids)
+
+    likes_by_comment: Dict[str, List[str]] = defaultdict(list)
+    if all_comment_ids:
+        all_likes = session.exec(
+            select(CommentLike).where(CommentLike.comment_id.in_(all_comment_ids))
+        ).all()
+        for like in all_likes:
+            likes_by_comment[like.comment_id].append(like.user_id)
 
     return [
         _serialize_post(
@@ -488,6 +790,8 @@ def list_posts(session: Session = Depends(_session_dep)) -> List[PostOut]:
             {emoji: users for emoji, users in reactions_by_post[p.id].items()},
             comments_by_post[p.id],
             handles,
+            grades,
+            likes_by_comment,
         )
         for p in posts
     ]
@@ -502,7 +806,13 @@ def community_activity_leaderboard(
 ) -> CommunityActivityLeaderboardOut:
     safe_limit = max(1, min(int(limit or 5), 10))
     week_start = _week_start()
-    rows = _community_activity_rows(session, week_start)[:safe_limit]
+    rows = _community_activity_rows(session, week_start)
+    if not rows:
+        # Si la semaine courante n'a pas encore d'activite enregistree, on
+        # garde le classement vivant avec les vraies statistiques historiques
+        # au lieu d'afficher un faux etat vide apres le changement de semaine.
+        rows = _community_activity_rows(session, None)
+    rows = rows[:safe_limit]
     return CommunityActivityLeaderboardOut(
         weekStartIso=week_start.isoformat(),
         entries=[_serialize_activity_entry(row) for row in rows],
@@ -537,6 +847,7 @@ def create_post(
         content=payload.content,
         image_url=_sanitize_post_image_url(payload.image_url),
         video_url=payload.video_url,
+        video_thumbnail_url=_sanitize_post_image_url(payload.video_thumbnail_url),
     )
     session.add(post)
     # PR M — crédit XP à l'auteur. On fait un `get` sur la clé primaire
@@ -553,7 +864,132 @@ def create_post(
     session.commit()
     session.refresh(post)
     handles = _resolve_handles(session, [post.author_id])
-    return _serialize_post(post, {}, [], handles)
+    grades = _resolve_grades(session, [post.author_id])
+    return _serialize_post(post, {}, [], handles, grades)
+
+
+@router.post(
+    "/uploads/image",
+    response_model=PostImageUploadOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_post_image(
+    request: Request,
+    image: UploadFile = File(...),
+) -> PostImageUploadOut:
+    content_type = (image.content_type or "").lower().strip()
+    extension = _COMMUNITY_IMAGE_CONTENT_TYPES.get(content_type)
+    if extension is None:
+        raise HTTPException(
+            status_code=415,
+            detail="Format image non supporte. Utilise JPG, PNG, WEBP ou GIF.",
+        )
+
+    payload = await image.read()
+    size = len(payload)
+    await image.close()
+    if size <= 0:
+        raise HTTPException(status_code=400, detail="Image vide.")
+    if size > _MAX_COMMUNITY_IMAGE_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail="Image trop lourde. Limite 8 Mo.",
+        )
+
+    filename = f"{uuid.uuid4().hex}{extension}"
+    destination = COMMUNITY_DIR / filename
+    destination.write_bytes(payload)
+
+    return PostImageUploadOut(
+        imageUrl=_build_uploaded_media_url(request, filename),
+        filename=filename,
+        contentType=content_type,
+        size=size,
+    )
+
+
+@router.post(
+    "/uploads/video",
+    response_model=PostImageUploadOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_post_video(
+    request: Request,
+    video: UploadFile = File(...),
+) -> PostImageUploadOut:
+    content_type = (video.content_type or "").lower().strip()
+    extension = _COMMUNITY_VIDEO_CONTENT_TYPES.get(content_type)
+    if extension is None:
+        raise HTTPException(
+            status_code=415,
+            detail="Format video non supporte. Utilise MP4, WEBM, MOV ou OGG.",
+        )
+
+    payload = await video.read()
+    size = len(payload)
+    await video.close()
+    if size <= 0:
+        raise HTTPException(status_code=400, detail="Video vide.")
+    if size > _MAX_COMMUNITY_VIDEO_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail="Video trop lourde. Limite 60 Mo.",
+        )
+
+    filename = f"{uuid.uuid4().hex}{extension}"
+    destination = COMMUNITY_DIR / filename
+    destination.write_bytes(payload)
+
+    return PostImageUploadOut(
+        imageUrl=_build_uploaded_media_url(request, filename),
+        filename=filename,
+        contentType=content_type,
+        size=size,
+    )
+
+
+@router.patch("/{post_id}", response_model=PostOut)
+def update_post(
+    post_id: str,
+    payload: PostUpdate,
+    session: Session = Depends(_session_dep),
+) -> PostOut:
+    post = session.get(Post, post_id)
+    if not post:
+        raise HTTPException(status_code=404, detail="Post introuvable.")
+    if post.author_id != payload.user_id:
+        raise HTTPException(status_code=403, detail="Seul l'auteur peut modifier ce post.")
+    if payload.content is not None:
+        post.content = payload.content
+    if payload.image_url is not None:
+        post.image_url = _sanitize_post_image_url(payload.image_url)
+    if payload.video_url is not None:
+        post.video_url = payload.video_url
+    if payload.video_thumbnail_url is not None:
+        post.video_thumbnail_url = _sanitize_post_image_url(payload.video_thumbnail_url)
+    session.commit()
+    session.refresh(post)
+
+    comments = session.exec(
+        select(Comment).where(Comment.post_id == post_id).order_by(Comment.created_at.asc())
+    ).all()
+    reactions = session.exec(
+        select(Reaction).where(Reaction.post_id == post_id)
+    ).all()
+    by_emoji: Dict[str, List[str]] = defaultdict(list)
+    for r in reactions:
+        by_emoji[r.emoji].append(r.user_id)
+    comment_ids = [c.id for c in comments]
+    likes_by_comment: Dict[str, List[str]] = defaultdict(list)
+    if comment_ids:
+        for like in session.exec(
+            select(CommentLike).where(CommentLike.comment_id.in_(comment_ids))
+        ).all():
+            likes_by_comment[like.comment_id].append(like.user_id)
+    author_ids = [post.author_id, *[c.author_id for c in comments]]
+    handles = _resolve_handles(session, author_ids)
+    grades = _resolve_grades(session, author_ids)
+    return _serialize_post(post, dict(by_emoji), comments, handles, grades, likes_by_comment)
 
 
 @router.delete("/{post_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -569,6 +1005,16 @@ def delete_post(
     if post.author_id != user_id and not _is_moderator(session, user_id):
         raise HTTPException(status_code=403, detail="Interdit.")
 
+    comment_ids = [
+        c.id
+        for c in session.exec(select(Comment).where(Comment.post_id == post_id)).all()
+    ]
+    if comment_ids:
+        session.exec(
+            CommentLike.__table__.delete().where(  # type: ignore[attr-defined]
+                CommentLike.comment_id.in_(comment_ids)
+            )
+        )
     session.exec(
         Comment.__table__.delete().where(Comment.post_id == post_id)  # type: ignore[attr-defined]
     )
@@ -628,10 +1074,20 @@ def toggle_reaction(
         .where(Comment.post_id == post_id)
         .order_by(Comment.created_at.asc())
     ).all()
+    comment_ids = [c.id for c in comments]
+    likes_by_comment: Dict[str, List[str]] = defaultdict(list)
+    if comment_ids:
+        for like in session.exec(
+            select(CommentLike).where(CommentLike.comment_id.in_(comment_ids))
+        ).all():
+            likes_by_comment[like.comment_id].append(like.user_id)
     handles = _resolve_handles(
         session, [post.author_id, *[c.author_id for c in comments]]
     )
-    return _serialize_post(post, dict(by_emoji), comments, handles)
+    grades = _resolve_grades(
+        session, [post.author_id, *[c.author_id for c in comments]]
+    )
+    return _serialize_post(post, dict(by_emoji), comments, handles, grades, likes_by_comment)
 
 
 @router.post(
@@ -647,6 +1103,12 @@ def add_comment(
     post = session.get(Post, post_id)
     if not post:
         raise HTTPException(status_code=404, detail="Post introuvable.")
+    parent_comment: Comment | None = None
+    if payload.parent_id:
+        parent_comment = session.get(Comment, payload.parent_id)
+        if not parent_comment or parent_comment.post_id != post_id:
+            raise HTTPException(status_code=404, detail="Commentaire parent introuvable.")
+
     comment = Comment(
         id=_generate_id("comment"),
         post_id=post_id,
@@ -654,6 +1116,15 @@ def add_comment(
         author_name=payload.author_name,
         author_avatar=_sanitize_avatar(payload.author_avatar),
         content=payload.content,
+        parent_id=parent_comment.id if parent_comment else None,
+        reply_to_author_id=(
+            payload.reply_to_author_id
+            or (parent_comment.author_id if parent_comment else None)
+        ),
+        reply_to_author_name=(
+            payload.reply_to_author_name
+            or (parent_comment.author_name if parent_comment else None)
+        ),
     )
     session.add(comment)
     # PR familiers#2 — XP au familier actif de l'auteur du commentaire.
@@ -665,14 +1136,23 @@ def add_comment(
     )
     session.commit()
     session.refresh(comment)
-    handles = _resolve_handles(session, [comment.author_id])
+    handle_ids = [comment.author_id]
+    if comment.reply_to_author_id:
+        handle_ids.append(comment.reply_to_author_id)
+    handles = _resolve_handles(session, handle_ids)
+    grades = _resolve_grades(session, [comment.author_id])
     return CommentOut(
         id=comment.id,
         authorId=comment.author_id,
         authorName=comment.author_name,
         authorHandle=handles.get(comment.author_id),
+        authorGrade=grades.get(comment.author_id),
         authorAvatar=comment.author_avatar,
         content=comment.content,
+        parentId=comment.parent_id,
+        replyToAuthorId=comment.reply_to_author_id,
+        replyToAuthorName=comment.reply_to_author_name,
+        replyToAuthorHandle=handles.get(comment.reply_to_author_id or ""),
         createdAt=comment.created_at,
         likes=[],
     )
@@ -701,5 +1181,95 @@ def delete_comment(
         and not _is_moderator(session, user_id)
     ):
         raise HTTPException(status_code=403, detail="Interdit.")
-    session.delete(comment)
+    post_comments = session.exec(select(Comment).where(Comment.post_id == post_id)).all()
+    descendants_by_parent: Dict[str, List[Comment]] = defaultdict(list)
+    for current in post_comments:
+        if current.parent_id:
+            descendants_by_parent[current.parent_id].append(current)
+
+    to_delete: List[Comment] = []
+    stack = [comment]
+    seen: set[str] = set()
+    while stack:
+        current = stack.pop()
+        if current.id in seen:
+            continue
+        seen.add(current.id)
+        to_delete.append(current)
+        stack.extend(descendants_by_parent.get(current.id, []))
+
+    delete_ids = [row.id for row in to_delete]
+    if delete_ids:
+        session.exec(
+            CommentLike.__table__.delete().where(  # type: ignore[attr-defined]
+                CommentLike.comment_id.in_(delete_ids)
+            )
+        )
+    for row in to_delete:
+        session.delete(row)
     session.commit()
+
+
+@router.post(
+    "/{post_id}/comments/{comment_id}/likes",
+    response_model=CommentOut,
+)
+def toggle_comment_like(
+    post_id: str,
+    comment_id: str,
+    payload: ReactionToggle,
+    session: Session = Depends(_session_dep),
+) -> CommentOut:
+    comment = session.get(Comment, comment_id)
+    if not comment or comment.post_id != post_id:
+        raise HTTPException(status_code=404, detail="Commentaire introuvable.")
+
+    existing = session.exec(
+        select(CommentLike).where(
+            CommentLike.comment_id == comment_id,
+            CommentLike.user_id == payload.user_id,
+        )
+    ).first()
+    if existing:
+        session.delete(existing)
+    else:
+        session.add(CommentLike(comment_id=comment_id, user_id=payload.user_id))
+    session.commit()
+
+    likes = session.exec(
+        select(CommentLike).where(CommentLike.comment_id == comment_id)
+    ).all()
+    handle_ids = [comment.author_id]
+    if comment.reply_to_author_id:
+        handle_ids.append(comment.reply_to_author_id)
+    handles = _resolve_handles(session, handle_ids)
+    grades = _resolve_grades(session, [comment.author_id])
+    return CommentOut(
+        id=comment.id,
+        authorId=comment.author_id,
+        authorName=comment.author_name,
+        authorHandle=handles.get(comment.author_id),
+        authorGrade=grades.get(comment.author_id),
+        authorAvatar=comment.author_avatar,
+        content=comment.content,
+        parentId=comment.parent_id,
+        replyToAuthorId=comment.reply_to_author_id,
+        replyToAuthorName=comment.reply_to_author_name,
+        replyToAuthorHandle=handles.get(comment.reply_to_author_id or ""),
+        createdAt=comment.created_at,
+        likes=[like.user_id for like in likes],
+    )
+
+
+@router.get("/contests/drawing", response_model=DrawingContestStatusOut)
+def get_drawing_contest_status(
+    session: Session = Depends(_session_dep),
+) -> DrawingContestStatusOut:
+    return _drawing_contest_status(session)
+
+
+@router.post("/contests/drawing/settle", response_model=DrawingContestSettlementOut)
+def settle_drawing_contest(
+    session: Session = Depends(_session_dep),
+) -> DrawingContestSettlementOut:
+    return _award_drawing_contest(session)

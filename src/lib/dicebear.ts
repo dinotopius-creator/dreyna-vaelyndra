@@ -54,7 +54,7 @@ export interface DicebearStyle {
   previewSeed: string;
 }
 
-/** Sélection curée de styles DiceBear qui collent à l'esthétique Vaelyndra. */
+/** Sélection curée de styles DiceBear qui collent à l'esthétique PulseForge. */
 export const STYLES: DicebearStyle[] = [
   {
     id: "adventurer",
@@ -124,7 +124,7 @@ export const DEFAULT_CONFIG: Omit<DicebearConfig, "seed"> = {
 /**
  * Construit l'URL DiceBear SVG correspondant à une configuration. On
  * force le fond (sinon certains styles sont transparents et mal lisibles
- * sur les cards Vaelyndra).
+ * sur les cards PulseForge).
  */
 export function buildDicebearUrl(config: DicebearConfig): string {
   const params = new URLSearchParams({

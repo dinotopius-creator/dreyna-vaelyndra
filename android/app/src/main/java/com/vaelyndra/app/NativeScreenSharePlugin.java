@@ -37,6 +37,7 @@ public class NativeScreenSharePlugin extends Plugin {
         ret.put("title", NativeScreenShareService.getLiveTitle());
         ret.put("category", NativeScreenShareService.getLiveCategory());
         ret.put("startedAtMs", NativeScreenShareService.getStartedAtMs());
+        ret.put("lastStopReason", NativeScreenShareService.getLastStopReason());
         call.resolve(ret);
     }
 
@@ -109,7 +110,13 @@ public class NativeScreenSharePlugin extends Plugin {
     public void stop(PluginCall call) {
         Context context = getContext();
         Log.i(TAG, "Stopping native screen share service from plugin");
-        context.stopService(new Intent(context, NativeScreenShareService.class));
+        Intent serviceIntent = new Intent(context, NativeScreenShareService.class);
+        serviceIntent.setAction(NativeScreenShareService.ACTION_STOP);
+        if (android.os.Build.VERSION.SDK_INT >= 26) {
+            context.startForegroundService(serviceIntent);
+        } else {
+            context.startService(serviceIntent);
+        }
         JSObject ret = new JSObject();
         ret.put("stopped", true);
         call.resolve(ret);

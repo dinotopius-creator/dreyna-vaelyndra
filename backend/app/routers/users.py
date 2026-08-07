@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import unicodedata
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
@@ -34,9 +35,11 @@ from ..handles import (
     suggest_unique_handle,
 )
 from ..familiars import (
+    DEFAULT_FAMILIAR_COSMETIC_IDS,
     compute_familiar_stats,
     evolution_for_level,
     get_familiar,
+    get_familiar_cosmetic,
     progress_in_level,
 )
 from ..models import (
@@ -78,7 +81,7 @@ from ..schemas import (
 
 
 # PR M — XP gagné par type d'activité pour les deux flux accordés dans ce
-# fichier (réception de Sylvins via gift + nouveau follower). Le troisième flux
+# fichier (réception de Aureons via gift + nouveau follower). Le troisième flux
 # XP (post créé) vit dans `routers/posts.py` avec sa propre constante
 # `XP_PER_POST`, au plus près de la route qui le déclenche — ne pas dupliquer
 # ici pour éviter qu'un mainteneur change la valeur dans users.py et croie
@@ -87,10 +90,28 @@ XP_PER_SYLVIN_RECEIVED = 1
 XP_PER_SUBSCRIBER = 50
 
 
+def _clean_profile_text(value: str, *, field: str, max_graphemes: int) -> str:
+    cleaned = value.strip()
+    if field == "pseudo" and len([ch for ch in cleaned]) < 2:
+        raise HTTPException(status_code=400, detail="Ton pseudo est trop court.")
+    if len([ch for ch in cleaned]) > max_graphemes:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{field.capitalize()} trop long ({max_graphemes} caractères maximum).",
+        )
+    for ch in cleaned:
+        if unicodedata.category(ch) in ("Cc", "Cs"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"{field.capitalize()} invalide : caractères de contrôle interdits.",
+            )
+    return cleaned
+
+
 router = APIRouter(prefix="/users", tags=["users"])
 
 
-# Récompense quotidienne : 50 Lueurs / jour (cooldown 20 h pour lisser l'heure
+# Récompense quotidienne : 50 Eclats / jour (cooldown 20 h pour lisser l'heure
 # de connexion — comme la plupart des jeux mobiles).
 DAILY_REWARD_LUEURS = 50
 DAILY_COOLDOWN = timedelta(hours=20)
@@ -122,6 +143,57 @@ def _creature_out(creature_id: str | None) -> CreatureOut | None:
     return CreatureOut(**c)
 
 
+def _familiar_cosmetic_payload(row: UserFamiliar) -> tuple[list[str], dict[str, str], dict[str, dict], str | None]:
+    try:
+        raw_inventory = json.loads(row.cosmetic_inventory_json or "[]")
+    except (TypeError, ValueError):
+        raw_inventory = []
+    inventory: list[str] = []
+    for cosmetic_id in [
+        *DEFAULT_FAMILIAR_COSMETIC_IDS,
+        *[str(item) for item in raw_inventory if isinstance(item, str)],
+    ]:
+        if cosmetic_id in inventory:
+            continue
+        if get_familiar_cosmetic(cosmetic_id) is not None:
+            inventory.append(cosmetic_id)
+
+    try:
+        raw_equipped = json.loads(row.cosmetic_equipped_json or "{}")
+    except (TypeError, ValueError):
+        raw_equipped = {}
+    equipped: dict[str, str] = {}
+    cosmetics: dict[str, dict] = {}
+    color_override: str | None = None
+    if isinstance(raw_equipped, dict):
+        for slot, cosmetic_id in raw_equipped.items():
+            if not isinstance(slot, str) or not isinstance(cosmetic_id, str):
+                continue
+            if cosmetic_id not in inventory:
+                continue
+            cosmetic = get_familiar_cosmetic(cosmetic_id)
+            if cosmetic is None or cosmetic["slot"] != slot:
+                continue
+            equipped[slot] = cosmetic_id
+            payload = {
+                "id": cosmetic["id"],
+                "slot": cosmetic["slot"],
+                "name": cosmetic["name"],
+                "description": cosmetic["description"],
+                "rarity": cosmetic["rarity"],
+                "currency": cosmetic["currency"],
+                "price": cosmetic["price"],
+                "icon": cosmetic.get("icon", ""),
+                "color": cosmetic.get("color", ""),
+                "accent": cosmetic.get("accent", ""),
+                "compatibleFamiliars": cosmetic.get("compatible_familiars"),
+            }
+            cosmetics[slot] = payload
+            if slot == "color" and payload["color"]:
+                color_override = payload["color"]
+    return inventory, equipped, cosmetics, color_override
+
+
 def _active_familiar_summary(
     session: Session, user_id: str
 ) -> Optional[ActiveFamiliarSummary]:
@@ -143,11 +215,12 @@ def _active_familiar_summary(
         return None
     level, xp_into, xp_to_next = progress_in_level(row.xp or 0)
     evo = evolution_for_level(level)
+    cosmetic_inventory, cosmetic_equipped, cosmetics, color_override = _familiar_cosmetic_payload(row)
     return ActiveFamiliarSummary(
         familiarId=row.familiar_id,
         name=fam["name"],
         icon=fam["icon"],
-        color=fam["color"],
+        color=color_override or fam["color"],
         tier=fam["tier"],
         rarity=fam["rarity"],
         level=level,
@@ -157,6 +230,9 @@ def _active_familiar_summary(
         evolutionId=evo["id"],
         evolutionName=evo["name"],
         nickname=row.nickname,
+        cosmeticInventory=cosmetic_inventory,
+        cosmeticEquipped=cosmetic_equipped,
+        cosmetics=cosmetics,
         stats=dict(compute_familiar_stats(row.familiar_id, row.xp or 0)),
     )
 
@@ -236,6 +312,7 @@ def _to_out(p: UserProfile, session: Session | None = None) -> UserProfileOut:
         handle=p.handle,
         handleUpdatedAt=p.handle_updated_at,
         avatarImageUrl=p.avatar_image_url,
+        bio=p.bio or "",
         avatarUrl=p.avatar_url,
         inventory=json.loads(p.inventory_json or "[]"),
         equipped=json.loads(p.equipped_json or "{}"),
@@ -462,7 +539,9 @@ def upsert_user(
     # + _auto_follow_officials qui peut déclencher un autoflush + commit)
     # doit être dans le try/except pour attraper l'IntegrityError quel
     # que soit son point de déclenchement.
-    base_handle = slugify_handle(payload.username)
+    username = _clean_profile_text(payload.username, field="pseudo", max_graphemes=64)
+    bio = _clean_profile_text(payload.bio or "", field="bio", max_graphemes=500)
+    base_handle = slugify_handle(username)
     for attempt in range(3):
         p = session.get(UserProfile, payload.id)
         is_new = p is None
@@ -476,7 +555,8 @@ def upsert_user(
                 )
                 p = UserProfile(
                     id=payload.id,
-                    username=payload.username,
+                    username=username,
+                    bio=bio,
                     handle=handle,
                     avatar_image_url=payload.avatar_image_url,
                     creature_id=creature_id,
@@ -488,7 +568,8 @@ def upsert_user(
                 # déclencher ici — d'où le try/except englobant.
                 session.flush()
             else:
-                p.username = payload.username
+                p.username = username
+                p.bio = bio
                 # On ne remplace l'avatar_image_url que s'il n'en avait pas
                 # (pour ne pas écraser un rendu RPM déjà généré par
                 # l'utilisateur).
@@ -878,7 +959,7 @@ def gift_sylvins(
     payload: GiftTransfer,
     session: Session = Depends(_session_dep),
 ) -> GiftTransferOut:
-    """Transfère atomiquement `amount` Sylvins du sender au receiver.
+    """Transfère atomiquement `amount` Aureons du sender au receiver.
 
     - Consomme le pot PROMO du sender d'abord (évite de gaspiller le pot
       retirable), puis déborde sur PAID.
@@ -905,14 +986,14 @@ def gift_sylvins(
     if sender.sylvins + sender.sylvins_paid < amount:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Solde Sylvins insuffisant.",
+            detail="Solde Aureons insuffisant.",
         )
 
     # Ordre de consommation : PROMO d'abord (préserve le pot retirable).
     # `max(0, …)` : même garde-fou défensif que `_apply_legacy_sylvins_delta`,
     # au cas où `sender.sylvins` serait négatif suite à une race condition ou
     # un chemin futur. Sans ce garde-fou, un pot PROMO à -5 siphonnerait 5
-    # Sylvins supplémentaires depuis le pot PAID retirable et créditerait le
+    # Aureons supplémentaires depuis le pot PAID retirable et créditerait le
     # receiver en `earnings_paid` au lieu d'`earnings_promo` — exactement le
     # blanchiment que le split est censé empêcher.
     take_promo = min(amount, max(0, sender.sylvins))
@@ -988,7 +1069,7 @@ def gift_item(
     - L'item doit être dans la wishlist du receiver (anti-triche : on ne peut
       pas offrir un item arbitraire en contournant l'UI).
     - Le receiver ne doit pas déjà posséder l'item.
-    - En Sylvins, consomme PROMO d'abord puis PAID (même logique que
+    - En Aureons, consomme PROMO d'abord puis PAID (même logique que
       `gift-sylvins` — impossible de blanchir un solde promo en cashable en
       passant par un achat croisé).
     - Atomique : soit tout passe (débit + inventaire + retrait wishlist),
@@ -1027,14 +1108,14 @@ def gift_item(
         if sender.lueurs < payload.price:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Solde Lueurs insuffisant.",
+                detail="Solde Eclats insuffisant.",
             )
         sender.lueurs -= payload.price
     else:  # sylvins
         if sender.sylvins + sender.sylvins_paid < payload.price:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Solde Sylvins insuffisant.",
+                detail="Solde Aureons insuffisant.",
             )
         take_promo = min(payload.price, max(0, sender.sylvins))
         take_paid = payload.price - take_promo
@@ -1046,7 +1127,7 @@ def gift_item(
     receiver.inventory_json = json.dumps(inventory)
     _store_wishlist(receiver, [x for x in wishlist if x != payload.item_id])
     # PR M — XP accordé au receiver uniquement si le cadeau a été payé en
-    # Sylvins (monnaie premium). Les achats en Lueurs (monnaie gratuite
+    # Aureons (monnaie premium). Les achats en Eclats (monnaie gratuite
     # via daily claim) ne donnent PAS d'XP, sinon deux comptes complices
     # pourraient se faire grimper en grade gratuitement en s'offrant des
     # items en boucle.
@@ -1087,13 +1168,13 @@ def gift_item(
 # --- Shop atomic purchase -------------------------------------------------
 
 
-class ShopPurchaseLueursPayload(BaseModel):
-    """Achat boutique payé en Lueurs.
+class ShopPurchaseEclatsPayload(BaseModel):
+    """Achat boutique payé en Eclats.
 
     Le serveur tranche tout en une transaction :
-      1. Vérifie que le solde Lueurs est ≥ `price`.
+      1. Vérifie que le solde Eclats est ≥ `price`.
       2. Refuse si l'item est déjà dans l'inventaire du user.
-      3. Débite `price` Lueurs.
+      3. Débite `price` Eclats.
       4. Ajoute `item_id` à l'inventaire.
       5. Écrit une ligne `ShopOrder` (status="paid").
       6. Écrit une ligne `WalletLedger` (delta=-price, raison="shop:…").
@@ -1111,20 +1192,20 @@ class ShopPurchaseLueursPayload(BaseModel):
 @router.post("/{user_id}/shop/purchase-lueurs", response_model=UserProfileOut)
 def purchase_with_lueurs(
     user_id: str,
-    payload: ShopPurchaseLueursPayload,
+    payload: ShopPurchaseEclatsPayload,
     session: Session = Depends(_session_dep),
 ) -> UserProfileOut:
-    """Achat atomique boutique en Lueurs.
+    """Achat atomique boutique en Eclats.
 
     Avant cette endpoint, le frontend faisait :
       - `apiApplyWalletDelta({ lueurs: -price })` (débite serveur)
       - `dispatch addOrder` (ajoute order en LOCAL state)
     → Si le user vidait son cache navigateur, l'order local
     disparaissait et l'item n'était jamais dans son inventaire DB,
-    donnant l'impression que les Lueurs s'étaient "perdues".
+    donnant l'impression que les Eclats s'étaient "perdues".
 
     On atomise les deux étapes côté serveur pour qu'on ait toujours :
-    débit Lueurs ⇔ ligne `ShopOrder` ⇔ item dans `inventory_json`.
+    débit Eclats ⇔ ligne `ShopOrder` ⇔ item dans `inventory_json`.
     """
     p = session.get(UserProfile, user_id)
     if not p:
@@ -1132,7 +1213,7 @@ def purchase_with_lueurs(
     if p.lueurs < payload.price:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Solde Lueurs insuffisant.",
+            detail="Solde Eclats insuffisant.",
         )
     inventory = json.loads(p.inventory_json or "[]")
     if payload.item_id in inventory:
@@ -1156,7 +1237,7 @@ def purchase_with_lueurs(
             quantity=1,
             unit_price=payload.price,
             total_price=payload.price,
-            currency="Lueurs",
+            currency="Eclats",
             status="paid",
         )
     )
@@ -1191,7 +1272,7 @@ def daily_claim(
                 granted=0, already_claimed=True, profile=_to_out(p, session)
             )
     # Bonus de moisson : la stat `harvest` du familier actif (0..99)
-    # ajoute jusqu'à ~24 Lueurs supplémentaires (harvest // 4).
+    # ajoute jusqu'à ~24 Eclats supplémentaires (harvest // 4).
     harvest_bonus = 0
     active = session.exec(
         select(UserFamiliar)

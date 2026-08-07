@@ -1,7 +1,7 @@
 /**
- * Constantes économiques du royaume de Vaelyndra.
+ * Constantes économiques du royaume de PulseForge.
  *
- * Le prix de référence est le pack d'entrée "Pochée de Sylvins" (100 Sylvins
+ * Le prix de référence est le pack d'entrée "Pochée de Aureons" (100 Aureons
  * pour 1,99 €), soit **0,0199 € / Sylvin**. Cette conversion n'est utilisée
  * que pour estimer les recettes des streamers en € ; la monnaie réelle
  * manipulée en live reste le Sylvin.
@@ -9,7 +9,7 @@
 export const SYLVIN_TO_EUR = 1.99 / 100;
 
 /**
- * Part que la plateforme Vaelyndra prélève sur les gains des streamers
+ * Part que la plateforme PulseForge prélève sur les gains des streamers
  * (0,30 = 30 %). Le streamer touche donc `1 - PLATFORM_CUT` (70 %) net.
  */
 export const PLATFORM_CUT = 0.3;
@@ -20,7 +20,7 @@ export const PLATFORM_CUT = 0.3;
  */
 export const MIN_PAYOUT_EUR = 20;
 
-/** Calcule la valeur brute en € d'un solde en Sylvins. */
+/** Calcule la valeur brute en € d'un solde en Aureons. */
 export function sylvinsToGrossEur(sylvins: number): number {
   return sylvins * SYLVIN_TO_EUR;
 }
@@ -39,7 +39,7 @@ export function formatEur(value: number): string {
   }).format(value);
 }
 
-/** Formate un nombre de Sylvins. */
-export function formatSylvins(value: number): string {
+/** Formate un nombre de Aureons. */
+export function formatAureons(value: number): string {
   return new Intl.NumberFormat("fr-FR").format(value);
 }

@@ -145,6 +145,19 @@ def heartbeat(
     with get_session() as session:
         existing = session.get(LiveSession, user.id)
         if existing is None:
+            # Demande client (Alexandre, 20/04) : "à chaque live, le chat
+            # revient à zéro, je ne veux pas les chats des anciens live".
+            # On purge tous les messages de chat persistés sous ce
+            # broadcaster avant d'enregistrer la nouvelle session. Les
+            # viewers qui rejoignent le nouveau live partent ainsi d'un
+            # chat vide, sans charger l'historique du live précédent.
+            stale_chat = session.exec(
+                select(LiveChatMessage).where(
+                    LiveChatMessage.broadcaster_id == user.id
+                )
+            ).all()
+            for row in stale_chat:
+                session.delete(row)
             existing = LiveSession(
                 broadcaster_id=user.id,
                 broadcaster_name=user.username,
@@ -622,11 +635,6 @@ def create_native_offer(
     payload: NativeSignalOfferIn,
     user: Optional[UserProfile] = Depends(optional_user),
 ) -> NativeSignalOut:
-    if user is not None and payload.broadcaster_id == user.id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"message": "cannot_watch_own_native_live"},
-        )
     now = datetime.now(timezone.utc).isoformat()
     with get_session() as session:
         _purge_stale_native_signals(session)

@@ -1,5 +1,7 @@
 import {
+  type ChangeEvent,
   type FormEvent,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -7,11 +9,23 @@ import {
   useState,
 } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Send } from "lucide-react";
+import { ArrowLeft, ArrowUp, Send, Paperclip, X, FileText } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useMessages } from "../contexts/MessagesContext";
 import { useToast } from "../contexts/ToastContext";
 import { apiGetProfile, type UserProfileDto } from "../lib/api";
+import { MessageAttachmentPreview } from "../components/MessageAttachmentPreview";
+import type { MessageAttachment } from "../types";
+import {
+  validateFile,
+  fileToBase64,
+  formatFileSize,
+  generateAttachmentId,
+  isImageFile,
+  FileValidationError,
+} from "../lib/fileUtils";
+import { moderateFile } from "../lib/contentModeration";
+import { parsePostImageUrl } from "../lib/helpers";
 
 function formatHourMinute(iso: string): string {
   try {
@@ -24,6 +38,34 @@ function formatHourMinute(iso: string): string {
   }
 }
 
+function parseDirectImageMessage(content: string): string | null {
+  const trimmed = content.trim();
+  if (!trimmed || /\s/.test(trimmed)) return null;
+  const parsed = parsePostImageUrl(trimmed);
+  return parsed?.kind === "image" ? parsed.src : null;
+}
+
+function renderMessageContent(content: string) {
+  return content.split(/(https?:\/\/[^\s]+)/g).map((part, index) => {
+    if (!/^https?:\/\//i.test(part)) {
+      return <span key={`text-${index}`}>{part}</span>;
+    }
+    const parsed = parsePostImageUrl(part);
+    const href = parsed?.kind === "image" ? parsed.src : part;
+    return (
+      <a
+        key={`link-${index}`}
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+        className="break-all text-gold-200 underline underline-offset-2 hover:text-gold-100"
+      >
+        {part}
+      </a>
+    );
+  });
+}
+
 export function MessageThread() {
   const { userId = "" } = useParams();
   const { user } = useAuth();
@@ -33,7 +75,10 @@ export function MessageThread() {
     thread,
     threadLoading,
     threadError,
+    threadHasMore,
+    threadLoadingMore,
     openThread,
+    loadOlderMessages,
     closeThread,
     sendMessage,
   } = useMessages();
@@ -41,7 +86,15 @@ export function MessageThread() {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [otherProfile, setOtherProfile] = useState<UserProfileDto | null>(null);
+  const [pendingAttachment, setPendingAttachment] = useState<MessageAttachment | null>(null);
+  const [attachmentLoading, setAttachmentLoading] = useState(false);
   const listRef = useRef<HTMLDivElement | null>(null);
+  const bottomRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const lastThreadIdRef = useRef<string>("");
+  const lastOldestIdRef = useRef<number | null>(null);
+  const lastNewestIdRef = useRef<number | null>(null);
+  const preservedScrollHeightRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -61,11 +114,108 @@ export function MessageThread() {
     };
   }, [user, userId, navigate, openThread, closeThread]);
 
-  // Auto-scroll vers le bas à chaque nouveau message du fil.
+  function scrollToLatest(behavior: ScrollBehavior = "auto") {
+    const list = listRef.current;
+    if (!list) return;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        bottomRef.current?.scrollIntoView({ block: "end", behavior });
+        list.scrollTop = list.scrollHeight;
+      });
+    });
+  }
+
+  // Détecte si l'utilisateur est déjà "en bas" de la liste (à 120px près).
+  // Sert à n'auto-scroller que quand on suit le fil, et à laisser tranquille
+  // quand on remonte dans l'historique.
+  function isNearBottom(): boolean {
+    const list = listRef.current;
+    if (!list) return true;
+    return list.scrollHeight - list.scrollTop - list.clientHeight < 120;
+  }
+
+  // Avant peinture : si on est sur le point d'insérer des messages plus
+  // anciens (oldest id change), on mémorise la hauteur courante pour
+  // pouvoir, juste après paint, restaurer le scroll afin que le message
+  // que l'utilisateur regardait reste à la même position visuelle.
   useLayoutEffect(() => {
-    const el = listRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    const list = listRef.current;
+    if (!list) return;
+    const oldestId = thread.length > 0 ? thread[0].id : null;
+    if (
+      oldestId !== null &&
+      lastOldestIdRef.current !== null &&
+      oldestId < lastOldestIdRef.current
+    ) {
+      preservedScrollHeightRef.current = list.scrollHeight;
+    }
   }, [thread]);
+
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+
+    // Identifie le fil par l'id de l'autre user (passé en URL), pas par
+    // l'empreinte des messages (qui change à chaque ajout).
+    const threadChanged = userId !== lastThreadIdRef.current;
+    const oldestId = thread.length > 0 ? thread[0].id : null;
+    const newestId = thread.length > 0 ? thread[thread.length - 1].id : null;
+    const olderPrepended =
+      oldestId !== null &&
+      lastOldestIdRef.current !== null &&
+      oldestId < lastOldestIdRef.current;
+    const newerAppended =
+      newestId !== null &&
+      lastNewestIdRef.current !== null &&
+      newestId > lastNewestIdRef.current;
+    const wasNearBottom = isNearBottom();
+
+    if (threadChanged) {
+      // Demande client (Alexandre, 20/04) : "quand on clique sur une
+      // conversation privée ça nous met à jour, ça nous descend en bas
+      // de la conversation". On ne marque le fil comme "ouvert" QUE
+      // quand les premiers messages sont arrivés et qu'on a pu scroller
+      // au plus récent — sinon, à l'ouverture d'un fil long, le premier
+      // rendu (vide / loading) consommait `threadChanged` puis le rendu
+      // suivant (messages chargés) trouvait `threadChanged=false` et
+      // laissait l'user en haut de l'historique.
+      if (!threadLoading && thread.length > 0) {
+        scrollToLatest("auto");
+        lastThreadIdRef.current = userId;
+        lastOldestIdRef.current = oldestId;
+        lastNewestIdRef.current = newestId;
+      }
+      // Si encore en chargement ou vide : on ne touche à rien et on
+      // attend le prochain rendu (`lastThreadIdRef` reste à l'ancien
+      // userId pour que `threadChanged` redéclenche).
+      return;
+    }
+
+    if (olderPrepended) {
+      // On vient d'insérer des messages anciens en haut. On ajuste le
+      // scrollTop pour que le message qui était visible le reste.
+      const prev = preservedScrollHeightRef.current;
+      if (prev !== null) {
+        const delta = list.scrollHeight - prev;
+        list.scrollTop = list.scrollTop + delta;
+      }
+      preservedScrollHeightRef.current = null;
+    } else if (newerAppended && wasNearBottom) {
+      // Nouveau message en bas et l'user suivait le fil → on suit aussi.
+      scrollToLatest("smooth");
+    }
+    // Sinon : on respecte la position de scroll de l'utilisateur (il est
+    // en train de lire dans l'historique), on ne touche à rien.
+
+    lastOldestIdRef.current = oldestId;
+    lastNewestIdRef.current = newestId;
+  }, [thread, threadLoading, userId]);
+
+  // Bouton "Charger les anciens" en haut.
+  const handleLoadOlder = useCallback(() => {
+    if (threadLoadingMore || !threadHasMore) return;
+    void loadOlderMessages();
+  }, [threadLoadingMore, threadHasMore, loadOlderMessages]);
 
   const otherName = otherProfile?.username ?? "Membre";
   const otherAvatar = otherProfile?.avatarImageUrl ?? "";
@@ -78,14 +228,65 @@ export function MessageThread() {
     return null;
   }, [thread, user]);
 
+  /** Gestion du fichier sélectionné */
+  const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!fileInputRef.current) return;
+    fileInputRef.current.value = "";
+    if (!file) return;
+
+    setAttachmentLoading(true);
+    try {
+      // 1. Validation (taille, type MIME, extension)
+      validateFile(file);
+
+      // 2. Modération du contenu
+      const modResult = await moderateFile(file);
+
+      // 3. Conversion base64
+      const base64Data = await fileToBase64(file);
+
+      const attachment: MessageAttachment = {
+        id: generateAttachmentId(),
+        filename: file.name,
+        mimeType: file.type,
+        size: file.size,
+        base64Data,
+        createdAt: new Date().toISOString(),
+        flagged: modResult.flagged,
+      };
+
+      if (modResult.flagged) {
+        notify(
+          `⚠️ Fichier signalé : ${modResult.reason ?? "contenu potentiellement problématique"}. L'envoi est bloqué.`,
+          "error",
+        );
+        return;
+      }
+
+      setPendingAttachment(attachment);
+    } catch (err) {
+      if (err instanceof FileValidationError) {
+        notify(`Fichier invalide : ${err.message}`, "error");
+      } else {
+        notify("Impossible de charger ce fichier.", "error");
+      }
+    } finally {
+      setAttachmentLoading(false);
+    }
+  };
+
+  const removePendingAttachment = () => setPendingAttachment(null);
+
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const content = draft.trim();
-    if (!content || sending) return;
+    if ((!content && !pendingAttachment) || sending) return;
     setSending(true);
     try {
-      await sendMessage(content);
+      await sendMessage(content, pendingAttachment ?? undefined);
       setDraft("");
+      setPendingAttachment(null);
     } catch (err) {
       const msg =
         err instanceof Error ? err.message : "Envoi impossible.";
@@ -97,9 +298,11 @@ export function MessageThread() {
 
   if (!user) return null;
 
+  const canSend = (draft.trim().length > 0 || pendingAttachment !== null) && !sending && !attachmentLoading;
+
   return (
-    <div className="mx-auto flex h-[calc(100vh-4.5rem)] max-w-3xl flex-col px-0 sm:px-5 sm:py-6">
-      <header className="flex items-center gap-3 border-b border-royal-500/20 bg-night-800/60 px-4 py-3 sm:rounded-t-2xl">
+    <div className="mx-auto flex min-h-[calc(100dvh-4rem)] max-w-3xl flex-col px-0 sm:h-[calc(100vh-4.5rem)] sm:px-5 sm:py-6">
+      <header className="flex items-center gap-3 border-b border-royal-500/20 bg-night-800/60 px-3 py-3 sm:rounded-t-2xl sm:px-4">
         <Link
           to="/messages"
           className="rounded-full border border-royal-500/30 p-2 text-ivory/70 hover:text-gold-200"
@@ -133,7 +336,7 @@ export function MessageThread() {
 
       <div
         ref={listRef}
-        className="flex-1 overflow-y-auto bg-night-900/40 px-4 py-5 sm:rounded-b-none"
+        className="flex-1 overflow-y-auto bg-night-900/40 px-3 py-4 sm:rounded-b-none sm:px-4 sm:py-5"
       >
         {threadLoading && thread.length === 0 ? (
           <p className="text-center text-xs text-ivory/50">Chargement…</p>
@@ -145,65 +348,185 @@ export function MessageThread() {
           </p>
         ) : (
           <ul className="flex flex-col gap-2">
+            {threadHasMore && (
+              <li className="flex justify-center pb-2">
+                <button
+                  type="button"
+                  onClick={handleLoadOlder}
+                  disabled={threadLoadingMore}
+                  className="inline-flex items-center gap-2 rounded-full border border-royal-500/30 bg-night-800/70 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-ivory/70 transition hover:border-gold-400/40 hover:text-gold-200 disabled:cursor-wait disabled:opacity-60"
+                >
+                  <ArrowUp className="h-3 w-3" />
+                  {threadLoadingMore ? "Chargement…" : "Charger les anciens messages"}
+                </button>
+              </li>
+            )}
             {thread.map((m) => {
               const mine = m.sender_id === user.id;
               const showReadBelow =
                 mine && m.read_at !== null && m.read_at === lastSeen;
+              const attachments = m.attachments ?? [];
+              const directImageUrl =
+                attachments.length === 0 ? parseDirectImageMessage(m.content) : null;
               return (
                 <li
                   key={m.id}
-                  className={`flex ${mine ? "justify-end" : "justify-start"}`}
+                  className={`flex flex-col ${mine ? "items-end" : "items-start"}`}
                 >
-                  <div
-                    className={`max-w-[78%] rounded-2xl px-4 py-2 text-sm shadow-sm ${
-                      mine
-                        ? "bg-gold-500/15 text-ivory border border-gold-400/40"
-                        : "bg-night-800/70 text-ivory border border-royal-500/30"
-                    }`}
-                  >
-                    <p className="whitespace-pre-wrap break-words">{m.content}</p>
-                    <p
-                      className={`mt-1 text-[10px] ${
-                        mine ? "text-gold-100/70" : "text-ivory/50"
+                  {/* Pièces jointes */}
+                  {attachments.length > 0 && (
+                    <div className="mb-1 max-w-[85%] sm:max-w-[78%]">
+                      {attachments.map((att) => (
+                        <MessageAttachmentPreview key={att.id} attachment={att} />
+                      ))}
+                    </div>
+                  )}
+
+                  {directImageUrl && (
+                    <a
+                      href={directImageUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mb-1 block max-w-[85%] overflow-hidden rounded-2xl border border-gold-400/30 bg-night-950/45 sm:max-w-[78%]"
+                    >
+                      <img
+                        src={directImageUrl}
+                        alt="Image envoyée"
+                        className="max-h-[22rem] w-full object-cover"
+                        loading="lazy"
+                      />
+                    </a>
+                  )}
+
+                  {/* Bulle de message (uniquement si du texte réel, pas juste le fallback nom de fichier) */}
+                  {m.content &&
+                    !directImageUrl &&
+                    !(attachments.length > 0 && m.content === `📎 ${attachments[0]?.filename}`) && (
+                    <div
+                      className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm shadow-sm sm:max-w-[78%] sm:px-4 ${
+                        mine
+                          ? "bg-gold-500/15 text-ivory border border-gold-400/40"
+                          : "bg-night-800/70 text-ivory border border-royal-500/30"
                       }`}
                     >
-                      {formatHourMinute(m.created_at)}
-                      {mine &&
-                        (showReadBelow
-                          ? ` · Vu à ${formatHourMinute(m.read_at ?? "")}`
-                          : m.read_at === null
-                            ? " · Envoyé"
-                            : "")}
-                    </p>
-                  </div>
+                      <p className="whitespace-pre-wrap break-words">
+                        {renderMessageContent(m.content)}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Horodatage */}
+                  <p
+                    className={`mt-0.5 text-[10px] px-1 ${
+                      mine ? "text-gold-100/70" : "text-ivory/50"
+                    }`}
+                  >
+                    {formatHourMinute(m.created_at)}
+                    {mine &&
+                      (showReadBelow
+                        ? ` · Vu à ${formatHourMinute(m.read_at ?? "")}`
+                        : m.read_at === null
+                          ? " · Envoyé"
+                          : "")}
+                  </p>
                 </li>
               );
             })}
           </ul>
         )}
+        <div ref={bottomRef} />
       </div>
 
-      <form
-        onSubmit={onSubmit}
-        className="flex items-center gap-2 border-t border-royal-500/20 bg-night-800/80 px-4 py-3 sm:rounded-b-2xl"
-      >
-        <input
-          type="text"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          placeholder="Écrire un message…"
-          maxLength={2000}
-          className="flex-1 rounded-full border border-royal-500/30 bg-night-900/60 px-4 py-2 text-sm text-ivory placeholder:text-ivory/40 focus:border-gold-400/60 focus:outline-none"
-        />
-        <button
-          type="submit"
-          disabled={sending || draft.trim().length === 0}
-          className="inline-flex items-center gap-1.5 rounded-full bg-gold-shine px-4 py-2 text-xs font-semibold text-night-900 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <Send className="h-4 w-4" />
-          Envoyer
-        </button>
-      </form>
+      {/* Zone de composition */}
+      <div className="border-t border-royal-500/20 bg-night-800/80 px-4 py-3 sm:rounded-b-2xl">
+
+        {/* Aperçu pièce jointe en attente */}
+        {pendingAttachment && (
+          <div className="mb-2">
+            {isImageFile(pendingAttachment.mimeType) ? (
+              <div className="relative inline-block">
+                <img
+                  src={`data:${pendingAttachment.mimeType};base64,${pendingAttachment.base64Data}`}
+                  alt={pendingAttachment.filename}
+                  className="max-h-32 rounded-lg border border-gold-400/40 object-cover"
+                />
+                <button
+                  onClick={removePendingAttachment}
+                  className="absolute -right-2 -top-2 rounded-full bg-rose-500/90 p-1 text-ivory hover:brightness-110"
+                  aria-label="Supprimer la pièce jointe"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 rounded-lg border border-royal-500/30 bg-night-900/60 px-3 py-2">
+                <FileText className="h-4 w-4 flex-none text-gold-300" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-semibold text-ivory">{pendingAttachment.filename}</p>
+                  <p className="text-[10px] text-ivory/50">{formatFileSize(pendingAttachment.size)}</p>
+                </div>
+                <button
+                  onClick={removePendingAttachment}
+                  className="rounded-full bg-rose-500/90 p-1 text-ivory hover:brightness-110"
+                  aria-label="Supprimer"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Indication de chargement */}
+        {attachmentLoading && (
+          <div className="mb-2 flex items-center gap-2 text-xs text-ivory/60">
+            <span className="animate-spin">✦</span> Analyse du fichier en cours…
+          </div>
+        )}
+
+        <form onSubmit={onSubmit} className="flex items-center gap-2">
+          {/* Bouton trombone */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/zip"
+            onChange={handleFileChange}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={attachmentLoading || sending}
+            title="Joindre un fichier (images, PDF, documents — max 10 Mo)"
+            className="flex-none rounded-full border border-royal-500/30 p-2 text-ivory/60 transition hover:border-gold-400/60 hover:text-gold-200 disabled:cursor-not-allowed disabled:opacity-40"
+            aria-label="Joindre un fichier"
+          >
+            <Paperclip className="h-4 w-4" />
+          </button>
+
+          <input
+            type="text"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder={pendingAttachment ? "Ajouter un message (optionnel)…" : "Écrire un message…"}
+            maxLength={2000}
+            className="flex-1 rounded-full border border-royal-500/30 bg-night-900/60 px-4 py-2.5 text-sm text-ivory placeholder:text-ivory/40 focus:border-gold-400/60 focus:outline-none"
+          />
+          <button
+            type="submit"
+            disabled={!canSend}
+            className="inline-flex items-center gap-1.5 rounded-full bg-gold-shine px-4 py-2 text-xs font-semibold text-night-900 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Send className="h-4 w-4" />
+            Envoyer
+          </button>
+        </form>
+
+        {/* Légende formats acceptés */}
+        <p className="mt-1.5 text-[10px] text-ivory/30 text-center">
+          Formats acceptés : images (JPG, PNG, GIF, WebP), PDF, TXT, DOC, DOCX, ZIP · Max 10 Mo
+        </p>
+      </div>
     </div>
   );
 }

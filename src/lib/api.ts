@@ -1,5 +1,5 @@
 /**
- * Client HTTP minimal pour l'API Vaelyndra (posts / commentaires / réactions).
+ * Client HTTP minimal pour l'API PulseForge (posts / commentaires / réactions).
  *
  * Base URL configurable via `VITE_API_URL` au build. À défaut on tape le
  * backend Fly.io de prod — ce qui permet au site déployé sur devinapps.com
@@ -33,10 +33,12 @@ async function request<T>(
   path: string,
   init: RequestInit = {},
 ): Promise<T | null> {
+  const isFormData =
+    typeof FormData !== "undefined" && init.body instanceof FormData;
   const res = await fetch(`${BASE}${path}`, {
     ...init,
     headers: {
-      "Content-Type": "application/json",
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
       ...(init.headers ?? {}),
     },
   });
@@ -60,17 +62,70 @@ export async function apiCreatePost(input: {
   content: string;
   imageUrl?: string;
   videoUrl?: string;
+  videoThumbnailUrl?: string;
 }): Promise<CommunityPost> {
   const body = {
     ...input.author,
     content: input.content,
     image_url: input.imageUrl,
     video_url: input.videoUrl,
+    video_thumbnail_url: input.videoThumbnailUrl,
   };
   return (await request<CommunityPost>("/posts", {
     method: "POST",
     body: JSON.stringify(body),
   })) as CommunityPost;
+}
+
+export interface CommunityImageUploadDto {
+  imageUrl: string;
+  filename: string;
+  contentType: string;
+  size: number;
+}
+
+export async function apiUploadCommunityImage(
+  file: File,
+): Promise<CommunityImageUploadDto> {
+  const body = new FormData();
+  body.append("image", file);
+  return (await request<CommunityImageUploadDto>("/posts/uploads/image", {
+    method: "POST",
+    body,
+  })) as CommunityImageUploadDto;
+}
+
+export async function apiUploadCommunityVideo(
+  file: File,
+): Promise<CommunityImageUploadDto> {
+  const body = new FormData();
+  body.append("video", file);
+  return (await request<CommunityImageUploadDto>("/posts/uploads/video", {
+    method: "POST",
+    body,
+  })) as CommunityImageUploadDto;
+}
+
+export async function apiUpdatePost(
+  postId: string,
+  input: {
+    userId: string;
+    content?: string;
+    imageUrl?: string;
+    videoUrl?: string;
+    videoThumbnailUrl?: string;
+  },
+): Promise<CommunityPost> {
+  const body: Record<string, string> = { user_id: input.userId };
+  if (input.content !== undefined) body.content = input.content;
+  if (input.imageUrl !== undefined) body.image_url = input.imageUrl;
+  if (input.videoUrl !== undefined) body.video_url = input.videoUrl;
+  if (input.videoThumbnailUrl !== undefined)
+    body.video_thumbnail_url = input.videoThumbnailUrl;
+  return (await request<CommunityPost>(
+    `/posts/${encodeURIComponent(postId)}`,
+    { method: "PATCH", body: JSON.stringify(body) },
+  )) as CommunityPost;
 }
 
 export async function apiDeletePost(
@@ -99,7 +154,13 @@ export async function apiToggleReaction(
 
 export async function apiAddComment(
   postId: string,
-  input: { author: AuthorPayload; content: string },
+  input: {
+    author: AuthorPayload;
+    content: string;
+    parentId?: string | null;
+    replyToAuthorId?: string | null;
+    replyToAuthorName?: string | null;
+  },
 ): Promise<Comment> {
   return (await request<Comment>(
     `/posts/${encodeURIComponent(postId)}/comments`,
@@ -108,6 +169,9 @@ export async function apiAddComment(
       body: JSON.stringify({
         ...input.author,
         content: input.content,
+        parent_id: input.parentId ?? null,
+        reply_to_author_id: input.replyToAuthorId ?? null,
+        reply_to_author_name: input.replyToAuthorName ?? null,
       }),
     },
   )) as Comment;
@@ -126,11 +190,25 @@ export async function apiDeleteComment(
   );
 }
 
+export async function apiToggleCommentLike(
+  postId: string,
+  commentId: string,
+  userId: string,
+): Promise<Comment> {
+  return (await request<Comment>(
+    `/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}/likes`,
+    {
+      method: "POST",
+      body: JSON.stringify({ user_id: userId, emoji: "like" }),
+    },
+  )) as Comment;
+}
+
 export interface CommunityActivityRewardDto {
   weekStartIso: string;
   userId: string;
   rank: number;
-  rewardLueurs: number;
+  rewardEclats: number;
   awardedAt: string;
 }
 
@@ -144,6 +222,7 @@ export interface CommunityActivityEntryDto {
   id: string;
   username: string;
   handle: string | null;
+  grade: StreamerGradeDto | null;
   avatarImageUrl: string;
   postCount: number;
   commentCount: number;
@@ -170,6 +249,57 @@ export async function apiSyncCommunityActivityRewards(): Promise<CommunityActivi
     "/posts/activity-rewards/sync",
     { method: "POST" },
   )) as CommunityActivityRewardSyncDto;
+}
+
+export interface DrawingContestEntryDto {
+  id: string;
+  authorId: string;
+  authorName: string;
+  authorHandle: string | null;
+  authorGrade: StreamerGradeDto | null;
+  authorAvatar: string;
+  content: string;
+  imageUrl: string | null;
+  createdAt: string;
+  likeCount: number;
+  participantRank: number;
+  eligible: boolean;
+}
+
+export interface DrawingContestStatusDto {
+  contestId: string;
+  hashtag: string;
+  startsAt: string;
+  endsAt: string;
+  active: boolean;
+  now: string;
+  timeRemainingMs: number;
+  rewardEclats: number;
+  rewardFood: number;
+  announcementPostId: string;
+  entries: DrawingContestEntryDto[];
+  topEntry: DrawingContestEntryDto | null;
+  winnerAwarded: boolean;
+}
+
+export interface DrawingContestSettlementDto {
+  contestId: string;
+  active: boolean;
+  alreadyAwarded: boolean;
+  winner: DrawingContestEntryDto | null;
+  awardedAt: string | null;
+  rewardEclats: number;
+  rewardFood: number;
+}
+
+export async function apiGetDrawingContestStatus(): Promise<DrawingContestStatusDto> {
+  return (await request<DrawingContestStatusDto>("/posts/contests/drawing")) as DrawingContestStatusDto;
+}
+
+export async function apiSettleDrawingContest(): Promise<DrawingContestSettlementDto> {
+  return (await request<DrawingContestSettlementDto>("/posts/contests/drawing/settle", {
+    method: "POST",
+  })) as DrawingContestSettlementDto;
 }
 
 export interface OracleRewardDto {
@@ -199,8 +329,8 @@ export interface OracleStatusDto {
 
 export interface OraclePlayDto extends OracleStatusDto {
   reward: OracleRewardDto;
-  profileLueurs: number;
-  profileSylvinsPromo: number;
+  profileEclats: number;
+  profileAureonsPromo: number;
 }
 
 export async function apiGetOracleStatus(
@@ -234,7 +364,7 @@ export async function apiPlayOracle(input: {
  * - `inventory` / `equipped` : items possédés / équipés (ids opaque string)
  * - `lueurs` : monnaie gratuite (daily claim, events)
  *
- * Sylvins (monnaie premium) — split anti-fraude :
+ * Aureons (monnaie premium) — split anti-fraude :
  * - `sylvinsPaid` : solde acheté en € via Stripe (seul pot retirable)
  * - `sylvinsPromo` : solde gratuit (admin top-up, events, cadeaux reçus
  *   depuis un pot promo). Dépensable mais non retirable.
@@ -257,6 +387,7 @@ export interface UserProfileDto {
   /** ISO du dernier changement de handle (cooldown 30 j côté backend). */
   handleUpdatedAt: string | null;
   avatarImageUrl: string;
+  bio?: string;
   avatarUrl: string | null;
   inventory: string[];
   equipped: Record<string, string>;
@@ -282,6 +413,36 @@ export interface UserProfileDto {
    * donc rester résilient et ne rien afficher plutôt que de crasher.
    */
   grade: StreamerGradeDto | null;
+  familiar?: {
+    familiarId: string;
+    name: string;
+    icon: string;
+    color: string;
+    tier: string;
+    rarity: string;
+    level: number;
+    xp: number;
+    xpIntoLevel: number;
+    xpToNextLevel: number;
+    evolutionId: string;
+    evolutionName: string;
+    nickname: string | null;
+    cosmeticInventory?: string[];
+    cosmeticEquipped?: Record<string, string>;
+    cosmetics?: Record<string, {
+      id: string;
+      slot: string;
+      name: string;
+      description: string;
+      rarity: string;
+      currency: string;
+      price: number;
+      icon?: string;
+      color?: string;
+      accent?: string;
+    }>;
+    stats: Record<string, number>;
+  } | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -333,11 +494,26 @@ export interface WorldPresenceDto {
   handle: string | null;
   avatarImageUrl: string;
   avatarUrl: string | null;
+  appearance?: {
+    avatarUrl?: string | null;
+    outfit3d?: string | null;
+    accessory3d?: string | null;
+    frame?: string | null;
+  };
   role: string;
   district: string;
   posX: number;
   posY: number;
   voiceEnabled: boolean;
+  voiceChannelId: string;
+  privateVoicePartnerId: string | null;
+  pendingVoiceInviteFromUserId: string | null;
+  pendingVoiceInviteToUserId: string | null;
+  interactionKind: string | null;
+  interactionFromUserId: string | null;
+  interactionFromUsername: string | null;
+  interactionPartnerUserId: string | null;
+  interactionExpiresAt: string | null;
   lastSeenAt: string;
 }
 
@@ -353,6 +529,7 @@ export async function apiUpsertProfile(input: {
   id: string;
   username: string;
   avatarImageUrl: string;
+  bio?: string;
   /** Optionnel : envoyé uniquement au premier upsert (inscription). */
   creatureId?: string;
 }): Promise<UserProfileDto> {
@@ -361,6 +538,7 @@ export async function apiUpsertProfile(input: {
     body: JSON.stringify({
       id: input.id,
       username: input.username,
+      bio: input.bio,
       avatar_image_url: input.avatarImageUrl,
       creature_id: input.creatureId,
     }),
@@ -516,6 +694,59 @@ export async function apiLeaveWorldPresence(worldId: string): Promise<void> {
   });
 }
 
+export async function apiRequestPrivateWorldVoice(
+  worldId: string,
+  targetUserId: string,
+): Promise<WorldPresenceDto> {
+  return (await sessionRequest<WorldPresenceDto>(
+    `/worlds/${encodeURIComponent(worldId)}/voice/private/request`,
+    {
+      method: "POST",
+      body: JSON.stringify({ targetUserId }),
+    },
+  )) as WorldPresenceDto;
+}
+
+export async function apiRespondPrivateWorldVoice(
+  worldId: string,
+  payload: { requesterUserId: string; accept: boolean },
+): Promise<WorldPresenceDto> {
+  return (await sessionRequest<WorldPresenceDto>(
+    `/worlds/${encodeURIComponent(worldId)}/voice/private/respond`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  )) as WorldPresenceDto;
+}
+
+export async function apiLeavePrivateWorldVoice(
+  worldId: string,
+): Promise<WorldPresenceDto> {
+  return (await sessionRequest<WorldPresenceDto>(
+    `/worlds/${encodeURIComponent(worldId)}/voice/private/leave`,
+    {
+      method: "POST",
+    },
+  )) as WorldPresenceDto;
+}
+
+export async function apiSendWorldInteraction(
+  worldId: string,
+  payload: {
+    targetUserId: string;
+    kind: "wave" | "heart" | "hug" | "applaud" | "dance" | "lueur" | "sit" | "swing";
+  },
+): Promise<WorldPresenceDto> {
+  return (await sessionRequest<WorldPresenceDto>(
+    `/worlds/${encodeURIComponent(worldId)}/interactions`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  )) as WorldPresenceDto;
+}
+
 /**
  * PR S — Change le `@handle` de l'utilisateur courant. Renvoie le profil
  * mis à jour en cas de succès.
@@ -572,9 +803,9 @@ export async function apiApplyWalletDelta(
      */
     sylvins?: number;
     sylvins_earnings?: number;
-    /** Crédit/débit explicite du pot PAID Sylvins (retirable). */
+    /** Crédit/débit explicite du pot PAID Aureons (retirable). */
     sylvins_paid?: number;
-    /** Crédit/débit explicite du pot PROMO Sylvins (non retirable). */
+    /** Crédit/débit explicite du pot PROMO Aureons (non retirable). */
     sylvins_promo?: number;
     /** Crédit/débit explicite des earnings PAID streamer. */
     earnings_paid?: number;
@@ -590,21 +821,21 @@ export async function apiApplyWalletDelta(
 }
 
 /**
- * Achat boutique atomique payé en Lueurs.
+ * Achat boutique atomique payé en Eclats.
  *
  * Le serveur fait, en une seule transaction :
- *   - vérifie le solde Lueurs,
+ *   - vérifie le solde Eclats,
  *   - débite `price`,
  *   - ajoute `itemId` à l'inventaire,
  *   - écrit une ligne `ShopOrder` (history persistant côté DB),
- *   - écrit une ligne `WalletLedger` (audit du débit Lueurs).
+ *   - écrit une ligne `WalletLedger` (audit du débit Eclats).
  *
  * Sans cet endpoint, le frontend faisait :
  *   `apiApplyWalletDelta({ lueurs: -price })` puis `dispatch addOrder`
  *   en LOCAL → la commande disparaissait au vidage du cache
- *   navigateur, donnant l'impression d'avoir "perdu" des Lueurs.
+ *   navigateur, donnant l'impression d'avoir "perdu" des Eclats.
  */
-export async function apiShopPurchaseLueurs(
+export async function apiShopPurchaseEclats(
   userId: string,
   body: { item_id: string; price: number },
 ): Promise<UserProfileDto> {
@@ -622,7 +853,7 @@ export interface GiftTransferDto {
 }
 
 /**
- * Transfert atomique de Sylvins (cadeau live). Le serveur consomme le pot
+ * Transfert atomique de Aureons (cadeau live). Le serveur consomme le pot
  * PROMO du sender en priorité et crédite le receiver sur les pots miroirs
  * (promo→promo, paid→paid) : impossible de blanchir un solde promo en
  * cashable via un complice.
@@ -671,7 +902,7 @@ export interface GiftItemDto {
  * Le serveur :
  *   - vérifie que l'item est bien dans la wishlist du receiver,
  *   - vérifie que le receiver ne possède pas déjà l'item,
- *   - débite le sender (PROMO d'abord pour les Sylvins),
+ *   - débite le sender (PROMO d'abord pour les Aureons),
  *   - ajoute l'item à l'inventaire du receiver + le retire de sa wishlist.
  * Atomique.
  */
@@ -698,7 +929,7 @@ export async function apiGiftItem(input: {
   )) as GiftItemDto;
 }
 
-export async function apiGiftSylvins(input: {
+export async function apiGiftAureons(input: {
   senderId: string;
   receiverId: string;
   amount: number;
@@ -742,7 +973,7 @@ export interface StreamerLeaderboardEntryDto {
   userId: string;
   username: string;
   avatarImageUrl: string;
-  totalSylvins: number;
+  totalAureons: number;
   creature: CreatureDto | null;
   role: string;
   /** PR M — grade affiché à côté du nom dans le classement. */
@@ -759,11 +990,11 @@ export interface StreamerLeaderboardDto {
 export interface BFFEntryDto {
   streamer: StreamerMiniDto;
   donor: StreamerMiniDto;
-  totalSylvins: number;
+  totalAureons: number;
 }
 
 /**
- * Classement hebdomadaire des streamers par Sylvins reçus.
+ * Classement hebdomadaire des streamers par Aureons reçus.
  * - `week=this` (défaut) : semaine ISO en cours, mise à jour temps réel
  *   (chaque cadeau écrit une ligne de ledger côté backend).
  * - `week=last` : semaine précédente, figée.
@@ -774,21 +1005,23 @@ export async function apiGetStreamerLeaderboard(
 ): Promise<StreamerLeaderboardDto> {
   return (await request<StreamerLeaderboardDto>(
     `/streamers/leaderboard?week=${week}&limit=${limit}`,
+    { cache: "no-store" },
   )) as StreamerLeaderboardDto;
 }
 
 /**
  * Duos BFF : pour chaque streamer, son plus gros donateur.
- * `week="all"` par défaut (historique complet) — choix délibéré pour
- * refléter une relation stable plutôt qu'éphémère.
+ * `week="this"` par défaut : classement hebdomadaire, remis à zéro chaque
+ * lundi avec le classement streamer.
  */
 export async function apiGetBFFs(
-  week: "this" | "last" | "all" = "all",
+  week: "this" | "last" | "all" = "this",
   limit = 20,
 ): Promise<BFFEntryDto[]> {
   return (
     (await request<BFFEntryDto[]>(
       `/streamers/bff?week=${week}&limit=${limit}`,
+      { cache: "no-store" },
     )) ?? []
   );
 }
@@ -798,4 +1031,35 @@ export async function apiDailyClaim(userId: string): Promise<DailyClaimDto> {
     `/users/${encodeURIComponent(userId)}/daily-claim`,
     { method: "POST" },
   )) as DailyClaimDto;
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// /stats — chiffres publics de la communauté pour la home (membres
+// réels, top donateurs réels). Remplace les bots décoratifs historiques
+// (TOP_FANS, "∞ membres", etc.) côté frontend.
+// ──────────────────────────────────────────────────────────────────────
+
+export interface CommunityStatsOverviewDto {
+  membersCount: number;
+  liveCount: number;
+  currenciesCount: number;
+  gradesCount: number;
+}
+
+export interface CommunityTopFanDto {
+  userId: string;
+  username: string;
+  handle?: string | null;
+  avatarImageUrl: string;
+  totalAureonsGiven: number;
+}
+
+export async function apiGetCommunityStats(): Promise<CommunityStatsOverviewDto | null> {
+  return (await request<CommunityStatsOverviewDto>("/stats/overview")) ?? null;
+}
+
+export async function apiGetTopFans(limit = 6): Promise<CommunityTopFanDto[]> {
+  return (
+    (await request<CommunityTopFanDto[]>(`/stats/top-fans?limit=${limit}`)) ?? []
+  );
 }

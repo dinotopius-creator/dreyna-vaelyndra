@@ -1,7 +1,7 @@
 /**
  * Page `/avatar` — studio d'avatar 3D local.
  *
- * On persiste maintenant une configuration `vaelyndra3d:` compacte :
+ * On persiste maintenant une configuration `PulseForge3d:` compacte :
  * silhouette, visage, cheveux et couleurs. Le rendu 3D est reconstruit
  * côté front et une vignette SVG est aussi générée pour les zones qui
  * consomment encore une image simple (chat, petites cartes, listes).
@@ -29,6 +29,8 @@ import { DailyRewardCard } from "../components/DailyRewardCard";
 import { InventoryPanel } from "../components/InventoryPanel";
 import { SectionHeading } from "../components/SectionHeading";
 import { EQUIP_SLOT } from "../lib/avatarShop";
+import { PREMIUM_AVATAR_PACK } from "../data/premiumAvatarPack";
+
 
 export function Avatar() {
   const { user } = useAuth();
@@ -52,7 +54,7 @@ export function Avatar() {
     return (
       <div className="mx-auto max-w-3xl px-6 py-20 text-center">
         <p className="text-ivory/70">
-          Connectez-vous pour composer votre avatar de Vaelyndra.
+          Connectez-vous pour composer votre avatar de PulseForge.
         </p>
         <Link
           to="/connexion"
@@ -64,7 +66,11 @@ export function Avatar() {
     );
   }
 
-  const currentAvatar = draft?.avatarUrl ?? profile?.avatarUrl ?? null;
+  const currentAvatar =
+    draft?.avatarUrl ??
+
+    PREMIUM_AVATAR_PACK.vrmModels[0]?.path ??
+    null;
   const currentImage =
     draft?.avatarImageUrl ?? profile?.avatarImageUrl ?? user.avatar ?? null;
   const hasDraft = !!draft;
@@ -96,11 +102,11 @@ export function Avatar() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-14">
-      <div className="mb-8 flex items-center justify-between">
+    <div className="mx-auto max-w-6xl px-3 py-8 sm:px-6 sm:py-14">
+      <div className="mb-6 flex items-center justify-between gap-3 sm:mb-8">
         <Link
           to="/moi"
-          className="inline-flex items-center gap-2 rounded-full border border-royal-500/30 px-4 py-2 font-regal text-[10px] tracking-[0.22em] text-ivory/70 hover:text-gold-200"
+          className="inline-flex items-center gap-2 rounded-full border border-royal-500/30 px-3 py-2 font-regal text-[10px] tracking-[0.22em] text-ivory/70 hover:text-gold-200"
         >
           <ArrowLeft className="h-4 w-4" /> Mon domaine
         </Link>
@@ -114,14 +120,77 @@ export function Avatar() {
       <SectionHeading
         eyebrow="Atelier d'avatar"
         title="Composez votre double magique"
-        subtitle="Créez votre avatar 3D debout, faites-le pivoter à 360°, puis scellez-le sur votre compte. Vos tenues et accessoires 3D s’y greffent ensuite partout sur Vaelyndra."
+        subtitle="Créez votre avatar 3D debout, faites-le pivoter à 360°, puis scellez-le sur votre compte. Vos tenues et accessoires 3D s’y greffent ensuite partout sur PulseForge."
       />
+
+      <div className="mt-8 rounded-[28px] border border-gold-400/20 bg-[linear-gradient(135deg,rgba(15,23,42,0.92),rgba(40,20,67,0.92))] p-4 shadow-[0_24px_70px_rgba(0,0,0,0.28)] sm:p-6">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-2xl">
+            <p className="font-regal text-[10px] tracking-[0.24em] text-gold-300">
+              ✦ {PREMIUM_AVATAR_PACK.title}
+            </p>
+            <h2 className="mt-2 font-display text-2xl text-gold-100 sm:text-3xl">
+              Direction premium, base VRoid installée
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-ivory/75">
+              {PREMIUM_AVATAR_PACK.subtitle}
+            </p>
+            <ul className="mt-4 grid gap-2 text-sm text-ivory/72 sm:grid-cols-2">
+              {PREMIUM_AVATAR_PACK.assets.map((asset) => (
+                <li
+                  key={asset.name}
+                  className="rounded-2xl border border-white/10 bg-night-950/55 px-4 py-3"
+                >
+                  <p className="font-semibold text-gold-100">{asset.name}</p>
+                  <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-ivory/45">
+                    {asset.kind} · {asset.format}
+                  </p>
+                  <p className="mt-2 text-xs leading-5 text-ivory/62">
+                    {asset.notes}
+                  </p>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-4 text-xs leading-5 text-ivory/50">
+              {PREMIUM_AVATAR_PACK.installNote}
+            </p>
+            <div className="mt-4 rounded-2xl border border-white/10 bg-night-950/55 p-4">
+              <p className="text-[10px] uppercase tracking-[0.24em] text-gold-300">
+                Aperçu principal
+              </p>
+            <p className="mt-1 text-sm text-ivory/70">
+              L’avatar principal est affiché ici. Il remplace l’ancien rendu moche
+              et sert de référence unique pour le profil, les posts, les commentaires
+              et les lives.
+            </p>
+            <p className="mt-3 rounded-2xl border border-amber-300/20 bg-amber-500/10 px-3 py-2 text-[11px] leading-5 text-amber-100/85">
+              {PREMIUM_AVATAR_PACK.missingModelNote}
+            </p>
+          </div>
+          </div>
+
+          <div className="grid w-full max-w-md grid-cols-2 gap-3 sm:grid-cols-3 lg:w-[320px] lg:grid-cols-2">
+            {PREMIUM_AVATAR_PACK.previews.map((preview, index) => (
+              <div
+                key={preview}
+                className={`relative overflow-hidden rounded-2xl border border-white/10 bg-night-950/60 ${index === 0 ? "col-span-2 aspect-[16/10]" : "aspect-square"}`}
+              >
+                <img
+                  src={preview}
+                  alt={`Aperçu du pack premium ${index + 1}`}
+                  className="h-full w-full object-cover"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
 
       <div className="mt-10 grid gap-8 lg:grid-cols-[minmax(0,360px)_1fr]">
         <motion.aside
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          className="card-royal space-y-5 p-6"
+          className="panel-app space-y-5 p-5 sm:p-6 lg:sticky lg:top-24"
         >
           <AvatarViewer
             src={currentAvatar}
@@ -139,7 +208,7 @@ export function Avatar() {
             }
           />
 
-          <div>
+          <div className="panel-app-soft p-4">
             <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
               ✦ Aperçu
             </p>
@@ -180,7 +249,7 @@ export function Avatar() {
               </div>
             )}
             {!hasDraft && profile?.avatarUrl && (
-              <p className="pt-1 text-center text-[10px] uppercase tracking-[0.22em] text-gold-300/70">
+              <p className="panel-app-soft pt-3 pb-2 text-center text-[10px] uppercase tracking-[0.22em] text-gold-300/70">
                 <Sparkles className="mr-1 inline h-3 w-3" /> Avatar enregistré —
                 modifiez puis cliquez sur Enregistrer
               </p>
@@ -196,7 +265,6 @@ export function Avatar() {
         <div className="relative">
           {editing ? (
             <AvatarEditor
-              initialAvatarUrl={profile?.avatarUrl ?? null}
               defaultSeed={user.username}
               equippedFrameId={profile?.equipped?.[EQUIP_SLOT.Frame] ?? null}
               equippedSceneId={profile?.equipped?.[EQUIP_SLOT.Scene] ?? null}
@@ -216,7 +284,7 @@ export function Avatar() {
               onClose={() => setEditing(false)}
             />
           ) : (
-            <div className="card-royal flex h-full flex-col justify-center gap-4 p-8 text-center">
+            <div className="panel-app flex h-full flex-col justify-center gap-4 p-6 text-center sm:p-8">
               <p className="font-regal text-[10px] tracking-[0.22em] text-gold-300">
                 ✦ Comment ça marche
               </p>
@@ -246,8 +314,8 @@ export function Avatar() {
               </ol>
               <p className="mt-3 text-xs text-ivory/50">
                 Le rendu 3D est local au site. Ajoutez ensuite tenues,
-                accessoires, cadres et scènes à votre collection via la
-                boutique avatar ci-dessous.
+                accessoires, cadres et scènes à votre collection via la boutique
+                avatar ci-dessous.
               </p>
             </div>
           )}

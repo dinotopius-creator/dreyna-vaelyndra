@@ -38,13 +38,28 @@ export interface Comment {
   authorName: string;
   /** PR S — `@handle` de l'auteur, résolu côté backend au serialize. */
   authorHandle?: string | null;
+  authorGrade?: {
+    slug: string;
+    name: string;
+    short: string;
+    emoji: string;
+    motto: string;
+    theme: string;
+    color: string;
+    minXp: number;
+    xp: number;
+    progressXp: number;
+    nextXp: number | null;
+    override: boolean;
+  } | null;
   authorAvatar: string;
   content: string;
-  createdAt: string;
-  likes: string[]; // userIds
   parentId?: string | null;
   replyToAuthorId?: string | null;
   replyToAuthorName?: string | null;
+  replyToAuthorHandle?: string | null;
+  createdAt: string;
+  likes: string[]; // userIds
 }
 
 export interface Article {
@@ -69,14 +84,16 @@ export interface Product {
   tagline: string;
   description: string;
   price: number;
-  currency: "€" | "Lueurs";
+  currency: "€" | "Eclats";
   image: string;
-  category: "Merch" | "Digital" | "VIP" | "Exclusif" | "Sylvins" | "Lueurs";
+  category: "Merch" | "Digital" | "VIP" | "Exclusif" | "Aureons" | "Eclats";
   /**
-   * Amount of Sylvins (virtual currency) granted when this product is purchased.
-   * Only set on products of category "Sylvins".
+   * Amount of Aureons (virtual currency) granted when this product is purchased.
+   * Only set on products of category "Aureons".
    */
   sylvins?: number;
+  /** Amount of Eclats granted when this euro product is purchased. */
+  lueurs?: number;
   rating: number;
   stock: number;
   featured?: boolean;
@@ -103,10 +120,27 @@ export interface CommunityPost {
   authorName: string;
   /** PR S — `@handle` de l'auteur, résolu côté backend au serialize. */
   authorHandle?: string | null;
+  authorGrade?: {
+    slug: string;
+    name: string;
+    short: string;
+    emoji: string;
+    motto: string;
+    theme: string;
+    color: string;
+    minXp: number;
+    xp: number;
+    progressXp: number;
+    nextXp: number | null;
+    override: boolean;
+  } | null;
   authorAvatar: string;
   content: string;
   imageUrl?: string;
   videoUrl?: string;
+  videoThumbnailUrl?: string;
+  postType?: "standard" | "official_event" | string;
+  officialLabel?: string | null;
   createdAt: string;
   reactions: Record<string, string[]>; // emoji -> userIds
   comments: Comment[];
@@ -158,7 +192,7 @@ export type GiftRarity =
 export interface Gift {
   id: string;
   name: string;
-  /** Coût en Sylvins (retiré du wallet du viewer et crédité au streamer). */
+  /** Coût en Aureons (retiré du wallet du viewer et crédité au streamer). */
   price: number;
   /** Chemin vers l'icône SVG (public/gifts/xxx.svg). */
   icon: string;
@@ -167,9 +201,9 @@ export interface Gift {
 }
 
 /**
- * Portefeuille Sylvins d'un membre.
- * - `balance` : Sylvins achetés que le membre peut dépenser en cadeaux.
- * - `earnings` : Sylvins reçus en cadeaux (solde streamer, convertible en €).
+ * Portefeuille Aureons d'un membre.
+ * - `balance` : Aureons achetés que le membre peut dépenser en cadeaux.
+ * - `earnings` : Aureons reçus en cadeaux (solde streamer, convertible en €).
  * - `history` : trace des cadeaux envoyés/reçus (tronquée aux 50 plus récents
  *   pour ne pas exploser le localStorage).
  * - `giftsSentCount` / `giftsReceivedCount` : compteurs cumulatifs complets
@@ -230,4 +264,18 @@ export interface LiveViewerSummary {
   username: string;
   avatar: string;
   joinedAt: string;
+}
+
+/**
+ * Pièce jointe dans un message privé.
+ * Stockée comme base64 dans le contenu du message pour persistence.
+ */
+export interface MessageAttachment {
+  id: string;
+  filename: string;
+  mimeType: string;
+  size: number; // bytes
+  base64Data: string;
+  createdAt: string;
+  flagged?: boolean; // true si contenu potentiellement problématique
 }

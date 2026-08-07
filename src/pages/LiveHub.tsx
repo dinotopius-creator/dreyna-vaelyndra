@@ -7,6 +7,7 @@ import { useLive } from "../contexts/LiveContext";
 import { SectionHeading } from "../components/SectionHeading";
 import { StreamerLeaderboard } from "../components/StreamerLeaderboard";
 import { BFFModule } from "../components/BFFModule";
+import { LiveBannerCarousel } from "../components/LiveBannerCarousel";
 import { LIVE_CATEGORIES, getLiveCategory } from "../data/liveCategories";
 import { formatRelative } from "../lib/helpers";
 
@@ -22,6 +23,7 @@ export function LiveHub() {
     [liveRegistry],
   );
   const featured = lives[0] ?? null;
+  const liveCount = lives.length;
   const categoriesWithLives = useMemo(
     () =>
       LIVE_CATEGORIES.map((category) => ({
@@ -34,7 +36,7 @@ export function LiveHub() {
   );
 
   return (
-    <div className="mx-auto max-w-7xl px-6 py-12">
+    <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-12">
       <SectionHeading
         eyebrow="Lives publics"
         title={
@@ -42,8 +44,50 @@ export function LiveHub() {
             La salle des <span className="text-mystic">lives</span>
           </>
         }
-        subtitle="Retrouvez tous les directs en cours, les classements et les streamers qui font vibrer Vaelyndra."
+        subtitle="Retrouvez tous les directs en cours, les classements et les streamers qui font vibrer PulseForge."
       />
+
+      <div className="mt-6 grid gap-3 sm:grid-cols-3">
+        <div className="panel-app-soft p-4">
+          <p className="font-regal text-[10px] uppercase tracking-[0.22em] text-gold-300/75">
+            En direct
+          </p>
+          <p className="mt-2 font-display text-2xl text-gold-100">{liveCount}</p>
+          <p className="mt-1 text-sm text-ivory/65">salons actifs maintenant</p>
+        </div>
+        <div className="panel-app-soft p-4">
+          <p className="font-regal text-[10px] uppercase tracking-[0.22em] text-gold-300/75">
+            Navigation
+          </p>
+          <p className="mt-2 font-display text-lg text-gold-100">
+            Accès direct aux catégories
+          </p>
+          <p className="mt-1 text-sm text-ivory/65">
+            Catégories lisibles et cartes faciles à ouvrir sur mobile.
+          </p>
+        </div>
+        <Link
+          to={user ? "/live/studio" : "/connexion"}
+          className="panel-app-soft flex items-center justify-between gap-3 p-4 transition hover:-translate-y-0.5 hover:border-gold-300/30"
+        >
+          <div>
+            <p className="font-regal text-[10px] uppercase tracking-[0.22em] text-gold-300/75">
+              Créer
+            </p>
+            <p className="mt-2 font-display text-lg text-gold-100">
+              Lancer un live
+            </p>
+            <p className="mt-1 text-sm text-ivory/65">
+              Ouvre la scène live sans perdre de temps.
+            </p>
+          </div>
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05] text-gold-200">
+            <Radio className="h-5 w-5" />
+          </div>
+        </Link>
+      </div>
+
+      <LiveBannerCarousel />
 
       <div className="mt-10 grid gap-6 lg:grid-cols-[1.35fr,0.65fr]">
         <section className="overflow-hidden rounded-2xl border border-royal-500/30 bg-night-900/55">
@@ -56,7 +100,7 @@ export function LiveHub() {
                   className="absolute inset-0 h-full w-full object-cover opacity-45 blur-sm transition duration-500 group-hover:scale-105"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-night-900 via-night-900/70 to-night-900/20" />
-                <div className="relative flex min-h-[340px] flex-col justify-end p-6 sm:p-8">
+                <div className="relative flex min-h-[340px] flex-col justify-end p-5 sm:p-8">
                   <div className="mb-4 flex flex-wrap items-center gap-2">
                     <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-400/50 bg-rose-500/25 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-rose-100">
                       <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-rose-300" />
@@ -74,14 +118,14 @@ export function LiveHub() {
                       );
                     })()}
                   </div>
-                  <h2 className="font-display text-3xl text-gold-200 sm:text-5xl">
+                  <h2 className="font-display text-2xl text-gold-200 sm:text-5xl">
                     {featured.title || `${featured.username} est en direct`}
                   </h2>
                   <p className="mt-3 max-w-2xl text-sm text-ivory/75">
                     {featured.description ||
-                      `Rejoignez ${featured.username} dans son live Vaelyndra.`}
+                      `Rejoignez ${featured.username} dans son live PulseForge.`}
                   </p>
-                  <div className="mt-5 flex flex-wrap items-center gap-4 text-sm text-ivory/80">
+                  <div className="mt-5 flex flex-col items-start gap-3 text-sm text-ivory/80 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
                     <span className="inline-flex items-center gap-2">
                       <img
                         src={featured.avatar}
@@ -278,7 +322,7 @@ export function LiveHub() {
         )}
       </section>
 
-      <div className="mt-10 grid gap-6 lg:grid-cols-[1.2fr,0.8fr]">
+        <div className="mt-10 grid gap-6 lg:grid-cols-[1.2fr,0.8fr]">
         <section className="rounded-2xl border border-royal-500/25 bg-night-900/35 p-5">
           <div className="mb-4 flex items-center gap-2">
             <Trophy className="h-4 w-4 text-gold-300" />

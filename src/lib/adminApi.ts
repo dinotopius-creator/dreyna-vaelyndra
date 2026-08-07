@@ -68,9 +68,9 @@ export type WalletPot =
   | "earnings_paid";
 
 export const WALLET_POT_LABELS: Record<WalletPot, string> = {
-  lueurs: "Lueurs (monnaie gratuite)",
-  sylvins_promo: "Sylvins promo (non retirables)",
-  sylvins_paid: "Sylvins payés (retirables)",
+  lueurs: "Eclats (monnaie gratuite)",
+  sylvins_promo: "Aureons promo (non retirables)",
+  sylvins_paid: "Aureons payés (retirables)",
   earnings_promo: "Earnings promo streamer",
   earnings_paid: "Earnings payés streamer (retirables)",
 };
@@ -83,6 +83,53 @@ export interface AuditLogEntry {
   targetUsername: string;
   action: string;
   details: Record<string, unknown>;
+  createdAt: string;
+}
+
+export type AdminRequestAction =
+  | "grant_lueurs"
+  | "grant_sylvins"
+  | "grant_item";
+
+export type AdminRequestStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "cancelled";
+
+export type AdminRequestContext =
+  | "recompense_evenement"
+  | "correction"
+  | "concours"
+  | "animation_live"
+  | "compensation"
+  | "autre";
+
+export interface AdminRequestEntry {
+  id: number;
+  requesterId: string;
+  requesterUsername: string;
+  requesterRole: string;
+  targetId: string;
+  targetUsername: string;
+  actionType: AdminRequestAction;
+  currency: string | null;
+  amount: number;
+  itemId: string | null;
+  reason: string;
+  context: AdminRequestContext;
+  status: AdminRequestStatus;
+  reviewerId: string | null;
+  reviewerUsername: string | null;
+  reviewerComment: string | null;
+  createdAt: string;
+  reviewedAt: string | null;
+}
+
+export interface OfficialEventResult {
+  id: string;
+  postType: string;
+  officialLabel: string;
   createdAt: string;
 }
 
@@ -264,6 +311,77 @@ export async function adminListAuditLog(params?: {
   if (params?.limit) search.set("limit", String(params.limit));
   const qs = search.toString() ? `?${search.toString()}` : "";
   return (await authRequest<AuditLogEntry[]>(`/admin/audit-log${qs}`)) ?? [];
+}
+
+export async function adminCreateRequest(body: {
+  targetUserId: string;
+  actionType: AdminRequestAction;
+  amount?: number;
+  itemId?: string;
+  reason: string;
+  context: AdminRequestContext;
+}): Promise<AdminRequestEntry> {
+  return (await authRequest<AdminRequestEntry>("/admin/requests", {
+    method: "POST",
+    body: JSON.stringify({
+      target_user_id: body.targetUserId,
+      action_type: body.actionType,
+      amount: body.amount ?? 0,
+      item_id: body.itemId || undefined,
+      reason: body.reason,
+      context: body.context,
+    }),
+  })) as AdminRequestEntry;
+}
+
+export async function adminListRequests(params?: {
+  status?: AdminRequestStatus;
+  targetId?: string;
+  limit?: number;
+}): Promise<AdminRequestEntry[]> {
+  const search = new URLSearchParams();
+  if (params?.status) search.set("status", params.status);
+  if (params?.targetId) search.set("target_id", params.targetId);
+  if (params?.limit) search.set("limit", String(params.limit));
+  const qs = search.toString() ? `?${search.toString()}` : "";
+  return (await authRequest<AdminRequestEntry[]>(`/admin/requests${qs}`)) ?? [];
+}
+
+export async function adminApproveRequest(
+  requestId: number,
+  comment?: string,
+): Promise<AdminRequestEntry> {
+  return (await authRequest<AdminRequestEntry>(
+    `/admin/requests/${requestId}/approve`,
+    { method: "POST", body: JSON.stringify({ comment: comment ?? "" }) },
+  )) as AdminRequestEntry;
+}
+
+export async function adminRejectRequest(
+  requestId: number,
+  comment?: string,
+): Promise<AdminRequestEntry> {
+  return (await authRequest<AdminRequestEntry>(
+    `/admin/requests/${requestId}/reject`,
+    { method: "POST", body: JSON.stringify({ comment: comment ?? "" }) },
+  )) as AdminRequestEntry;
+}
+
+export async function adminCreateOfficialEvent(body: {
+  title: string;
+  description: string;
+  eventDate?: string;
+  imageUrl?: string;
+}): Promise<OfficialEventResult> {
+  return (await authRequest<OfficialEventResult>("/admin/community/events", {
+    method: "POST",
+    body: JSON.stringify({
+      title: body.title,
+      description: body.description,
+      event_date: body.eventDate || undefined,
+      image_url: body.imageUrl || undefined,
+    }),
+  })) as OfficialEventResult;
 }
 
 // --- Reports ---------------------------------------------------------------

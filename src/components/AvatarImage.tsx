@@ -24,19 +24,26 @@ interface AvatarImageProps
   extends Omit<ImgHTMLAttributes<HTMLImageElement>, "src"> {
   candidates?: Array<string | null | undefined>;
   fallbackSeed: string;
+  fallbackSrc?: string;
 }
 
 export function AvatarImage({
   candidates = [],
   fallbackSeed,
+  fallbackSrc,
   alt,
   onError,
   ...props
 }: AvatarImageProps) {
-  const fallbackSrc = useMemo(() => fallbackAvatar(fallbackSeed), [fallbackSeed]);
+  const resolvedFallbackSrc = useMemo(
+    () => fallbackSrc?.trim() || fallbackAvatar(fallbackSeed),
+    [fallbackSeed, fallbackSrc],
+  );
   const resolvedSrc = useMemo(
-    () => candidates.find((src) => isRenderableAvatar(src))?.trim() ?? fallbackSrc,
-    [candidates, fallbackSrc],
+    () =>
+      candidates.find((src) => isRenderableAvatar(src))?.trim() ??
+      resolvedFallbackSrc,
+    [candidates, resolvedFallbackSrc],
   );
   const [src, setSrc] = useState(resolvedSrc);
 
@@ -50,7 +57,7 @@ export function AvatarImage({
       alt={alt}
       src={src}
       onError={(event) => {
-        if (src !== fallbackSrc) setSrc(fallbackSrc);
+        if (src !== resolvedFallbackSrc) setSrc(resolvedFallbackSrc);
         onError?.(event);
       }}
     />

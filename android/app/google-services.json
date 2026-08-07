@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "319780120769",
+    "project_id": "vaelyndra-a66f5",
+    "storage_bucket": "vaelyndra-a66f5.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:319780120769:android:eaecf3fac66748bb9b4c40",
+        "android_client_info": {
+          "package_name": "com.vaelyndra.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAbhOSDNMRdm8vAKDuwkUxUhDcuzghR_fw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

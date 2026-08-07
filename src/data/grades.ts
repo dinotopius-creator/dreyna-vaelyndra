@@ -91,7 +91,7 @@ export const GRADES: Grade[] = [
   },
   {
     slug: "legende-vaelyndra",
-    name: "Légende de Vaelyndra",
+    name: "Légende de PulseForge",
     short: "LEG",
     emoji: "👑",
     motto: "Les êtres rares qui façonnent le monde",

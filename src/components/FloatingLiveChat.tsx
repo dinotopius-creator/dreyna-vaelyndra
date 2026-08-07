@@ -74,15 +74,34 @@ function readPosition(): Position | null {
 
 function readMinimized(): boolean {
   if (typeof window === "undefined") return false;
-  return localStorage.getItem(MINIMIZED_STORAGE_KEY) === "1";
+  const stored = localStorage.getItem(MINIMIZED_STORAGE_KEY);
+  if (stored === null) return window.innerWidth < 640;
+  return stored === "1";
+}
+
+function getPanelWidth() {
+  if (typeof window === "undefined") return PANEL_WIDTH;
+  return window.innerWidth < 640
+    ? Math.min(PANEL_WIDTH, window.innerWidth - 16)
+    : PANEL_WIDTH;
+}
+
+function getPanelHeight() {
+  if (typeof window === "undefined") return PANEL_HEIGHT;
+  return window.innerWidth < 640
+    ? Math.min(PANEL_HEIGHT, window.innerHeight - 112)
+    : PANEL_HEIGHT;
 }
 
 function defaultPosition(): Position {
   if (typeof window === "undefined") return { x: 24, y: 24 };
   // Bas-droite de l'écran par défaut (comme demandé par Alexandre).
   return {
-    x: Math.max(16, window.innerWidth - PANEL_WIDTH - 24),
-    y: Math.max(16, window.innerHeight - PANEL_HEIGHT - 96),
+    x: Math.max(8, window.innerWidth - getPanelWidth() - 8),
+    y:
+      window.innerWidth < 640
+        ? Math.max(16, window.innerHeight - MINI_SIZE - 88)
+        : Math.max(16, window.innerHeight - getPanelHeight() - 96),
   };
 }
 
@@ -121,7 +140,7 @@ function FloatingLiveChatSession() {
   const [position, setPosition] = useState<Position>(() => {
     const stored = readPosition();
     const initial = stored ?? defaultPosition();
-    return clampPosition(initial, PANEL_WIDTH, PANEL_HEIGHT);
+    return clampPosition(initial, getPanelWidth(), getPanelHeight());
   });
   const [minimized, setMinimized] = useState<boolean>(() => readMinimized());
   // Masquage one-shot : le user a cliqué sur ✕, on cache jusqu'à la
@@ -180,7 +199,7 @@ function FloatingLiveChatSession() {
   // panneau peut se retrouver hors écran et devenir inaccessible.
   useEffect(() => {
     function handleResize() {
-      setPosition((prev) => clampPosition(prev, PANEL_WIDTH, PANEL_HEIGHT));
+      setPosition((prev) => clampPosition(prev, getPanelWidth(), getPanelHeight()));
     }
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
@@ -260,8 +279,8 @@ function FloatingLiveChatSession() {
     } else {
       e.preventDefault();
     }
-    const nextWidth = minimized ? MINI_SIZE : PANEL_WIDTH;
-    const nextHeight = minimized ? MINI_SIZE : PANEL_HEIGHT;
+    const nextWidth = minimized ? MINI_SIZE : getPanelWidth();
+    const nextHeight = minimized ? MINI_SIZE : getPanelHeight();
     setPosition(
       clampPosition(
         { x: e.clientX - state.offsetX, y: e.clientY - state.offsetY },
@@ -371,8 +390,8 @@ function FloatingLiveChatSession() {
         position: "fixed",
         left: position.x,
         top: position.y,
-        width: PANEL_WIDTH,
-        height: PANEL_HEIGHT,
+        width: getPanelWidth(),
+        height: getPanelHeight(),
         zIndex: 2147483000,
       }}
       className="flex flex-col overflow-hidden rounded-2xl border border-gold-400/30 bg-night-900/92 text-ivory shadow-2xl backdrop-blur-md"

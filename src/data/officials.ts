@@ -1,5 +1,5 @@
 /**
- * Comptes officiels Vaelyndra (miroir de `backend/app/main.py:OFFICIAL_ACCOUNTS`).
+ * Comptes officiels PulseForge (miroir de `backend/app/main.py:OFFICIAL_ACCOUNTS`).
  *
  * Utilisé côté front pour deviner le rôle et la créature d'un auteur de
  * post/commentaire sans avoir à faire un round-trip par carte. Quand le
@@ -8,7 +8,7 @@
 export interface Official {
   id: string;
   username: string;
-  role: "admin" | "animator";
+  role: "architect" | "admin" | "animator" | "user";
   creatureId: string;
 }
 
@@ -16,19 +16,19 @@ export const OFFICIALS: Official[] = [
   {
     id: "user-dreyna",
     username: "Dreyna",
-    role: "animator",
+    role: "user",
     creatureId: "elfe",
   },
   {
     id: "user-kamestars",
     username: "Kamestars LV",
-    role: "animator",
+    role: "user",
     creatureId: "fee",
   },
   {
     id: "user-roi-des-zems",
     username: "Le roi des zems💎",
-    role: "admin",
+    role: "architect",
     creatureId: "dragon",
   },
 ];

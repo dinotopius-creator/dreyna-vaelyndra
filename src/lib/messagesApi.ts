@@ -13,6 +13,8 @@ export interface DirectMessageDto {
   content: string;
   created_at: string;
   read_at: string | null;
+  /** Pièces jointes encodées en base64 (images, PDF, etc.) */
+  attachments?: import('../types').MessageAttachment[];
 }
 
 export interface ConversationDto {
@@ -58,11 +60,16 @@ export async function apiListConversations(): Promise<ConversationDto[]> {
 
 export async function apiGetThread(
   otherUserId: string,
-  limit = 200,
+  options: { limit?: number; beforeId?: number } = {},
 ): Promise<DirectMessageDto[]> {
+  const limit = options.limit ?? 200;
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (options.beforeId !== undefined && options.beforeId > 0) {
+    params.set("before_id", String(options.beforeId));
+  }
   return (
     (await messagesRequest<DirectMessageDto[]>(
-      `/${encodeURIComponent(otherUserId)}?limit=${limit}`,
+      `/${encodeURIComponent(otherUserId)}?${params.toString()}`,
     )) ?? []
   );
 }
@@ -70,12 +77,13 @@ export async function apiGetThread(
 export async function apiSendMessage(
   otherUserId: string,
   content: string,
+  attachment?: import('../types').MessageAttachment,
 ): Promise<DirectMessageDto> {
   return (await messagesRequest<DirectMessageDto>(
     `/${encodeURIComponent(otherUserId)}`,
     {
       method: "POST",
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({ content, ...(attachment ? { attachments: [attachment] } : {}) }),
     },
   )) as DirectMessageDto;
 }

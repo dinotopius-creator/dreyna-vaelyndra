@@ -105,12 +105,12 @@ SEED_PRODUCTS: list[dict] = [
     },
     {
         "id": "prod-sylvins-100",
-        "name": "Pochée de Sylvins",
-        "tagline": "100 Sylvins — le premier pas",
-        "description": "100 Sylvins crédités immédiatement sur ton compte. Parfait pour offrir tes premiers cadeaux animés pendant les lives.",
+        "name": "Pochée de Aureons",
+        "tagline": "100 Aureons — le premier pas",
+        "description": "100 Aureons crédités immédiatement sur ton compte. Parfait pour offrir tes premiers cadeaux animés pendant les lives.",
         "price": 1.99,
         "image": "/sylvin-coin-icon.png",
-        "category": "Sylvins",
+        "category": "Aureons",
         "rating": 5,
         "stock": 9999,
         "tags": ["sylvins", "monnaie virtuelle"],
@@ -118,12 +118,12 @@ SEED_PRODUCTS: list[dict] = [
     },
     {
         "id": "prod-sylvins-500",
-        "name": "Bourse de Sylvins",
-        "tagline": "500 Sylvins + 50 bonus",
-        "description": "550 Sylvins au total (500 + 50 offerts). Le pack le plus populaire de la cour pour soutenir Dreyna en live.",
+        "name": "Bourse de Aureons",
+        "tagline": "500 Aureons + 50 bonus",
+        "description": "550 Aureons au total (500 + 50 offerts). Le pack le plus populaire de la cour pour soutenir Dreyna en live.",
         "price": 8.99,
         "image": "/sylvin-coin-icon.png",
-        "category": "Sylvins",
+        "category": "Aureons",
         "rating": 4.9,
         "stock": 9999,
         "tags": ["sylvins", "monnaie virtuelle", "populaire"],
@@ -133,11 +133,11 @@ SEED_PRODUCTS: list[dict] = [
     {
         "id": "prod-sylvins-1200",
         "name": "Coffre Verdoyant",
-        "tagline": "1 200 Sylvins + 200 bonus",
-        "description": "1 400 Sylvins au total (1 200 + 200 offerts). Pour les chevaliers réguliers de la cour.",
+        "tagline": "1 200 Aureons + 200 bonus",
+        "description": "1 400 Aureons au total (1 200 + 200 offerts). Pour les chevaliers réguliers de la cour.",
         "price": 19.99,
         "image": "/sylvin-coin-icon.png",
-        "category": "Sylvins",
+        "category": "Aureons",
         "rating": 4.9,
         "stock": 9999,
         "tags": ["sylvins", "monnaie virtuelle"],
@@ -146,11 +146,11 @@ SEED_PRODUCTS: list[dict] = [
     {
         "id": "prod-sylvins-3000",
         "name": "Arche Sylvestre",
-        "tagline": "3 000 Sylvins + 600 bonus",
-        "description": "3 600 Sylvins au total (3 000 + 600 offerts). Pour les ducs et duchesses de la cour royale.",
+        "tagline": "3 000 Aureons + 600 bonus",
+        "description": "3 600 Aureons au total (3 000 + 600 offerts). Pour les ducs et duchesses de la cour royale.",
         "price": 44.99,
         "image": "/sylvin-coin-icon.png",
-        "category": "Sylvins",
+        "category": "Aureons",
         "rating": 4.95,
         "stock": 9999,
         "tags": ["sylvins", "monnaie virtuelle"],
@@ -159,11 +159,11 @@ SEED_PRODUCTS: list[dict] = [
     {
         "id": "prod-sylvins-8000",
         "name": "Relique d'Elennor",
-        "tagline": "8 000 Sylvins + 2 000 bonus",
-        "description": "10 000 Sylvins au total (8 000 + 2 000 offerts). Pour les princes et princesses de Vaelyndra — débloque automatiquement le badge Mécène Royal.",
+        "tagline": "8 000 Aureons + 2 000 bonus",
+        "description": "10 000 Aureons au total (8 000 + 2 000 offerts). Pour les princes et princesses de Vaelyndra — débloque automatiquement le badge Mécène Royal.",
         "price": 99.99,
         "image": "/sylvin-coin-icon.png",
-        "category": "Sylvins",
+        "category": "Aureons",
         "rating": 5,
         "stock": 9999,
         "tags": ["sylvins", "monnaie virtuelle", "premium"],
@@ -172,55 +172,60 @@ SEED_PRODUCTS: list[dict] = [
     },
     {
         "id": "prod-lueurs-fiole",
-        "name": "Fiole de lucioles",
-        "tagline": "Collection lumineuse · 120 Lueurs",
-        "description": "Objet numérique collector inspiré des lucioles sacrées de Vaelyndra. Achat immédiat avec tes Lueurs.",
-        "price": 120,
-        "currency": "Lueurs",
+        "name": "Étincelle de Eclats",
+        "tagline": "500 Eclats · recharge découverte",
+        "description": "500 Eclats créditées sur ton compte pour débloquer les premiers items gratuits plus vite.",
+        "price": 1.49,
+        "currency": "€",
         "image": "/lueurs-fiole.svg",
-        "category": "Lueurs",
+        "category": "Eclats",
         "rating": 4.8,
         "stock": 9999,
-        "tags": ["lueurs", "collector", "digital"],
+        "tags": ["lueurs", "monnaie virtuelle", "découverte"],
+        "lueurs": 500,
     },
     {
         "id": "prod-lueurs-grimoire",
-        "name": "Grimoire d'éclats",
-        "tagline": "Edition runique · 260 Lueurs",
-        "description": "Une relique numérique de bibliothèque mystique, réservée aux membres qui dépensent leurs Lueurs.",
-        "price": 260,
-        "currency": "Lueurs",
+        "name": "Bourse de Eclats",
+        "tagline": "1 200 Eclats · meilleur départ",
+        "description": "1 200 Eclats pour acheter plusieurs cosmétiques non premium sans attendre les récompenses quotidiennes.",
+        "price": 2.99,
+        "currency": "€",
         "image": "/lueurs-grimoire.svg",
-        "category": "Lueurs",
+        "category": "Eclats",
         "rating": 4.9,
         "stock": 9999,
-        "tags": ["lueurs", "grimoire", "digital"],
+        "tags": ["lueurs", "monnaie virtuelle", "populaire"],
+        "featured": True,
+        "lueurs": 1200,
     },
     {
         "id": "prod-lueurs-banniere",
-        "name": "Bannière astrale",
-        "tagline": "Étendard du royaume · 480 Lueurs",
-        "description": "Grande bannière cosmique de collection, pensée comme un trésor premium à débloquer avec les Lueurs du jeu.",
-        "price": 480,
-        "currency": "Lueurs",
+        "name": "Coffret de Eclats",
+        "tagline": "3 000 Eclats · collection avatar",
+        "description": "Un gros pack de Eclats pensé pour composer une tenue avatar complète en monnaie non premium.",
+        "price": 6.99,
+        "currency": "€",
         "image": "/lueurs-banniere.svg",
-        "category": "Lueurs",
+        "category": "Eclats",
         "rating": 5,
         "stock": 9999,
-        "tags": ["lueurs", "astral", "collector"],
+        "tags": ["lueurs", "monnaie virtuelle", "avatar"],
+        "lueurs": 3000,
     },
     {
         "id": "prod-lueurs-relique",
-        "name": "Relique du veilleur",
-        "tagline": "Artefact majeur · 900 Lueurs",
-        "description": "Une grande pièce de prestige pour les membres les plus actifs de la plateforme. Achetable uniquement en Lueurs.",
-        "price": 900,
-        "currency": "Lueurs",
+        "name": "Trésor de Eclats",
+        "tagline": "7 500 Eclats · réserve royale",
+        "description": "La réserve la plus rentable en Eclats, moins chère que les Aureons et adaptée aux achats cosmétiques non premium.",
+        "price": 14.99,
+        "currency": "€",
         "image": "/lueurs-relique.svg",
-        "category": "Lueurs",
+        "category": "Eclats",
         "rating": 5,
         "stock": 9999,
-        "tags": ["lueurs", "prestige", "relique"],
+        "tags": ["lueurs", "monnaie virtuelle", "réserve"],
+        "lueurs": 7500,
     },
 ]
 
@@ -346,6 +351,7 @@ def seed_catalog() -> None:
                         image=p.get("image", ""),
                         category=p.get("category", "Merch"),
                         sylvins=p.get("sylvins"),
+                        lueurs=p.get("lueurs"),
                         rating=float(p.get("rating", 5.0)),
                         stock=int(p.get("stock", 0)),
                         featured=bool(p.get("featured", False)),
@@ -362,7 +368,31 @@ def seed_catalog() -> None:
             )
             now = _now_iso()
             for p in SEED_PRODUCTS:
-                if p["id"] not in BACKFILL_PRODUCT_IDS or p["id"] in existing_ids:
+                if p["id"] not in BACKFILL_PRODUCT_IDS:
+                    continue
+                existing = session.get(CatalogProduct, p["id"])
+                if existing is not None:
+                    # Convertit les anciens objets collectors achetés en
+                    # Eclats en vrais packs de Eclats payables en euros.
+                    existing.name = p["name"]
+                    existing.tagline = p.get("tagline", "")
+                    existing.description = p.get("description", "")
+                    existing.price = float(p.get("price", 0))
+                    existing.currency = p.get("currency", "€")
+                    existing.image = p.get("image", "")
+                    existing.category = p.get("category", "Merch")
+                    existing.sylvins = p.get("sylvins")
+                    existing.lueurs = p.get("lueurs")
+                    existing.rating = float(p.get("rating", 5.0))
+                    existing.stock = int(p.get("stock", 0))
+                    existing.featured = bool(p.get("featured", False))
+                    existing.tags_json = json.dumps(
+                        p.get("tags", []), ensure_ascii=False
+                    )
+                    existing.updated_at = now
+                    session.add(existing)
+                    continue
+                if p["id"] in existing_ids:
                     continue
                 session.add(
                     CatalogProduct(
@@ -375,6 +405,7 @@ def seed_catalog() -> None:
                         image=p.get("image", ""),
                         category=p.get("category", "Merch"),
                         sylvins=p.get("sylvins"),
+                        lueurs=p.get("lueurs"),
                         rating=float(p.get("rating", 5.0)),
                         stock=int(p.get("stock", 0)),
                         featured=bool(p.get("featured", False)),

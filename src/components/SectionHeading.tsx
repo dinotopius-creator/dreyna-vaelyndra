@@ -27,15 +27,17 @@ export function SectionHeading({
       }
     >
       {eyebrow && (
-        <p className="font-regal text-[11px] tracking-[0.4em] text-gold-300">
+        <p className="font-regal text-[10px] tracking-[0.26em] text-gold-300 sm:text-[11px] sm:tracking-[0.4em]">
           {eyebrow}
         </p>
       )}
-      <h2 className="heading-gold mt-3 text-3xl text-balance md:text-5xl">
+      <h2 className="heading-gold mt-3 text-2xl text-balance sm:text-3xl md:text-5xl">
         {title}
       </h2>
       {subtitle && (
-        <p className="mt-4 text-base text-ivory/75 md:text-lg">{subtitle}</p>
+        <p className="mt-3 text-sm leading-6 text-ivory/75 sm:mt-4 sm:text-base md:text-lg">
+          {subtitle}
+        </p>
       )}
       {children}
     </motion.div>

@@ -5,6 +5,7 @@ import {
   useEffect,
   useMemo,
   useReducer,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -56,7 +57,7 @@ interface StoreState {
    */
   deletedArticleIds: string[];
   /**
-   * Per-user Sylvins wallets (balance, streamer earnings, gift history).
+   * Per-user Aureons wallets (balance, streamer earnings, gift history).
    */
   wallets: Record<string, Wallet>;
 }
@@ -90,6 +91,8 @@ type Action =
   | { type: "reactPost"; postId: string; emoji: string; userId: string }
   | { type: "addPostComment"; postId: string; comment: Comment }
   | { type: "deletePostComment"; postId: string; commentId: string }
+  | { type: "toggleCommentLike"; postId: string; commentId: string; userId: string }
+  | { type: "replaceComment"; postId: string; comment: Comment }
   | { type: "addLive"; live: LiveSession }
   | { type: "deleteLive"; id: string }
   | {
@@ -101,7 +104,7 @@ type Action =
       toId: string;
       toName: string;
     }
-  | { type: "creditSylvins"; userId: string; amount: number }
+  | { type: "creditAureons"; userId: string; amount: number }
   | {
       /**
        * Synchronise le wallet local depuis la source de vérité serveur
@@ -109,7 +112,7 @@ type Action =
        * paiement Stripe (qui crédite uniquement côté backend), la balance
        * affichée dans /moi, /panier et le GiftPanel resterait à 0 jusqu'à
        * ce que l'utilisateur dépense quelque chose. Idem au login : un
-       * compte chargé d'achats antérieurs n'affichait jamais ses Sylvins.
+       * compte chargé d'achats antérieurs n'affichait jamais ses Aureons.
        */
       type: "syncWalletFromServer";
       userId: string;
@@ -275,6 +278,40 @@ function reducer(state: StoreState, action: Action): StoreState {
             : p,
         ),
       };
+    case "toggleCommentLike":
+      return {
+        ...state,
+        posts: state.posts.map((p) => {
+          if (p.id !== action.postId) return p;
+          return {
+            ...p,
+            comments: p.comments.map((c) => {
+              if (c.id !== action.commentId) return c;
+              const has = c.likes.includes(action.userId);
+              return {
+                ...c,
+                likes: has
+                  ? c.likes.filter((uid) => uid !== action.userId)
+                  : [...c.likes, action.userId],
+              };
+            }),
+          };
+        }),
+      };
+    case "replaceComment":
+      return {
+        ...state,
+        posts: state.posts.map((p) =>
+          p.id === action.postId
+            ? {
+                ...p,
+                comments: p.comments.map((c) =>
+                  c.id === action.comment.id ? action.comment : c,
+                ),
+              }
+            : p,
+        ),
+      };
     case "addLive":
       return { ...state, lives: [action.live, ...state.lives] };
     case "deleteLive":
@@ -316,7 +353,7 @@ function reducer(state: StoreState, action: Action): StoreState {
         },
       };
     }
-    case "creditSylvins": {
+    case "creditAureons": {
       const wallet = getWallet(state.wallets, action.userId);
       return {
         ...state,
@@ -353,6 +390,15 @@ function reducer(state: StoreState, action: Action): StoreState {
     default:
       return state;
   }
+}
+
+function mergeCommunityPosts(base: CommunityPost[], incoming: CommunityPost[]) {
+  const merged = new Map<string, CommunityPost>();
+  for (const post of base) merged.set(post.id, post);
+  for (const post of incoming) merged.set(post.id, post);
+  return Array.from(merged.values()).sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
 }
 
 const INITIAL: StoreState = {
@@ -415,7 +461,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return init;
       const parsed = JSON.parse(raw) as Partial<StoreState>;
-      // Merge any new mock products (e.g. newly added Sylvins packs) into the
+      // Merge any new mock products (e.g. newly added Aureons packs) into the
       // stored catalogue so existing users automatically get them without
       // losing their own admin-created products. Mock products that the admin
       // explicitly deleted are tracked in `deletedMockProductIds` so they are
@@ -575,6 +621,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return init;
     }
   });
+  const postsRef = useRef(state.posts);
+
+  useEffect(() => {
+    postsRef.current = state.posts;
+  }, [state.posts]);
 
   const [isLiveOn, setLiveOn] = useState<boolean>(() => {
     try {
@@ -604,7 +655,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const refresh = async () => {
       try {
         const posts = await apiListPosts();
-        if (!cancelled) dispatch({ type: "setPosts", posts });
+        if (cancelled) return;
+        if (posts.length === 0) {
+          console.warn(
+            "Le backend a renvoyé un fil vide; on conserve les posts locaux existants.",
+          );
+          return;
+        }
+        const nextPosts = mergeCommunityPosts(postsRef.current, posts);
+        dispatch({ type: "setPosts", posts: nextPosts });
       } catch (err) {
         if (!cancelled) console.warn("Impossible de rafraîchir le fil :", err);
       }
@@ -647,9 +706,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Source de vérité du wallet : `backendMe` (`/auth/me`). Sans ce sync, la
-  // balance locale (`state.wallets[user.id]`) ne reçoit jamais les Sylvins
+  // balance locale (`state.wallets[user.id]`) ne reçoit jamais les Aureons
   // crédités côté serveur (achats Stripe via webhook, top-ups admin, gains
-  // streamer). Résultat : "Solde à dépenser : 0 Sylvins" même après un
+  // streamer). Résultat : "Solde à dépenser : 0 Aureons" même après un
   // paiement réussi. On dispatche dès que les pots changent côté serveur.
   useEffect(() => {
     if (!user?.id || !backendMe) return;
@@ -665,6 +724,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     });
   }, [
     user?.id,
+    backendMe,
     backendMe?.sylvins_paid,
     backendMe?.sylvins_promo,
     backendMe?.earnings_paid,
@@ -734,3 +794,4 @@ export function useStore() {
   if (!ctx) throw new Error("useStore must be used in StoreProvider");
   return ctx;
 }
+

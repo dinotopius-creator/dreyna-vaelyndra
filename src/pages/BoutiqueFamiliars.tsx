@@ -2,9 +2,9 @@
  * Boutique des familiers (PR familiers#4).
  *
  * Catalogue complet (gratuits + premium) avec filtre par rareté, badge
- * "déjà possédé" / "actif" et achat des familiers premium en Sylvins.
+ * "déjà possédé" / "actif" et achat des familiers premium en Aureons.
  *
- * Le débit Sylvins est atomique côté serveur (cf. `POST /users/{id}/
+ * Le débit Aureons est atomique côté serveur (cf. `POST /users/{id}/
  * familiers/buy`) — on se contente d'afficher l'état et de rafraîchir
  * `backendMe` après chaque achat pour synchroniser le solde.
  */
@@ -82,7 +82,7 @@ export function BoutiqueFamiliars() {
     const sorted = [...catalog].sort((a, b) => {
       // Free d'abord, puis premium, puis par prix croissant à l'intérieur.
       if (a.tier !== b.tier) return a.tier === "free" ? -1 : 1;
-      return a.priceSylvins - b.priceSylvins;
+      return a.priceAureons - b.priceAureons;
     });
     if (filter === "all") return sorted;
     return sorted.filter((f) => f.rarity === filter);
@@ -97,16 +97,16 @@ export function BoutiqueFamiliars() {
       return;
     }
     if (ownedIds.has(item.id)) return;
-    if (item.tier === "premium" && sylvinsTotal < item.priceSylvins) {
+    if (item.tier === "premium" && sylvinsTotal < item.priceAureons) {
       notify(
-        `Solde insuffisant : ${item.priceSylvins} Sylvins requis, tu en as ${sylvinsTotal}.`,
+        `Solde insuffisant : ${item.priceAureons} Aureons requis, tu en as ${sylvinsTotal}.`,
         "error",
       );
       return;
     }
     const ok = window.confirm(
       item.tier === "premium"
-        ? `Acquérir ${item.name} pour ${item.priceSylvins} Sylvins ?\n\nIl rejoindra ta collection. Tu pourras l'activer depuis la page Mon Familier (1er switch gratuit, puis 300 Sylvins).`
+        ? `Acquérir ${item.name} pour ${item.priceAureons} Aureons ?\n\nIl rejoindra ta collection. Tu pourras l'activer depuis la page Mon Familier (1er switch gratuit, puis 300 Aureons).`
         : `Ajouter ${item.name} à ta collection (gratuit) ?`,
     );
     if (!ok) return;
@@ -115,7 +115,7 @@ export function BoutiqueFamiliars() {
       const updated = await buyFamiliar(user.id, item.id);
       setCollection(updated);
       notify(`${item.icon} ${item.name} rejoint ta collection.`);
-      // Synchronise le solde Sylvins après débit serveur.
+      // Synchronise le solde Aureons après débit serveur.
       await refreshBackendMe();
     } catch (e: unknown) {
       const msg =
@@ -155,7 +155,7 @@ export function BoutiqueFamiliars() {
         </h1>
         <p className="max-w-xl text-sm text-ivory/70">
           Familiers d'éveil et ancestraux. Les ancestraux se débloquent en
-          Sylvins et apportent des animations rares, des effets de particules
+          Aureons et apportent des animations rares, des effets de particules
           et des cadres premium sur ton profil.
         </p>
         {user?.id && (
@@ -164,7 +164,7 @@ export function BoutiqueFamiliars() {
             <span className="text-gold-200">
               {sylvinsTotal.toLocaleString("fr-FR")}
             </span>{" "}
-            Sylvins
+            Aureons
           </div>
         )}
       </header>
@@ -197,7 +197,7 @@ export function BoutiqueFamiliars() {
               active={active}
               pending={buying === item.id}
               canAfford={
-                item.tier === "free" || sylvinsTotal >= item.priceSylvins
+                item.tier === "free" || sylvinsTotal >= item.priceAureons
               }
               onBuy={() => purchase(item)}
             />
@@ -324,10 +324,10 @@ function BoutiqueCard({
           {item.tier === "premium" ? (
             <>
               <span className="text-gold-200">
-                {item.priceSylvins.toLocaleString("fr-FR")}
+                {item.priceAureons.toLocaleString("fr-FR")}
               </span>{" "}
               <span className="text-[11px] uppercase tracking-widest text-ivory/50">
-                Sylvins
+                Aureons
               </span>
             </>
           ) : (

@@ -1,7 +1,7 @@
 /**
  * Helper unique pour afficher le "rôle" d'un utilisateur de façon sobre.
  *
- * Historiquement, l'app affichait des titres fantasy ("Reine de Vaelyndra",
+ * Historiquement, l'app affichait des titres fantasy ("Reine de PulseForge",
  * "Chevalier·e lunaire", "Elfe de la cour") en dur sur les profils. Sur
  * un vrai réseau social, le rôle doit juste dire ce que la personne EST
  * sur la plateforme (admin / animateur / membre), sans fiction narrative.
@@ -11,9 +11,10 @@
  * `localStorage` seed.
  *
  * Le `role` du backend est la source de vérité quand il est disponible :
- * `admin` | `animator` | `user`.
+ * `architect` | `admin` | `animator` | `user`.
  */
 export type UserRole =
+  | "architect"
   | "admin"
   | "animator"
   | "user"
@@ -25,6 +26,7 @@ export type UserRole =
   | undefined;
 
 export function roleLabel(role: UserRole): string {
+  if (role === "architect") return "Architecte";
   if (role === "admin" || role === "queen") return "Administrateur";
   if (role === "animator" || role === "knight") return "Animateur";
   return "Membre";
@@ -32,6 +34,7 @@ export function roleLabel(role: UserRole): string {
 
 /** Avec une pincée d'emoji pour les cartes profil. */
 export function roleLabelWithIcon(role: UserRole): string {
+  if (role === "architect") return "♛ Architecte";
   if (role === "admin" || role === "queen") return "🛡️ Administrateur";
   if (role === "animator" || role === "knight") return "🎭 Animateur";
   return "✨ Membre";

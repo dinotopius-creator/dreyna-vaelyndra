@@ -48,7 +48,7 @@ export function LiveDesktopChatPopout() {
   const isStreamerPopout = !!user?.id && user.id === broadcasterId;
 
   useEffect(() => {
-    document.title = "Vaelyndra Live Chat";
+    document.title = "PulseForge Live Chat";
   }, []);
 
   useEffect(() => {
@@ -194,7 +194,7 @@ export function LiveDesktopChatPopout() {
         </div>
         <div className="min-w-0 flex-1">
           <p className="truncate font-display text-lg text-gold-100">
-            Chat live Vaelyndra
+            Chat live PulseForge
           </p>
           <p className="text-[11px] uppercase tracking-[0.18em] text-ivory/45">
             Fenetre pop-out PC

@@ -14,7 +14,9 @@ viennent dans des PRs suivantes.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import json
+import random
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -24,14 +26,19 @@ from sqlmodel import Session, select
 from ..db import get_session
 from ..familiars import (
     FAMILIARS,
+    FAMILIAR_COSMETICS,
+    DEFAULT_FAMILIAR_COSMETIC_IDS,
     SWITCH_PRICE_SYLVINS,
     RENAME_PRICE_SYLVINS,
     compute_familiar_stats,
     evolution_for_level,
     get_familiar,
+    get_familiar_cosmetic,
     progress_in_level,
 )
+from ..familiars_xp import grant_gift_received_xp, grant_gift_sent_xp
 from ..models import (
+    FamiliarGiftLedger,
     FamiliarSwitchLedger,
     UserFamiliar,
     UserProfile,
@@ -41,6 +48,10 @@ from ..models import (
 
 router = APIRouter(prefix="/familiers", tags=["familiers"])
 user_router = APIRouter(prefix="/users", tags=["familiers"])
+
+AFFECTION_HEART_REQUIREMENTS = [10, 15, 20, 30, 45, 60, 80, 105, 135, 170]
+AFFECTION_HEART_REWARDS = [50, 75, 100, 150, 200, 275, 350, 450, 600, 800]
+ENCLOSURE_CLEANING_COOLDOWN_SECONDS = 6 * 60 * 60
 
 
 def _session_dep() -> Session:
@@ -57,6 +68,100 @@ def _session_gen():
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _parse_iso(value: Optional[str]) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _affection_cumulative_thresholds() -> list[int]:
+    total = 0
+    thresholds: list[int] = []
+    for required in AFFECTION_HEART_REQUIREMENTS:
+        total += required
+        thresholds.append(total)
+    return thresholds
+
+
+def _affection_hearts(feedings: int) -> int:
+    total = max(0, int(feedings or 0))
+    hearts = 0
+    for threshold in _affection_cumulative_thresholds():
+        if total >= threshold:
+            hearts += 1
+    return min(10, hearts)
+
+
+def _load_rewarded_hearts(row: UserFamiliar) -> list[int]:
+    try:
+        raw = json.loads(row.affection_rewarded_hearts_json or "[]")
+    except (TypeError, ValueError):
+        raw = []
+    out: list[int] = []
+    for item in raw:
+        try:
+            heart = int(item)
+        except (TypeError, ValueError):
+            continue
+        if 1 <= heart <= 10 and heart not in out:
+            out.append(heart)
+    return sorted(out)
+
+
+def _store_rewarded_hearts(row: UserFamiliar, hearts: list[int]) -> None:
+    clean = sorted({heart for heart in hearts if 1 <= int(heart) <= 10})
+    row.affection_rewarded_hearts_json = json.dumps(clean)
+
+
+def _affection_out(row: UserFamiliar) -> FamiliarAffectionOut:
+    feedings = max(0, int(row.affection_feedings or 0))
+    hearts = _affection_hearts(feedings)
+    thresholds = _affection_cumulative_thresholds()
+    previous_threshold = thresholds[hearts - 1] if hearts > 0 else 0
+    next_threshold = thresholds[hearts] if hearts < 10 else thresholds[-1]
+    meals_for_next = (
+        AFFECTION_HEART_REQUIREMENTS[hearts] if hearts < 10 else 0
+    )
+    meals_into = min(max(0, feedings - previous_threshold), meals_for_next)
+    meals_until = max(0, next_threshold - feedings) if hearts < 10 else 0
+    return FamiliarAffectionOut(
+        foodStock=max(0, int(row.food_stock or 0)),
+        affectionFeedings=feedings,
+        affectionHearts=hearts,
+        affectionMealsIntoHeart=meals_into,
+        affectionMealsForNextHeart=meals_for_next,
+        affectionMealsUntilNextHeart=meals_until,
+        affectionRewardedHearts=_load_rewarded_hearts(row),
+        heartRequirements=list(AFFECTION_HEART_REQUIREMENTS),
+        heartRewards=list(AFFECTION_HEART_REWARDS),
+    )
+
+
+def _roll_cleaning_food() -> int:
+    roll = random.random()
+    if roll < 0.60:
+        return 1
+    if roll < 0.85:
+        return 2
+    if roll < 0.95:
+        return 3
+    return 0
+
+
+def _cleaning_cooldown_remaining(row: UserFamiliar) -> int:
+    last = _parse_iso(row.enclosure_last_cleaned_at)
+    if last is None:
+        return 0
+    if last.tzinfo is None:
+        last = last.replace(tzinfo=timezone.utc)
+    ready_at = last + timedelta(seconds=ENCLOSURE_CLEANING_COOLDOWN_SECONDS)
+    remaining = ready_at - datetime.now(timezone.utc)
+    return max(0, int(remaining.total_seconds()))
 
 
 # --- DTOs ------------------------------------------------------------------
@@ -79,8 +184,22 @@ class FamiliarCatalogItemOut(BaseModel):
     color: str
     tagline: str
     description: str
-    priceSylvins: int
+    priceAureons: int
     baseStats: dict
+
+
+class FamiliarCosmeticOut(BaseModel):
+    id: str
+    slot: str
+    name: str
+    description: str
+    rarity: str
+    currency: str
+    price: int
+    icon: str = ""
+    color: str = ""
+    accent: str = ""
+    compatibleFamiliars: Optional[List[str]] = None
 
 
 class OwnedFamiliarOut(BaseModel):
@@ -103,6 +222,43 @@ class OwnedFamiliarOut(BaseModel):
     stats: dict
     acquiredAt: str
     lastActiveAt: Optional[str] = None
+    cosmeticInventory: List[str] = []
+    cosmeticEquipped: dict = {}
+    cosmetics: dict = {}
+    foodStock: int = 0
+    affectionFeedings: int = 0
+    affectionHearts: int = 0
+    affectionMealsIntoHeart: int = 0
+    affectionMealsForNextHeart: int = 0
+    affectionMealsUntilNextHeart: int = 0
+    affectionRewardedHearts: List[int] = []
+    heartRequirements: List[int] = []
+    heartRewards: List[int] = []
+    enclosureLastCleanedAt: Optional[str] = None
+    enclosureCooldownRemainingSeconds: int = 0
+
+
+class FamiliarAffectionOut(BaseModel):
+    foodStock: int
+    affectionFeedings: int
+    affectionHearts: int
+    affectionMealsIntoHeart: int
+    affectionMealsForNextHeart: int
+    affectionMealsUntilNextHeart: int
+    affectionRewardedHearts: List[int]
+    heartRequirements: List[int]
+    heartRewards: List[int]
+
+
+class FamiliarEnclosureActionOut(BaseModel):
+    familiar: OwnedFamiliarOut
+    affection: FamiliarAffectionOut
+    foodFound: int = 0
+    heartGained: Optional[int] = None
+    lueursRewarded: int = 0
+    profileEclats: int = 0
+    cooldownRemainingSeconds: int = 0
+    message: str
 
 
 class FamiliarCollectionOut(BaseModel):
@@ -113,7 +269,7 @@ class FamiliarCollectionOut(BaseModel):
     owned: List[OwnedFamiliarOut]
     switchCount: int
     nextSwitchFree: bool
-    switchPriceSylvins: int
+    switchPriceAureons: int
 
 
 class BuyFamiliarPayload(BaseModel):
@@ -132,6 +288,20 @@ class OnboardingPayload(BaseModel):
     familiarId: str = Field(..., min_length=1, max_length=64)
 
 
+class GiftFamiliarPayload(BaseModel):
+    senderId: str = Field(..., min_length=1, max_length=128)
+    amount: int = Field(..., gt=0, le=10000)
+
+
+class BuyFamiliarCosmeticPayload(BaseModel):
+    cosmeticId: str = Field(..., min_length=1, max_length=80)
+
+
+class EquipFamiliarCosmeticPayload(BaseModel):
+    slot: str = Field(..., min_length=1, max_length=32)
+    cosmeticId: Optional[str] = Field(default=None, max_length=80)
+
+
 # --- Helpers --------------------------------------------------------------
 
 
@@ -145,9 +315,93 @@ def _catalog_item_out(definition) -> FamiliarCatalogItemOut:
         color=definition["color"],
         tagline=definition["tagline"],
         description=definition["description"],
-        priceSylvins=definition["price_sylvins"],
+        priceAureons=definition["price_sylvins"],
         baseStats=dict(definition["base_stats"]),
     )
+
+
+def _cosmetic_out(definition) -> FamiliarCosmeticOut:
+    return FamiliarCosmeticOut(
+        id=definition["id"],
+        slot=definition["slot"],
+        name=definition["name"],
+        description=definition["description"],
+        rarity=definition["rarity"],
+        currency=definition["currency"],
+        price=definition["price"],
+        icon=definition.get("icon", ""),
+        color=definition.get("color", ""),
+        accent=definition.get("accent", ""),
+        compatibleFamiliars=definition.get("compatible_familiars"),
+    )
+
+
+def _load_cosmetic_inventory(row: UserFamiliar) -> List[str]:
+    try:
+        raw = json.loads(row.cosmetic_inventory_json or "[]")
+    except (TypeError, ValueError):
+        raw = []
+    ids = [str(item) for item in raw if isinstance(item, str)]
+    merged: list[str] = []
+    for cosmetic_id in [*DEFAULT_FAMILIAR_COSMETIC_IDS, *ids]:
+        if cosmetic_id in merged:
+            continue
+        if get_familiar_cosmetic(cosmetic_id) is not None:
+            merged.append(cosmetic_id)
+    return merged
+
+
+def _store_cosmetic_inventory(row: UserFamiliar, inventory: List[str]) -> None:
+    clean = []
+    for cosmetic_id in inventory:
+        if cosmetic_id in clean:
+            continue
+        if get_familiar_cosmetic(cosmetic_id) is not None:
+            clean.append(cosmetic_id)
+    row.cosmetic_inventory_json = json.dumps(clean)
+
+
+def _load_cosmetic_equipped(row: UserFamiliar) -> dict[str, str]:
+    try:
+        raw = json.loads(row.cosmetic_equipped_json or "{}")
+    except (TypeError, ValueError):
+        raw = {}
+    if not isinstance(raw, dict):
+        return {}
+    inventory = set(_load_cosmetic_inventory(row))
+    out: dict[str, str] = {}
+    for slot, cosmetic_id in raw.items():
+        if not isinstance(slot, str) or not isinstance(cosmetic_id, str):
+            continue
+        cosmetic = get_familiar_cosmetic(cosmetic_id)
+        if cosmetic is None or cosmetic_id not in inventory:
+            continue
+        if cosmetic["slot"] != slot:
+            continue
+        out[slot] = cosmetic_id
+    return out
+
+
+def _store_cosmetic_equipped(row: UserFamiliar, equipped: dict[str, str]) -> None:
+    clean: dict[str, str] = {}
+    inventory = set(_load_cosmetic_inventory(row))
+    for slot, cosmetic_id in equipped.items():
+        cosmetic = get_familiar_cosmetic(cosmetic_id)
+        if cosmetic is None or cosmetic_id not in inventory:
+            continue
+        if cosmetic["slot"] != slot:
+            continue
+        clean[slot] = cosmetic_id
+    row.cosmetic_equipped_json = json.dumps(clean)
+
+
+def _equipped_cosmetics(row: UserFamiliar) -> dict:
+    out = {}
+    for slot, cosmetic_id in _load_cosmetic_equipped(row).items():
+        cosmetic = get_familiar_cosmetic(cosmetic_id)
+        if cosmetic is not None:
+            out[slot] = dict(_cosmetic_out(cosmetic))
+    return out
 
 
 def _owned_out(row: UserFamiliar) -> OwnedFamiliarOut:
@@ -160,6 +414,14 @@ def _owned_out(row: UserFamiliar) -> OwnedFamiliarOut:
         "color": "#888",
     }
     level, xp_into, xp_to_next = progress_in_level(row.xp)
+    inventory = _load_cosmetic_inventory(row)
+    equipped = _load_cosmetic_equipped(row)
+    cosmetics = _equipped_cosmetics(row)
+    affection = _affection_out(row)
+    display_color = fam.get("color", "#888")
+    color_cosmetic = cosmetics.get("color")
+    if color_cosmetic and color_cosmetic.get("color"):
+        display_color = color_cosmetic["color"]
     return OwnedFamiliarOut(
         id=row.id or 0,
         familiarId=row.familiar_id,
@@ -167,7 +429,7 @@ def _owned_out(row: UserFamiliar) -> OwnedFamiliarOut:
         rarity=fam.get("rarity", "commun"),
         tier=fam.get("tier", "free"),
         icon=fam.get("icon", "❓"),
-        color=fam.get("color", "#888"),
+        color=display_color,
         nickname=row.nickname,
         isActive=row.is_active,
         xp=row.xp,
@@ -178,6 +440,20 @@ def _owned_out(row: UserFamiliar) -> OwnedFamiliarOut:
         stats=dict(compute_familiar_stats(row.familiar_id, row.xp)),
         acquiredAt=row.acquired_at,
         lastActiveAt=row.last_active_at,
+        cosmeticInventory=inventory,
+        cosmeticEquipped=equipped,
+        cosmetics=cosmetics,
+        foodStock=affection.foodStock,
+        affectionFeedings=affection.affectionFeedings,
+        affectionHearts=affection.affectionHearts,
+        affectionMealsIntoHeart=affection.affectionMealsIntoHeart,
+        affectionMealsForNextHeart=affection.affectionMealsForNextHeart,
+        affectionMealsUntilNextHeart=affection.affectionMealsUntilNextHeart,
+        affectionRewardedHearts=affection.affectionRewardedHearts,
+        heartRequirements=affection.heartRequirements,
+        heartRewards=affection.heartRewards,
+        enclosureLastCleanedAt=row.enclosure_last_cleaned_at,
+        enclosureCooldownRemainingSeconds=_cleaning_cooldown_remaining(row),
     )
 
 
@@ -200,7 +476,7 @@ def _switch_count(session: Session, user_id: str) -> int:
 
 
 def _consume_sylvins(p: UserProfile, amount: int) -> tuple[int, int]:
-    """Débite `amount` Sylvins, PROMO d'abord puis PAID.
+    """Débite `amount` Aureons, PROMO d'abord puis PAID.
 
     Retourne (`take_promo`, `take_paid`) effectivement débités. Lève
     `HTTPException(400)` si le solde total est insuffisant. Appel à
@@ -212,7 +488,7 @@ def _consume_sylvins(p: UserProfile, amount: int) -> tuple[int, int]:
     if total < amount:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Solde Sylvins insuffisant.",
+            detail="Solde Aureons insuffisant.",
         )
     remaining = amount
     take_promo = min(remaining, max(0, p.sylvins))
@@ -279,7 +555,7 @@ def _collection_out(session: Session, user_id: str) -> FamiliarCollectionOut:
         owned=[_owned_out(r) for r in owned],
         switchCount=switch_count,
         nextSwitchFree=switch_count == 0,
-        switchPriceSylvins=SWITCH_PRICE_SYLVINS,
+        switchPriceAureons=SWITCH_PRICE_SYLVINS,
     )
 
 
@@ -292,6 +568,12 @@ def get_catalog() -> List[FamiliarCatalogItemOut]:
     return [_catalog_item_out(f) for f in FAMILIARS]
 
 
+@router.get("/cosmetics/catalog", response_model=List[FamiliarCosmeticOut])
+def get_cosmetics_catalog() -> List[FamiliarCosmeticOut]:
+    """Catalogue serveur des cosmétiques de familiers."""
+    return [_cosmetic_out(c) for c in FAMILIAR_COSMETICS]
+
+
 @user_router.get(
     "/{user_id}/familiers", response_model=FamiliarCollectionOut
 )
@@ -302,6 +584,280 @@ def list_user_familiars(
     p = session.get(UserProfile, user_id)
     if not p:
         raise HTTPException(status_code=404, detail="Profil introuvable.")
+    return _collection_out(session, user_id)
+
+
+@user_router.post(
+    "/{user_id}/familiers/enclosure/clean",
+    response_model=FamiliarEnclosureActionOut,
+)
+def clean_familiar_enclosure(
+    user_id: str,
+    session: Session = Depends(_session_dep),
+) -> FamiliarEnclosureActionOut:
+    """Nettoie l'enclos du familier actif et donne de la nourriture.
+
+    Le gain est scelle cote serveur pour eviter les recompenses purement
+    client. Le cooldown limite le farm sans bloquer l'usage de l'enclos.
+    """
+    p = session.get(UserProfile, user_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Profil introuvable.")
+    active = _active_row(session, user_id)
+    if active is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tu n'as pas encore de familier actif.",
+        )
+
+    remaining = _cleaning_cooldown_remaining(active)
+    if remaining > 0:
+        return FamiliarEnclosureActionOut(
+            familiar=_owned_out(active),
+            affection=_affection_out(active),
+            cooldownRemainingSeconds=remaining,
+            profileEclats=p.lueurs,
+            message="L'enclos est déjà propre. Revenez un peu plus tard.",
+        )
+
+    food_found = _roll_cleaning_food()
+    active.food_stock = max(0, int(active.food_stock or 0)) + food_found
+    active.enclosure_last_cleaned_at = _now_iso()
+    session.add(active)
+    p.updated_at = _now_iso()
+    session.add(p)
+    session.commit()
+    session.refresh(active)
+    session.refresh(p)
+    message = (
+        f"Vous avez gagné {food_found} nourriture{'s' if food_found > 1 else ''}."
+        if food_found > 0
+        else "Aucune nourriture trouvée cette fois."
+    )
+    return FamiliarEnclosureActionOut(
+        familiar=_owned_out(active),
+        affection=_affection_out(active),
+        foodFound=food_found,
+        cooldownRemainingSeconds=_cleaning_cooldown_remaining(active),
+        profileEclats=p.lueurs,
+        message=message,
+    )
+
+
+@user_router.post(
+    "/{user_id}/familiers/enclosure/feed",
+    response_model=FamiliarEnclosureActionOut,
+)
+def feed_active_familiar(
+    user_id: str,
+    session: Session = Depends(_session_dep),
+) -> FamiliarEnclosureActionOut:
+    """Nourrit le familier actif et crédite les Eclats au changement de coeur."""
+    p = session.get(UserProfile, user_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Profil introuvable.")
+    active = _active_row(session, user_id)
+    if active is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tu n'as pas encore de familier actif.",
+        )
+    if int(active.food_stock or 0) <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Vous n'avez plus de nourriture. Nettoyez l'enclos pour en trouver.",
+        )
+
+    before_hearts = _affection_hearts(active.affection_feedings)
+    active.food_stock = max(0, int(active.food_stock or 0) - 1)
+    active.affection_feedings = max(0, int(active.affection_feedings or 0)) + 1
+    after_hearts = _affection_hearts(active.affection_feedings)
+    rewarded = _load_rewarded_hearts(active)
+    heart_gained: Optional[int] = None
+    lueurs_rewarded = 0
+    reference_id = (
+        f"famaff-{active.id}-{int(datetime.now(timezone.utc).timestamp() * 1000)}"
+        f"-{user_id[-6:]}"
+    )
+
+    if after_hearts > before_hearts and after_hearts not in rewarded:
+        heart_gained = after_hearts
+        lueurs_rewarded = AFFECTION_HEART_REWARDS[after_hearts - 1]
+        p.lueurs += lueurs_rewarded
+        rewarded.append(after_hearts)
+        _store_rewarded_hearts(active, rewarded)
+        session.add(
+            WalletLedger(
+                user_id=user_id,
+                pot="lueurs",
+                delta=lueurs_rewarded,
+                balance_after=p.lueurs,
+                reason=f"familier:affection-heart:{after_hearts}",
+                reference_id=reference_id,
+            )
+        )
+
+    session.add(active)
+    p.updated_at = _now_iso()
+    session.add(p)
+    session.commit()
+    session.refresh(active)
+    session.refresh(p)
+
+    affection = _affection_out(active)
+    if heart_gained:
+        message = f"Votre familier gagne un cœur ! +{lueurs_rewarded} lueurs."
+    elif affection.affectionHearts >= 10:
+        message = "Votre familier est déjà au maximum d'affection."
+    else:
+        message = (
+            "Votre familier a été nourri. "
+            f"Encore {affection.affectionMealsUntilNextHeart} repas avant le prochain cœur."
+        )
+    return FamiliarEnclosureActionOut(
+        familiar=_owned_out(active),
+        affection=affection,
+        heartGained=heart_gained,
+        lueursRewarded=lueurs_rewarded,
+        profileEclats=p.lueurs,
+        message=message,
+    )
+
+
+@user_router.post(
+    "/{user_id}/familiers/cosmetics/buy",
+    response_model=FamiliarCollectionOut,
+)
+def buy_familiar_cosmetic(
+    user_id: str,
+    payload: BuyFamiliarCosmeticPayload,
+    session: Session = Depends(_session_dep),
+) -> FamiliarCollectionOut:
+    """Achete un cosmetique pour le familier actif avec prix serveur."""
+    p = session.get(UserProfile, user_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Profil introuvable.")
+    active = _active_row(session, user_id)
+    if active is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tu n'as pas encore de familier actif.",
+        )
+    cosmetic = get_familiar_cosmetic(payload.cosmeticId)
+    if cosmetic is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cosmétique de familier inconnu.",
+        )
+    compatible = cosmetic.get("compatible_familiars")
+    if compatible and active.familiar_id not in compatible:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ce cosmétique n'est pas compatible avec ce familier.",
+        )
+
+    inventory = _load_cosmetic_inventory(active)
+    if cosmetic["id"] in inventory:
+        return _collection_out(session, user_id)
+
+    reference_id = f"famcos-{int(datetime.now(timezone.utc).timestamp() * 1000)}-{user_id[-6:]}"
+    price = int(cosmetic.get("price", 0) or 0)
+    currency = cosmetic["currency"]
+    if currency == "lueurs" and price > 0:
+        if p.lueurs < price:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Solde Eclats insuffisant.",
+            )
+        p.lueurs -= price
+        session.add(
+            WalletLedger(
+                user_id=user_id,
+                pot="lueurs",
+                delta=-price,
+                balance_after=p.lueurs,
+                reason=f"familier:cosmetic:{cosmetic['id']}",
+                reference_id=reference_id,
+            )
+        )
+    elif currency == "sylvins" and price > 0:
+        take_promo, take_paid = _consume_sylvins(p, price)
+        _record_purchase_ledger(
+            session,
+            user_id,
+            take_promo,
+            take_paid,
+            p.sylvins,
+            p.sylvins_paid,
+            reason=f"familier:cosmetic:{cosmetic['id']}",
+            reference_id=reference_id,
+        )
+
+    inventory.append(cosmetic["id"])
+    _store_cosmetic_inventory(active, inventory)
+    session.add(active)
+    p.updated_at = _now_iso()
+    session.commit()
+    return _collection_out(session, user_id)
+
+
+@user_router.post(
+    "/{user_id}/familiers/cosmetics/equip",
+    response_model=FamiliarCollectionOut,
+)
+def equip_familiar_cosmetic(
+    user_id: str,
+    payload: EquipFamiliarCosmeticPayload,
+    session: Session = Depends(_session_dep),
+) -> FamiliarCollectionOut:
+    """Equipe ou retire un cosmetique du familier actif."""
+    p = session.get(UserProfile, user_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Profil introuvable.")
+    active = _active_row(session, user_id)
+    if active is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tu n'as pas encore de familier actif.",
+        )
+    slot = payload.slot.strip()
+    equipped = _load_cosmetic_equipped(active)
+    if payload.cosmeticId is None:
+        equipped.pop(slot, None)
+        _store_cosmetic_equipped(active, equipped)
+        session.add(active)
+        p.updated_at = _now_iso()
+        session.commit()
+        return _collection_out(session, user_id)
+
+    cosmetic = get_familiar_cosmetic(payload.cosmeticId)
+    if cosmetic is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cosmétique de familier inconnu.",
+        )
+    if cosmetic["slot"] != slot:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ce cosmétique ne correspond pas à cette catégorie.",
+        )
+    inventory = _load_cosmetic_inventory(active)
+    if cosmetic["id"] not in inventory:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Achète ou débloque ce cosmétique avant de l'équiper.",
+        )
+    compatible = cosmetic.get("compatible_familiars")
+    if compatible and active.familiar_id not in compatible:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ce cosmétique n'est pas compatible avec ce familier.",
+        )
+    equipped[slot] = cosmetic["id"]
+    _store_cosmetic_equipped(active, equipped)
+    session.add(active)
+    p.updated_at = _now_iso()
+    session.commit()
     return _collection_out(session, user_id)
 
 
@@ -365,7 +921,7 @@ def onboard_familiar(
     Refusé si l'utilisateur possède déjà un familier (il doit passer par
     `buy` ou `switch` pour en obtenir un autre). Premier `to_familiar`
     GRATUIT pour les 4 familiers `tier=free` ; pour un premium en
-    onboarding, on facture normalement le prix Sylvins.
+    onboarding, on facture normalement le prix Aureons.
     """
     p = session.get(UserProfile, user_id)
     if not p:
@@ -426,12 +982,12 @@ def buy_familiar(
     payload: BuyFamiliarPayload,
     session: Session = Depends(_session_dep),
 ) -> FamiliarCollectionOut:
-    """Achat d'un familier premium avec des Sylvins.
+    """Achat d'un familier premium avec des Aureons.
 
     Atomique :
-      1. Vérifie le solde Sylvins (promo + paid)
+      1. Vérifie le solde Aureons (promo + paid)
       2. Refuse si déjà possédé
-      3. Débite Sylvins (PROMO d'abord, PAID en débordement)
+      3. Débite Aureons (PROMO d'abord, PAID en débordement)
       4. Ajoute le familier à la collection (inactif par défaut)
       5. Écrit `WalletLedger` (-cost, `familier:buy:{id}`)
 
@@ -510,7 +1066,7 @@ def switch_familiar(
       (`new.xp = max(new.xp, old.xp)` — on garde le meilleur pour ne
       jamais perdre de progression).
     - Atomique : verrouille, transfère XP, désactive l'ancien, active
-      le nouveau, débite Sylvins, écrit `FamiliarSwitchLedger` +
+      le nouveau, débite Aureons, écrit `FamiliarSwitchLedger` +
       éventuel `WalletLedger`.
     """
     p = session.get(UserProfile, user_id)
@@ -611,7 +1167,7 @@ def rename_active_familiar(
     """Rename (surnom) du familier actif. `None` ou `""` retire le surnom.
 
     Première attribution de surnom GRATUITE. Tout changement ultérieur vers
-    un nouveau surnom non vide coûte `RENAME_PRICE_SYLVINS` Sylvins.
+    un nouveau surnom non vide coûte `RENAME_PRICE_SYLVINS` Aureons.
     """
     p = session.get(UserProfile, user_id)
     if not p:
@@ -674,7 +1230,7 @@ def rename_specific_familiar(
     """Rename surnom pour un familier précis (par son `UserFamiliar.id`).
 
     Même règle : première attribution gratuite, changements ultérieurs
-    vers un surnom non vide coûtent `RENAME_PRICE_SYLVINS` Sylvins.
+    vers un surnom non vide coûtent `RENAME_PRICE_SYLVINS` Aureons.
     """
     p = session.get(UserProfile, user_id)
     if not p:
@@ -716,3 +1272,162 @@ def rename_specific_familiar(
     p.updated_at = _now_iso()
     session.commit()
     return _collection_out(session, user_id)
+
+
+class GiftFamiliarOut(BaseModel):
+    xpGranted: int
+    newLevel: int
+    newXp: int
+    familiarName: str
+    familiarIcon: str
+
+
+@user_router.post(
+    "/{user_id}/familiers/gift", response_model=GiftFamiliarOut
+)
+def gift_familiar(
+    user_id: str,
+    payload: GiftFamiliarPayload,
+    session: Session = Depends(_session_dep),
+) -> GiftFamiliarOut:
+    """Offrir des Aureons au familier actif d'un autre utilisateur.
+
+    Le sender paie `amount` Aureons (PROMO puis PAID). Le familier actif
+    du receiver gagne `amount` XP (ratio 1:1, capé 1000 XP/jour). Le
+    sender gagne aussi de l'XP sur son propre familier (amount // 3,
+    capé 200 XP/jour).
+    """
+    if payload.senderId == user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tu ne peux pas offrir à ton propre familier.",
+        )
+    sender_profile = session.get(UserProfile, payload.senderId)
+    if not sender_profile:
+        raise HTTPException(status_code=404, detail="Profil envoyeur introuvable.")
+    receiver_profile = session.get(UserProfile, user_id)
+    if not receiver_profile:
+        raise HTTPException(status_code=404, detail="Profil destinataire introuvable.")
+
+    active = _active_row(session, user_id)
+    if active is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ce membre n'a pas de familier actif.",
+        )
+
+    reference_id = f"famgift-{int(datetime.now(timezone.utc).timestamp() * 1000)}-{payload.senderId[-6:]}"
+
+    take_promo, take_paid = _consume_sylvins(sender_profile, payload.amount)
+    _record_purchase_ledger(
+        session,
+        payload.senderId,
+        take_promo,
+        take_paid,
+        sender_profile.sylvins,
+        sender_profile.sylvins_paid,
+        reason=f"familier:gift:{user_id}",
+        reference_id=reference_id,
+    )
+
+    xp_granted = grant_gift_received_xp(
+        session, user_id, payload.amount, reference_id
+    )
+    grant_gift_sent_xp(
+        session, payload.senderId, payload.amount, reference_id
+    )
+
+    # Trace sociale pour notifier le destinataire ("X a offert N Aureons à
+    # ton familier") et lui proposer d'offrir en retour.
+    session.add(
+        FamiliarGiftLedger(
+            sender_id=payload.senderId,
+            sender_name=sender_profile.username or payload.senderId,
+            receiver_id=user_id,
+            receiver_familiar_id=active.id or 0,
+            amount=payload.amount,
+            xp_granted=xp_granted,
+            reference_id=reference_id,
+        )
+    )
+
+    sender_profile.updated_at = _now_iso()
+    receiver_profile.updated_at = _now_iso()
+    session.commit()
+    session.refresh(active)
+
+    fam = get_familiar(active.familiar_id)
+    level, _, _ = progress_in_level(active.xp)
+    return GiftFamiliarOut(
+        xpGranted=xp_granted,
+        newLevel=level,
+        newXp=active.xp,
+        familiarName=fam["name"] if fam else active.familiar_id,
+        familiarIcon=fam.get("icon", "❓") if fam else "❓",
+    )
+
+
+class ReceivedFamiliarGiftOut(BaseModel):
+    """Une offrande reçue par le familier d'un membre.
+
+    Alimente le centre de notifications du destinataire (qui a offert,
+    combien, quand) et le bouton "Offrir en retour" qui pointe vers le
+    profil de l'envoyeur (`senderId`).
+    """
+
+    id: int
+    senderId: str
+    senderName: str
+    senderAvatar: str
+    amount: int
+    xpGranted: int
+    createdAt: str
+
+
+@user_router.get(
+    "/{user_id}/familiers/gifts/received",
+    response_model=List[ReceivedFamiliarGiftOut],
+)
+def list_received_familiar_gifts(
+    user_id: str,
+    limit: int = 50,
+    session: Session = Depends(_session_dep),
+) -> List[ReceivedFamiliarGiftOut]:
+    """Liste les offrandes Aureons reçues par le familier du membre.
+
+    Trié du plus récent au plus ancien. Le client poll cet endpoint pour
+    générer les notifications "X a offert N Aureons à ton familier".
+    """
+    capped = max(1, min(limit, 100))
+    rows = session.exec(
+        select(FamiliarGiftLedger)
+        .where(FamiliarGiftLedger.receiver_id == user_id)
+        .order_by(FamiliarGiftLedger.created_at.desc())
+        .limit(capped)
+    ).all()
+
+    sender_ids = {row.sender_id for row in rows}
+    profiles: dict[str, UserProfile] = {}
+    if sender_ids:
+        for prof in session.exec(
+            select(UserProfile).where(UserProfile.id.in_(sender_ids))
+        ).all():
+            profiles[prof.id] = prof
+
+    out: List[ReceivedFamiliarGiftOut] = []
+    for row in rows:
+        prof = profiles.get(row.sender_id)
+        name = (prof.username if prof else "") or row.sender_name or row.sender_id
+        avatar = (prof.avatar_image_url if prof else "") or ""
+        out.append(
+            ReceivedFamiliarGiftOut(
+                id=row.id or 0,
+                senderId=row.sender_id,
+                senderName=name,
+                senderAvatar=avatar,
+                amount=row.amount,
+                xpGranted=row.xp_granted,
+                createdAt=row.created_at,
+            )
+        )
+    return out

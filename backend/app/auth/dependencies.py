@@ -159,8 +159,12 @@ def require_auth_session(request: Request) -> tuple[AuthSession, UserProfile]:
         return auth_session, user
 
 
+STAFF_ROLES = {"architect", "admin"}
+ADMIN_OR_ANIMATOR_ROLES = {"architect", "admin", "animator"}
+
+
 def require_admin(user: UserProfile = Depends(require_auth)) -> UserProfile:
-    if user.role != "admin":
+    if user.role not in STAFF_ROLES:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Accès réservé aux administrateurs.",
@@ -168,10 +172,19 @@ def require_admin(user: UserProfile = Depends(require_auth)) -> UserProfile:
     return user
 
 
+def require_architect(user: UserProfile = Depends(require_auth)) -> UserProfile:
+    if user.role != "architect":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Accès réservé à l'Architecte Vaelyndra.",
+        )
+    return user
+
+
 def require_admin_or_animator(
     user: UserProfile = Depends(require_auth),
 ) -> UserProfile:
-    if user.role not in {"admin", "animator"}:
+    if user.role not in ADMIN_OR_ANIMATOR_ROLES:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Accès réservé aux administrateurs et animateurs.",

@@ -8,8 +8,8 @@ export function Confidentialite() {
       lastUpdated="18 avril 2026"
     >
       <p>
-        La présente politique décrit la manière dont le Royaume de Vaelyndra
-        (ci-après <em>« Vaelyndra »</em>, <em>« nous »</em>) collecte et
+        La présente politique décrit la manière dont le Royaume de PulseForge
+        (ci-après <em>« PulseForge »</em>, <em>« nous »</em>) collecte et
         traite les données personnelles de ses membres, dans le respect du
         Règlement général sur la protection des données (règlement UE
         2016/679, <strong>RGPD</strong>) et de la loi « Informatique et
@@ -44,7 +44,7 @@ export function Confidentialite() {
           exécution du contrat.
         </li>
         <li>
-          <strong>Achats (Sylvins et biens physiques)</strong> — identité de
+          <strong>Achats (Aureons et biens physiques)</strong> — identité de
           facturation, adresse de livraison (pour les produits physiques),
           historique des commandes. <em>Finalité : exécution de la commande,
           facturation, obligations comptables.</em> Base légale : exécution du

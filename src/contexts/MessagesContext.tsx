@@ -18,6 +18,7 @@ import {
   type DirectMessageDto,
   type MessagesStreamEvent,
 } from "../lib/messagesApi";
+import { mergeAttachments } from "../lib/attachmentStore";
 import { useAuth } from "./AuthContext";
 
 interface MessagesCtx {
@@ -28,12 +29,18 @@ interface MessagesCtx {
   threadOtherId: string | null;
   threadLoading: boolean;
   threadError: string | null;
+  /** Indique s'il existe encore des messages plus anciens à charger. */
+  threadHasMore: boolean;
+  /** En cours de chargement d'une page d'historique. */
+  threadLoadingMore: boolean;
   /** Ouvre un fil avec un autre user (charge + marque lus + écoute SSE). */
   openThread: (otherUserId: string) => Promise<void>;
+  /** Charge la tranche précédente du fil courant (anciens messages). */
+  loadOlderMessages: () => Promise<void>;
   /** Ferme le fil courant (libère la ref interne). */
   closeThread: () => void;
   /** Envoie un message dans le fil courant. Lève en cas d'erreur. */
-  sendMessage: (content: string) => Promise<void>;
+  sendMessage: (content: string, attachment?: import('../types').MessageAttachment) => Promise<void>;
   /** Re-fetch la liste de conversations (ex. pull-to-refresh). */
   refreshConversations: () => Promise<void>;
 }
@@ -48,8 +55,14 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
   const [threadOtherId, setThreadOtherId] = useState<string | null>(null);
   const [threadLoading, setThreadLoading] = useState(false);
   const [threadError, setThreadError] = useState<string | null>(null);
+  const [threadHasMore, setThreadHasMore] = useState(false);
+  const [threadLoadingMore, setThreadLoadingMore] = useState(false);
 
   const threadOtherRef = useRef<string | null>(null);
+  // Taille de page utilisée pour la pagination. Si le backend renvoie
+  // exactement `PAGE_SIZE` messages, on suppose qu'il en reste d'autres
+  // à charger.
+  const PAGE_SIZE = 200;
 
   const refreshConversations = useCallback(async () => {
     if (!user) return;
@@ -83,6 +96,8 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
       setUnreadCount(0);
       setThread([]);
       setThreadOtherId(null);
+      setThreadHasMore(false);
+      setThreadLoadingMore(false);
       threadOtherRef.current = null;
       return;
     }
@@ -103,9 +118,11 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
             : message.sender_id;
         // Si le fil ouvert correspond, on l'enrichit.
         if (threadOtherRef.current === otherId) {
-          setThread((t) =>
-            t.some((m) => m.id === message.id) ? t : [...t, message],
-          );
+          setThread((t) => {
+            if (t.some((m) => m.id === message.id)) return t;
+            const [enriched] = mergeAttachments([message]);
+            return [...t, enriched];
+          });
         }
         // Incrémente le badge si je reçois un message et que je ne suis pas
         // en train de lire le fil correspondant.
@@ -141,13 +158,19 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
       setThreadOtherId(otherUserId);
       setThreadLoading(true);
       setThreadError(null);
+      setThreadHasMore(false);
+      setThreadLoadingMore(false);
       try {
-        const rows = await apiGetThread(otherUserId);
+        const rows = await apiGetThread(otherUserId, { limit: PAGE_SIZE });
         // Un switch rapide A → B peut inverser l'ordre d'arrivée des
         // réponses : si on est déjà passé à un autre fil, on ignore cette
         // réponse pour ne pas écraser les messages du fil actuel.
         if (threadOtherRef.current !== otherUserId) return;
-        setThread(rows);
+        setThread(mergeAttachments(rows));
+        // S'il y a exactement une page pleine, on suppose qu'il en
+        // reste d'autres à charger (l'UI proposera "Charger plus
+        // anciens").
+        setThreadHasMore(rows.length >= PAGE_SIZE);
         // Les messages reçus viennent d'être marqués lus côté backend →
         // on resynchronise le badge et la liste.
         await Promise.all([refreshUnread(), refreshConversations()]);
@@ -166,23 +189,75 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
     [refreshUnread, refreshConversations],
   );
 
+  const loadOlderMessages = useCallback(async () => {
+    const otherId = threadOtherRef.current;
+    if (!otherId) return;
+    // On utilise l'état React courant via une lecture fonctionnelle pour
+    // éviter de dépendre d'une closure périmée.
+    let oldestId: number | null = null;
+    setThread((current) => {
+      if (current.length > 0) oldestId = current[0].id;
+      return current;
+    });
+    if (oldestId === null || oldestId <= 0) return;
+    setThreadLoadingMore(true);
+    try {
+      const rows = await apiGetThread(otherId, {
+        limit: PAGE_SIZE,
+        beforeId: oldestId,
+      });
+      if (threadOtherRef.current !== otherId) return;
+      if (rows.length === 0) {
+        setThreadHasMore(false);
+        return;
+      }
+      const enriched = mergeAttachments(rows);
+      setThread((current) => {
+        const existing = new Set(current.map((m) => m.id));
+        const fresh = enriched.filter((m) => !existing.has(m.id));
+        return [...fresh, ...current];
+      });
+      setThreadHasMore(rows.length >= PAGE_SIZE);
+    } catch {
+      // Silencieux : on n'écrase pas le fil déjà chargé.
+    } finally {
+      if (threadOtherRef.current === otherId) {
+        setThreadLoadingMore(false);
+      }
+    }
+  }, []);
+
   const closeThread = useCallback(() => {
     threadOtherRef.current = null;
     setThreadOtherId(null);
     setThread([]);
     setThreadError(null);
+    setThreadHasMore(false);
+    setThreadLoadingMore(false);
   }, []);
 
   const sendMessage = useCallback(
-    async (content: string) => {
+    async (content: string, attachment?: import('../types').MessageAttachment) => {
       const otherId = threadOtherRef.current;
       if (!otherId) throw new Error("Aucun fil ouvert.");
       const trimmed = content.trim();
-      if (!trimmed) return;
-      const msg = await apiSendMessage(otherId, trimmed);
-      // Optimisme : on push localement immédiatement. Le serveur va aussi
-      // nous renvoyer l'event SSE — on dédoublonne par id.
-      setThread((t) => (t.some((m) => m.id === msg.id) ? t : [...t, msg]));
+      if (!trimmed && !attachment) return;
+      // Le backend accepte maintenant un contenu vide quand une pièce
+      // jointe est présente (cf. backend.routers.messages). On envoie
+      // l'attachment au serveur qui le persiste, donc le destinataire
+      // recevra bien le fichier (avant : seul l'émetteur l'avait en
+      // localStorage et l'autre voyait `📎 nom.jpeg` en texte).
+      const msg = await apiSendMessage(otherId, trimmed, attachment);
+      // La réponse serveur contient déjà `attachments` ; on garde
+      // l'objet local comme fallback au cas où le backend ne les
+      // renverrait pas (ancienne version déployée).
+      const msgWithAtt =
+        msg.attachments && msg.attachments.length > 0
+          ? msg
+          : attachment
+            ? { ...msg, attachments: [attachment] }
+            : msg;
+      setThread((t) => (t.some((m) => m.id === msgWithAtt.id) ? t : [...t, msgWithAtt]));
       refreshConversations();
     },
     [refreshConversations],
@@ -196,7 +271,10 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
       threadOtherId,
       threadLoading,
       threadError,
+      threadHasMore,
+      threadLoadingMore,
       openThread,
+      loadOlderMessages,
       closeThread,
       sendMessage,
       refreshConversations,
@@ -208,7 +286,10 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
       threadOtherId,
       threadLoading,
       threadError,
+      threadHasMore,
+      threadLoadingMore,
       openThread,
+      loadOlderMessages,
       closeThread,
       sendMessage,
       refreshConversations,

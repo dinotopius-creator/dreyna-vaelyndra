@@ -1,12 +1,15 @@
-"""Mini-jeu Oracle des Runes : gains journaliers Lueurs / Sylvins."""
+"""Mini-jeu Oracle des Runes : gains journaliers Eclats / Aureons."""
 from __future__ import annotations
 
+import logging
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import Session, select
+
+logger = logging.getLogger("oracle")
 
 from ..db import get_session
 from ..models import OracleGameSession, UserProfile
@@ -23,9 +26,9 @@ router = APIRouter(prefix="/oracle", tags=["oracle"])
 MAX_DAILY_PLAYS = 3
 VALID_RUNES = {"lune", "flamme", "couronne"}
 REWARD_TABLE: list[tuple[int, str, int, str, str]] = [
-    (34, "lueurs", 15, "15 lueurs captees", "soft"),
-    (26, "lueurs", 25, "25 lueurs reveillees", "soft"),
-    (17, "lueurs", 40, "40 lueurs scellees", "bright"),
+    (34, "lueurs", 15, "15 lueurs captées", "soft"),
+    (26, "lueurs", 25, "25 lueurs réveillées", "soft"),
+    (17, "lueurs", 40, "40 lueurs scellées", "bright"),
     (9, "lueurs", 70, "70 lueurs astrales", "bright"),
     (5, "lueurs", 120, "120 lueurs royales", "epic"),
     (8, "none", 0, "Le voile reste silencieux", "void"),
@@ -130,9 +133,19 @@ def get_oracle_status(
         ).all()
     )
     plays_left = max(0, MAX_DAILY_PLAYS - used_today)
+    next_reset = _next_reset_iso()
+    logger.info(
+        "oracle.status user=%s day=%s used=%d left=%d banned=%s next_reset=%s",
+        user_id,
+        day_key,
+        used_today,
+        plays_left,
+        profile.banned_at is not None,
+        next_reset,
+    )
     return OracleStatusOut(
         dayKey=day_key,
-        nextResetAt=_next_reset_iso(),
+        nextResetAt=next_reset,
         playsUsedToday=used_today,
         playsLeftToday=plays_left,
         maxDailyPlays=MAX_DAILY_PLAYS,
@@ -169,7 +182,7 @@ def play_oracle(
     if used_today >= MAX_DAILY_PLAYS:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Rituel journalier deja epuise.",
+            detail="Rituel journalier déjà épuisé.",
         )
 
     reward = _roll_reward()
@@ -191,7 +204,7 @@ def play_oracle(
     )
     session.add(entry)
     session.add(profile)
-    # Trace WalletLedger pour audit (cf. plainte "j'ai perdu mes Lueurs"
+    # Trace WalletLedger pour audit (cf. plainte "j'ai perdu mes Eclats"
     # → on doit pouvoir auditer chaque crédit). Import différé pour
     # éviter le cycle oracle ↔ models au boot.
     from ..models import WalletLedger
@@ -224,6 +237,16 @@ def play_oracle(
 
     plays_used = used_today + 1
     plays_left = max(0, MAX_DAILY_PLAYS - plays_used)
+    logger.info(
+        "oracle.play user=%s day=%s rune=%s reward=%s/%d used=%d left=%d",
+        payload.user_id,
+        day_key,
+        payload.rune_key,
+        reward.currency,
+        reward.amount,
+        plays_used,
+        plays_left,
+    )
     return OraclePlayOut(
         dayKey=day_key,
         nextResetAt=_next_reset_iso(),
@@ -231,7 +254,7 @@ def play_oracle(
         playsLeftToday=plays_left,
         maxDailyPlays=MAX_DAILY_PLAYS,
         reward=reward,
-        profileLueurs=profile.lueurs,
-        profileSylvinsPromo=profile.sylvins,
+        profileEclats=profile.lueurs,
+        profileAureonsPromo=profile.sylvins,
         recentHistory=_recent_history(session, payload.user_id),
     )
