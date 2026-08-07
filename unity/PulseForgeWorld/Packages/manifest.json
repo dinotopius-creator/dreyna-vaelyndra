@@ -1,0 +1,11 @@
+{
+  "dependencies": {
+    "com.unity.adaptiveperformance": "5.1.2",
+    "com.unity.collections": "2.5.0",
+    "com.unity.inputsystem": "1.14.0",
+    "com.unity.nuget.newtonsoft-json": "3.2.1",
+    "com.unity.render-pipelines.core": "17.0.5",
+    "com.unity.render-pipelines.universal": "17.0.5",
+    "com.unity.textmeshpro": "3.0.9"
+  }
+}
