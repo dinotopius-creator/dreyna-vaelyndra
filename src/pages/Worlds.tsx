@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 import { SectionHeading } from "../components/SectionHeading";
 import { AvatarImage } from "../components/AvatarImage";
-import { AvatarViewer } from "../components/AvatarViewer";
 import { Handle } from "../components/Handle";
 import { useAuth } from "../contexts/AuthContext";
 import { useLive } from "../contexts/LiveContext";

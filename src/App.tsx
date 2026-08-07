@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+﻿import { lazy, Suspense } from "react";
 import { Route, Routes, useLocation } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Navbar } from "./components/Navbar";
@@ -51,6 +51,10 @@ const Community = lazy(async () => {
 const Worlds = lazy(async () => {
   const mod = await import("./pages/Worlds");
   return { default: mod.Worlds };
+});
+const WorldUnity = lazy(async () => {
+  const mod = await import("./pages/WorldUnity");
+  return { default: mod.WorldUnity };
 });
 const Oracle = lazy(async () => {
   const mod = await import("./pages/Oracle");
@@ -147,7 +151,7 @@ function RouteFallback() {
       <div className="card-royal w-full max-w-md px-6 py-10 text-center">
         <div className="mx-auto h-12 w-12 animate-pulse rounded-full border border-gold-400/40 bg-gold-500/10 shadow-glow-gold" />
         <p className="mt-4 font-display text-2xl text-gold-200">
-          Le voile se lève...
+          Le voile se lÃ¨ve...
         </p>
         <p className="mt-2 text-sm text-ivory/70">
           Chargement de cette page de Vaelyndra.
@@ -187,6 +191,7 @@ function AnimatedRoutes() {
             <Route path="/live/:broadcasterId" element={<Live />} />
             <Route path="/communaute" element={<Community />} />
             <Route path="/mondes" element={<Worlds />} />
+            <Route path="/world" element={<WorldUnity />} />
             <Route path="/oracle" element={<Oracle />} />
             <Route path="/u/:userId" element={<UserProfile />} />
             <Route path="/connexion" element={<Login />} />
@@ -328,3 +333,4 @@ function App() {
 }
 
 export default App;
+
