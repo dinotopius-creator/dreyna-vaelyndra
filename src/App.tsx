@@ -9,7 +9,6 @@ import { Home } from "./pages/Home";
 import { Guarded } from "./components/Guarded";
 import { EasterEggs } from "./components/EasterEggs";
 import { CookieBanner } from "./components/CookieBanner";
-import { FloatingLiveChat } from "./components/FloatingLiveChat";
 import { FamiliarOnboardingGate } from "./components/FamiliarOnboardingGate";
 import { NativeAppBootstrap } from "./components/NativeAppBootstrap";
 
@@ -176,7 +175,7 @@ function RouteFallback() {
       <div className="card-royal w-full max-w-md px-4 py-8 text-center sm:px-6 sm:py-10">
         <div className="mx-auto h-12 w-12 animate-pulse rounded-full border border-gold-400/40 bg-gold-500/10 shadow-glow-gold" />
         <p className="mt-4 font-display text-2xl text-gold-200">
-          Le voile se lève...
+          Le voile se lÃ¨ve...
         </p>
         <p className="mt-2 text-sm text-ivory/70">
           Chargement de cette page de PulseForge.
