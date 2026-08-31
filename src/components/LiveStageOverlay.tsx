@@ -155,9 +155,14 @@ export function LiveStageOverlay({
     };
   }, [broadcasterId]);
 
-  // Charge le profil broadcaster (pour AvatarViewer : avatarUrl + équipement).
+  // Charge le profil broadcaster uniquement si l'avatar live est réellement
+  // affiché. En mode "familier seul", on évite ce fetch et on garde le
+  // player plus léger pendant les lives desktop / partage d'écran.
   useEffect(() => {
-    if (!broadcasterId) return;
+    if (!broadcasterId || !showAvatar) {
+      setProfile(null);
+      return;
+    }
     let cancelled = false;
     apiGetProfile(broadcasterId)
       .then((p) => {
@@ -169,7 +174,7 @@ export function LiveStageOverlay({
     return () => {
       cancelled = true;
     };
-  }, [broadcasterId]);
+  }, [broadcasterId, showAvatar]);
 
   // Burst sur cadeau reçu : rebond + particules (familier seulement).
   useEffect(() => {
